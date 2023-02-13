@@ -1,0 +1,580 @@
+1
+0:00:00.000 --> 0:00:10.940
+Hi, everybody. My name is Drew Devault, and today I'm going to give a quick talk giving
+
+2
+0:00:10.940 --> 0:00:20.760
+you a sneak peek at a microkernel I've been working on called Helios. So why should we
+
+3
+0:00:20.760 --> 0:00:25.860
+write new kernels? These are the reasons that I came up with for writing new kernels. You
+
+4
+0:00:25.860 --> 0:00:30.320
+know, is Linux good enough? I don't know, but kernel hacking is really, really fun,
+
+5
+0:00:30.320 --> 0:00:35.360
+so I'm enjoying myself working on it, which is reason enough. I also want to prove if
+
+6
+0:00:35.360 --> 0:00:40.840
+the programming language Herr is useful for writing kernels. Herr is a programming language
+
+7
+0:00:40.840 --> 0:00:44.120
+I developed along with many of the people in this room and many people outside of this
+
+8
+0:00:44.120 --> 0:00:49.880
+room, which one of the stated goals is to be useful for systems programming and to be
+
+9
+0:00:49.880 --> 0:00:53.240
+able to write kernels with. So in order to prove that that's possible, we have to write
+
+10
+0:00:53.240 --> 0:00:58.680
+a kernel. Other goals is I want to know if we can do better than the SEL4 microkernel,
+
+11
+0:00:58.680 --> 0:01:04.360
+which is a microkernel that inspired a lot of the system design for Helios. And if I
+
+12
+0:01:04.360 --> 0:01:09.080
+were to be particularly ambitious and bold, I would wonder if it's possible to do better
+
+13
+0:01:09.080 --> 0:01:14.200
+than Linux. And so we've had Linux now for, what, 30 years? Maybe a little bit less than
+
+14
+0:01:14.200 --> 0:01:20.160
+30 years. And I think it's time for some innovation in kernels. SEL4 is cool, but maybe we can
+
+15
+0:01:20.160 --> 0:01:23.840
+do better. And you know, at the end of the day, we're having fun doing it and that's
+
+16
+0:01:23.840 --> 0:01:32.000
+enough. So enter Helios. Helios is a microkernel, which again is largely inspired by SEL4 and
+
+17
+0:01:32.000 --> 0:01:36.400
+is written in Herr to prove that Herr can be used to write kernels and also because
+
+18
+0:01:36.400 --> 0:01:41.720
+it's fun to write kernels and maybe we can make it good. It runs right now on x86.64
+
+19
+0:01:41.720 --> 0:01:47.160
+and ARM64 and support for RISC-V is coming, which is all of the targets that Herr presently
+
+20
+0:01:47.160 --> 0:01:53.240
+supports. The kernel itself is quite small. The portable code base is about 8,500 lines
+
+21
+0:01:53.240 --> 0:01:57.520
+of code. And then on top of that, for each architecture, we have about 3,000 lines of
+
+22
+0:01:57.520 --> 0:02:02.080
+code. And that's it. That's the whole microkernel. The kernel is licensed under the GNU public
+
+23
+0:02:02.080 --> 0:02:07.000
+license and I suppose here, I should mention these small line codes don't include the boot
+
+24
+0:02:07.000 --> 0:02:12.800
+loaders, which themselves maybe add 2,000 lines of code per target. And it's written
+
+25
+0:02:12.800 --> 0:02:17.640
+in Herr, which is again a systems programming language that I designed with the help of
+
+26
+0:02:17.640 --> 0:02:23.600
+about 80 contributors. This is the pitch from the website, but the short version is that
+
+27
+0:02:23.600 --> 0:02:28.760
+Herr is a systems programming language, which is designed to be very simple. We have a specification
+
+28
+0:02:28.760 --> 0:02:33.640
+which is less than 100 pages. We have a small compiler. We have a minimal runtime, manual
+
+29
+0:02:33.640 --> 0:02:38.720
+memory management. And the goals is to use it for systems programming. So that includes
+
+30
+0:02:38.720 --> 0:02:46.120
+others, daemons, system tools, and also things like kernels.
+
+31
+0:02:46.120 --> 0:02:50.320
+Further about Herr, again, it's a general purpose systems programming language. So in
+
+32
+0:02:50.320 --> 0:02:55.600
+addition to kernels, we also use it in user space on Linux and FreeBSD, working on OpenBSD
+
+33
+0:02:55.600 --> 0:03:01.600
+and NetBSD user space support as well. We've been working on it now for about three years.
+
+34
+0:03:01.600 --> 0:03:08.040
+And the footprint of the programming language is also small. We have an 18,000 line compiler,
+
+35
+0:03:08.040 --> 0:03:13.760
+our backend cube, not LLVM. Our backend is cube, which is about 12,000 lines of C99.
+
+36
+0:03:13.760 --> 0:03:17.840
+And together, this is enough to bootstrap the compiler plus, you know, bin utils is
+
+37
+0:03:17.840 --> 0:03:22.960
+required. And it runs again on these three targets.
+
+38
+0:03:22.960 --> 0:03:26.960
+If you've never seen any Herr code before, I just have a small sample here. I'm not going
+
+39
+0:03:26.960 --> 0:03:32.360
+to go into too much detail about exactly what any of this code does. But this is just what
+
+40
+0:03:32.360 --> 0:03:37.160
+it looks like. If you're familiar with C, a lot of things here probably look fairly
+
+41
+0:03:37.160 --> 0:03:43.400
+recognizable to you. Some things maybe don't. Namespaces are nice, you know. But this is
+
+42
+0:03:43.400 --> 0:03:47.280
+just a peek at what Herr looks like. And this particular code sample is the entry point
+
+43
+0:03:47.280 --> 0:03:51.200
+for the Helios microkernel. So this is the first line of portable code. There's also
+
+44
+0:03:51.200 --> 0:03:56.000
+some architecture specific setup code, and the bootloader runs before any of this. But
+
+45
+0:03:56.000 --> 0:04:01.160
+this is the first line of code that runs on all architectures.
+
+46
+0:04:01.160 --> 0:04:08.000
+So what is Helios? What is the goal of the design? It's a microkernel, so it's designed
+
+47
+0:04:08.000 --> 0:04:12.200
+to be as small as possible and to move any tasks which can be performed in user space
+
+48
+0:04:12.200 --> 0:04:17.480
+into user space contrasted with something like Linux, which is a monolithic design.
+
+49
+0:04:17.480 --> 0:04:22.560
+The kernel is very, very small and simple. It only has 14 syscalls of which 12 related
+
+50
+0:04:22.560 --> 0:04:28.160
+to capabilities. A user's capability-based security, which is essentially this means
+
+51
+0:04:28.160 --> 0:04:33.960
+of controlling access to resources on the system like memory, like hardware I.O., memory
+
+52
+0:04:33.960 --> 0:04:39.920
+mapped I.O., processes, threads, address spaces. All of these things are represented by capabilities,
+
+53
+0:04:39.920 --> 0:04:45.320
+and the syscall API is used for working with those capabilities. And then each process
+
+54
+0:04:45.320 --> 0:04:48.760
+on the system has access to some subset of capabilities, which entitles it to rights
+
+55
+0:04:48.760 --> 0:04:54.560
+to use resources, which is a really good approach for sandboxing and security.
+
+56
+0:04:54.560 --> 0:04:59.480
+It's especially good when compared to a monolithic design like Linux. The example I usually reach
+
+57
+0:04:59.480 --> 0:05:05.200
+for to explain why Helios's design is more secure than Linux is to consider the case
+
+58
+0:05:05.200 --> 0:05:10.200
+of a floppy disk driver. So if you have a floppy disk driver on Linux, it's compiled
+
+59
+0:05:10.200 --> 0:05:15.000
+into your kernel and runs in ring 0. And if there's a bug in it, the worst thing that
+
+60
+0:05:15.000 --> 0:05:19.760
+bug can do is completely compromise your system. Whereas on Helios, the worst thing a bug in
+
+61
+0:05:19.760 --> 0:05:25.480
+your floppy disk driver could do is erase your floppy disk. All drivers, in addition
+
+62
+0:05:25.480 --> 0:05:30.240
+to user space processes, are sandboxed with the MMU, just like user space processes generally
+
+63
+0:05:30.240 --> 0:05:34.960
+are on systems like Linux. Of course, for a microkernel, inter-process communication
+
+64
+0:05:34.960 --> 0:05:40.760
+is critical. We have two approaches to IPC, which again are largely inspired by SEL4.
+
+65
+0:05:40.760 --> 0:05:45.360
+We have synchronous IPC via endpoints and asynchronous via notifications, as well as
+
+66
+0:05:45.360 --> 0:05:50.400
+the ability to set up shared memory so that you can communicate more efficiently than
+
+67
+0:05:50.400 --> 0:05:59.120
+using SysCalls for IPC. Where is the project at now? It's fairly mature. We're about nine
+
+68
+0:05:59.120 --> 0:06:05.040
+months in. The capabilities are working. Inter-process communication is also working. We also have
+
+69
+0:06:05.040 --> 0:06:09.640
+preemptive scheduling, so we do actually have processes which get scheduled. But the scheduler
+
+70
+0:06:09.640 --> 0:06:15.040
+is very simple. We don't have support for SMP yet, so it's all running on one core.
+
+71
+0:06:15.040 --> 0:06:19.200
+And it's just a simple round robin scheduler, but we will make improvements in this domain.
+
+72
+0:06:19.200 --> 0:06:24.160
+We also have support for hardware IO and IRQs, both in user space, so it is now possible
+
+73
+0:06:24.160 --> 0:06:29.840
+to write user space drivers for hardware in Helios or on top of Helios. And in terms of
+
+74
+0:06:29.840 --> 0:06:35.520
+booting, we currently have support for EFI on ARM and multi-boot on X8664. We're going
+
+75
+0:06:35.520 --> 0:06:40.480
+to also bring EFI to X8664 as soon as somebody can be bothered to implement position independent
+
+76
+0:06:40.480 --> 0:06:48.160
+code for our back-end. And does it work? The answer is self-evidently yes, because this
+
+77
+0:06:48.160 --> 0:06:51.960
+slide deck you're viewing right now is running on this Raspberry Pi, which is running on
+
+78
+0:06:51.960 --> 0:06:58.620
+Helios. I promised that I would not do any talks about Helios until I could actually
+
+79
+0:06:58.620 --> 0:07:05.600
+present that talk from Helios. And I initially was going to try and write an Intel HD graphics
+
+80
+0:07:05.600 --> 0:07:11.160
+driver from X86 laptop, and then I started looking at the IHD manuals, of which there's
+
+81
+0:07:11.160 --> 0:07:19.320
+about 18 volumes per Intel hardware revision. Among those are about 100,000 pages of PDF.
+
+82
+0:07:19.320 --> 0:07:24.520
+And after about two days of reading those PDFs, I forgot about that and instead ported
+
+83
+0:07:24.520 --> 0:07:31.240
+the entire kernel to ARM so I could write GPU driver for the Raspberry Pi instead. That
+
+84
+0:07:31.240 --> 0:07:37.840
+ARM port took about 42 days to complete from start to finish. The Raspberry Pi here is
+
+85
+0:07:37.840 --> 0:07:42.880
+running its GPU driver and a serial driver in user space. The GPU driver is driving the
+
+86
+0:07:42.880 --> 0:07:49.200
+projector and I'm switching between slides by typing letters into the serial port. The
+
+87
+0:07:49.200 --> 0:07:55.640
+slide deck itself is encoded as QOI, quite okay, images, on a tarball, which essentially
+
+88
+0:07:55.640 --> 0:08:02.320
+acts like an INIT RAMFS. And there's basically no hacks here. There's no smoke and mirrors.
+
+89
+0:08:02.320 --> 0:08:08.280
+I actually ported the entire Helios kernel to ARM. There's no SOC specific build, so
+
+90
+0:08:08.280 --> 0:08:12.760
+this same configuration should work on any other ARM device, which implements an EFI
+
+91
+0:08:12.760 --> 0:08:17.800
+boot. I am using EDK to boot through EFI. I'm using device trees to enumerate the hardware
+
+92
+0:08:17.800 --> 0:08:22.640
+instead of drivers. So there's very little on the way of hacks. 42 days for a complete
+
+93
+0:08:22.640 --> 0:08:34.200
+port to ARM. No hacks. It just works.
+
+94
+0:08:34.200 --> 0:08:41.920
+Thank you. So where's the project going from here? The kernel itself is done in big error
+
+95
+0:08:41.920 --> 0:08:47.560
+quotes in terms of the fact that it's almost functionally complete. It needs to be polished
+
+96
+0:08:47.560 --> 0:08:52.520
+and we need to, you know, if you do a Git grep on todo, you find about 100 things that
+
+97
+0:08:52.520 --> 0:08:58.080
+still need to be fixed, just little stuff. We need to add multiprocessing support. I
+
+98
+0:08:58.080 --> 0:09:02.960
+want to port it to RISC-V as well, which maybe it'll take more than 40 days because I'm not
+
+99
+0:09:02.960 --> 0:09:08.600
+going to kill myself over this one without a deadline like Fostom. I mentioned earlier
+
+100
+0:09:08.600 --> 0:09:14.560
+that I want to expand the bootloader options, so I want to add EFI support for x86.64 and
+
+101
+0:09:14.560 --> 0:09:20.240
+we also intend to boot RISC-V over EFI. And I want to improve the documentation, of course.
+
+102
+0:09:20.240 --> 0:09:26.440
+The docs are actually already kind of okay. They're at aries.org. If you're curious, the
+
+103
+0:09:26.440 --> 0:09:31.840
+kernel docs are maybe about 60% complete. And if you're curious to play with Helios,
+
+104
+0:09:31.840 --> 0:09:38.120
+you can definitely use those as a starting point and ask an IRC if you encounter a stub
+
+105
+0:09:38.120 --> 0:09:45.200
+where there should be docs. In the big picture, this is our plans. So, like I said, the kernel
+
+106
+0:09:45.200 --> 0:09:48.440
+is almost functionally complete, but it's a macrokernel, so that doesn't mean that it
+
+107
+0:09:48.440 --> 0:09:54.080
+can necessarily do very much that it's useful. But we're going to go to user space and build
+
+108
+0:09:54.080 --> 0:10:02.200
+more stuff. We have this idea of kind of layers of support. So at the core is the microkernel,
+
+109
+0:10:02.200 --> 0:10:06.840
+Helios, but then we're going to build additional projects on top of it, which will expand it
+
+110
+0:10:06.840 --> 0:10:11.720
+into a complete operating system. We have now Mercury, which is a driver framework.
+
+111
+0:10:11.720 --> 0:10:16.840
+This already exists and is fairly mature and has become even more so in the past week or
+
+112
+0:10:16.840 --> 0:10:21.240
+so. And then we've just started last week working on Venus, which is going to be our
+
+113
+0:10:21.240 --> 0:10:26.880
+collection of drivers. Just any kind of hardware that we want to support, the driver for it
+
+114
+0:10:26.880 --> 0:10:30.760
+will probably end up in Venus and be built on top of the Mercury framework. And together
+
+115
+0:10:30.760 --> 0:10:37.000
+these will present an interface to Gaia, which will take these abstractions for accessing
+
+116
+0:10:37.000 --> 0:10:43.840
+hardware and build them into an actual programming environment, which will resemble Unix or Plan
+
+117
+0:10:43.840 --> 0:10:49.240
+9. We're also going to build Luna, which will be a POSIX compatibility layer. Gaia itself
+
+118
+0:10:49.240 --> 0:10:55.480
+will not be POSIX. I think that there's room for beyond POSIX, I hope. But we do want POSIX
+
+119
+0:10:55.480 --> 0:10:58.980
+software to work, so we'll have this compatibility layer. And then we'll tie it all together
+
+120
+0:10:58.980 --> 0:11:03.440
+with Ares, which will be a more complete operating system that provides a package manager and
+
+121
+0:11:03.440 --> 0:11:11.440
+a service manager and other things that you might be used to from a complete experience.
+
+122
+0:11:11.440 --> 0:11:18.560
+I want to give some quick acknowledgments as well to the people who made this possible.
+
+123
+0:11:18.560 --> 0:11:22.840
+I want to thank Ember Savadi and Alexei Yeren in particular for their early experiments
+
+124
+0:11:22.840 --> 0:11:28.860
+with kernel programming in HAIR. These early kernels for x86 and RISC-V, they never made
+
+125
+0:11:28.860 --> 0:11:32.840
+it to user space. They weren't very sophisticated, but they did answer a lot of the problems
+
+126
+0:11:32.840 --> 0:11:37.560
+that needed to be answered for us to know how do we do HAIR development in RISC-0. And
+
+127
+0:11:37.560 --> 0:11:42.720
+so this was very valuable for establishing things like booting up, dealing with the MMU,
+
+128
+0:11:42.720 --> 0:11:47.880
+and other questions for how to get a kernel going in HAIR. And the HAIR community itself
+
+129
+0:11:47.880 --> 0:11:51.880
+deserves a big shout out because none of this would be possible without the immense amount
+
+130
+0:11:51.880 --> 0:11:55.640
+of work which people have put into it. Many of the people who contributed to HAIR are
+
+131
+0:11:55.640 --> 0:12:00.520
+in this room and I offer them my thanks. But many people are not here. There's about 80
+
+132
+0:12:00.520 --> 0:12:05.720
+people who run into making HAIR possible. I also want to thank the OS dev community
+
+133
+0:12:05.720 --> 0:12:11.440
+on the Barat Chats IRC. These guys are incredibly smart and incredibly friendly and incredibly
+
+134
+0:12:11.440 --> 0:12:15.280
+helpful. And if you want to get involved in kernel hacking and do any kind of work in
+
+135
+0:12:15.280 --> 0:12:21.360
+RISC-0 yourself, this is an indispensable resource. Definitely check these guys out.
+
+136
+0:12:21.360 --> 0:12:27.860
+And also we owe some acknowledgements to SEL4 because a lot of our design is inspired or
+
+137
+0:12:27.860 --> 0:12:37.720
+stolen from SEL4. I should have updated this slide. We have a birds of a feather and a
+
+138
+0:12:37.720 --> 0:12:42.680
+couple of hours for HAIR, the programming language. So it's not about Helios, it's about the language
+
+139
+0:12:42.680 --> 0:12:46.000
+that Helios is implemented in. So if you want to learn more about the language, please come
+
+140
+0:12:46.000 --> 0:12:50.560
+there. There's also a talk tomorrow in the microkernel room where I'm going to have a
+
+141
+0:12:50.560 --> 0:12:54.440
+full hour to talk about Helios and I'll go into a lot more depth. So you're welcome to
+
+142
+0:12:54.440 --> 0:12:59.240
+come check that out. If you want to see any resources online about the system, the links
+
+143
+0:12:59.240 --> 0:13:04.480
+are here. This is a link to the website which contains mostly documentation, a link to the
+
+144
+0:13:04.480 --> 0:13:09.240
+source code, to the website for the programming language and to the IRC channel where we hang
+
+145
+0:13:09.240 --> 0:13:21.400
+out and we'll answer your questions. And that's it. That's Helios. Thank you very much.
+
