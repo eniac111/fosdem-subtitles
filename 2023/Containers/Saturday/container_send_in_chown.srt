@@ -1,0 +1,1328 @@
+1
+0:00:00.000 --> 0:00:10.560
+Okay, then our next talk is by Fraser.
+
+2
+0:00:10.560 --> 0:00:11.560
+Over to you.
+
+3
+0:00:11.560 --> 0:00:12.860
+Okay, thank you.
+
+4
+0:00:12.860 --> 0:00:21.800
+So I'm going to talk about user namespaces and delegation of control of C groups in container
+
+5
+0:00:21.800 --> 0:00:24.800
+orchestration systems.
+
+6
+0:00:24.800 --> 0:00:28.280
+So yeah, container and container standards.
+
+7
+0:00:28.280 --> 0:00:33.440
+This is the container's dev room, I think hopefully most people should have some idea.
+
+8
+0:00:33.440 --> 0:00:39.120
+Talk about Kubernetes and OpenShift, user namespaces and C groups, and then a demo of
+
+9
+0:00:39.120 --> 0:00:45.840
+a system B-based workload on Kubernetes and more specifically OpenShift.
+
+10
+0:00:45.840 --> 0:00:51.880
+So a container is a process isolation and confinement abstraction.
+
+11
+0:00:51.880 --> 0:00:57.840
+Most commonly it uses operating system level virtualisation where the process is running
+
+12
+0:00:57.840 --> 0:01:03.280
+in the container using the same kernel as the host system.
+
+13
+0:01:03.280 --> 0:01:09.840
+Examples of this include FreeBSD jails and Solaris zones as well as Linux containers.
+
+14
+0:01:09.840 --> 0:01:14.440
+And the container image is not a container, the container image just defines the file
+
+15
+0:01:14.440 --> 0:01:21.240
+system contents for a container and some metadata suggesting what process should be run, what
+
+16
+0:01:21.240 --> 0:01:25.500
+user ID it should run underneath and so on.
+
+17
+0:01:25.500 --> 0:01:32.880
+On Linux containers use a combination of the following technologies, so namespaces, process
+
+18
+0:01:32.880 --> 0:01:39.840
+ID namespaces, mount namespaces, network namespaces, et cetera, to restrict what the process running
+
+19
+0:01:39.840 --> 0:01:43.080
+in the container can see.
+
+20
+0:01:43.080 --> 0:01:48.000
+The container may have restricted capabilities or a sec comp profile that limits which system
+
+21
+0:01:48.000 --> 0:01:51.520
+calls or operating system features it can use.
+
+22
+0:01:51.520 --> 0:01:59.760
+There may be SE Linux or App Armor confinement and it can use C groups for resource limits.
+
+23
+0:01:59.760 --> 0:02:08.160
+Not necessarily all of these are used at the same time, it depends on the implementation.
+
+24
+0:02:08.160 --> 0:02:15.940
+The Open Container Initiative defines standards around containers in the free software ecosystem
+
+25
+0:02:15.940 --> 0:02:21.460
+and its runtime specification in particular defines a low-level runtime interface for
+
+26
+0:02:21.460 --> 0:02:29.000
+containers that is not just for Linux containers but it defines the runtime semantics for Linux,
+
+27
+0:02:29.000 --> 0:02:34.040
+Solaris containers, Windows containers, virtual machines.
+
+28
+0:02:34.040 --> 0:02:38.360
+And so there are a bunch of implementations of the runtime spec including RunC, the reference
+
+29
+0:02:38.360 --> 0:02:46.160
+implementation, C run and CART containers which is a virtual machine-based container
+
+30
+0:02:46.160 --> 0:02:48.240
+runtime.
+
+31
+0:02:48.240 --> 0:02:54.120
+The OCI runtime spec has a JSON configuration, there's a link to an example.
+
+32
+0:02:54.120 --> 0:03:00.520
+It defines or lets you define the mounts, what process to be executed, its environment,
+
+33
+0:03:00.520 --> 0:03:05.880
+life cycle hooks, so extra code to run when the container is created, destroyed, started,
+
+34
+0:03:05.880 --> 0:03:07.120
+stopped.
+
+35
+0:03:07.120 --> 0:03:14.440
+The Linux specific capabilities that can be controlled via the OCI runtime spec include
+
+36
+0:03:14.440 --> 0:03:23.200
+the capabilities, that's the kernel feature capabilities, namespaces, the C group, the
+
+37
+0:03:23.200 --> 0:03:29.560
+system controls that should be set for that container, the seccomp profile and so on.
+
+38
+0:03:29.560 --> 0:03:39.760
+This is what an example runtime specification looks like, so it has a process structure
+
+39
+0:03:39.760 --> 0:03:44.960
+which includes a field for the user ID and the group ID.
+
+40
+0:03:44.960 --> 0:03:51.240
+It has this Linux structure which defines the Linux specific attributes for this container
+
+41
+0:03:51.240 --> 0:03:58.360
+and one of those attributes is the namespaces list which defines a list of the different
+
+42
+0:03:58.360 --> 0:04:07.160
+namespaces that should be used or should be newly created for that container.
+
+43
+0:04:07.160 --> 0:04:13.960
+Kubernetes is a container orchestration platform, has a declarative configuration system and
+
+44
+0:04:13.960 --> 0:04:19.720
+it integrates with many different cloud providers.
+
+45
+0:04:19.720 --> 0:04:25.800
+Anyone not know what Kubernetes is in the room?
+
+46
+0:04:25.800 --> 0:04:33.600
+The container is an isolated or confined process or process tree, a pod is one or more related
+
+47
+0:04:33.600 --> 0:04:42.560
+containers that together constitute an application of some sort, so it might be an HTTP server
+
+48
+0:04:42.560 --> 0:04:48.480
+and a database to encapsulate the entire web application.
+
+49
+0:04:48.480 --> 0:04:55.480
+A namespace in Kubernetes terminology is not a namespace in Linux kernel terminology,
+
+50
+0:04:55.480 --> 0:05:01.760
+this is just an object scope and authorization scope for a bunch of objects in the Kubernetes
+
+51
+0:05:01.760 --> 0:05:07.280
+data store, so if you have a particular team or project in your organisation you might
+
+52
+0:05:07.280 --> 0:05:13.760
+deploy all of the Kubernetes applications in a single namespace.
+
+53
+0:05:13.760 --> 0:05:17.800
+And a node is a machine in the cluster where pods are executed, there are different kinds
+
+54
+0:05:17.800 --> 0:05:22.620
+of nodes, there are control plane nodes, there are worker nodes where the actual business
+
+55
+0:05:22.620 --> 0:05:28.280
+applications run.
+
+56
+0:05:28.280 --> 0:05:34.720
+Kuberlet is the agent that executes pods on nodes, so there's a scheduling system, the
+
+57
+0:05:34.720 --> 0:05:42.620
+scheduler will, when a pod is created, decide what node that pod should run on and Kuberlet
+
+58
+0:05:42.620 --> 0:05:48.520
+is the agent on the node that takes the pod specification and turns it into a container
+
+59
+0:05:48.520 --> 0:05:51.600
+running on that node.
+
+60
+0:05:51.600 --> 0:05:58.800
+The Kubernetes terminology uses the term sandbox, that's an isolation or confinement mechanism
+
+61
+0:05:58.800 --> 0:06:04.120
+and there's one sandbox per pod, so there could be multiple containers running in the
+
+62
+0:06:04.120 --> 0:06:05.960
+sandbox.
+
+63
+0:06:05.960 --> 0:06:14.200
+And the container runtime interface defines how Kuberlet actually starts and stops the
+
+64
+0:06:14.200 --> 0:06:17.600
+containers or the sandboxes.
+
+65
+0:06:17.600 --> 0:06:24.040
+So cryo is one implementation of the container runtime interface, that's what's used in OpenShift,
+
+66
+0:06:24.040 --> 0:06:31.080
+there's also containerd, that's used in some other distributions of Kubernetes.
+
+67
+0:06:31.080 --> 0:06:38.480
+So visualising this, the whole box is one Kubernetes node, the Kuberlet has the gRPC
+
+68
+0:06:38.480 --> 0:06:46.260
+client to talk to a CRI runtime, the CRI runtime does something and containers appear.
+
+69
+0:06:46.260 --> 0:06:54.320
+So we could instantiate the container runtime interface implementation as cryo and then
+
+70
+0:06:54.320 --> 0:07:01.400
+we can see that cryo talks to an OCI runtime, it uses exec to use the OCI runtime and we
+
+71
+0:07:01.400 --> 0:07:08.720
+can go one step further and say that the OCI runtime implementation will be runc and this
+
+72
+0:07:08.720 --> 0:07:13.840
+is the setup that we use on OpenShift.
+
+73
+0:07:13.840 --> 0:07:21.760
+This is a pod spec in YAML format, so we have kind pod, the specification has a list of
+
+74
+0:07:21.760 --> 0:07:26.000
+containers, in this case there's one, the container has a name, defines the image to
+
+75
+0:07:26.000 --> 0:07:34.000
+use, the command to execute environment variables that should be set and so on.
+
+76
+0:07:34.000 --> 0:07:40.360
+OpenShift or OpenShift container platform is an enterprise ready Kubernetes container platform,
+
+77
+0:07:40.360 --> 0:07:46.040
+it's commercially supported by Red Hat, there's a community upstream distribution called OKD,
+
+78
+0:07:46.040 --> 0:07:53.640
+as I mentioned before, it uses cryo and runc and the latest stable release is 4.12, I think
+
+79
+0:07:53.640 --> 0:07:58.160
+that came out just a week ago or so.
+
+80
+0:07:58.160 --> 0:08:06.440
+And its default, the default way that it creates containers is it uses se Linux and namespaces
+
+81
+0:08:06.440 --> 0:08:08.400
+to confine the processes.
+
+82
+0:08:08.400 --> 0:08:17.480
+Each namespace gets assigned a unique user ID range and the processes for the pods in
+
+83
+0:08:17.480 --> 0:08:22.080
+that namespace have to run in those host UIDs.
+
+84
+0:08:22.080 --> 0:08:28.840
+You can circumvent this using the run as user security context constraint, but that is not
+
+85
+0:08:28.840 --> 0:08:35.640
+a good idea, you don't want your containers running as root on the container host because
+
+86
+0:08:35.640 --> 0:08:41.360
+if they escape the sandbox then your cluster got owned.
+
+87
+0:08:41.360 --> 0:08:48.480
+So this is the why of user namespaces, user namespaces, we're talking now Linux kernel,
+
+88
+0:08:48.480 --> 0:08:54.160
+user namespaces can be used to improve the workload isolation and the confinement of
+
+89
+0:08:54.160 --> 0:08:57.240
+the pods in your cluster.
+
+90
+0:08:57.240 --> 0:09:01.920
+They can also be used to run applications that require or assume that they're running
+
+91
+0:09:01.920 --> 0:09:08.160
+as specific user IDs or to phrase this a different way, you can drag your legacy applications
+
+92
+0:09:08.160 --> 0:09:16.040
+kicking and screaming into the cloud and get the benefits of all of the orchestration and
+
+93
+0:09:16.040 --> 0:09:22.880
+networking support that these platforms like Kubernetes and OpenShift can give you while
+
+94
+0:09:22.880 --> 0:09:24.920
+still running that workload securely.
+
+95
+0:09:24.920 --> 0:09:31.360
+In other words, trick it to believe it is running as root.
+
+96
+0:09:31.360 --> 0:09:39.720
+And there have been a bunch of CVS in Kubernetes and the broader container orchestration ecosystem
+
+97
+0:09:39.720 --> 0:09:47.000
+arising from sandbox escapes where user namespaces would have prevented the vulnerability or
+
+98
+0:09:47.000 --> 0:09:53.040
+severely limited or curtailed its impact.
+
+99
+0:09:53.040 --> 0:09:58.600
+So visualising a user namespace, we can have two separate containers with a user namespace
+
+100
+0:09:58.600 --> 0:10:08.320
+mapping of UID range 0 to 65535 inside the container's user namespace to a range of unprivileged
+
+101
+0:10:08.320 --> 0:10:12.240
+user IDs in the host's user ID namespace.
+
+102
+0:10:12.240 --> 0:10:16.920
+So the processes running in the container believe that they are running as, for example,
+
+103
+0:10:16.920 --> 0:10:25.080
+root UID0 or some other privileged user ID when in fact it's running as UID200,000 on
+
+104
+0:10:25.080 --> 0:10:28.400
+the host and unprivileged user ID.
+
+105
+0:10:28.400 --> 0:10:35.460
+Escape the sandbox and you're still an unprivileged user on the host.
+
+106
+0:10:35.460 --> 0:10:40.640
+So in Linux there's some references to some man pages about user namespaces and how to
+
+107
+0:10:40.640 --> 0:10:41.640
+use them.
+
+108
+0:10:41.640 --> 0:10:50.360
+The critical thing is the unshare system call which is how you create and use the user namespace.
+
+109
+0:10:50.360 --> 0:10:56.720
+In the OCI runtime specification there are some fields and again this is Linux specific
+
+110
+0:10:56.720 --> 0:11:02.360
+so it's inside the Linux specific part of that configuration that you can specify that
+
+111
+0:11:02.360 --> 0:11:07.600
+a user namespace should be created or used for that container and you can specify the
+
+112
+0:11:07.600 --> 0:11:16.840
+mappings of how do we map the container's user ID range to the host user ID range.
+
+113
+0:11:16.840 --> 0:11:22.040
+These namespaces were implemented, before they were implemented in Kubernetes upstream,
+
+114
+0:11:22.040 --> 0:11:24.360
+we did it in Cryo.
+
+115
+0:11:24.360 --> 0:11:32.840
+It first shipped in OpenShift 4.7 but it required a considerable amount of additional configuration
+
+116
+0:11:32.840 --> 0:11:37.760
+of the cluster to use it and since OpenShift 4.10 you've been able to use it out of the
+
+117
+0:11:37.760 --> 0:11:38.760
+box.
+
+118
+0:11:38.760 --> 0:11:46.680
+You do still have to opt in using annotations on a per pod basis.
+
+119
+0:11:46.680 --> 0:11:53.240
+It requires the NEU ID security context constraint or an equivalent privileged security context
+
+120
+0:11:53.240 --> 0:11:58.880
+constraint in order to admit the pod because the admission machinery does not yet understand
+
+121
+0:11:58.880 --> 0:12:01.520
+about user namespaces.
+
+122
+0:12:01.520 --> 0:12:07.800
+So the pod spec says I want to run as user ID zero and the admission machinery says no
+
+123
+0:12:07.800 --> 0:12:08.800
+way.
+
+124
+0:12:08.800 --> 0:12:15.400
+We need to circumvent that for the time being but the workload itself will run in the user
+
+125
+0:12:15.400 --> 0:12:18.760
+namespace.
+
+126
+0:12:18.760 --> 0:12:25.120
+And depending on the workload it may still require some additional cluster configuration.
+
+127
+0:12:25.120 --> 0:12:31.240
+So the annotations to opt in, you can say I o.OpenShift.builder is true, that activates
+
+128
+0:12:31.240 --> 0:12:37.840
+a particular Cryo what we call a workload, basically an alternative bunch of runtime
+
+129
+0:12:37.840 --> 0:12:46.400
+settings and then we use the user NS mode annotation to specify that we want an arbitrary
+
+130
+0:12:46.400 --> 0:12:49.920
+user namespace of size 6.536.
+
+131
+0:12:49.920 --> 0:12:55.760
+So that will allocate you a contiguous host UID range for that container and map it to
+
+132
+0:12:55.760 --> 0:13:00.480
+unprivileged host user IDs.
+
+133
+0:13:00.480 --> 0:13:04.920
+In the Kubernetes upstream it took a bit longer to get user namespace support and it's still
+
+134
+0:13:04.920 --> 0:13:11.280
+a work in progress but the initial support was delivered in Kubernetes 1.25 and that
+
+135
+0:13:11.280 --> 0:13:19.440
+version is what we've moved to in OpenShift 4.12 so you can now use the first class user
+
+136
+0:13:19.440 --> 0:13:21.920
+namespace support in OpenShift.
+
+137
+0:13:21.920 --> 0:13:26.200
+It is an alpha feature so it's not enabled by default, you have to turn it on with a
+
+138
+0:13:26.200 --> 0:13:33.400
+feature gate and at the moment it only supports ephemeral volume types so empty config maps,
+
+139
+0:13:33.400 --> 0:13:37.880
+it's no persistent volume support yet.
+
+140
+0:13:37.880 --> 0:13:46.880
+You opt in by putting host user's false in your pod spec and currently it gives you a
+
+141
+0:13:46.880 --> 0:13:54.720
+fixed mapping size of 6.536 that will be unique to that pod.
+
+142
+0:13:54.720 --> 0:14:01.200
+It is hoped that a later phase will deliver support for the additional volume types.
+
+143
+0:14:01.200 --> 0:14:10.760
+The reason we didn't have them is the complexity around ID mapped mounts and how to adapt the
+
+144
+0:14:10.760 --> 0:14:16.400
+volume mounts to understand how to map the user IDs between the host UID namespace and
+
+145
+0:14:16.400 --> 0:14:19.520
+the container's user namespace.
+
+146
+0:14:19.520 --> 0:14:23.280
+There's also very simple heuristics around the ID range assignment, as I mentioned it's
+
+147
+0:14:23.280 --> 0:14:30.480
+a fixed size of 6.536 that limits the number of pods that you could run in user namespaces
+
+148
+0:14:30.480 --> 0:14:33.800
+on a given node.
+
+149
+0:14:33.800 --> 0:14:37.840
+There are still some other mount point and file ownership issues, for example with the
+
+150
+0:14:37.840 --> 0:14:40.040
+C group FS.
+
+151
+0:14:40.040 --> 0:14:42.720
+That takes us to the C group's topic.
+
+152
+0:14:42.720 --> 0:14:50.320
+OpenShift creates a unique C group for each container and it also creates a C group namespace
+
+153
+0:14:50.320 --> 0:14:58.640
+so that the container in the CFS C group mount only sees its namespace.
+
+154
+0:14:58.640 --> 0:15:05.880
+Inside the container CFS C group points to CFS C group slash a whole bunch of stuff specific
+
+155
+0:15:05.880 --> 0:15:11.580
+to that container in the host's file system.
+
+156
+0:15:11.580 --> 0:15:17.480
+If you want to run a system D based workload, system D needs right access to the C group
+
+157
+0:15:17.480 --> 0:15:18.680
+FS.
+
+158
+0:15:18.680 --> 0:15:24.800
+But by default the C group FS will be mounted read only.
+
+159
+0:15:24.800 --> 0:15:32.000
+So the solution, we modify the container runtime to the C group to the container's process
+
+160
+0:15:32.000 --> 0:15:33.080
+UID.
+
+161
+0:15:33.080 --> 0:15:43.520
+So that is we chain it to the host UID corresponding to UID zero in the container's user namespace.
+
+162
+0:15:43.520 --> 0:15:50.960
+But first before we did this in an ad hoc basis we engaged with the open container initiative
+
+163
+0:15:50.960 --> 0:15:57.280
+to define the semantics for C group ownership in a container.
+
+164
+0:15:57.280 --> 0:16:03.880
+Those proposals were workshopped and accepted and after that we were able to implement those
+
+165
+0:16:03.880 --> 0:16:07.080
+semantics in run C.
+
+166
+0:16:07.080 --> 0:16:08.480
+So what are the semantics?
+
+167
+0:16:08.480 --> 0:16:16.520
+The container's C group will be choned to the host UID matching the process UID in the
+
+168
+0:16:16.520 --> 0:16:24.200
+container's user namespace if and only if the node is using C group speed two and the
+
+169
+0:16:24.200 --> 0:16:34.200
+container has its own C group namespace and the C group FS is mounted read right.
+
+170
+0:16:34.200 --> 0:16:41.320
+So only the C group directory itself and the files mentioned in Cyskernel C group delegate
+
+171
+0:16:41.320 --> 0:16:42.560
+are choned.
+
+172
+0:16:42.560 --> 0:16:51.560
+These are the ones that are safe to delegate to a subprocess.
+
+173
+0:16:51.560 --> 0:16:58.560
+And the container runtime, if that file Cyskernel C group delegate is defined then it will read
+
+174
+0:16:58.560 --> 0:17:03.660
+that file and only chone the files mentioned there.
+
+175
+0:17:03.660 --> 0:17:13.120
+So it can respond to the evolution of the kernel where new C group nodes may come and
+
+176
+0:17:13.120 --> 0:17:14.120
+go.
+
+177
+0:17:14.120 --> 0:17:16.320
+Some of them may be safe to delegate.
+
+178
+0:17:16.320 --> 0:17:19.420
+Some of them may not.
+
+179
+0:17:19.420 --> 0:17:24.060
+In OpenShift C group speed two is not yet the default when you deploy a cluster but it does
+
+180
+0:17:24.060 --> 0:17:26.820
+work and it is supported.
+
+181
+0:17:26.820 --> 0:17:36.440
+And to activate the C group choned semantics that I just explained we still require an
+
+182
+0:17:36.440 --> 0:17:41.160
+annotation in the pod spec.
+
+183
+0:17:41.160 --> 0:17:44.320
+So let's do a demo.
+
+184
+0:17:44.320 --> 0:17:49.760
+Here's a cluster I prepared earlier.
+
+185
+0:17:49.760 --> 0:17:59.760
+And we can see new project test, okay, OC create user test.
+
+186
+0:17:59.760 --> 0:18:01.440
+Maybe test already exists, okay.
+
+187
+0:18:01.440 --> 0:18:03.400
+We'll just use test.
+
+188
+0:18:03.400 --> 0:18:09.600
+So we can now, oh, I'll show you the pod I'm going to create.
+
+189
+0:18:09.600 --> 0:18:14.340
+Cat pod nginx host users false.
+
+190
+0:18:14.340 --> 0:18:16.520
+So this is a pod spec.
+
+191
+0:18:16.520 --> 0:18:22.840
+Let's get some syntax.
+
+192
+0:18:22.840 --> 0:18:25.400
+This is going to run nginx.
+
+193
+0:18:25.400 --> 0:18:28.760
+It's a system D based workload.
+
+194
+0:18:28.760 --> 0:18:38.200
+So it's a Fedora system that will come up and system D will run and it will start nginx.
+
+195
+0:18:38.200 --> 0:18:42.240
+We setting host users false so that it will run in the user name space.
+
+196
+0:18:42.240 --> 0:18:49.720
+I have already enabled the feature flag on this cluster.
+
+197
+0:18:49.720 --> 0:18:55.240
+There's that annotation for the C group choned.
+
+198
+0:18:55.240 --> 0:18:57.480
+And the name of the pod will be nginx.
+
+199
+0:18:57.480 --> 0:18:59.200
+So let's create that.
+
+200
+0:18:59.200 --> 0:19:07.680
+So OC as test create dash F. Okay.
+
+201
+0:19:07.680 --> 0:19:09.680
+Fingers crossed.
+
+202
+0:19:09.680 --> 0:19:15.120
+Okay.
+
+203
+0:19:15.120 --> 0:19:23.040
+So we'll say OC admin policy add role to user edit.
+
+204
+0:19:23.040 --> 0:19:24.040
+Okay.
+
+205
+0:19:24.040 --> 0:19:29.360
+Let's try that again.
+
+206
+0:19:29.360 --> 0:19:33.440
+So the pod has been created.
+
+207
+0:19:33.440 --> 0:19:38.520
+And we'll just check its status to see which node it is running on.
+
+208
+0:19:38.520 --> 0:19:40.640
+And it hasn't yet started.
+
+209
+0:19:40.640 --> 0:19:45.760
+So we don't have a container ID for it yet.
+
+210
+0:19:45.760 --> 0:19:54.840
+But in the upper pane, I'll get a shell on that worker node.
+
+211
+0:19:54.840 --> 0:20:00.400
+Okay.
+
+212
+0:20:00.400 --> 0:20:03.120
+Pod is now running.
+
+213
+0:20:03.120 --> 0:20:09.800
+So we can run cry control, inspect, container ID.
+
+214
+0:20:09.800 --> 0:20:12.320
+And we'll just pull out the PID.
+
+215
+0:20:12.320 --> 0:20:15.840
+So this is our PID.
+
+216
+0:20:15.840 --> 0:20:20.960
+Now if we have a look at the user ID map for this process.
+
+217
+0:20:20.960 --> 0:20:40.640
+Okay, so here we see that we have a user name space with a user ID mapping of size 65536.
+
+218
+0:20:40.640 --> 0:20:50.000
+Which is mapping user ID zero in the container's user name space to user ID 131072 in the host
+
+219
+0:20:50.000 --> 0:20:53.960
+user name space.
+
+220
+0:20:53.960 --> 0:20:58.640
+And now we can look at the processes that are actually running there.
+
+221
+0:20:58.640 --> 0:21:08.120
+So we'll do p grep, double dash n s says show me everything with the same set of name spaces
+
+222
+0:21:08.120 --> 0:21:12.600
+as this process ID.
+
+223
+0:21:12.600 --> 0:21:16.960
+And then I'll just pipe that to PS.
+
+224
+0:21:16.960 --> 0:21:24.760
+Let's print the user, the PID and the command.
+
+225
+0:21:24.760 --> 0:21:26.800
+Sorting by PID.
+
+226
+0:21:26.800 --> 0:21:28.340
+Okay.
+
+227
+0:21:28.340 --> 0:21:36.160
+So we can see that this container is running, well, in it.
+
+228
+0:21:36.160 --> 0:21:40.480
+And then a bunch of system D processes.
+
+229
+0:21:40.480 --> 0:21:43.600
+And then eventually, nginx.
+
+230
+0:21:43.600 --> 0:21:48.480
+And these are running under 131072.
+
+231
+0:21:48.480 --> 0:21:50.480
+Yeah.
+
+232
+0:21:50.480 --> 0:21:52.480
+132071.
+
+233
+0:21:52.480 --> 0:21:54.480
+Yeah.
+
+234
+0:21:54.480 --> 0:22:03.840
+So these are running as various user IDs in the container's user name space.
+
+235
+0:22:03.840 --> 0:22:11.840
+And those are being mapped to the host user ID name space as these PIDs.
+
+236
+0:22:11.840 --> 0:22:21.160
+If we look at the logs, we can see that it looks like a regular system D system has come
+
+237
+0:22:21.160 --> 0:22:22.160
+up.
+
+238
+0:22:22.160 --> 0:22:26.320
+Indeed, it has.
+
+239
+0:22:26.320 --> 0:22:27.320
+And let's see.
+
+240
+0:22:27.320 --> 0:22:28.320
+I see.
+
+241
+0:22:28.320 --> 0:22:37.480
+Maybe we'll get a shell on the pod.
+
+242
+0:22:37.480 --> 0:22:48.840
+And, yeah, if we have a look at what is the container's view of the processes that are
+
+243
+0:22:48.840 --> 0:22:57.520
+running, it sees that system D is running as root or other system D related users inside
+
+244
+0:22:57.520 --> 0:23:01.280
+the container's user name space.
+
+245
+0:23:01.280 --> 0:23:07.120
+nginx is running as the nginx user in that container's user name space.
+
+246
+0:23:07.120 --> 0:23:16.800
+But as we saw, these are all mapped to unprivileged host user IDs in the host user name space.
+
+247
+0:23:16.800 --> 0:23:19.320
+So that concludes the demo.
+
+248
+0:23:19.320 --> 0:23:22.360
+Here's links to various resources.
+
+249
+0:23:22.360 --> 0:23:26.400
+I have a lot of blog posts and this and related topics.
+
+250
+0:23:26.400 --> 0:23:31.440
+So you can hit my blog and just look at the container's tag.
+
+251
+0:23:31.440 --> 0:23:34.480
+A recording of a demo or a similar demo.
+
+252
+0:23:34.480 --> 0:23:36.560
+Slightly earlier version.
+
+253
+0:23:36.560 --> 0:23:42.880
+And to KEP 127, which is where all of the discussion around how to do the upstream support
+
+254
+0:23:42.880 --> 0:23:46.640
+for user name spaces in Kubernetes.
+
+255
+0:23:46.640 --> 0:23:48.320
+All of that discussion happened there.
+
+256
+0:23:48.320 --> 0:23:52.800
+The OCI runtime spec is referenced there.
+
+257
+0:23:52.800 --> 0:23:53.800
+And that's it.
+
+258
+0:23:53.800 --> 0:23:58.840
+So I think there is time for some questions.
+
+259
+0:23:58.840 --> 0:24:07.560
+So please stay seated until 25 so we can ask questions.
+
+260
+0:24:07.560 --> 0:24:08.560
+Okay.
+
+261
+0:24:08.560 --> 0:24:09.560
+There is one in the back.
+
+262
+0:24:09.560 --> 0:24:12.080
+Do you want to read the one from the chat first?
+
+263
+0:24:12.080 --> 0:24:14.280
+There's a question in chat.
+
+264
+0:24:14.280 --> 0:24:17.240
+I don't see it anymore.
+
+265
+0:24:17.240 --> 0:24:21.040
+It says, why would I want to run system D in a container?
+
+266
+0:24:21.040 --> 0:24:26.640
+It's cool that it's possible with user name spaces, but I lack an idea for a use case.
+
+267
+0:24:26.640 --> 0:24:34.400
+So the use case is you have a complicated legacy workload that runs under system D or
+
+268
+0:24:34.400 --> 0:24:40.680
+makes assumptions about the environment it runs in, the user IDs that the different components
+
+269
+0:24:40.680 --> 0:24:42.900
+are running as.
+
+270
+0:24:42.900 --> 0:24:44.040
+You've got two choices.
+
+271
+0:24:44.040 --> 0:24:51.280
+One is to spend a whole lot of upfront engineering effort to break up that application and containerize
+
+272
+0:24:51.280 --> 0:24:57.880
+it and make it quote unquote a cloud native application which is expensive and typically
+
+273
+0:24:57.880 --> 0:25:03.120
+has a long lead time or you can just wrap that whole application up in a container and
+
+274
+0:25:03.120 --> 0:25:08.840
+run it securely, hopefully, in a container orchestration platform and get the benefit
+
+275
+0:25:08.840 --> 0:25:16.080
+of all of the scaling, networking, observability features that the orchestration platform gives
+
+276
+0:25:16.080 --> 0:25:23.560
+you without having to spend that effort to bust your application into 100 pieces.
+
+277
+0:25:23.560 --> 0:25:26.240
+So I would say that that is the use case.
+
+278
+0:25:26.240 --> 0:25:28.340
+I think it's a compelling one.
+
+279
+0:25:28.340 --> 0:25:32.080
+If you were building applications today, you certainly wouldn't do that, but there are
+
+280
+0:25:32.080 --> 0:25:36.720
+100 million legacy applications out there and people don't want to break them up and
+
+281
+0:25:36.720 --> 0:25:38.960
+change them.
+
+282
+0:25:38.960 --> 0:25:42.520
+Hi.
+
+283
+0:25:42.520 --> 0:25:43.520
+Thanks for the talk.
+
+284
+0:25:43.520 --> 0:25:50.120
+I'm actually doing this right now at my company, but basically the container is running as
+
+285
+0:25:50.120 --> 0:25:51.120
+privileged.
+
+286
+0:25:51.120 --> 0:25:55.280
+So that's why it can access a C group.
+
+287
+0:25:55.280 --> 0:25:59.040
+Doesn't use user namespaces, just runs as privileged.
+
+288
+0:25:59.040 --> 0:26:06.440
+So I was wondering if using this method you could set a memory max, memory high or other
+
+289
+0:26:06.440 --> 0:26:13.800
+values for some processes running in the container, I mean?
+
+290
+0:26:13.800 --> 0:26:18.480
+I'm sorry, I couldn't hear the question because it's rather echoey.
+
+291
+0:26:18.480 --> 0:26:19.480
+Sorry.
+
+292
+0:26:19.480 --> 0:26:20.480
+Yeah.
+
+293
+0:26:20.480 --> 0:26:27.000
+So can you set memory high, memory max, values, CPU affinities, like all these kinds of things
+
+294
+0:26:27.000 --> 0:26:29.960
+you would set in the C group usually?
+
+295
+0:26:29.960 --> 0:26:34.600
+Can you set them from this particular use case of C groups in a container?
+
+296
+0:26:34.600 --> 0:26:41.160
+Yes, absolutely, because the container still has its own C group namespace, so all of the
+
+297
+0:26:41.160 --> 0:26:48.040
+standard C group confinement and resource limit capabilities can be used.
+
+298
+0:26:48.040 --> 0:26:49.040
+Okay.
+
+299
+0:26:49.040 --> 0:26:56.080
+I guess I got confused by the list of values that were allowed to do a list in the previous
+
+300
+0:26:56.080 --> 0:26:57.160
+slide.
+
+301
+0:26:57.160 --> 0:27:00.080
+There was a restricted list of values.
+
+302
+0:27:00.080 --> 0:27:09.200
+Yeah, yeah, so those were just the particular files that need to be chined in order for
+
+303
+0:27:09.200 --> 0:27:17.560
+safe delegation of control of that branch of the C group hierarchy to another process.
+
+304
+0:27:17.560 --> 0:27:28.480
+So you can still set on the C group directory all of the limits and the container won't
+
+305
+0:27:28.480 --> 0:27:36.000
+be able to change those because those will not be chined to the container's process UID.
+
+306
+0:27:36.000 --> 0:27:41.920
+Okay, thank you.
+
+307
+0:27:41.920 --> 0:28:09.560
+So I have a question regarding the CSFSC group CSH own.
+
+308
+0:28:09.560 --> 0:28:18.260
+So you mentioned it's going to be changed to the UID of the process container.
+
+309
+0:28:18.260 --> 0:28:24.640
+Can you do that if you want to have several ports to run their own system D?
+
+310
+0:28:24.640 --> 0:28:32.240
+So, because it seems, is it in the sub-tree of the C group hierarchy that you do that
+
+311
+0:28:32.240 --> 0:28:35.320
+or at the top level?
+
+312
+0:28:35.320 --> 0:28:38.040
+Is your question around can you do it in a nested way?
+
+313
+0:28:38.040 --> 0:28:40.720
+No, not in a nested way.
+
+314
+0:28:40.720 --> 0:28:46.520
+You have three different ports which each port needs their own system.
+
+315
+0:28:46.520 --> 0:28:48.520
+Yes, yes, absolutely.
+
+316
+0:28:48.520 --> 0:28:56.360
+So if I created more pods in my demo, you would see that they would then be mapped to
+
+317
+0:28:56.360 --> 0:28:58.200
+different host UID ranges.
+
+318
+0:28:58.200 --> 0:29:08.720
+So the limit is only how many of the range allocations can you fit into the host UID
+
+319
+0:29:08.720 --> 0:29:09.720
+range.
+
+320
+0:29:09.720 --> 0:29:21.280
+So the limit will be a little under 65536 because the size of the host UID range on
+
+321
+0:29:21.280 --> 0:29:28.440
+Linux by default is 2 to the 32.
+
+322
+0:29:28.440 --> 0:29:31.520
+I think we have time for one more question.
+
+323
+0:29:31.520 --> 0:29:34.680
+Thank you all for your patience.
+
+324
+0:29:34.680 --> 0:29:35.680
+Thank you, Fraser.
+
+325
+0:29:35.680 --> 0:29:41.960
+I just wanted to know if v2, v2 by default in OpenShift is on the roadmap yet and whether
+
+326
+0:29:41.960 --> 0:29:45.000
+or not there's any sort of estimated time scale for that?
+
+327
+0:29:45.000 --> 0:29:46.680
+Yes, it is.
+
+328
+0:29:46.680 --> 0:29:50.800
+So there is a plan to eventually move to secret v2 as the default.
+
+329
+0:29:50.800 --> 0:29:56.280
+I don't know the exact time frame.
+
+330
+0:29:56.280 --> 0:29:59.120
+Thank you so much for your talk.
+
+331
+0:29:59.120 --> 0:30:01.880
+Thank you all for your patience.
+
+332
+0:30:01.880 --> 0:30:22.520
+I know this sounds weird, but your patience is on me.
+
