@@ -1,0 +1,612 @@
+1
+0:00:00.000 --> 0:00:11.240
+So, hi everyone. I am Merlin and we're going to talk about lightweight Kubernetes operators
+
+2
+0:00:11.240 --> 0:00:19.520
+with WebAssembly. So, basically, it's an attempt to lower the memory and CPU footprint of the
+
+3
+0:00:19.520 --> 0:00:28.200
+Kubernetes control plane. So, I am Merlin. You can also say it in Dutch Merlin. And I
+
+4
+0:00:28.200 --> 0:00:35.000
+am a researcher at iMac and I teach at Gent University. I'm also part of the Ubuntu Community
+
+5
+0:00:35.000 --> 0:00:41.680
+Council. But right now, I'm here to talk about my research, which is service orchestration in the
+
+6
+0:00:41.680 --> 0:00:49.440
+cloud and in the edge. And so, it's specifically the edge part of this research. Edge computing is
+
+7
+0:00:49.440 --> 0:00:55.080
+becoming more and more popular. More and more people want to run their applications closer to
+
+8
+0:00:55.080 --> 0:01:02.920
+end users on devices inside of users' homes, for example. And as a result, you have a lot of
+
+9
+0:01:02.920 --> 0:01:08.120
+these people who are coming from a background of developing cloud applications and who now
+
+10
+0:01:08.120 --> 0:01:14.920
+suddenly want to develop applications that run on devices, which are very low-powered. And they
+
+11
+0:01:14.920 --> 0:01:19.840
+really like the development experience of the cloud. They like all the tools. They like the
+
+12
+0:01:19.840 --> 0:01:26.320
+cloud-native experience with tools like Kubernetes, for example. But as most of you might know,
+
+13
+0:01:26.320 --> 0:01:35.440
+Kubernetes isn't really a great fit for the edge. Kubernetes is incredibly resource-hungry. It
+
+14
+0:01:35.440 --> 0:01:42.480
+really likes to gobble up RAM. It really likes to block all your CPUs. And there's a lot of
+
+15
+0:01:42.480 --> 0:01:49.760
+components inside of the Kubernetes control plane that do this. Part of it is the Cubelet that runs
+
+16
+0:01:49.760 --> 0:01:57.240
+on every worker machine. Part of it is the container runtimes themselves or the API server. But what
+
+17
+0:01:57.240 --> 0:02:11.560
+I'm going to talk about in this session... I think I have no idea why. I still have batteries. So,
+
+18
+0:02:11.560 --> 0:02:20.320
+I'm going to talk about operators specifically. Operators tend to take a lot of resources, eat up
+
+19
+0:02:20.320 --> 0:02:27.880
+a lot of resources from your Kubernetes cluster. So first of all, operators, these are basically
+
+20
+0:02:27.880 --> 0:02:34.800
+plugins to the Kubernetes control plane, which add additional functionality to the Kubernetes API.
+
+21
+0:02:34.800 --> 0:02:41.960
+For example, it could add a resource to deploy and manage a MySQL cluster, or it could add a resource
+
+22
+0:02:41.960 --> 0:02:51.960
+to deploy and manage a SEF cluster, for example. And these operators, they are also really resource
+
+23
+0:02:51.960 --> 0:02:58.800
+hungry. And this is part of it is because they are long-running processes. So, these processes,
+
+24
+0:02:58.800 --> 0:03:03.080
+they see something change in your Kubernetes cluster. They want to do something with it. And
+
+25
+0:03:03.080 --> 0:03:08.520
+then write those changes back to the API server in order to manage the applications. But after
+
+26
+0:03:08.520 --> 0:03:14.320
+that writing is done, these processes, they keep running because they keep listening for events
+
+27
+0:03:14.320 --> 0:03:21.600
+from the Kubernetes API or even sometimes manually watching if some resource has changed. And so,
+
+28
+0:03:21.600 --> 0:03:26.640
+even if they're doing nothing, they're still running. A lot of them are written in Golang,
+
+29
+0:03:26.640 --> 0:03:33.160
+and Golang really likes memory. They are running inside of containers. Most of them are running
+
+30
+0:03:33.160 --> 0:03:39.280
+inside of separate containers. And they're basically sitting in RAM doing nothing, eating up
+
+31
+0:03:39.280 --> 0:03:45.360
+that RAM. And so, this is an issue if you want to run Kubernetes in the edge on devices which
+
+32
+0:03:45.360 --> 0:03:55.440
+have like 512 megabytes of RAM. These operators are basically unusable in situations like that.
+
+33
+0:03:55.440 --> 0:04:03.400
+So, how could we solve this? One of the ways that you could solve this is that we think we can
+
+34
+0:04:03.400 --> 0:04:09.040
+solve this is by using WebAssembly and the WebAssembly system interface. And so, yes, really,
+
+35
+0:04:09.040 --> 0:04:15.880
+we're trying to lower the footprint of Kubernetes by taking a web technology and putting it inside
+
+36
+0:04:15.880 --> 0:04:23.280
+of Kubernetes. If you don't believe me, this is a tweet from one of the co-founders of Docker who
+
+37
+0:04:23.280 --> 0:04:28.280
+basically said like if WebAssembly and the WebAssembly system interface would have existed in
+
+38
+0:04:28.280 --> 0:04:37.600
+2008, they wouldn't have needed to create Docker. It's a very interesting technology which we think
+
+39
+0:04:37.600 --> 0:04:44.640
+is a very good fit to solve this issue in Kubernetes. So, what is WebAssembly created
+
+40
+0:04:44.640 --> 0:04:51.960
+originally for the browser? It's basically a binary code format. You compile your applications to
+
+41
+0:04:51.960 --> 0:04:59.480
+WebAssembly instead of compiling them to x86 or to ARM. And then this code runs inside of a
+
+42
+0:04:59.480 --> 0:05:05.800
+runtime. You could call it a very lightweight virtual machine. It runs in your browser, it runs in
+
+43
+0:05:05.800 --> 0:05:11.800
+the Node.js runtime, but there's also a whole bunch of new purpose built, very lightweight
+
+44
+0:05:11.800 --> 0:05:19.280
+runtimes such as wasm time, the one that we're using right now. And the WebAssembly system interface
+
+45
+0:05:19.280 --> 0:05:25.440
+is basically a syscall interface. So, WebAssembly is your binary, but it doesn't have access to
+
+46
+0:05:25.440 --> 0:05:31.520
+anything. And then the system interface is a syscall interface. So, that's an interface that it uses
+
+47
+0:05:31.520 --> 0:05:37.720
+to open files, open sockets, start new threads and stuff like that. And so, if you combine these two,
+
+48
+0:05:37.720 --> 0:05:46.440
+you basically have a very lightweight super fast sandbox. And so, the result of running these
+
+49
+0:05:46.440 --> 0:05:54.960
+operators inside of WebAssembly containers is that they use a lot less RAM. So, here on this slide,
+
+50
+0:05:54.960 --> 0:06:03.440
+at the top, you see 100 operators running as Docker containers. Then you have 100 operators
+
+51
+0:06:03.440 --> 0:06:09.720
+running as WebAssembly containers, and then 100 running just on bare metal. So, we're not reaching
+
+52
+0:06:09.720 --> 0:06:17.640
+the performance of bare metal. There's still some overhead. However, we're compared to the Docker
+
+53
+0:06:17.640 --> 0:06:26.680
+containers, like we're getting a lot closer than that. As an advantage that we didn't see coming
+
+54
+0:06:26.680 --> 0:06:33.480
+initially, but they also have a lot less latency. They run a lot quicker. This also shows the
+
+55
+0:06:33.480 --> 0:06:39.360
+difference between Golang operators and Rust operators. So, obviously, Rust will have a lot
+
+56
+0:06:39.360 --> 0:06:45.240
+less latency and a lot less latency distribution because it's not a garbage collected language.
+
+57
+0:06:45.240 --> 0:06:50.720
+However, we were surprised to see that running them inside of WebAssembly gave them even better,
+
+58
+0:06:50.720 --> 0:07:00.320
+even more consistent latency. So, how did we do this? We basically work with a client server
+
+59
+0:07:00.320 --> 0:07:07.360
+model or like a parent operator and a child operator. The parent operator, it is a WebAssembly
+
+60
+0:07:07.360 --> 0:07:13.040
+runtime with a bunch of additions to it in order to support running operators inside of that
+
+61
+0:07:13.040 --> 0:07:22.080
+runtime. And it watches the Kubernetes resources in the name of the operators running inside of it.
+
+62
+0:07:22.080 --> 0:07:27.520
+So, the operators don't have to keep running to watch it. They can just shut down when there's
+
+63
+0:07:27.520 --> 0:07:35.080
+nothing to do. And the parent operator will call them once there is a change to process. The child
+
+64
+0:07:35.080 --> 0:07:41.720
+operators, those are where the actual operators run inside. And the interesting part is that they
+
+65
+0:07:41.720 --> 0:07:49.880
+are just regular operators compiled to WebAssembly using a patched version of the Kubernetes SDK.
+
+66
+0:07:49.880 --> 0:07:57.840
+So, in the future, this will probably make it possible to just take a regular Kubernetes
+
+67
+0:07:57.840 --> 0:08:05.960
+operator, compile it to WebAssembly and then use it in this system. Right now, we only support Rust
+
+68
+0:08:05.960 --> 0:08:14.320
+because Rust support for WebAssembly is very good. Go-Lang support for WebAssembly is iffy. And we
+
+69
+0:08:14.320 --> 0:08:25.040
+have a patched version of Kube RS, Kubernetes SDK, to then contact the parent operator instead of
+
+70
+0:08:25.040 --> 0:08:34.760
+contacting the Kubernetes API itself. So, how does this loading and unloading work? This is the
+
+71
+0:08:34.760 --> 0:08:42.440
+WebAssembly engine. This is basically just wasn't time, the WebAssembly runtime. And in here is your
+
+72
+0:08:42.440 --> 0:08:48.600
+client operator, your child operator is running. Once the child operator wants to contact the
+
+73
+0:08:48.600 --> 0:08:54.880
+Kubernetes API server, it does a sys call. We extended the WebAssembly system interface to
+
+74
+0:08:54.880 --> 0:09:02.320
+add a few sys calls to support the scenario. And this sys call goes through to the parent
+
+75
+0:09:02.320 --> 0:09:08.840
+operator and then the parent operator is the one who actually contacts the Kubernetes API. Once
+
+76
+0:09:08.840 --> 0:09:15.440
+these calls are finished, the parent operator, it contacts the child operator back again in order
+
+77
+0:09:15.440 --> 0:09:22.400
+to give it the result of these calls. And if the child operator is not doing anything, the parent
+
+78
+0:09:22.400 --> 0:09:28.000
+operator shuts down the child operator. And once there changes to process, it starts it up again.
+
+79
+0:09:28.000 --> 0:09:35.640
+And so the results I showed you on the first slides, those results are just not unloading
+
+80
+0:09:35.640 --> 0:09:42.640
+anything. Just running Kubernetes operators inside of WebAssembly. So these results are what you
+
+81
+0:09:42.640 --> 0:09:51.760
+get when you have the worst case scenario for unloading operators when they're not doing anything.
+
+82
+0:09:51.760 --> 0:09:58.840
+And so we see that in a worst case scenario, they still use 50% less RAM because they're constantly
+
+83
+0:09:58.840 --> 0:10:06.760
+being unloaded and then reloaded again once there's changes to process. However, this is obviously
+
+84
+0:10:06.760 --> 0:10:17.760
+at the cost of latency. Even though WebAssembly, it starts incredibly fast. It has latency that just
+
+85
+0:10:17.760 --> 0:10:23.760
+can't be compared to Docker containers for starting applications. There is still some latency to start
+
+86
+0:10:23.760 --> 0:10:30.240
+a WebAssembly application. And so this compounds in the worst case scenario of like 100 operators
+
+87
+0:10:30.240 --> 0:10:41.360
+chaining themselves up to 12 seconds, which is an issue. So what are we doing now? So we have this
+
+88
+0:10:41.360 --> 0:10:48.080
+basic proof of concept to show that this seems to be a very good approach to lower the footprint of
+
+89
+0:10:48.080 --> 0:10:55.120
+the Kubernetes control plane. And we want to do more with this. Currently, we're improving the build
+
+90
+0:10:55.120 --> 0:11:00.800
+tools and we're making more realistic tests. All the tests we did right now were a worst case
+
+91
+0:11:00.800 --> 0:11:06.880
+scenario of operators constantly doing stuff. However, in the real world, most operators don't
+
+92
+0:11:06.880 --> 0:11:13.360
+do anything most of the time. So we're creating more realistic tests to see what these operators,
+
+93
+0:11:13.360 --> 0:11:20.240
+what the performance benefits are for real workloads. We're also working on predictive
+
+94
+0:11:20.240 --> 0:11:25.600
+unloading so that if we know that an operator is going to have to run again in a few milliseconds,
+
+95
+0:11:25.600 --> 0:11:32.320
+we don't unload it because it's better to just keep it running. In the future, we want to work on
+
+96
+0:11:32.320 --> 0:11:39.520
+better support for controllers that wake periodically. So right now, we see that a lot of production
+
+97
+0:11:39.520 --> 0:11:45.440
+controllers actually wake periodically every five seconds or every 20 seconds in order to
+
+98
+0:11:45.440 --> 0:11:51.440
+manually check resources in the Kubernetes API because some of those resources, they can't
+
+99
+0:11:52.240 --> 0:11:57.840
+work with callbacks. So we are trying to figure out a way to actually put that functionality
+
+100
+0:11:57.840 --> 0:12:03.120
+into the host operator itself so that even when you're watching resources that don't support
+
+101
+0:12:03.840 --> 0:12:10.640
+event-based APIs, the operator is still sleeping as long as there's nothing to process.
+
+102
+0:12:11.600 --> 0:12:16.400
+And we're also really interested in upstreaming and standardizing this. We have patches for
+
+103
+0:12:16.400 --> 0:12:21.760
+QBAR-S. We have an extension for the WebAssembly system interface. It would be very interesting to
+
+104
+0:12:21.760 --> 0:12:28.960
+see if there's people in the ecosystem who are interested in this and support for Golang, although
+
+105
+0:12:28.960 --> 0:12:35.760
+this will probably not be work that we're doing. We'll just wait until Golang is better supported
+
+106
+0:12:35.760 --> 0:12:44.240
+in WebAssembly. So I have to thank the developers. Francesco is somewhere here in the audience.
+
+107
+0:12:44.240 --> 0:12:51.840
+We started from a prototype created by Francesco and Marcus, which runs Kubernetes controllers
+
+108
+0:12:51.840 --> 0:12:59.120
+inside of WebAssembly. And we refactored it to use WasmTime and we added the unloading mechanism.
+
+109
+0:12:59.120 --> 0:13:06.240
+This was done by Tim as part of his master's thesis. And right now, student Kevin is working on it
+
+110
+0:13:06.240 --> 0:13:14.240
+also as part of his master's thesis to improve the build system so that it's much easier to get started
+
+111
+0:13:14.240 --> 0:13:20.720
+with it and to add predictive unloading and more realistic benchmarks to have a better idea of what
+
+112
+0:13:20.720 --> 0:13:29.200
+is the performance for actual production controllers. So the main reason I am here today is to say like,
+
+113
+0:13:29.200 --> 0:13:35.360
+hey, we have a really cool proof of concept, which solves an issue that we have been having.
+
+114
+0:13:35.360 --> 0:13:43.360
+Is this solving an issue for other people in the community? And are you interested in working together on this?
+
+115
+0:13:43.360 --> 0:13:49.360
+If you're interested in working together on this, please get in touch. If you're a student yourself
+
+116
+0:13:49.360 --> 0:13:55.360
+and you want to do like an internship or a master's thesis working on this, we have a lot of opportunities,
+
+117
+0:13:55.360 --> 0:14:09.360
+same for a PhD. So please contact us, send me an email to see what we can do for you and how we could collaborate.
+
+118
+0:14:09.360 --> 0:14:19.360
+So this is the end of my presentation and there's now room for questions. I also put the link to part of our code here.
+
+119
+0:14:19.360 --> 0:14:25.360
+I think this GitHub repo also links to the other repositories that you need.
+
+120
+0:14:25.360 --> 0:14:49.360
+Okay, we can take a couple of questions.
+
+121
+0:14:49.360 --> 0:14:59.360
+So why was is so fast and why it is not possible to do something similar with JVM?
+
+122
+0:14:59.360 --> 0:15:09.360
+So definitely, like JVM and WebAssembly are very similar in that regard and a lot of people,
+
+123
+0:15:09.360 --> 0:15:18.360
+they position WebAssembly as being like a more cross-platform and a more cross-language version of the JVM.
+
+124
+0:15:18.360 --> 0:15:31.360
+But if you're only interested in Java and Java-based languages, then the Java runtime itself is a very good alternative to this.
+
+125
+0:15:31.360 --> 0:15:40.360
+Okay, there was another one over here, right?
+
+126
+0:15:40.360 --> 0:15:50.360
+So if I understood correctly, you are deploying your operators outside containers and that makes them much more efficient.
+
+127
+0:15:50.360 --> 0:15:59.360
+But besides the security aspects, when you deploy in containers in Kubernetes,
+
+128
+0:15:59.360 --> 0:16:07.360
+you have many other things that you can set, like resource limits, but also things like post-topology spread constraints
+
+129
+0:16:07.360 --> 0:16:13.360
+and notations to make sure that some processes are running on specific nodes and so on.
+
+130
+0:16:13.360 --> 0:16:15.360
+How can you address that with WebAssembly?
+
+131
+0:16:15.360 --> 0:16:22.360
+Because you cannot package then your operator like any other workload that you deploy in Kubernetes.
+
+132
+0:16:22.360 --> 0:16:26.360
+Yeah, so it's a very good question.
+
+133
+0:16:26.360 --> 0:16:32.360
+So one of the benchmarks was just running the operators on bare metal, but that's not actually what I'm proposing.
+
+134
+0:16:32.360 --> 0:16:39.360
+It was just to see what is the absolute maximum amount of performance we could get out of this.
+
+135
+0:16:39.360 --> 0:16:44.360
+Our plan is to run each operator inside of its own container.
+
+136
+0:16:44.360 --> 0:16:51.360
+It's just a WebAssembly plus WebAssembly system interface container instead of a Docker container.
+
+137
+0:16:51.360 --> 0:17:02.360
+And so most of the security profile and stuff like that that you have with Docker containers is very similar with WebAssembly.
+
+138
+0:17:02.360 --> 0:17:10.360
+Some would even argue that it's more secure in WebAssembly because it has a much smaller API footprint
+
+139
+0:17:10.360 --> 0:17:16.360
+and it has some of the best teams working on it to make sure it's secure for the browser.
+
+140
+0:17:16.360 --> 0:17:28.360
+Moreover, the code that is running in these WebAssembly containers in my proof of concept, this is control plane code.
+
+141
+0:17:28.360 --> 0:17:32.360
+So this is code that the system administrator selected.
+
+142
+0:17:32.360 --> 0:17:39.360
+Like, okay, yeah, I want this specific system administration code to manage my applications.
+
+143
+0:17:39.360 --> 0:17:55.360
+And so in that sense, there is also like a higher level of trust put into the code, which means that things like attacks and stuff like that,
+
+144
+0:17:55.360 --> 0:17:58.360
+there is less of a risk to it.
+
+145
+0:17:58.360 --> 0:18:11.360
+But even then, like it's still running inside of containers.
+
+146
+0:18:11.360 --> 0:18:20.360
+So one of the most important scalability aspects of Kubernetes controllers is the watch based cache, right?
+
+147
+0:18:20.360 --> 0:18:26.360
+So without it, the API server wouldn't be able to handle all the long pulling and so on.
+
+148
+0:18:26.360 --> 0:18:33.360
+And it's also one of the most memory intensive aspects of Kubernetes controllers.
+
+149
+0:18:33.360 --> 0:18:40.360
+I was wondering in your memory benchmarks if you were cutting down on this watch based aspect,
+
+150
+0:18:40.360 --> 0:18:44.360
+or if it is still included in the parent operator.
+
+151
+0:18:44.360 --> 0:18:50.360
+So for example, is the parent operator caching as a proxy for the child operators?
+
+152
+0:18:50.360 --> 0:18:52.360
+Is that the case?
+
+153
+0:18:52.360 --> 0:18:57.360
+Yeah, that's what's happening basically. The parent operator is where the caches are.
+
