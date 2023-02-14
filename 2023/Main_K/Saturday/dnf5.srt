@@ -1,0 +1,2372 @@
+1
+0:00:00.000 --> 0:00:06.560
+Okay.
+
+2
+0:00:06.560 --> 0:00:08.120
+So hello.
+
+3
+0:00:08.120 --> 0:00:10.400
+Let me introduce us.
+
+4
+0:00:10.400 --> 0:00:15.600
+Like you may have heard, we are from Red Hat, from Berno actually, and we are going to talk
+
+5
+0:00:15.600 --> 0:00:24.160
+about the NFI, the new generation, as we have in the title.
+
+6
+0:00:24.160 --> 0:00:30.160
+To introduce us and the talk, we have it split into three sections.
+
+7
+0:00:30.160 --> 0:00:32.600
+The first one is covered by me.
+
+8
+0:00:32.600 --> 0:00:35.520
+It will be a technical overview.
+
+9
+0:00:35.520 --> 0:00:42.640
+Then there is community history and action items by Nicola, and finally a live demo from
+
+10
+0:00:42.640 --> 0:00:44.240
+Jan.
+
+11
+0:00:44.240 --> 0:00:51.480
+First, I would like to explain what are we actually talking about.
+
+12
+0:00:51.480 --> 0:00:58.240
+I imagine you most of you already know this, but DNF is a package manager, and probably
+
+13
+0:00:58.240 --> 0:01:04.520
+the easiest way to explain this to someone is to compare it to like an app store or a
+
+14
+0:01:04.520 --> 0:01:08.200
+command line app store.
+
+15
+0:01:08.200 --> 0:01:13.000
+So it installs, upgrades, removes packages, and dependencies, metadata, and stuff like
+
+16
+0:01:13.000 --> 0:01:14.000
+that.
+
+17
+0:01:14.000 --> 0:01:24.840
+There are many examples, and we are actually working on DNF and microDNF.
+
+18
+0:01:24.840 --> 0:01:32.920
+To put this into some more context, we have this diagram that's actually describing Fedora,
+
+19
+0:01:32.920 --> 0:01:40.160
+but I think many distributions have something similar set up like this.
+
+20
+0:01:40.160 --> 0:01:45.360
+You can see that it's possible to interact with the package manager in many ways or in
+
+21
+0:01:45.360 --> 0:01:52.240
+many levels, but here we are talking about the high level manager, and that is DNF or
+
+22
+0:01:52.240 --> 0:01:54.720
+libDNF.
+
+23
+0:01:54.720 --> 0:02:03.560
+If we focus on that section, we could see a diagram of components that for the current
+
+24
+0:02:03.560 --> 0:02:08.440
+version looks something like this.
+
+25
+0:02:08.440 --> 0:02:17.440
+There are some problems with this.
+
+26
+0:02:17.440 --> 0:02:22.440
+At first glance, I think it already looks more complicated than it needs to be, but
+
+27
+0:02:22.440 --> 0:02:31.360
+mainly you can see that the libDNF, the library is split into two sections, and DNF is actually
+
+28
+0:02:31.360 --> 0:02:37.960
+just using the Hawkeye section, but not the libHif one, while microDNF is using both.
+
+29
+0:02:37.960 --> 0:02:42.840
+This would be fine if there was some extra functionality in microDNF, but it is actually
+
+30
+0:02:42.840 --> 0:02:44.840
+the other way around.
+
+31
+0:02:44.840 --> 0:02:54.160
+MicroDNF does less than DNF, and this is because we have duplicate code there.
+
+32
+0:02:54.160 --> 0:02:58.680
+That's of course not good, so we should fix that.
+
+33
+0:02:58.680 --> 0:03:03.840
+The other big issue is with the extensions or plugins.
+
+34
+0:03:03.840 --> 0:03:10.840
+All of our plugins are for DNF, and they are in Python, but as you can see from the diagram,
+
+35
+0:03:10.840 --> 0:03:15.360
+it's not possible to use the same extensions in microDNF.
+
+36
+0:03:15.360 --> 0:03:19.840
+There's simply no way how to get to them, and also the other way around, if you have
+
+37
+0:03:19.840 --> 0:03:25.600
+some extension for libHif, it doesn't get used in DNF.
+
+38
+0:03:25.600 --> 0:03:30.280
+This is again not good, because we already have some extensions that we want in both,
+
+39
+0:03:30.280 --> 0:03:34.440
+and we have to duplicate them, again, that's just a bad situation.
+
+40
+0:03:34.440 --> 0:03:40.720
+To resolve that, we are introducing or creating DNF5.
+
+41
+0:03:40.720 --> 0:03:45.640
+I should mention that when I say DNF5 here, I mean this whole part of the stack, so the
+
+42
+0:03:45.640 --> 0:03:55.560
+library, the plugins, the actual command line DNF tool, but the new diagram looks like this.
+
+43
+0:03:55.560 --> 0:03:57.840
+It is much simpler.
+
+44
+0:03:57.840 --> 0:04:05.080
+We have merged the insides of the library into one piece, and we have also merged DNF
+
+45
+0:04:05.080 --> 0:04:10.760
+and microDNF into just one tool, which is here called DNF5.
+
+46
+0:04:10.760 --> 0:04:14.880
+There's also a new DNF daemon.
+
+47
+0:04:14.880 --> 0:04:26.120
+We still have two nodes here for plugins or extensions, but it is much more clearly separated.
+
+48
+0:04:26.120 --> 0:04:32.800
+For the library, we have more like passive extensions that get used automatically.
+
+49
+0:04:32.800 --> 0:04:41.000
+Every time you use the library, they get loaded and run, and for DNF5, there are more like
+
+50
+0:04:41.000 --> 0:04:46.800
+active plugins, so this is typically like a new command that you can add, and the user
+
+51
+0:04:46.800 --> 0:04:52.760
+actually has to type it and run it.
+
+52
+0:04:52.760 --> 0:05:02.640
+Other big two features are that we actually are breaking API, and it's not backwards compatible.
+
+53
+0:05:02.640 --> 0:05:06.280
+These are not exactly features, and you might ask, why are we doing this?
+
+54
+0:05:06.280 --> 0:05:10.280
+Let me try to explain that or justify it.
+
+55
+0:05:10.280 --> 0:05:18.360
+First for the library, we completely restructured the API and tried to make it better and most
+
+56
+0:05:18.360 --> 0:05:26.240
+importantly unified and safer, because before, like I mentioned, it was merged together a
+
+57
+0:05:26.240 --> 0:05:32.320
+bunch of things, and it wasn't that great, so hopefully this time we try to learn from
+
+58
+0:05:32.320 --> 0:05:38.280
+our mistakes and make it better.
+
+59
+0:05:38.280 --> 0:05:42.720
+Another change we are also doing is inside of the library.
+
+60
+0:05:42.720 --> 0:05:50.280
+For example, we are now loading and downloading the repositories at the same time.
+
+61
+0:05:50.280 --> 0:05:55.160
+This is because typically downloading the repositories is network intensive, but loading
+
+62
+0:05:55.160 --> 0:06:00.560
+them on the other hand requires CPU, so they kind of nicely match together and can be done
+
+63
+0:06:00.560 --> 0:06:03.560
+at the same time.
+
+64
+0:06:03.560 --> 0:06:11.080
+Another change is, no, we don't download file list metadata by default.
+
+65
+0:06:11.080 --> 0:06:17.480
+If you're not familiar, the file list contains a list of every file in all of the RPMs, so
+
+66
+0:06:17.480 --> 0:06:23.840
+it is quite a big file, and we think it's possible to get by without it, as other distributions
+
+67
+0:06:23.840 --> 0:06:29.080
+do, so we don't download it by default, but of course it's still possible if the user
+
+68
+0:06:29.080 --> 0:06:35.000
+wants to download it or even configure it, so it's downloaded every time.
+
+69
+0:06:35.000 --> 0:06:41.680
+We are trying to make it, of course, in general faster, and I think we will see this in the
+
+70
+0:06:41.680 --> 0:06:44.960
+demo later.
+
+71
+0:06:44.960 --> 0:06:51.200
+We have bindings for the new library.
+
+72
+0:06:51.200 --> 0:06:56.640
+We mainly focus on Python, because that's most of our users, but thanks to Svek, it
+
+73
+0:06:56.640 --> 0:07:04.120
+should be possible to generate also for other languages like Per or Ruby, and it will need
+
+74
+0:07:04.120 --> 0:07:10.040
+some work to do that, but hopefully it wouldn't be that too bad.
+
+75
+0:07:10.040 --> 0:07:15.880
+Now I'm moving to the actual command line package manager, dnf, dnf5.
+
+76
+0:07:15.880 --> 0:07:22.680
+Probably the biggest change or one of the biggest changes is that we dropped Python
+
+77
+0:07:22.680 --> 0:07:28.960
+as a dependency, and this is actually what allowed us to merge microdnf and dnf together,
+
+78
+0:07:28.960 --> 0:07:37.920
+because before we needed microdnf for like a container on minimal environments where
+
+79
+0:07:37.920 --> 0:07:43.520
+you need smaller footprints, but since now we don't need Python and everything is in
+
+80
+0:07:43.520 --> 0:07:51.640
+C++, we have best of both worlds.
+
+81
+0:07:51.640 --> 0:07:53.040
+Not everything has changed.
+
+82
+0:07:53.040 --> 0:07:59.320
+We keep most of the commands are actually the same, except for a couple differences
+
+83
+0:07:59.320 --> 0:08:04.200
+that needed like speaking or fixing, but on the other hand, the outputs of the commands
+
+84
+0:08:04.200 --> 0:08:05.200
+did change.
+
+85
+0:08:05.200 --> 0:08:15.040
+In fact, we do run still the same CI test that we ran for dnf4 as well as for dnf5,
+
+86
+0:08:15.040 --> 0:08:20.800
+and usually you have to change the checking of the outputs to make it work.
+
+87
+0:08:20.800 --> 0:08:26.560
+Most all of the tests work, but we are still developing it and working on that.
+
+88
+0:08:26.560 --> 0:08:32.520
+Then there is the daemon, and just really quickly it will be or it already is accessible
+
+89
+0:08:32.520 --> 0:08:39.240
+by debuffs, and since it uses the whole library or the same library, it will have the same
+
+90
+0:08:39.240 --> 0:08:47.760
+functions, so you can use it to work with groups or modules and stuff like that.
+
+91
+0:08:47.760 --> 0:08:51.720
+Last thing from me, I want to mention a couple additional improvements.
+
+92
+0:08:51.720 --> 0:09:02.000
+I'm not going to like too many details, but we have configurable aliases, fully integrated
+
+93
+0:09:02.000 --> 0:09:07.920
+modularity, just single configuration for all the users of the library.
+
+94
+0:09:07.920 --> 0:09:14.800
+We managed to separate system state from history database and module state, and for example,
+
+95
+0:09:14.800 --> 0:09:17.320
+we have built in autocomplete.
+
+96
+0:09:17.320 --> 0:09:18.320
+That is a good thing.
+
+97
+0:09:18.320 --> 0:09:25.840
+If you have questions about this or anything else, you can of course ask us after the presentation.
+
+98
+0:09:25.840 --> 0:09:32.720
+That was everything from me, and let me now hand it over to Nicola and the community part.
+
+99
+0:09:32.720 --> 0:09:34.760
+Thank you.
+
+100
+0:09:34.760 --> 0:09:41.120
+After the technical review, let's focus more on who is actually contributing to the nf5
+
+101
+0:09:41.120 --> 0:09:47.320
+and how we are changing our idea of looking at the community, not just our idea of the
+
+102
+0:09:47.320 --> 0:09:51.640
+code base, how we plan to change our approach with the community.
+
+103
+0:09:51.640 --> 0:09:57.840
+Of course, the nf5 is an upstream project, so it all starts from upstream.
+
+104
+0:09:57.840 --> 0:10:04.160
+It was, I would say, quite a bit chaotic in the past because components were a bit separated,
+
+105
+0:10:04.160 --> 0:10:06.800
+issues were not enabled for dnf, for example, for quite a while.
+
+106
+0:10:06.800 --> 0:10:13.560
+Now they are, but it wasn't super clear the path we were taking with the community.
+
+107
+0:10:13.560 --> 0:10:16.760
+Many issues stayed open for a while.
+
+108
+0:10:16.760 --> 0:10:19.160
+Pull requests are reviewed.
+
+109
+0:10:19.160 --> 0:10:23.520
+We didn't do great, but we plan to change it.
+
+110
+0:10:23.520 --> 0:10:28.720
+Let me give you an overview of what was the past of dnf contributions.
+
+111
+0:10:28.720 --> 0:10:34.120
+Then we will look at what we expect in the future, and then the action items that the
+
+112
+0:10:34.120 --> 0:10:43.440
+team has to make everything more transparent and all the workflow much clearer.
+
+113
+0:10:43.440 --> 0:10:46.840
+First of all, the past of the projects.
+
+114
+0:10:46.840 --> 0:10:52.720
+I'm saying projects because here I graphed the weekly contributions by author of dnf,
+
+115
+0:10:52.720 --> 0:10:54.240
+libdnf, and dnf5.
+
+116
+0:10:54.240 --> 0:10:59.920
+What I want to pull out from this graph is that, well, first of all, now the effort of
+
+117
+0:10:59.920 --> 0:11:06.800
+the team is all focused on dnf5, as you see, it's just all the contributions are on the
+
+118
+0:11:06.800 --> 0:11:09.040
+green part.
+
+119
+0:11:09.040 --> 0:11:15.680
+One other interesting thing is that, yes, dnf5 efforts are higher, are more, compared
+
+120
+0:11:15.680 --> 0:11:23.720
+to dnf or libdnf alone, but actually the effort, if you sum the highest points of dnf and libdnf,
+
+121
+0:11:23.720 --> 0:11:31.640
+the efforts of dnf5 is less, and that's because you have to maintain unified code base, and
+
+122
+0:11:31.640 --> 0:11:34.640
+that's much, much more easier to do.
+
+123
+0:11:34.640 --> 0:11:36.760
+Just one thing.
+
+124
+0:11:36.760 --> 0:11:44.120
+Also, I want to show you during the history of the project how many people actually contributed.
+
+125
+0:11:44.120 --> 0:11:51.440
+These are on the Y, the number of people that did some number of contribution on the X.
+
+126
+0:11:51.440 --> 0:11:55.640
+So there is some exceptional guy, around 200.
+
+127
+0:11:55.640 --> 0:11:56.640
+There is some others.
+
+128
+0:11:56.640 --> 0:12:04.160
+There is just one guy, 150, 125, and I like everyone is doing a very small number.
+
+129
+0:12:04.160 --> 0:12:08.160
+So that's fact, and that's how upstream works.
+
+130
+0:12:08.160 --> 0:12:14.120
+You have exceptional core team members that they will do all the job, and they are carrying,
+
+131
+0:12:14.120 --> 0:12:20.640
+they're pulling the efforts, but it's actually good to maybe improve the community a bit
+
+132
+0:12:20.640 --> 0:12:28.400
+more and, well, to give you maybe some more perspective, you can even see, like, this
+
+133
+0:12:28.400 --> 0:12:30.720
+is every bar is a contribution.
+
+134
+0:12:30.720 --> 0:12:33.160
+So it's a different person.
+
+135
+0:12:33.160 --> 0:12:40.320
+And yet again, there are just a few people that did a huge amount, a huge number of contributions,
+
+136
+0:12:40.320 --> 0:12:47.680
+and many, many people that did just a few, like one, which of course are important.
+
+137
+0:12:47.680 --> 0:12:56.960
+But what it means to us when we, what it means for us having someone from outside contributing.
+
+138
+0:12:56.960 --> 0:13:06.520
+So I had this idea of kind of splitting the contribution into groups, and here is my analysis.
+
+139
+0:13:06.520 --> 0:13:10.920
+So there are, of course, the authors of the project.
+
+140
+0:13:10.920 --> 0:13:15.440
+They are responsible of, let's say, the 10% of the total number of commits or contributions,
+
+141
+0:13:15.440 --> 0:13:16.440
+right?
+
+142
+0:13:16.440 --> 0:13:21.320
+One, two, max five maybe in the project.
+
+143
+0:13:21.320 --> 0:13:23.800
+Those are, like, the key components.
+
+144
+0:13:23.800 --> 0:13:26.760
+They are there from the beginning.
+
+145
+0:13:26.760 --> 0:13:29.960
+I'm talking generally, but this applies for our components.
+
+146
+0:13:29.960 --> 0:13:36.040
+Then there are the paid programmers, co-authors, exceptional contributors that are doing a
+
+147
+0:13:36.040 --> 0:13:38.040
+hundred of commits, a hundred of commits.
+
+148
+0:13:38.040 --> 0:13:40.840
+Well, it's quite a number, right?
+
+149
+0:13:40.840 --> 0:13:44.120
+And then, of course, there are the one-liners, the people that come, and they're like, hey,
+
+150
+0:13:44.120 --> 0:13:47.000
+there's a typo here, super important as well.
+
+151
+0:13:47.000 --> 0:13:50.720
+But they are just, they come and go, they, you will never see them again.
+
+152
+0:13:50.720 --> 0:13:53.600
+And well, they might be not even interested.
+
+153
+0:13:53.600 --> 0:14:00.680
+Sometimes they just come and they are just doing one small fix and going away.
+
+154
+0:14:00.680 --> 0:14:04.160
+And then there are who I call the people in the middle.
+
+155
+0:14:04.160 --> 0:14:12.640
+So actually the people that can effectively contribute by following the project and by
+
+156
+0:14:12.640 --> 0:14:21.480
+coming in more than once to just point out, hey, I am doing this request, maybe I'm opening
+
+157
+0:14:21.480 --> 0:14:30.480
+an issue, and then the contributor gets interested in working into the project and does active
+
+158
+0:14:30.480 --> 0:14:35.120
+commit, let's say, so brings in some code or maybe deletes some code.
+
+159
+0:14:35.120 --> 0:14:37.920
+The deleting code is very important.
+
+160
+0:14:37.920 --> 0:14:43.280
+So let's look at how we perceive contributions from inside a team.
+
+161
+0:14:43.280 --> 0:14:48.080
+So for DNF, talking still about weekly contributors.
+
+162
+0:14:48.080 --> 0:14:54.200
+We had a total of 225 contributors for authors, so four people that did more than 10% of the
+
+163
+0:14:54.200 --> 0:15:03.360
+whole work, and 19 people, very good people that did 100 commits.
+
+164
+0:15:03.360 --> 0:15:05.560
+And those people, they are regular.
+
+165
+0:15:05.560 --> 0:15:06.720
+They're since forever.
+
+166
+0:15:06.720 --> 0:15:09.680
+You kind of know that they are there helping you out.
+
+167
+0:15:09.680 --> 0:15:11.400
+But let's focus on the others.
+
+168
+0:15:11.400 --> 0:15:16.960
+So how many commits are in total and how many have been without those people?
+
+169
+0:15:16.960 --> 0:15:20.560
+And the number is actually roughly 10,000 total commits.
+
+170
+0:15:20.560 --> 0:15:23.720
+Oh, sorry, I'm talking about contributions.
+
+171
+0:15:23.720 --> 0:15:27.640
+So it's a little binned, so it's smaller numbers.
+
+172
+0:15:27.640 --> 0:15:30.240
+But still, like the statistic applies.
+
+173
+0:15:30.240 --> 0:15:35.100
+Roughly 4,000 commits without the authors and roughly 1,000.
+
+174
+0:15:35.100 --> 0:15:42.000
+So 1,000 commits are done just by those people that stay in the middle, more or less.
+
+175
+0:15:42.000 --> 0:15:49.000
+And so what is your effort to be, let's say, active member of the community?
+
+176
+0:15:49.000 --> 0:15:51.880
+So I said, OK, I want to do the 1% of this.
+
+177
+0:15:51.880 --> 0:15:53.480
+That's pretty easy.
+
+178
+0:15:53.480 --> 0:16:01.760
+You do roughly 1, sorry, 11 commits, 11 issues, 11 whatever, 11 comments.
+
+179
+0:16:01.760 --> 0:16:04.360
+And you are actually 1%.
+
+180
+0:16:04.360 --> 0:16:12.440
+If you know 100 people, you definitely remember if one person is missing or not or like, hey,
+
+181
+0:16:12.440 --> 0:16:15.640
+you change your haircut to pink.
+
+182
+0:16:15.640 --> 0:16:18.520
+And you remember because the 1% is quite a lot.
+
+183
+0:16:18.520 --> 0:16:19.960
+So it's very easy.
+
+184
+0:16:19.960 --> 0:16:23.520
+And I'm talking about 11 contributions in whole the history of DNF.
+
+185
+0:16:23.520 --> 0:16:26.520
+And DNF is being active for like 10 years.
+
+186
+0:16:26.520 --> 0:16:30.200
+So it's like one contribution per year.
+
+187
+0:16:30.200 --> 0:16:31.500
+It's quite easy, right?
+
+188
+0:16:31.500 --> 0:16:36.840
+And now it's the time to jump into DNF5 because if you look to DNF5, same applies.
+
+189
+0:16:36.840 --> 0:16:38.240
+It's basically just team effort.
+
+190
+0:16:38.240 --> 0:16:40.240
+So five authors roughly.
+
+191
+0:16:40.240 --> 0:16:42.840
+This number will decrease with time.
+
+192
+0:16:42.840 --> 0:16:45.560
+And six very good contributors.
+
+193
+0:16:45.560 --> 0:16:47.960
+And then those are the number of contributions.
+
+194
+0:16:47.960 --> 0:16:54.600
+And again, if you do one or two contributors, we value that kind of contribution, whatever
+
+195
+0:16:54.600 --> 0:16:55.760
+it is, quite a lot.
+
+196
+0:16:55.760 --> 0:16:57.600
+I mean, it's significant.
+
+197
+0:16:57.600 --> 0:16:59.480
+This is what I'm trying to bring up.
+
+198
+0:16:59.480 --> 0:17:02.560
+So what kind of contributions are we talking about?
+
+199
+0:17:02.560 --> 0:17:03.920
+We have a transparent workflow.
+
+200
+0:17:03.920 --> 0:17:05.800
+We have open issues now.
+
+201
+0:17:05.800 --> 0:17:07.600
+We triage all the issues weekly.
+
+202
+0:17:07.600 --> 0:17:13.320
+This is something that, again, we were not doing for DNF for some time.
+
+203
+0:17:13.320 --> 0:17:20.600
+We have public milestones in GitHub so you can understand what our action plans are.
+
+204
+0:17:20.600 --> 0:17:26.480
+And also we have discussions open that we use for announcement, that we use for gathering
+
+205
+0:17:26.480 --> 0:17:27.480
+opinions.
+
+206
+0:17:27.480 --> 0:17:29.880
+DNF5 naming is discussed on GitHub.
+
+207
+0:17:29.880 --> 0:17:32.800
+So you can go there and give your opinion.
+
+208
+0:17:32.800 --> 0:17:36.360
+And questions, of course, if you have a question now, you can ask it.
+
+209
+0:17:36.360 --> 0:17:40.840
+If you have a question later, there will be the link to GitHub to just go there and ask
+
+210
+0:17:40.840 --> 0:17:41.840
+something.
+
+211
+0:17:41.840 --> 0:17:47.000
+And of course we have Bugzilla for Fedora tracking and, I mean, downstream requests
+
+212
+0:17:47.000 --> 0:17:50.420
+or specific Fedora things.
+
+213
+0:17:50.420 --> 0:17:54.760
+But like the upstream is where we start.
+
+214
+0:17:54.760 --> 0:17:58.920
+And the upstream is where we are trying to improve to the community.
+
+215
+0:17:58.920 --> 0:18:01.640
+A bit more to that.
+
+216
+0:18:01.640 --> 0:18:04.160
+We have now a better documentation.
+
+217
+0:18:04.160 --> 0:18:08.560
+The documentation is actually generated from the code base.
+
+218
+0:18:08.560 --> 0:18:09.800
+It is tested.
+
+219
+0:18:09.800 --> 0:18:14.440
+So everything, every snippet that's there gets compiled in C++, it gets interpreted
+
+220
+0:18:14.440 --> 0:18:16.400
+in Python.
+
+221
+0:18:16.400 --> 0:18:20.800
+And so it's much more, let's say, reliable documentation.
+
+222
+0:18:20.800 --> 0:18:27.120
+So we expect to have, I'm not saying what we expect to have, you know what?
+
+223
+0:18:27.120 --> 0:18:29.520
+Because you'll never know.
+
+224
+0:18:29.520 --> 0:18:31.280
+But then we have now tutorials.
+
+225
+0:18:31.280 --> 0:18:32.400
+We have code templates.
+
+226
+0:18:32.400 --> 0:18:44.880
+We have a lot more material that a newcomer could work on and start to contribute to DNF
+
+227
+0:18:44.880 --> 0:18:46.720
+using that material.
+
+228
+0:18:46.720 --> 0:18:48.400
+Right?
+
+229
+0:18:48.400 --> 0:18:52.280
+And then we are planning to also add contributing guides that now are missing.
+
+230
+0:18:52.280 --> 0:18:59.400
+But we are planning to improve the contribution workflow on GitHub yet again and also to open
+
+231
+0:18:59.400 --> 0:19:02.040
+first time issues which are missing.
+
+232
+0:19:02.040 --> 0:19:04.120
+But we are targeting that.
+
+233
+0:19:04.120 --> 0:19:09.160
+So just to conclude my part, who's the community?
+
+234
+0:19:09.160 --> 0:19:12.000
+Actually the community for us is the people who create issues.
+
+235
+0:19:12.000 --> 0:19:16.200
+I mean, not create problems, create GitHub issues, right?
+
+236
+0:19:16.200 --> 0:19:18.440
+People who add or remove code.
+
+237
+0:19:18.440 --> 0:19:20.320
+And people to take part in the discussions.
+
+238
+0:19:20.320 --> 0:19:21.320
+Even now.
+
+239
+0:19:21.320 --> 0:19:26.720
+Even just by coming to us and say, hey, DNF5, you know what, I tried it.
+
+240
+0:19:26.720 --> 0:19:27.720
+It worked.
+
+241
+0:19:27.720 --> 0:19:28.720
+Or it broke my system.
+
+242
+0:19:28.720 --> 0:19:29.720
+It happened.
+
+243
+0:19:29.720 --> 0:19:31.520
+So I mean, it can happen.
+
+244
+0:19:31.520 --> 0:19:33.520
+It's not perfect.
+
+245
+0:19:33.520 --> 0:19:35.040
+Or the people who raise questions.
+
+246
+0:19:35.040 --> 0:19:40.240
+Like now or again, they are reaching back to us to the mailing list.
+
+247
+0:19:40.240 --> 0:19:46.000
+The more questions we have, the more reliable we can provide a code that actually works
+
+248
+0:19:46.000 --> 0:19:49.360
+for the most user cases.
+
+249
+0:19:49.360 --> 0:19:52.320
+And just using DNF5, you're part of the community.
+
+250
+0:19:52.320 --> 0:20:00.360
+And most importantly, and I really feel this quite a lot because when I started working
+
+251
+0:20:00.360 --> 0:20:06.040
+on DNF, I actually needed help from the team.
+
+252
+0:20:06.040 --> 0:20:12.960
+And I believe that many people didn't quite dive into the contribution system because
+
+253
+0:20:12.960 --> 0:20:15.520
+they didn't have help.
+
+254
+0:20:15.520 --> 0:20:21.720
+So we're actually in the need of people that help and ask for help.
+
+255
+0:20:21.720 --> 0:20:24.880
+And that will bring to all the other points.
+
+256
+0:20:24.880 --> 0:20:32.320
+So well, I hope now it's much more clear how we intend to work in the future.
+
+257
+0:20:32.320 --> 0:20:39.080
+And now let's see how DNF5 works in practice with the demo.
+
+258
+0:20:39.080 --> 0:20:40.080
+So here we go.
+
+259
+0:20:40.080 --> 0:20:44.040
+Jan will talk to you about the demo.
+
+260
+0:20:44.040 --> 0:20:47.640
+So hopefully it will work.
+
+261
+0:20:47.640 --> 0:20:52.520
+So let's try some hands-on ECGs.
+
+262
+0:20:52.520 --> 0:20:54.480
+And what do we have here?
+
+263
+0:20:54.480 --> 0:21:00.840
+So we have two separate individual containers, both running federal Linux.
+
+264
+0:21:00.840 --> 0:21:04.600
+And they have the same configuration.
+
+265
+0:21:04.600 --> 0:21:10.600
+And on the left side, I will show you the examples using the original DNF command.
+
+266
+0:21:10.600 --> 0:21:16.520
+And on the right side, I will show you the same examples running the DNF5 command.
+
+267
+0:21:16.520 --> 0:21:20.640
+So let's start with something simple.
+
+268
+0:21:20.640 --> 0:21:21.960
+Just install a package.
+
+269
+0:21:21.960 --> 0:21:29.560
+So we will try to install this package.
+
+270
+0:21:29.560 --> 0:21:32.040
+Hopefully the Wi-Fi will work.
+
+271
+0:21:32.040 --> 0:21:38.320
+And I will try the same on the right side.
+
+272
+0:21:38.320 --> 0:21:39.320
+Okay.
+
+273
+0:21:39.320 --> 0:21:40.360
+So what's going on?
+
+274
+0:21:40.360 --> 0:21:43.960
+We need to download the metadata about the packages.
+
+275
+0:21:43.960 --> 0:21:46.360
+So basically what are the packages?
+
+276
+0:21:46.360 --> 0:21:48.040
+What are their dependencies?
+
+277
+0:21:48.040 --> 0:21:50.360
+The requirements?
+
+278
+0:21:50.360 --> 0:21:56.240
+So the definition of repositories is configured in the system.
+
+279
+0:21:56.240 --> 0:22:01.240
+And now we need to just pull all the data, the metadata from repositories.
+
+280
+0:22:01.240 --> 0:22:08.720
+And now we can see the first difference between the DNF and DNF5.
+
+281
+0:22:08.720 --> 0:22:11.280
+What I was already talking about.
+
+282
+0:22:11.280 --> 0:22:13.760
+And it's the size of the metadata.
+
+283
+0:22:13.760 --> 0:22:19.160
+Because in DNF, everything is hard coded.
+
+284
+0:22:19.160 --> 0:22:21.400
+And always all metadata was downloaded.
+
+285
+0:22:21.400 --> 0:22:26.600
+So there is like 64 megabytes for the federal 37 repository.
+
+286
+0:22:26.600 --> 0:22:31.000
+And if we look into DNF5, there is just 21 megabytes.
+
+287
+0:22:31.000 --> 0:22:34.200
+And it's because of the file lists are not there by default.
+
+288
+0:22:34.200 --> 0:22:37.000
+Because usually we don't need them.
+
+289
+0:22:37.000 --> 0:22:38.400
+Okay.
+
+290
+0:22:38.400 --> 0:22:41.080
+And we can see some differences in the outputs.
+
+291
+0:22:41.080 --> 0:22:44.200
+Like for the DNF5, we have some more information there.
+
+292
+0:22:44.200 --> 0:22:47.280
+Like what packages are being replaced.
+
+293
+0:22:47.280 --> 0:22:48.280
+Yes.
+
+294
+0:22:48.280 --> 0:22:53.400
+But it's basically it looks very similar.
+
+295
+0:22:53.400 --> 0:23:00.040
+But the output should be a little bit more convenient for the user.
+
+296
+0:23:00.040 --> 0:23:02.960
+So let's try to install the packages.
+
+297
+0:23:02.960 --> 0:23:05.800
+And yeah, that's it.
+
+298
+0:23:05.800 --> 0:23:07.800
+Basically.
+
+299
+0:23:07.800 --> 0:23:12.240
+Another example, Alish was talking about the auto completion.
+
+300
+0:23:12.240 --> 0:23:15.360
+So this was also improved.
+
+301
+0:23:15.360 --> 0:23:20.280
+We can see that for DNF, there was also some auto completion.
+
+302
+0:23:20.280 --> 0:23:26.000
+If we try, for example, the mark command, I will type the M and now the double tap.
+
+303
+0:23:26.000 --> 0:23:31.120
+And we can see the DNF offers the commands for us.
+
+304
+0:23:31.120 --> 0:23:32.120
+Okay.
+
+305
+0:23:32.120 --> 0:23:33.120
+That's fine.
+
+306
+0:23:33.120 --> 0:23:34.960
+But the mark command has also the subcommand.
+
+307
+0:23:34.960 --> 0:23:41.880
+So if I type the double tap again, oh, it shows me like the installed packages on the
+
+308
+0:23:41.880 --> 0:23:42.880
+systems.
+
+309
+0:23:42.880 --> 0:23:46.480
+So these are the arguments I should use.
+
+310
+0:23:46.480 --> 0:23:53.560
+But if we see the help, like we need to use one of those three subcommands and these are
+
+311
+0:23:53.560 --> 0:23:56.640
+not suggested by the DNF.
+
+312
+0:23:56.640 --> 0:23:58.760
+So this was improved for DNF5.
+
+313
+0:23:58.760 --> 0:24:00.200
+You can look at this.
+
+314
+0:24:00.200 --> 0:24:05.760
+If we put the M and double tap, we can already see that there is some difference.
+
+315
+0:24:05.760 --> 0:24:13.840
+There is also some brief description of the subcommands that are offered for us.
+
+316
+0:24:13.840 --> 0:24:22.680
+And if we now put the double tap again, we can see also the subcommands there.
+
+317
+0:24:22.680 --> 0:24:26.900
+And of course, there is also the auto completion of the option.
+
+318
+0:24:26.900 --> 0:24:33.240
+So we can use the double dash and put the double tap again and we can see all the parameters
+
+319
+0:24:33.240 --> 0:24:36.040
+that are relevant to this command.
+
+320
+0:24:36.040 --> 0:24:40.600
+And it's quite, it could be quite convenient.
+
+321
+0:24:40.600 --> 0:24:45.720
+So now let's try some performance comparison.
+
+322
+0:24:45.720 --> 0:24:52.640
+So for example, the repo query command was quite improved.
+
+323
+0:24:52.640 --> 0:24:59.520
+So it's basically the command for querying the packages based on some keywords, on filtering
+
+324
+0:24:59.520 --> 0:25:02.700
+it and so on.
+
+325
+0:25:02.700 --> 0:25:09.000
+But for this example, we will use just the empty repo query, which basically lists all
+
+326
+0:25:09.000 --> 0:25:12.140
+the available packages in repositories.
+
+327
+0:25:12.140 --> 0:25:13.320
+So let's try that.
+
+328
+0:25:13.320 --> 0:25:17.440
+I'm running also for DNF5.
+
+329
+0:25:17.440 --> 0:25:23.160
+And we can see that the DNF5 was a little bit faster, but let's measure it exactly.
+
+330
+0:25:23.160 --> 0:25:27.920
+So let's use the time command.
+
+331
+0:25:27.920 --> 0:25:31.120
+And the same for DNF5.
+
+332
+0:25:31.120 --> 0:25:37.560
+And we can see there for DNF, it was like almost three seconds and for DNF5 it was one
+
+333
+0:25:37.560 --> 0:25:38.560
+second.
+
+334
+0:25:38.560 --> 0:25:42.080
+So it's a little bit faster there.
+
+335
+0:25:42.080 --> 0:25:48.000
+And we can also try some more advanced repo query.
+
+336
+0:25:48.000 --> 0:25:57.860
+So we can list all the packages that depend on the corollibrary.
+
+337
+0:25:57.860 --> 0:26:04.560
+And we will see that there will be, oh, there should be quite a big difference.
+
+338
+0:26:04.560 --> 0:26:07.240
+All right.
+
+339
+0:26:07.240 --> 0:26:12.400
+So what depends on...
+
+340
+0:26:12.400 --> 0:26:14.880
+Right.
+
+341
+0:26:14.880 --> 0:26:19.720
+So running it, I will try to run it parallel.
+
+342
+0:26:19.720 --> 0:26:23.000
+And we will see.
+
+343
+0:26:23.000 --> 0:26:25.160
+Okay.
+
+344
+0:26:25.160 --> 0:26:28.040
+So here is about six seconds for DNF5.
+
+345
+0:26:28.040 --> 0:26:29.280
+It's quite fast.
+
+346
+0:26:29.280 --> 0:26:34.680
+And for DNF it will be like three times longer, I think.
+
+347
+0:26:34.680 --> 0:26:36.680
+Okay.
+
+348
+0:26:36.680 --> 0:26:38.720
+20 seconds.
+
+349
+0:26:38.720 --> 0:26:45.240
+So that's it from the CLI demo.
+
+350
+0:26:45.240 --> 0:26:47.960
+And we can move to API.
+
+351
+0:26:47.960 --> 0:26:52.560
+And you could ask why I should use the API.
+
+352
+0:26:52.560 --> 0:26:55.640
+Well, of course, it depends on the use cases.
+
+353
+0:26:55.640 --> 0:27:03.560
+But usually if your project has, like, support one of our scripting languages, we have the
+
+354
+0:27:03.560 --> 0:27:11.680
+bindings for, like, the Python, it could be much more convenient to use directly the API.
+
+355
+0:27:11.680 --> 0:27:17.360
+And also it's more powerful than the CLI interface.
+
+356
+0:27:17.360 --> 0:27:25.940
+But yeah, some common use cases are simpler to write through the command line.
+
+357
+0:27:25.940 --> 0:27:32.240
+And so sometimes in the end the client chooses both approaches, right?
+
+358
+0:27:32.240 --> 0:27:33.400
+Okay.
+
+359
+0:27:33.400 --> 0:27:37.520
+So let's see some simple API example.
+
+360
+0:27:37.520 --> 0:27:41.360
+Let's say we have some our favorite package.
+
+361
+0:27:41.360 --> 0:27:46.920
+And we want to know what are the latest available version of this package in different federal
+
+362
+0:27:46.920 --> 0:27:47.920
+releases.
+
+363
+0:27:47.920 --> 0:27:50.400
+Could be useful.
+
+364
+0:27:50.400 --> 0:27:55.520
+So let's see step by step what we need to do.
+
+365
+0:27:55.520 --> 0:28:02.800
+So if we have installed the double packages and the API bindings following our tutorials
+
+366
+0:28:02.800 --> 0:28:07.920
+on the GitHub pages, the importing of the Python module is super simple.
+
+367
+0:28:07.920 --> 0:28:16.120
+Then we need to set up the session for the DNS and running some initialization method.
+
+368
+0:28:16.120 --> 0:28:24.400
+Then we need to override the release version variable, which is basically used in the repository
+
+369
+0:28:24.400 --> 0:28:26.920
+URL.
+
+370
+0:28:26.920 --> 0:28:34.400
+So we always look only for the packages of the respective federal release.
+
+371
+0:28:34.400 --> 0:28:40.640
+Then we need to prepare or load the repositories from the configuration and prepare, like,
+
+372
+0:28:40.640 --> 0:28:44.080
+the objects for the Python.
+
+373
+0:28:44.080 --> 0:28:51.840
+And then we need to prepare the query, what we will actually be querying.
+
+374
+0:28:51.840 --> 0:28:53.880
+So this is also quite simple.
+
+375
+0:28:53.880 --> 0:28:59.200
+There's a package query object and we will just filter all the packages containing the
+
+376
+0:28:59.200 --> 0:29:00.720
+kernel name.
+
+377
+0:29:00.720 --> 0:29:05.000
+And we want to have the latest version always.
+
+378
+0:29:05.000 --> 0:29:06.440
+That's simple.
+
+379
+0:29:06.440 --> 0:29:11.440
+And if we found any of those packages containing kernel, we just print the name of the package
+
+380
+0:29:11.440 --> 0:29:14.160
+otherwise not available.
+
+381
+0:29:14.160 --> 0:29:15.160
+Okay.
+
+382
+0:29:15.160 --> 0:29:20.880
+Let's try it running this simple script.
+
+383
+0:29:20.880 --> 0:29:24.960
+And for Fedora 35 there is this kernel version.
+
+384
+0:29:24.960 --> 0:29:30.120
+For Fedora 36 there will be some probably newer one.
+
+385
+0:29:30.120 --> 0:29:35.040
+Oh, it's taking long.
+
+386
+0:29:35.040 --> 0:29:41.320
+And also should output for Fedora 37 something a little bit newer.
+
+387
+0:29:41.320 --> 0:29:42.760
+Okay.
+
+388
+0:29:42.760 --> 0:29:52.840
+Now we can try to edit our script and show you if we have already some DNF5 package available.
+
+389
+0:29:52.840 --> 0:30:05.520
+But yeah, we need to add here a row height version, a development version of the Fedora.
+
+390
+0:30:05.520 --> 0:30:13.480
+Doesn't work.
+
+391
+0:30:13.480 --> 0:30:18.160
+I don't know how to...
+
+392
+0:30:18.160 --> 0:30:21.160
+Does anyone know how to exit V?
+
+393
+0:30:21.160 --> 0:30:22.920
+No, I couldn't resist.
+
+394
+0:30:22.920 --> 0:30:30.240
+I need to escape.
+
+395
+0:30:30.240 --> 0:30:31.240
+Different laptop.
+
+396
+0:30:31.240 --> 0:30:41.200
+And the thing is that it's actually a different laptop because the HDMI wasn't working.
+
+397
+0:30:41.200 --> 0:30:45.680
+So I don't know.
+
+398
+0:30:45.680 --> 0:30:51.480
+Because escape is not working.
+
+399
+0:30:51.480 --> 0:30:54.480
+Thank you.
+
+400
+0:30:54.480 --> 0:31:02.160
+If anyone has any questions, we'll try to move on and maybe...
+
+401
+0:31:02.160 --> 0:31:03.560
+Yeah, we can move on.
+
+402
+0:31:03.560 --> 0:31:04.560
+Okay.
+
+403
+0:31:04.560 --> 0:31:07.400
+So you will never know if DNF5 is actually in some Fedora.
+
+404
+0:31:07.400 --> 0:31:09.160
+Well, guess what?
+
+405
+0:31:09.160 --> 0:31:12.320
+We will say it anyways, but there was the clue.
+
+406
+0:31:12.320 --> 0:31:13.320
+It's always exiting.
+
+407
+0:31:13.320 --> 0:31:14.320
+Oh, maybe.
+
+408
+0:31:14.320 --> 0:31:15.320
+Maybe I got it.
+
+409
+0:31:15.320 --> 0:31:16.320
+I got it.
+
+410
+0:31:16.320 --> 0:31:17.320
+So in Fedora 35 there is no DNF5.
+
+411
+0:31:17.320 --> 0:31:18.320
+In Fedora 36 there is a DNF5.
+
+412
+0:31:18.320 --> 0:31:29.480
+In Fedora 37, no DNF5.
+
+413
+0:31:29.480 --> 0:31:38.000
+Oh, maybe for row heights.
+
+414
+0:31:38.000 --> 0:31:44.440
+It's taking some time.
+
+415
+0:31:44.440 --> 0:31:46.520
+I don't know.
+
+416
+0:31:46.520 --> 0:31:47.520
+Maybe just...
+
+417
+0:31:47.520 --> 0:31:50.520
+Oh, it's there.
+
+418
+0:31:50.520 --> 0:31:51.840
+Okay.
+
+419
+0:31:51.840 --> 0:32:01.760
+We can move to some more challenging example.
+
+420
+0:32:01.760 --> 0:32:04.440
+What if we want to add some...
+
+421
+0:32:04.440 --> 0:32:08.360
+Our awesome new command to DNF5?
+
+422
+0:32:08.360 --> 0:32:14.280
+So then the user will install it and just type DNF5, our command, and it will do the
+
+423
+0:32:14.280 --> 0:32:15.440
+magic.
+
+424
+0:32:15.440 --> 0:32:16.440
+It's quite simple.
+
+425
+0:32:16.440 --> 0:32:22.600
+We can show it to write some simple DNF5 plugin in like five minutes.
+
+426
+0:32:22.600 --> 0:32:23.600
+So what do we need?
+
+427
+0:32:23.600 --> 0:32:24.600
+Okay.
+
+428
+0:32:24.600 --> 0:32:26.480
+We need Devlin bindings packages.
+
+429
+0:32:26.480 --> 0:32:27.480
+That's no problem.
+
+430
+0:32:27.480 --> 0:32:30.160
+We can install it for the tutorials.
+
+431
+0:32:30.160 --> 0:32:31.880
+We need some template sources.
+
+432
+0:32:31.880 --> 0:32:32.880
+Okay.
+
+433
+0:32:32.880 --> 0:32:38.160
+You can steal our DNF5 plugin sources and use them.
+
+434
+0:32:38.160 --> 0:32:43.520
+And you need some build tools and build script, and then you can also steal the CMake script
+
+435
+0:32:43.520 --> 0:32:46.040
+we have for the DNF5 plugin.
+
+436
+0:32:46.040 --> 0:32:47.040
+No problem.
+
+437
+0:32:47.040 --> 0:32:49.680
+Everything is in our DNF5 repository.
+
+438
+0:32:49.680 --> 0:32:51.840
+Now how to write it?
+
+439
+0:32:51.840 --> 0:32:56.160
+You can follow our structure of the DNF5 plugins.
+
+440
+0:32:56.160 --> 0:33:03.480
+It's basically always some definition file, like the header was there, the actual implementation,
+
+441
+0:33:03.480 --> 0:33:11.440
+the CPP file, and then there is the adapter for the plugin API.
+
+442
+0:33:11.440 --> 0:33:13.560
+But it's like the boilerplate code.
+
+443
+0:33:13.560 --> 0:33:16.800
+We just need to change few lines and it will work.
+
+444
+0:33:16.800 --> 0:33:20.560
+So let's look at this C++ example.
+
+445
+0:33:20.560 --> 0:33:25.480
+There is the implementation of really simple example command.
+
+446
+0:33:25.480 --> 0:33:28.920
+And it's following the command interface from the DNF5.
+
+447
+0:33:28.920 --> 0:33:37.800
+So there is some methods for the setup of the command we need to follow.
+
+448
+0:33:37.800 --> 0:33:42.320
+In this step, we need to tell the DNF5 we have some new command.
+
+449
+0:33:42.320 --> 0:33:47.880
+So we basically register our new command into the DNF5.
+
+450
+0:33:47.880 --> 0:33:52.040
+This is super simple and it could be copied from other plugins.
+
+451
+0:33:52.040 --> 0:33:56.800
+Then there is setting the argument parser, basically parsing the arguments.
+
+452
+0:33:56.800 --> 0:34:02.000
+What are the arguments for our new command?
+
+453
+0:34:02.000 --> 0:34:04.720
+Listing all the positional arguments and what we have.
+
+454
+0:34:04.720 --> 0:34:10.260
+But in this simple example, we don't have any, so we just set some simple description.
+
+455
+0:34:10.260 --> 0:34:17.120
+In the configure section, we can modify the DNF5 session, change some configuration or
+
+456
+0:34:17.120 --> 0:34:20.320
+request some optional metadata to be downloaded.
+
+457
+0:34:20.320 --> 0:34:23.400
+Here we just gonna be quiet.
+
+458
+0:34:23.400 --> 0:34:29.480
+And there is the actual implementation of the command in the run method where we just
+
+459
+0:34:29.480 --> 0:34:35.160
+output something on the terminal.
+
+460
+0:34:35.160 --> 0:34:38.640
+And here I will show briefly the adapter code.
+
+461
+0:34:38.640 --> 0:34:41.320
+So this is the boilerplate one.
+
+462
+0:34:41.320 --> 0:34:46.320
+You just copy it and change a couple of things.
+
+463
+0:34:46.320 --> 0:34:53.720
+This is like the plugin name, the version, like name your outer and name of the plugin.
+
+464
+0:34:53.720 --> 0:35:02.480
+Then there is a long block of some boilerplate code that is same for all the plugins.
+
+465
+0:35:02.480 --> 0:35:11.720
+Each plugin consists of one or more commands, so we just put our new command into the list.
+
+466
+0:35:11.720 --> 0:35:19.520
+And finally, we need to return the instance of our new plugin class and that's it.
+
+467
+0:35:19.520 --> 0:35:23.640
+So let's try to build it and run it.
+
+468
+0:35:23.640 --> 0:35:30.560
+At first I will show you that there is no example command for the DNF5 right now, so
+
+469
+0:35:30.560 --> 0:35:34.120
+I'm not cheating.
+
+470
+0:35:34.120 --> 0:35:39.280
+And here are the sources.
+
+471
+0:35:39.280 --> 0:35:43.040
+There is the CPP file I was showing.
+
+472
+0:35:43.040 --> 0:35:47.840
+Then there is the header file which is basically just the definition and the adapter code in
+
+473
+0:35:47.840 --> 0:35:50.000
+the example plugin CPP.
+
+474
+0:35:50.000 --> 0:35:58.160
+And then there is the build script for the CMake which is stolen from the DNF5 sources.
+
+475
+0:35:58.160 --> 0:36:08.880
+So we just need to create build folder and then we will do everything to make it, there
+
+476
+0:36:08.880 --> 0:36:13.280
+is again some weird keyboard.
+
+477
+0:36:13.280 --> 0:36:15.680
+I need, this is not English keyboard.
+
+478
+0:36:15.680 --> 0:36:17.360
+I was using the check keyboard.
+
+479
+0:36:17.360 --> 0:36:19.040
+You should know the check keyboard.
+
+480
+0:36:19.040 --> 0:36:21.280
+I need like the M%.
+
+481
+0:36:21.280 --> 0:36:22.280
+English.
+
+482
+0:36:22.280 --> 0:36:28.560
+This one.
+
+483
+0:36:28.560 --> 0:36:33.440
+Where is it?
+
+484
+0:36:33.440 --> 0:36:39.720
+There we have it.
+
+485
+0:36:39.720 --> 0:36:43.360
+How did it happen?
+
+486
+0:36:43.360 --> 0:36:44.360
+What happened?
+
+487
+0:36:44.360 --> 0:36:45.360
+I don't know.
+
+488
+0:36:45.360 --> 0:36:46.360
+Show me again.
+
+489
+0:36:46.360 --> 0:36:47.360
+What?
+
+490
+0:36:47.360 --> 0:36:52.760
+The shift and.
+
+491
+0:36:52.760 --> 0:36:56.920
+This is the Italian keyboard, so don't look at this.
+
+492
+0:36:56.920 --> 0:36:57.920
+Just go by memory.
+
+493
+0:36:57.920 --> 0:37:04.320
+Oh, it is the printed in Italian.
+
+494
+0:37:04.320 --> 0:37:07.120
+So make it, make install.
+
+495
+0:37:07.120 --> 0:37:12.600
+So basically just build the sources and the installation is just the copying of the library
+
+496
+0:37:12.600 --> 0:37:18.440
+into the correct place where the DNF looks for it.
+
+497
+0:37:18.440 --> 0:37:24.880
+So building is done and we can try running the DNF5 example.
+
+498
+0:37:24.880 --> 0:37:29.720
+And yes, we did it.
+
+499
+0:37:29.720 --> 0:37:34.200
+I don't see.
+
+500
+0:37:34.200 --> 0:37:36.320
+Okay.
+
+501
+0:37:36.320 --> 0:37:43.200
+So when will the DNF5 release, you discovered already.
+
+502
+0:37:43.200 --> 0:37:49.280
+DNF5 is actually already in Fedora row height, so 38.
+
+503
+0:37:49.280 --> 0:37:54.440
+And there is a plan to, well, in a moment.
+
+504
+0:37:54.440 --> 0:37:59.160
+So first of all, if you're running stable Fedora 36 or 37, you can use a hopper to try
+
+505
+0:37:59.160 --> 0:38:00.160
+it.
+
+506
+0:38:00.160 --> 0:38:03.520
+And it will be parallel installation with DNF.
+
+507
+0:38:03.520 --> 0:38:08.280
+And also here are all the sources that we have for whatever.
+
+508
+0:38:08.280 --> 0:38:10.360
+You can find everything in the GitHub repo.
+
+509
+0:38:10.360 --> 0:38:11.640
+That's the only link you need.
+
+510
+0:38:11.640 --> 0:38:12.980
+There's everything there.
+
+511
+0:38:12.980 --> 0:38:18.400
+We have all the links copied in the talk information.
+
+512
+0:38:18.400 --> 0:38:22.360
+If you run Fedora row height or if you're in a container of row height and you want
+
+513
+0:38:22.360 --> 0:38:23.680
+to try it, it's there.
+
+514
+0:38:23.680 --> 0:38:26.880
+So just DNF install, DNF5 and you're good.
+
+515
+0:38:26.880 --> 0:38:33.560
+And something more about it, when it will actually land in Fedora.
+
+516
+0:38:33.560 --> 0:38:41.160
+So there is a plan to do a major upgrade of microDNF that will actually simply to DNF5
+
+517
+0:38:41.160 --> 0:38:45.000
+so it will be replaced in Fedora 38.
+
+518
+0:38:45.000 --> 0:38:49.760
+And in Fedora 39, there's the plan to replace DNF with DNF5.
+
+519
+0:38:49.760 --> 0:38:59.240
+So it's coming and we hope to be ready for that.
+
+520
+0:38:59.240 --> 0:39:00.240
+That's it.
+
+521
+0:39:00.240 --> 0:39:01.240
+Thank you.
+
+522
+0:39:01.240 --> 0:39:11.840
+And if you have questions, we have time.
+
+523
+0:39:11.840 --> 0:39:12.840
+Any questions?
+
+524
+0:39:12.840 --> 0:39:25.120
+Thank you so much for this presentation.
+
+525
+0:39:25.120 --> 0:39:28.780
+My question is related to community.
+
+526
+0:39:28.780 --> 0:39:35.640
+You demonstrated there is quite a few people that are not making more than like odd one,
+
+527
+0:39:35.640 --> 0:39:37.800
+two, three, four commits.
+
+528
+0:39:37.800 --> 0:39:44.400
+Can you tell me what is your plan to help people contribute more?
+
+529
+0:39:44.400 --> 0:39:57.280
+How are you going to improve the contributor experience?
+
+530
+0:39:57.280 --> 0:39:58.480
+So thank you for the question.
+
+531
+0:39:58.480 --> 0:40:05.860
+So the idea is to once again make it simpler and be more proactive to help people.
+
+532
+0:40:05.860 --> 0:40:13.520
+So again, in the past, we weren't very responsive and people got pissed because their code was
+
+533
+0:40:13.520 --> 0:40:21.920
+just ignored and their questions were not as important as maintaining DNF or there was
+
+534
+0:40:21.920 --> 0:40:24.400
+a perception from the outside.
+
+535
+0:40:24.400 --> 0:40:32.120
+And now we try to again, every week we go through all the discussions, all the new issues,
+
+536
+0:40:32.120 --> 0:40:37.760
+all the new PRs from community in all our components and we set an action plan for that.
+
+537
+0:40:37.760 --> 0:40:40.240
+So we set the milestones in every one of them.
+
+538
+0:40:40.240 --> 0:40:45.160
+We want to make this landing for the 38, we want to make this landing for the 39.
+
+539
+0:40:45.160 --> 0:40:48.920
+So you know what is our priority.
+
+540
+0:40:48.920 --> 0:40:52.760
+And we take seriously in serious considerations PRs.
+
+541
+0:40:52.760 --> 0:41:00.600
+So if you just drop some code, it's very easy for us to review it and be proactive to that.
+
+542
+0:41:00.600 --> 0:41:05.360
+And once again, it's done weekly and it's on our priority.
+
+543
+0:41:05.360 --> 0:41:07.000
+Our workflow has changed.
+
+544
+0:41:07.000 --> 0:41:08.760
+Hope it answered.
+
+545
+0:41:08.760 --> 0:41:24.120
+Thank you.
+
+546
+0:41:24.120 --> 0:41:30.760
+Just technical curiosity, is the new DNF5 daemon intended to replace the package kit
+
+547
+0:41:30.760 --> 0:41:33.640
+daemon?
+
+548
+0:41:33.640 --> 0:41:49.840
+Is the DNF5 daemon intended to replace the package kit daemon?
+
+549
+0:41:49.840 --> 0:41:56.120
+So it can, we did start with that in mind because package kit was officially deprecated
+
+550
+0:41:56.120 --> 0:41:57.120
+before.
+
+551
+0:41:57.120 --> 0:41:58.120
+So that was one of the goals.
+
+552
+0:41:58.120 --> 0:42:06.120
+But lately I've seen that package kit is maintained and there is even issue on our page that someone
+
+553
+0:42:06.120 --> 0:42:10.640
+wants to create backend for the DNF5 for the new IPI for package kit.
+
+554
+0:42:10.640 --> 0:42:15.160
+So I'm not sure how it will turn up, but we will see.
+
+555
+0:42:15.160 --> 0:42:19.000
+It was the plan originally.
+
+556
+0:42:19.000 --> 0:42:24.400
+It could, sorry if you want to, yeah.
+
+557
+0:42:24.400 --> 0:42:26.740
+The thing is package kit works, right?
+
+558
+0:42:26.740 --> 0:42:32.360
+So it's not that easy to, I'm hearing, okay.
+
+559
+0:42:32.360 --> 0:42:35.920
+Well, I would say that for now gets the job done.
+
+560
+0:42:35.920 --> 0:42:38.600
+But still, there's an alternative.
+
+561
+0:42:38.600 --> 0:42:43.640
+Actually the first enablement of DNF daemon on the system, there will be for other components
+
+562
+0:42:43.640 --> 0:42:50.280
+that are less critical to probably to adapt to the new DNF or actually the new API.
+
+563
+0:42:50.280 --> 0:42:56.640
+We're looking at cockpit, for example, that could use the daemon or anaconda maybe could
+
+564
+0:42:56.640 --> 0:42:57.640
+use it.
+
+565
+0:42:57.640 --> 0:43:03.480
+So it's not just package kit for which the daemon would be relevant.
+
+566
+0:43:03.480 --> 0:43:07.520
+Let's say that.
+
+567
+0:43:07.520 --> 0:43:12.120
+Just finally, we would like to do that because, like to replace it because it could provide,
+
+568
+0:43:12.120 --> 0:43:15.960
+for example, like I mentioned, the module support or group support to even to Chrome
+
+569
+0:43:15.960 --> 0:43:19.440
+software which is currently not possible and that would be nice.
+
+570
+0:43:19.440 --> 0:43:24.400
+So any other questions?
+
+571
+0:43:24.400 --> 0:43:27.640
+Hello.
+
+572
+0:43:27.640 --> 0:43:41.560
+I do also have a community participation question.
+
+573
+0:43:41.560 --> 0:43:47.480
+Are you talking or have you considered reaching out to other RPM based distributions beyond
+
+574
+0:43:47.480 --> 0:43:53.600
+Fedra and the CentOS, like Open Man Revover or SUSE perhaps?
+
+575
+0:43:53.600 --> 0:44:07.080
+Thank you.
+
+576
+0:44:07.080 --> 0:44:14.320
+I'm not in contact because no one here is project manager or team lead.
+
+577
+0:44:14.320 --> 0:44:15.320
+Let's say that.
+
+578
+0:44:15.320 --> 0:44:18.520
+I would let another team member of us answer into that.
+
+579
+0:44:18.520 --> 0:44:26.960
+But yes, of course, the RPM distributions are taken into account and all the relatives
+
+580
+0:44:26.960 --> 0:44:31.400
+to Fedra, they're of course taken into account.
+
+581
+0:44:31.400 --> 0:44:35.400
+The thing is, for now, let's say it's a quite younger project, NFI.
+
+582
+0:44:35.400 --> 0:44:39.680
+It's just two years since it has started developing.
+
+583
+0:44:39.680 --> 0:44:43.080
+So I would say that this is the reason why we're just talking about Fedora, Fedora, Fedora,
+
+584
+0:44:43.080 --> 0:44:49.520
+Fedora because this is our upstream where we do the testing, our CI runs on Fedora.
+
+585
+0:44:49.520 --> 0:44:57.460
+And well, I think that we definitely would be porting or like we would be very happy
+
+586
+0:44:57.460 --> 0:45:12.800
+to see the NF5 land in other RPM distributions.
+
+587
+0:45:12.800 --> 0:45:14.800
+I think that's it.
+
+588
+0:45:14.800 --> 0:45:17.680
+No more question.
+
+589
+0:45:17.680 --> 0:45:19.760
+I think that's it.
+
+590
+0:45:19.760 --> 0:45:20.880
+Okay.
+
+591
+0:45:20.880 --> 0:45:21.880
+Thank you again.
+
+592
+0:45:21.880 --> 0:45:22.880
+Thank you.
+
+593
+0:45:22.880 --> 0:45:29.880
+Thank you, everyone.
+
