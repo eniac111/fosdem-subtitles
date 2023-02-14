@@ -1,0 +1,912 @@
+1
+0:00:00.000 --> 0:00:17.360
+I think I will start, otherwise I won't have any.
+
+2
+0:00:17.360 --> 0:00:21.080
+I like to talk a lot, so I won't have enough time anyway.
+
+3
+0:00:21.080 --> 0:00:22.480
+So thanks for coming to my presentation.
+
+4
+0:00:22.480 --> 0:00:28.040
+Today I'm going to talk about the challenges of updating everything.
+
+5
+0:00:28.040 --> 0:00:29.160
+So my name is Wareking.
+
+6
+0:00:29.160 --> 0:00:31.920
+I'm also one of the CI, the room maintainer.
+
+7
+0:00:31.920 --> 0:00:36.680
+I'm working for SUSE on all things related to Kubernetes, Rancher.
+
+8
+0:00:36.680 --> 0:00:40.760
+So if there are anything you want to talk about, feel free to reach out after my presentation.
+
+9
+0:00:40.760 --> 0:00:44.440
+But today I'm not here to talk about what I'm doing at work.
+
+10
+0:00:44.440 --> 0:00:47.880
+I'm here to present a project that I started before joining SUSE.
+
+11
+0:00:47.880 --> 0:00:50.440
+By then when I used to work on a Jenkins project.
+
+12
+0:00:50.440 --> 0:00:52.200
+And that project is named UpdateSyli.
+
+13
+0:00:52.200 --> 0:00:57.320
+So UpdateSyli is a command line tool that we use to automate things.
+
+14
+0:00:57.320 --> 0:01:02.080
+So the design is to run it on your machine, on the CI environment, whatever it is.
+
+15
+0:01:02.080 --> 0:01:08.000
+And so you specify in the manifest what the update strategy would look like.
+
+16
+0:01:08.000 --> 0:01:12.240
+So initially I wanted to talk about first UpdateSyli and then all the challenges that
+
+17
+0:01:12.240 --> 0:01:16.240
+you have when you want to automate Docker images, when you want to automate infrastructure,
+
+18
+0:01:16.240 --> 0:01:17.240
+whatever.
+
+19
+0:01:17.240 --> 0:01:18.560
+But I won't have the time to do that here.
+
+20
+0:01:18.560 --> 0:01:23.120
+So for those people in Ghent, for the configuration management camp, I will have more time over
+
+21
+0:01:23.120 --> 0:01:24.120
+there.
+
+22
+0:01:24.120 --> 0:01:29.320
+And I'm just focusing on what UpdateSyli is, what the problem is and what I'm trying to
+
+23
+0:01:29.320 --> 0:01:30.320
+do.
+
+24
+0:01:30.320 --> 0:01:35.120
+So the challenge that I face is quite often when I maintain large amount of projects,
+
+25
+0:01:35.120 --> 0:01:37.360
+something that used to work do not work anymore.
+
+26
+0:01:37.360 --> 0:01:41.920
+Like you're using Hugo, for example, to generate a website.
+
+27
+0:01:41.920 --> 0:01:46.240
+And then at some point you cannot deploy the website anymore because even though the projects
+
+28
+0:01:46.240 --> 0:01:50.080
+release a new Hugo version, they fail to build the...
+
+29
+0:01:50.080 --> 0:01:54.480
+And publish the Docker images associated to that, or you would realize yesterday I was
+
+30
+0:01:54.480 --> 0:01:59.480
+investigating an issue where UpdateSyli would deploy and would roll back version of the
+
+31
+0:01:59.480 --> 0:02:04.360
+engine asynchronous controller and then it ended up that the people maintaining that
+
+32
+0:02:04.360 --> 0:02:09.320
+container just release, delete the release, forget to remove the Git tag and those situations.
+
+33
+0:02:09.320 --> 0:02:12.080
+So you would expect something to work, you won't automate.
+
+34
+0:02:12.080 --> 0:02:17.200
+And the thing is when you get in those situations, you try to understand why it didn't work.
+
+35
+0:02:17.200 --> 0:02:20.200
+It used to work for years and then suddenly it doesn't work anymore.
+
+36
+0:02:20.200 --> 0:02:23.400
+And then so you spend time trying to understand what's the latest version and what's the change
+
+37
+0:02:23.400 --> 0:02:26.760
+log, what's something failed, basically.
+
+38
+0:02:26.760 --> 0:02:30.880
+And so when you want to automate those updates so you don't have to pay attention to them,
+
+39
+0:02:30.880 --> 0:02:32.880
+I mean, it obviously has benefits, right?
+
+40
+0:02:32.880 --> 0:02:38.440
+I mean, by curiosity, who's using, for example, dependable or renovateable to automate things,
+
+41
+0:02:38.440 --> 0:02:39.440
+updates?
+
+42
+0:02:39.440 --> 0:02:41.560
+Yes, a few people.
+
+43
+0:02:41.560 --> 0:02:43.000
+It's only the start.
+
+44
+0:02:43.000 --> 0:02:48.840
+But once you start automating things, you know that obviously it gets easier to change
+
+45
+0:02:48.840 --> 0:02:54.800
+your project infrastructure documentation, no matter what, because you get confident
+
+46
+0:02:54.800 --> 0:02:57.800
+in the change that you want to do.
+
+47
+0:02:57.800 --> 0:03:02.320
+And in my case, most of my projects are always the DOM Git repositories.
+
+48
+0:03:02.320 --> 0:03:05.840
+And one of the challenges when you think about those Git repositories is everything is a
+
+49
+0:03:05.840 --> 0:03:10.600
+file and what you try to do is you try to automate them, but most of the time you have
+
+50
+0:03:10.600 --> 0:03:13.640
+no idea what you're trying to update, right?
+
+51
+0:03:13.640 --> 0:03:17.520
+So for example, dependable, we'll just look at a package of JSON.
+
+52
+0:03:17.520 --> 0:03:21.280
+So if you find a package of JSON, we'll list all dependencies and try to update them one
+
+53
+0:03:21.280 --> 0:03:22.280
+by one.
+
+54
+0:03:22.280 --> 0:03:27.480
+But on the other side, for those people using, for example, random JSON file, there is no
+
+55
+0:03:27.480 --> 0:03:31.560
+way to know in advance what should be updated in those files.
+
+56
+0:03:31.560 --> 0:03:35.400
+And then you have all those middle grounds, like, for example, for those people familiar
+
+57
+0:03:35.400 --> 0:03:39.280
+with Dockerfile, you have some instructions that you can automatically update, like the
+
+58
+0:03:39.280 --> 0:03:42.640
+from instruction, it's pretty straightforward to know what you need to update.
+
+59
+0:03:42.640 --> 0:03:45.080
+You don't know what you want to update.
+
+60
+0:03:45.080 --> 0:03:46.360
+That's a different story.
+
+61
+0:03:46.360 --> 0:03:49.320
+But the thing is, you know that you want to automate the base image.
+
+62
+0:03:49.320 --> 0:03:52.640
+On the other side, you can put pretty much every information in the run instruction,
+
+63
+0:03:52.640 --> 0:03:58.680
+the label, the end view instruction, and that's where things get difficult.
+
+64
+0:03:58.680 --> 0:04:02.600
+So when we started working on a data slide, we wanted to think, okay, we want to automate
+
+65
+0:04:02.600 --> 0:04:07.800
+everything, so we want to define where the information is coming from, what are the conditions
+
+66
+0:04:07.800 --> 0:04:12.520
+to automate the thing, and finally, what should be the state of your file on your Git repository.
+
+67
+0:04:12.520 --> 0:04:18.080
+So if I go back to my ego example, the idea is the source of information is the latest
+
+68
+0:04:18.080 --> 0:04:21.640
+ego release, that could be the GitHub, that could be the latest Docker image published,
+
+69
+0:04:21.640 --> 0:04:23.720
+that could be the GitHub release, for example.
+
+70
+0:04:23.720 --> 0:04:28.620
+But at some point, we have to decide what's the source of truth for that specific application.
+
+71
+0:04:28.620 --> 0:04:31.600
+And then you have, like, a bunch of conditions that you want to apply, like, does it make
+
+72
+0:04:31.600 --> 0:04:38.720
+sense to bump the version in production if you fail to bump the version in the dev environment.
+
+73
+0:04:38.720 --> 0:04:42.120
+So you want to be sure that you are using the same version everywhere, and only then
+
+74
+0:04:42.120 --> 0:04:46.560
+you will bump all the files related to that version.
+
+75
+0:04:46.560 --> 0:04:50.560
+And so when we come back about update.il, the idea is we specify a manifest, we have
+
+76
+0:04:50.560 --> 0:04:54.560
+to write a manifest, so that's a main different, for example, than for dependable, because
+
+77
+0:04:54.560 --> 0:04:59.520
+dependable, you just enable the button, it works, but it will only detect what it can
+
+78
+0:04:59.520 --> 0:05:03.280
+detect, but most of the time you have no idea what you should update.
+
+79
+0:05:03.280 --> 0:05:06.160
+With update.il, we went the other way.
+
+80
+0:05:06.160 --> 0:05:11.080
+We write a manifest, for example, this one is you have the source, the source of truth,
+
+81
+0:05:11.080 --> 0:05:14.880
+in this case it's a GitHub release, so can GitHub release, and then you have the specification
+
+82
+0:05:14.880 --> 0:05:17.720
+where you provide all the parameters for that specific project.
+
+83
+0:05:17.720 --> 0:05:23.000
+So in this case, I am monitoring the go ego, I go git repository.
+
+84
+0:05:23.000 --> 0:05:27.240
+This one gives me a version, let's say 100, that's the latest one.
+
+85
+0:05:27.240 --> 0:05:33.480
+And what I want to do is I want to be sure that all my files on name Netify.toml.
+
+86
+0:05:33.480 --> 0:05:38.240
+Are up to date, so I look at the key, and if I run this manifest on my machine, it will
+
+87
+0:05:38.240 --> 0:05:40.040
+just dump the file on my machine.
+
+88
+0:05:40.040 --> 0:05:45.560
+If I run this manifest on the CI environment, it will bump the file in the CI environment.
+
+89
+0:05:45.560 --> 0:05:49.800
+And so the next step is, okay, that's one thing to have it working in a machine, but
+
+90
+0:05:49.800 --> 0:05:53.480
+then you also want to be sure that your git repositories are up to date and don't pay
+
+91
+0:05:53.480 --> 0:05:55.440
+attention to them.
+
+92
+0:05:55.440 --> 0:05:59.000
+So you can just focus on what really makes sense in your case.
+
+93
+0:05:59.000 --> 0:06:03.660
+And so the next step is, okay, we want to specify where that file is located.
+
+94
+0:06:03.660 --> 0:06:08.040
+So we have a bunch of other resources, in this case it's a SCM of type GT, because I
+
+95
+0:06:08.040 --> 0:06:13.960
+want to update GT repositories, and then I specify that I want the pull request approach
+
+96
+0:06:13.960 --> 0:06:18.840
+where I create a temporary branch, and then someone can review my change.
+
+97
+0:06:18.840 --> 0:06:23.920
+And then when you think about all those building blocks, you can really have like more advanced
+
+98
+0:06:23.920 --> 0:06:29.200
+scenarios like this one is another project that we use, where we use it is when someone
+
+99
+0:06:29.200 --> 0:06:34.880
+really is in a new version of APNIO, we use GitHub action there that send a bunch of release
+
+100
+0:06:34.880 --> 0:06:40.420
+events automatically to other git repositories, and those git repositories will trigger update
+
+101
+0:06:40.420 --> 0:06:41.420
+CLI.
+
+102
+0:06:41.420 --> 0:06:43.760
+So update CLI will retrieve all the different information.
+
+103
+0:06:43.760 --> 0:06:48.400
+So for example, on the apnio slash docs, which is obviously the website, we retrieve the
+
+104
+0:06:48.400 --> 0:06:52.800
+latest version of APNIO, and then we check that all the download links are up to date.
+
+105
+0:06:52.800 --> 0:06:56.120
+We check that we have the version for that specific website.
+
+106
+0:06:56.120 --> 0:07:01.720
+So we maintain one documentation per major and minor version.
+
+107
+0:07:01.720 --> 0:07:05.000
+So we try to be sure that those files are to be up to date.
+
+108
+0:07:05.000 --> 0:07:09.880
+And if it's not the case, we open a PR, and then as part of the release process of APNIO,
+
+109
+0:07:09.880 --> 0:07:13.720
+someone needs to review the PR and double check that it still contains a file that you
+
+110
+0:07:13.720 --> 0:07:16.920
+want to have there.
+
+111
+0:07:16.920 --> 0:07:19.360
+Another example is the way we automate hand shots.
+
+112
+0:07:19.360 --> 0:07:25.000
+We define, OK, we are monitoring the APNIO UI, which is a front application, and we monitor
+
+113
+0:07:25.000 --> 0:07:26.920
+the backend, the APNIO.
+
+114
+0:07:26.920 --> 0:07:30.400
+And then if for some reason there is a new version, then it will automatically bump the
+
+115
+0:07:30.400 --> 0:07:32.440
+hand shot, bump the metadata, and so on.
+
+116
+0:07:32.440 --> 0:07:36.480
+And once again, we have a human validation where someone can just come look at the PR
+
+117
+0:07:36.480 --> 0:07:40.400
+and decide if we want to go one step further.
+
+118
+0:07:40.400 --> 0:07:49.320
+So really briefly here is when automated update is not so easy challenge, as I initially thought,
+
+119
+0:07:49.320 --> 0:07:53.200
+because we split the project in three different categories.
+
+120
+0:07:53.200 --> 0:07:54.520
+The first one is declarative.
+
+121
+0:07:54.520 --> 0:07:59.080
+So the idea is you know in advance what should be updated, and so you define in a manifest
+
+122
+0:07:59.080 --> 0:08:03.600
+how you want to update something, because it's not something that you can define in
+
+123
+0:08:03.600 --> 0:08:04.600
+advance.
+
+124
+0:08:04.600 --> 0:08:08.720
+The other discovery is a bit more like for those people familiar with dependable or renovate,
+
+125
+0:08:08.720 --> 0:08:12.760
+but you just run the command, and you ask it to automatically detect what could be updated.
+
+126
+0:08:12.760 --> 0:08:16.480
+There are scenarios where you can find that information.
+
+127
+0:08:16.480 --> 0:08:20.720
+For example, on the Maven project you have the PAM.exe, and you fetch all the dependencies
+
+128
+0:08:20.720 --> 0:08:21.720
+and update them.
+
+129
+0:08:21.720 --> 0:08:24.920
+That's pretty easy.
+
+130
+0:08:24.920 --> 0:08:30.440
+On other projects like Docker containers, it's kind of a mess over there, so it's super difficult
+
+131
+0:08:30.440 --> 0:08:32.520
+to know what should be the next version.
+
+132
+0:08:32.520 --> 0:08:36.440
+And then on the other side, you have all those situations where you specify a constraint,
+
+133
+0:08:36.440 --> 0:08:37.440
+a version constraint.
+
+134
+0:08:37.440 --> 0:08:41.640
+Like you don't want to use a version bigger than the 1.0, but at some point the project
+
+135
+0:08:41.640 --> 0:08:45.080
+upstream is like way further than you are in your project.
+
+136
+0:08:45.080 --> 0:08:49.760
+At some point you need to be aware that you will need to plan some work to catch up on
+
+137
+0:08:49.760 --> 0:08:50.920
+the upstream project.
+
+138
+0:08:50.920 --> 0:08:54.560
+And so that's another experiment, which is update-planetary.
+
+139
+0:08:54.560 --> 0:08:56.000
+I want to do a quick demo.
+
+140
+0:08:56.000 --> 0:09:01.280
+I don't have good internet connectivity here, so I hope it will work.
+
+141
+0:09:01.280 --> 0:09:03.560
+On the left side is one of the manifests.
+
+142
+0:09:03.560 --> 0:09:07.560
+Is it big enough?
+
+143
+0:09:07.560 --> 0:09:11.840
+Oops.
+
+144
+0:09:11.840 --> 0:09:17.160
+On the left side, we specify a few things like, okay, in this case we want to enable
+
+145
+0:09:17.160 --> 0:09:21.120
+the auto merge feature of GitHub.
+
+146
+0:09:21.120 --> 0:09:24.800
+We specify labels, so we automatically open a PR.
+
+147
+0:09:24.800 --> 0:09:28.800
+And if all the tests are passing, it will merge the PR automatically.
+
+148
+0:09:28.800 --> 0:09:33.000
+And so I don't have to pay attention, which reduces, obviously, the noise introduced by
+
+149
+0:09:33.000 --> 0:09:34.160
+those PR.
+
+150
+0:09:34.160 --> 0:09:37.400
+We need to specify which projects we want to go.
+
+151
+0:09:37.400 --> 0:09:40.560
+So in this case, that's the updated website.
+
+152
+0:09:40.560 --> 0:09:43.160
+And finally, we specify where the information is coming from.
+
+153
+0:09:43.160 --> 0:09:45.280
+So this one we monitor, goi, goi, yo.
+
+154
+0:09:45.280 --> 0:09:50.200
+As I said, we could have, like, instead of monitoring the GitHub release, at some point
+
+155
+0:09:50.200 --> 0:09:54.160
+I could have said, okay, I just want to monitor the Docker images.
+
+156
+0:09:54.160 --> 0:10:00.320
+But in that case, I just need to provide different piece of information.
+
+157
+0:10:00.320 --> 0:10:03.640
+Or you could say, for example, I want to monitor.
+
+158
+0:10:03.640 --> 0:10:11.240
+But here, writing from the ID is the easiest way.
+
+159
+0:10:11.240 --> 0:10:16.400
+Again, you can specify different ways of filtering versions.
+
+160
+0:10:16.400 --> 0:10:20.840
+Because what's something that we noticed, for example, is when I said the Docker ecosystem
+
+161
+0:10:20.840 --> 0:10:24.360
+is a mess, you can put whatever information you want in a tag.
+
+162
+0:10:24.360 --> 0:10:28.200
+So there is pretty much no way, I mean, most of the time there is no way to know what should
+
+163
+0:10:28.200 --> 0:10:29.680
+be the next version.
+
+164
+0:10:29.680 --> 0:10:33.840
+And depending on the registries, they don't return you the latest version because they
+
+165
+0:10:33.840 --> 0:10:36.000
+don't sort the tags in the same way.
+
+166
+0:10:36.000 --> 0:10:42.360
+So at some point, yeah, you need to enforce a specific behavior.
+
+167
+0:10:42.360 --> 0:10:47.800
+And then the target in this case is if there is a new version of Ugo, we want to be sure
+
+168
+0:10:47.800 --> 0:10:55.040
+that the workflow file has the correct version and that the Netlify is up to date.
+
+169
+0:10:55.040 --> 0:10:57.080
+So I don't care.
+
+170
+0:10:57.080 --> 0:11:01.420
+And so what it looks like on the other side is just a CLI, as I said.
+
+171
+0:11:01.420 --> 0:11:08.000
+So you can read it from my machine, Linux, Mac, wherever you want to run it.
+
+172
+0:11:08.000 --> 0:11:13.880
+And then voila, you get the latest version, change log, depending on the situation.
+
+173
+0:11:13.880 --> 0:11:17.520
+And based on that, you can just combine the project.
+
+174
+0:11:17.520 --> 0:11:24.160
+And so we have a lot of different workflows where we automate things.
+
+175
+0:11:24.160 --> 0:11:27.760
+The last thing, how many times do I have left?
+
+176
+0:11:27.760 --> 0:11:29.760
+Five minutes.
+
+177
+0:11:29.760 --> 0:11:30.760
+OK.
+
+178
+0:11:30.760 --> 0:11:33.760
+Where is that?
+
+179
+0:11:33.760 --> 0:11:40.480
+It's not this one.
+
+180
+0:11:40.480 --> 0:11:45.920
+So the thing that I was mentioning for the monitoring the different versions.
+
+181
+0:11:45.920 --> 0:11:50.280
+So this one is a different way to see the problem is you want to monitor the version
+
+182
+0:11:50.280 --> 0:11:51.880
+that you are using at some point.
+
+183
+0:11:51.880 --> 0:11:57.440
+And so you want to compare, OK, in this case, I have one, on one location, I say I want
+
+184
+0:11:57.440 --> 0:12:00.520
+to monitor a version from the Netlify.me.
+
+185
+0:12:00.520 --> 0:12:04.240
+So get me a version which is 0.110.
+
+186
+0:12:04.240 --> 0:12:08.000
+And on the other side, I want to compare with what's the latest Ugo version.
+
+187
+0:12:08.000 --> 0:12:14.400
+And so if it doesn't match, then I know that I need to work on that at some point.
+
+188
+0:12:14.400 --> 0:12:27.280
+And since I have a bit of a time, I can quickly show what the discovery looks like.
+
+189
+0:12:27.280 --> 0:12:31.600
+Fleet lab.
+
+190
+0:12:31.600 --> 0:12:35.000
+The auto discovery is a bit more difficult because you need to know in advance what you
+
+191
+0:12:35.000 --> 0:12:37.240
+want to do.
+
+192
+0:12:37.240 --> 0:12:40.000
+But where is that thing?
+
+193
+0:12:40.000 --> 0:12:42.200
+Oh, pop, pop, pop.
+
+194
+0:12:42.200 --> 0:12:43.200
+Yeah, this way.
+
+195
+0:12:43.200 --> 0:12:46.080
+As you can see, we don't have a lot of support at this time.
+
+196
+0:12:46.080 --> 0:12:50.640
+So it's mainly around containers because I'm working on containers most of the time.
+
+197
+0:12:50.640 --> 0:12:52.000
+But so it will parse the file.
+
+198
+0:12:52.000 --> 0:12:56.080
+So in this case, it identifies it's a run-shore project where we have fleets.
+
+199
+0:12:56.080 --> 0:13:01.200
+And then based on that, it will try to fetch all the different versions specified in the
+
+200
+0:13:01.200 --> 0:13:06.240
+fleet projects and will suggest other versions.
+
+201
+0:13:06.240 --> 0:13:10.440
+So that's it for my presentation.
+
+202
+0:13:10.440 --> 0:13:13.440
+And voila.
+
+203
+0:13:13.440 --> 0:13:26.480
+Is there any question?
+
+204
+0:13:26.480 --> 0:13:31.120
+One time, two times, yes, there is one over there.
+
+205
+0:13:31.120 --> 0:13:37.640
+Hi there.
+
+206
+0:13:37.640 --> 0:13:38.640
+Thanks for the presentation.
+
+207
+0:13:38.640 --> 0:13:40.480
+I was talking about the depender bot.
+
+208
+0:13:40.480 --> 0:13:42.240
+But you didn't mention about renovate.
+
+209
+0:13:42.240 --> 0:13:47.840
+I wonder how much it overlaps with renovate if it would be more customizable one.
+
+210
+0:13:47.840 --> 0:13:50.200
+So the question, I mentioned depender bots.
+
+211
+0:13:50.200 --> 0:13:52.360
+I didn't mention that much renovate bots.
+
+212
+0:13:52.360 --> 0:13:56.720
+So if you compare the depender bot and renovate bot, the renovate bot is way better than the
+
+213
+0:13:56.720 --> 0:14:01.160
+depender bot because depender bots, I didn't have the time to cover the domain.
+
+214
+0:14:01.160 --> 0:14:04.000
+There are a lot of things that I didn't have the time to cover.
+
+215
+0:14:04.000 --> 0:14:06.800
+But for example, one of the features that I really love in renovate bot is they allow
+
+216
+0:14:06.800 --> 0:14:09.600
+you to group PRs which reduce the noise.
+
+217
+0:14:09.600 --> 0:14:13.160
+Because for example, they depend on the bot, especially for those people maintaining JavaScript
+
+218
+0:14:13.160 --> 0:14:18.280
+projects, they can open 10, 20, 30 PRs and then you have to review all of them.
+
+219
+0:14:18.280 --> 0:14:21.000
+So there are different strategies to update.
+
+220
+0:14:21.000 --> 0:14:25.840
+Renovate bot is just way better in the way that it supports more modules.
+
+221
+0:14:25.840 --> 0:14:32.720
+On the other side, it's not really easy in the case of renovate bots to have workflows
+
+222
+0:14:32.720 --> 0:14:34.000
+where you really want to check.
+
+223
+0:14:34.000 --> 0:14:40.440
+In the fetching version, I check a bunch of things and then I update other targets basically.
+
+224
+0:14:40.440 --> 0:14:45.680
+So I would say renovate bots is better in the auto-discovery part where it can detect
+
+225
+0:14:45.680 --> 0:14:46.800
+things for you.
+
+226
+0:14:46.800 --> 0:14:54.200
+But on the other side, it's not really easy to have very complex update scenarios.
+
+227
+0:14:54.200 --> 0:15:01.960
+That's it.
+
+228
+0:15:01.960 --> 0:15:06.480
+Thank you.
+
