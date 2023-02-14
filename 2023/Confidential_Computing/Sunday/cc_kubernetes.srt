@@ -1,0 +1,816 @@
+1
+0:00:00.000 --> 0:00:14.000
+We're going to start here. We have a presentation about constellation, how to manage Kubernetes,
+
+2
+0:00:14.000 --> 0:00:24.880
+we think Kubernetes. The presenters are Mojit and Malto. So big shout out to them.
+
+3
+0:00:24.880 --> 0:00:32.680
+Thank you. We'd like to pick up where Nick in his initial presentation of saying we need
+
+4
+0:00:32.680 --> 0:00:37.560
+to have a let's encrypt movement, we need to make confidential computing a commodity.
+
+5
+0:00:37.560 --> 0:00:43.480
+Where he started off and then Magnus I think had a great talk showing all those bits and
+
+6
+0:00:43.480 --> 0:00:47.640
+pieces that we need to have to bring together the use cases, the cloud native world, the
+
+7
+0:00:47.640 --> 0:00:53.040
+way we develop applications for the cloud and the advantages that the confidential computing
+
+8
+0:00:53.040 --> 0:01:00.840
+technology gives us, how to bring them together and where are those gaps.
+
+9
+0:01:00.840 --> 0:01:06.040
+Historically seen or for different kind of use cases, I would roughly split from a use
+
+10
+0:01:06.040 --> 0:01:11.600
+case perspective of if I want to develop an application, where can CC help me, how can
+
+11
+0:01:11.600 --> 0:01:19.320
+I play confidential computing. I can roughly split that in three tiers if you will. I think
+
+12
+0:01:19.320 --> 0:01:25.640
+one is definitely managing keys, having enclaves that hold your cryptographic certificates,
+
+13
+0:01:25.640 --> 0:01:37.880
+your keys that process the crypto operations for you. Very small TCB, very small kind of
+
+14
+0:01:37.880 --> 0:01:44.560
+application. Then the second one is where I package my entire application inside an
+
+15
+0:01:44.560 --> 0:01:51.280
+enclave inside a confidential container and I think that's what we've been doing lately
+
+16
+0:01:51.280 --> 0:01:56.960
+a lot. Then I think the third thing is what Magnus described, is how can we bring that
+
+17
+0:01:56.960 --> 0:02:03.480
+together making this orchestratable, making this manageable, deployable. I think there
+
+18
+0:02:03.480 --> 0:02:11.960
+are different ways of getting from the tier two or the way we are to here. One is I guess
+
+19
+0:02:11.960 --> 0:02:17.600
+what Magnus described with taking containers, making them confidential containers and then
+
+20
+0:02:17.600 --> 0:02:23.460
+having the problems with orchestration. An orthogonal approach that we like to present
+
+21
+0:02:23.460 --> 0:02:28.160
+now is more of the idea of having confidential clusters. Instead of isolating individual
+
+22
+0:02:28.160 --> 0:02:37.880
+containers, isolating the nodes, the downside probably is a little bit larger TCB and the
+
+23
+0:02:37.880 --> 0:02:44.480
+advantages being more closely to where we are right now with deploying and developing
+
+24
+0:02:44.480 --> 0:02:53.560
+cloud native applications. Talking about challenges, for level three definitely I think one of
+
+25
+0:02:53.560 --> 0:03:01.120
+the biggest ones is UI, UX. There's little hope that people will go ahead and drastically
+
+26
+0:03:01.120 --> 0:03:07.840
+adjust the way they deploy and develop applications for the cloud just because they want to use
+
+27
+0:03:07.840 --> 0:03:14.440
+this new type of technology. We need to get very close to where they are and bring those
+
+28
+0:03:14.440 --> 0:03:20.440
+worlds together. Then of course there are the challenges Magnus described with orchestration,
+
+29
+0:03:20.440 --> 0:03:27.120
+attesting, how can we attest all those different containers that are running in my cluster
+
+30
+0:03:27.120 --> 0:03:33.040
+and don't necessarily want to verify each individual instance of it. It could be a thousand
+
+31
+0:03:33.040 --> 0:03:41.120
+and more of the same. Once I have a cluster, all those day two operations of updating,
+
+32
+0:03:41.120 --> 0:03:47.440
+upgrading and doing that in a sensitive way where I can always verify what's currently
+
+33
+0:03:47.440 --> 0:03:54.680
+being running and what are the changes. A big part of what we're going to present today
+
+34
+0:03:54.680 --> 0:04:01.200
+is the right one here where a big benefit of the cloud is actually that I can give away
+
+35
+0:04:01.200 --> 0:04:08.080
+some of this orchestration work and I consume managed services that are operated by someone
+
+36
+0:04:08.080 --> 0:04:19.400
+or autonomously and I just consume them through an API or any other kind of interface. As
+
+37
+0:04:19.400 --> 0:04:24.240
+Nick has said, infrastructure is rolling out. We see all those confidential technologies
+
+38
+0:04:24.240 --> 0:04:33.360
+in the cloud, AMD, SCB. We have heard so many today, IBM, RISC-V. Most of them give us a
+
+39
+0:04:33.360 --> 0:04:39.920
+confidential VM which is as we've seen not necessarily the abstraction we want but still
+
+40
+0:04:39.920 --> 0:04:46.040
+we can already consume managed Kubernetes that runs on confidential VMs at least for
+
+41
+0:04:46.040 --> 0:04:55.360
+the worker nodes. I think Azure has it, GCP has it. This exists but it's not really solving
+
+42
+0:04:55.360 --> 0:05:00.600
+the problem. It gives us runtime encryption for the stuff that lives on that nodes but
+
+43
+0:05:00.600 --> 0:05:06.760
+all the edges, all the IO is not protected. The API server is not protected. We've seen
+
+44
+0:05:06.760 --> 0:05:13.880
+that in Michael's talk. The metadata problem, the problem of the trusted control plane,
+
+45
+0:05:13.880 --> 0:05:18.400
+the way if you want to consume persistent volumes, is that automatically encrypted or
+
+46
+0:05:18.400 --> 0:05:24.880
+do I need to adjust my application to encrypt before writing to storage? The idea of a confidential
+
+47
+0:05:24.880 --> 0:05:32.760
+cluster is that I have somebody or something that fills in those gaps so that I have instead
+
+48
+0:05:32.760 --> 0:05:39.640
+of those individual confidential VMs, I have one big context that I can verify through attestation
+
+49
+0:05:39.640 --> 0:05:44.680
+that I can establish a secret channel and then if I'm in that context, if I'm in that
+
+50
+0:05:44.680 --> 0:05:56.100
+cluster, I can just use Kubernetes as I used to and inside there, essentially everything
+
+51
+0:05:56.100 --> 0:06:04.920
+is trusted. It's a different type of approach. It just creates an envelope around my Kubernetes
+
+52
+0:06:04.920 --> 0:06:12.080
+and isolates that as a whole. As I said, I think UX and UI and the way we use this is
+
+53
+0:06:12.080 --> 0:06:19.320
+super important. It's not going to work that we need a lot of adjustments, a lot of additional
+
+54
+0:06:19.320 --> 0:06:26.480
+steps in the development workflows. This is just an example of consolation here but having
+
+55
+0:06:26.480 --> 0:06:32.400
+a simple way of creating such a confidential cluster and then using it is important and
+
+56
+0:06:32.400 --> 0:06:37.200
+all those things that I showed, all the challenges we need to solve below. We need to make this
+
+57
+0:06:37.200 --> 0:06:44.480
+more or less invisible. In terms of consolation, we try to make the node operating system as
+
+58
+0:06:44.480 --> 0:06:50.320
+verifiable as possible, strip it down as much as possible, harden it, then strip them together
+
+59
+0:06:50.320 --> 0:06:58.000
+for a cluster. We need to think about supply chain. We need to think about how we can automatically
+
+60
+0:06:58.000 --> 0:07:03.800
+encrypt all the stuff that goes over the network, that goes through the storage. Ideally, this
+
+61
+0:07:03.800 --> 0:07:10.280
+is all open source, so if I didn't mention it's open source and it's cloud agnostic so
+
+62
+0:07:10.280 --> 0:07:16.040
+it can run everywhere. Then for most of confidential computing stuff, I need some way of recovery
+
+63
+0:07:16.040 --> 0:07:26.920
+should things go south and everything is down and I need to get back into running mode.
+
+64
+0:07:26.920 --> 0:07:32.240
+The big problem with the confidential cluster concept is now I can create a cluster and
+
+65
+0:07:32.240 --> 0:07:37.640
+we will see in a bit of what that means but if I can create a cluster, I have everything
+
+66
+0:07:37.640 --> 0:07:43.880
+verified, now I have to maintain and run it on my own. This is, I guess, the biggest problem
+
+67
+0:07:43.880 --> 0:07:49.600
+with that concept. People want to consume managed stuff, want to have managed Kubernetes,
+
+68
+0:07:49.600 --> 0:07:57.400
+want to run their own, orchestrate their own Kubernetes. This is a big trade-off that people
+
+69
+0:07:57.400 --> 0:08:05.560
+are facing and we try to work on concepts of making that as easy as possible and Malte
+
+70
+0:08:05.560 --> 0:08:15.720
+is going to show you how.
+
+71
+0:08:15.720 --> 0:08:25.600
+Thanks for the introduction. The basic idea that we had was how can we manage Kubernetes
+
+72
+0:08:25.600 --> 0:08:33.000
+from inside Kubernetes itself and to kind of draft this idea, I will start by explaining
+
+73
+0:08:33.000 --> 0:08:43.000
+like what typically you can do today. On the left side, you really have the traditional
+
+74
+0:08:43.000 --> 0:08:50.160
+on-prem model which is you have the whole cluster in your own hand, the control plane,
+
+75
+0:08:50.160 --> 0:08:56.760
+the worker nodes, it runs on your own hardware which is great for security because you have
+
+76
+0:08:56.760 --> 0:09:04.360
+full control but it also means you are responsible for every single interaction like scaling
+
+77
+0:09:04.360 --> 0:09:11.360
+up the cluster, joining the nodes, performing upgrades both on the OS level and also Kubernetes
+
+78
+0:09:11.360 --> 0:09:18.400
+upgrades and then on the other side, you have something that is super popular. It is just
+
+79
+0:09:18.400 --> 0:09:25.040
+let the cloud provider deal with it and it means the cloud provider can scale your cluster
+
+80
+0:09:25.040 --> 0:09:31.720
+up and down just if you have a burst of traffic coming in, you get new nodes. It's all super
+
+81
+0:09:31.720 --> 0:09:39.280
+easy. You can set it up so that the cloud provider will automatically patch your operating
+
+82
+0:09:39.280 --> 0:09:46.160
+system. It will automatically upgrade your Kubernetes and this is great from a DevOps
+
+83
+0:09:46.160 --> 0:09:54.000
+perspective. It's super simple. It scales. It takes away work from the developer and
+
+84
+0:09:54.000 --> 0:10:02.040
+the operator of the cluster. What we thought is why don't we meet in the middle? That's
+
+85
+0:10:02.040 --> 0:10:09.560
+kind of like we have to run our own control plane in the confidential context but if we
+
+86
+0:10:09.560 --> 0:10:15.800
+do this, we lose all of these smart features from the cloud provider so we will just reinvent
+
+87
+0:10:15.800 --> 0:10:23.320
+them but inside the cluster. That means we can still do auto scaling. We can still join
+
+88
+0:10:23.320 --> 0:10:30.200
+the nodes by themselves without any human interaction. We can still roll out OS updates
+
+89
+0:10:30.200 --> 0:10:38.560
+and we can even roll out Kubernetes upgrades inside a running Kubernetes cluster. To explain
+
+90
+0:10:38.560 --> 0:10:45.520
+how this works, I will first go on to how Kubernetes nodes and consolations can actually
+
+91
+0:10:45.520 --> 0:10:53.320
+join the cluster without any outside interaction. What you have to understand here is these
+
+92
+0:10:53.320 --> 0:11:00.700
+are all confidential VMs and they make heavy use of the measured boot chain. I think we
+
+93
+0:11:00.700 --> 0:11:05.880
+already had some good introductions on this but I will still show you how this works in
+
+94
+0:11:05.880 --> 0:11:11.640
+an example. First, in the confidential VM, we have the firmware and the firmware is basically
+
+95
+0:11:11.640 --> 0:11:21.400
+just the first part that starts up. The main task here is to load up the first stage boot
+
+96
+0:11:21.400 --> 0:11:28.840
+loader and to measure it. We measure it on AMD, SEV in the approach we are currently
+
+97
+0:11:28.840 --> 0:11:36.320
+doing. It is measured into a virtual TPM. Then we load this boot loader and then we
+
+98
+0:11:36.320 --> 0:11:44.520
+will start executing it. The boot loader just has the task of, in our case, loading the
+
+99
+0:11:44.520 --> 0:11:51.320
+next stage and measuring it which is a unified kernel image. This is a very neat trick. It
+
+100
+0:11:51.320 --> 0:11:58.080
+is basically just one blob that contains the Linux kernel and init-ramfs and also the kernel
+
+101
+0:11:58.080 --> 0:12:04.560
+command line. The nice property here is we can measure all of these in one blob and don't
+
+102
+0:12:04.560 --> 0:12:12.880
+have to take care of the individual components which can be quite hard to do correctly. Inside
+
+103
+0:12:12.880 --> 0:12:20.800
+of this init-ramfs, we will use the kernel command line to extract the hash that we expect
+
+104
+0:12:20.800 --> 0:12:26.800
+for the root file system. For this, we use the mverity which I will not go into too much
+
+105
+0:12:26.800 --> 0:12:33.480
+detail about. It just allows us to have a read-only root file system and we know in
+
+106
+0:12:33.480 --> 0:12:41.600
+advance that it has not been tampered with. We can efficiently check every block while
+
+107
+0:12:41.600 --> 0:12:50.280
+it is read and before it is actually given to the user land. That is how we get to the
+
+108
+0:12:50.280 --> 0:12:55.680
+root file system. Inside of this root file system, we have a small application and the
+
+109
+0:12:55.680 --> 0:13:05.320
+task of this application is to join this node into the Kubernetes cluster. Next to the completely
+
+110
+0:13:05.320 --> 0:13:15.160
+unmodifiable OS, we have a state disk. The only task of the state disk is to have the
+
+111
+0:13:15.160 --> 0:13:21.600
+data for Kubernetes itself like container images and state at runtime that has to be
+
+112
+0:13:21.600 --> 0:13:30.080
+stored on disk. This is initialized to be completely clean. It is encrypted and that
+
+113
+0:13:30.080 --> 0:13:44.080
+is a component we need to operate. The next question is how do we make these things possible?
+
+114
+0:13:44.080 --> 0:13:51.140
+For this, we deploy some microservices inside of constellation. These are the node operator.
+
+115
+0:13:51.140 --> 0:13:59.360
+This is responsible for actually rolling out updates. It is the join service that tests
+
+116
+0:13:59.360 --> 0:14:04.120
+nodes that are joining the cluster and decides if they are allowed to join or not. We also
+
+117
+0:14:04.120 --> 0:14:10.600
+have a key service that is handling encryption keys and some more that are not really important
+
+118
+0:14:10.600 --> 0:14:20.080
+right now. How does a node actually join the cluster? I mentioned there is the boot stripper
+
+119
+0:14:20.080 --> 0:14:26.760
+that is started inside of the confidential virtual machine. It will autonomously search
+
+120
+0:14:26.760 --> 0:14:35.960
+for the existing Kubernetes control plan and it will perform remote attestation using a
+
+121
+0:14:35.960 --> 0:14:48.280
+tested TLS. It will basically use the attestation statement, for example from AMD, SCV, SMP.
+
+122
+0:14:48.280 --> 0:14:56.080
+The join service already knows what measurements to expect from a correct node that is running
+
+123
+0:14:56.080 --> 0:15:03.200
+the expected software. It can decide at this point if the booted node is running what you
+
+124
+0:15:03.200 --> 0:15:10.320
+want it to run and decide if it is allowed to join the cluster. Based on this, the join
+
+125
+0:15:10.320 --> 0:15:16.840
+service can then offer the node a join token which allows it to join the cluster and it
+
+126
+0:15:16.840 --> 0:15:24.440
+will also hand out a permanent encryption key for the state disk. Next, we will have
+
+127
+0:15:24.440 --> 0:15:31.400
+a quick look at how updates work. On a high level, we want the administrator to be in
+
+128
+0:15:31.400 --> 0:15:38.040
+control. We don't want to give up complete control over the update process, but we want
+
+129
+0:15:38.040 --> 0:15:43.440
+the actual execution to be completely automatic and seamless. We do this by basically just
+
+130
+0:15:43.440 --> 0:15:50.120
+telling the cluster what to do and the rest is done by a Kubernetes operator which is
+
+131
+0:15:50.120 --> 0:15:59.800
+a way to give in a desired state and let the cluster handle moving towards the state.
+
+132
+0:15:59.800 --> 0:16:08.200
+One important thing to think about here is we are running in the cloud environment and
+
+133
+0:16:08.200 --> 0:16:15.800
+we don't want you to depend on individual nodes. This is also what GKE and EKS and others
+
+134
+0:16:15.800 --> 0:16:23.080
+are doing. We're saying if you want to upgrade, we will give you a new node that has the desired
+
+135
+0:16:23.080 --> 0:16:32.320
+configuration and we will never try to do updates in place. How does the actual update
+
+136
+0:16:32.320 --> 0:16:39.600
+work? We basically give in custom resources that describe the desired state, so the Kubernetes
+
+137
+0:16:39.600 --> 0:16:48.200
+version and the OS image that we want to run on and some properties to actually verify
+
+138
+0:16:48.200 --> 0:16:53.400
+like the expected measurements for the new image and tashes for the individual Kubernetes
+
+139
+0:16:53.400 --> 0:17:01.640
+components. The operator reads this information and basically checks if the desired state
+
+140
+0:17:01.640 --> 0:17:11.040
+matches reality and if it detects a mismatch, it will first stop any auto scaling operations
+
+141
+0:17:11.040 --> 0:17:17.960
+that are happening in the cluster and then it will start replacing the nodes one by one.
+
+142
+0:17:17.960 --> 0:17:25.440
+For this we use the different APIs by the cloud providers. In this case, we will just
+
+143
+0:17:25.440 --> 0:17:31.280
+spawn a new node in the correct node group that has the desired configuration. We wait
+
+144
+0:17:31.280 --> 0:17:40.000
+for the node to autonomously join the cluster and we wait for it to become ready. Next,
+
+145
+0:17:40.000 --> 0:17:45.720
+we will coordinate and train the node, which just means we will safely move over your running
+
+146
+0:17:45.720 --> 0:17:51.440
+workloads from this node to other nodes in the cluster and only if we are sure that your
+
+147
+0:17:51.440 --> 0:17:58.720
+running workloads moved over, we will then remove the old node from the cluster. This
+
+148
+0:17:58.720 --> 0:18:08.200
+is basically how you can get from having outdated nodes to having updated nodes and this will
+
+149
+0:18:08.200 --> 0:18:17.440
+just go on until your whole cluster is up to date. You can also parallelize this. When
+
+150
+0:18:17.440 --> 0:18:24.040
+this is done, you can just restart the auto scaler and move on with your day.
+
+151
+0:18:24.040 --> 0:18:38.800
+All right, quick conclusion. In summary, the fundamental idea is we take this confidential
+
+152
+0:18:38.800 --> 0:18:46.200
+cluster concept, enveloping the entire Kubernetes cluster instead of protecting single containers
+
+153
+0:18:46.200 --> 0:18:53.000
+or parts. What we gain is we basically get all the orchestration for free. We need to
+
+154
+0:18:53.000 --> 0:18:59.840
+protect the edges, all the ION and so forth. The downside is we can't isolate inside that
+
+155
+0:18:59.840 --> 0:19:06.160
+cluster so it's one big envelope, of course. This works already. It's an open source tool.
+
+156
+0:19:06.160 --> 0:19:12.160
+You can check out Constellation on GitHub and then try it locally or on one of the big
+
+157
+0:19:12.160 --> 0:19:18.200
+clouds. From a Kubernetes perspective, it's just vanilla Kubernetes. Not surprising that
+
+158
+0:19:18.200 --> 0:19:23.880
+it's certified. To give out some more references, if you're
+
+159
+0:19:23.880 --> 0:19:32.040
+interested in this whole image part, there was the image-based Linux and TPM Devroom.
+
+160
+0:19:32.040 --> 0:19:38.680
+There's a lot of talks on these topics. Also very interesting. This is the last talk here,
+
+161
+0:19:38.680 --> 0:19:42.280
+but if you're interested in more confidential computing, sneaky little advertisement here
+
+162
+0:19:42.280 --> 0:19:48.440
+for the OC3 Open Confidential Computing Conference that's going to happen in March. It's virtual
+
+163
+0:19:48.440 --> 0:19:52.600
+free. You can just sign up and listen to the talks if you're interested. A bunch of the
+
+164
+0:19:52.600 --> 0:20:01.040
+folks that were here also have a talk there. If you have any questions, please feel free
+
+165
+0:20:01.040 --> 0:20:30.640
+to get in touch. That's it.
+
+166
+0:20:30.640 --> 0:20:36.160
+The question was about the attested TLS. When we join nodes, we establish a C connection
+
+167
+0:20:36.160 --> 0:20:43.160
+based on attested TLS. First of all, our implementation is open source. It's part of the Constellation
+
+168
+0:20:43.160 --> 0:20:52.680
+source on GitHub. I think it's nothing fancy. We use the AMD SCV or Intel TDX and so forth,
+
+169
+0:20:52.680 --> 0:21:02.600
+attestation statement to exchange a key as part of the data that's sent over. We bind
+
+170
+0:21:02.600 --> 0:21:09.200
+the TLS session to that attested key. I guess there are a couple of implementations for
+
+171
+0:21:09.200 --> 0:21:14.120
+attested TLS. They work more or less the same.
+
+172
+0:21:14.120 --> 0:21:23.480
+I'm really proud to be part of the most familiar with confidential computing. There is this
+
+173
+0:21:23.480 --> 0:21:33.480
+known flexibility in remote administration. It can be faked by a machine's host. I wonder
+
+174
+0:21:33.480 --> 0:21:40.480
+if it is possible to fight out from the remote attestation of the whole cluster any single
+
+175
+0:21:40.480 --> 0:21:50.480
+machine in the cluster may make a station and it goes unnoticed or not. All the others
+
+176
+0:21:50.480 --> 0:21:55.280
+are, for example, truthful.
+
+177
+0:21:55.280 --> 0:22:02.640
+Repeat the question. The question was there is a known vulnerability for attestation in
+
+178
+0:22:02.640 --> 0:22:09.160
+confidential computing. If given this confidential cluster, if from the whole cluster attestation,
+
+179
+0:22:09.160 --> 0:22:17.080
+I can refer to if one of the nodes is faking attestation. I have to say there were several
+
+180
+0:22:17.080 --> 0:22:23.000
+vulnerabilities in several of the CC technologies over time. I'm not aware of what vulnerability
+
+181
+0:22:23.000 --> 0:22:24.000
+you're referring to.
+
+182
+0:22:24.000 --> 0:22:39.720
+The question is, you don't know if it's a specific gem on a specific provider or someone
+
+183
+0:22:39.720 --> 0:22:43.880
+located in their garage. Is that what you mean?
+
+184
+0:22:43.880 --> 0:22:52.160
+The way the cluster attestation works is you give the first node, it has a known configuration,
+
+185
+0:22:52.160 --> 0:22:58.160
+and it will attest all other nodes based on this known attestation. If one node would
+
+186
+0:22:58.160 --> 0:23:04.400
+be able to perfectly fake that attestation, you would not know from a cluster attestation
+
+187
+0:23:04.400 --> 0:23:08.720
+perspective which node this would be.
+
+188
+0:23:08.720 --> 0:23:25.280
+But yeah, I guess that's what you can say.
+
+189
+0:23:25.280 --> 0:23:31.760
+It is super simple, but it is big TCB. Do you have any plans to reduce the TCB?
+
+190
+0:23:31.760 --> 0:23:41.920
+As I said, this is a trade-off. Yes, it's a much larger TCB than SGA, much larger TCB
+
+191
+0:23:41.920 --> 0:23:46.280
+even than confidential containers. We, of course, will try to make it as minimal as
+
+192
+0:23:46.280 --> 0:23:51.600
+possible. The biggest leverage is of course the node OS and everything we can do inside
+
+193
+0:23:51.600 --> 0:23:55.000
+there. We'll definitely try to improve there.
+
+194
+0:23:55.000 --> 0:24:05.800
+Yes? Very good question.
+
+195
+0:24:05.800 --> 0:24:15.440
+Sorry. Yeah, the question is part of the confidential VMs is the first component that's booted is
+
+196
+0:24:15.440 --> 0:24:21.000
+the firmware. Do we have control of the firmware? Ideally, we would have. But what's provided
+
+197
+0:24:21.000 --> 0:24:25.320
+by the cloud providers right now is Azure has something in preview that allows you to
+
+198
+0:24:25.320 --> 0:24:31.120
+do that. It's not generally available. And GCP does not allow you that. So the firmware
+
+199
+0:24:31.120 --> 0:24:38.840
+for at least GCP or Azure is completely controlled by them. On OpenStack with QMOKVM, you can
+
+200
+0:24:38.840 --> 0:24:43.520
+potentially fully control the firmware. Yes, next question.
+
+201
+0:24:43.520 --> 0:24:51.400
+Doesn't that create a huge trust problem? Does it have to trust the firmware to be secure?
+
+202
+0:24:51.400 --> 0:24:56.040
+Does this create a trust problem? That's the question. Yeah. I mean, this is a controversy.
+
+203
+0:24:56.040 --> 0:25:00.400
+I fully agree with you. This is not how we would like it. This is just the best we can
+
+204
+0:25:00.400 --> 0:25:05.800
+have.
+
