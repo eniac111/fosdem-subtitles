@@ -1,0 +1,826 @@
+WEBVTT
+
+00:00.000 --> 00:07.000
+Is Lightning talk on DPC++?
+
+00:07.000 --> 00:11.000
+Is it DPC++ first, I'm aware?
+
+00:11.000 --> 00:12.000
+Yeah, yeah, exactly.
+
+00:12.000 --> 00:14.000
+Okay, good afternoon.
+
+00:14.000 --> 00:16.000
+Yeah, so I'm going to be talking about compiler
+
+00:16.000 --> 00:21.000
+intrinsics in SQL, in DPC++ specifically.
+
+00:21.000 --> 00:24.000
+This is Intel's open source SQL implementation.
+
+00:24.000 --> 00:26.000
+This is what I work on.
+
+00:26.000 --> 00:28.000
+Yeah, so hopefully I'll be able to say something
+
+00:28.000 --> 00:32.000
+without saying too much in 10 minutes.
+
+00:32.000 --> 00:35.000
+Yeah, so Codeplay, I work for Codeplay.
+
+00:35.000 --> 00:38.000
+We had the first SQL implementation, compute CBP.
+
+00:38.000 --> 00:42.000
+We now work, we were acquired by Intel.
+
+00:42.000 --> 00:44.000
+So now we work on the Intel SQL implementation,
+
+00:44.000 --> 00:47.000
+DPC++, that's what I work on.
+
+00:47.000 --> 00:49.000
+We have lots of partners, you know,
+
+00:49.000 --> 00:51.000
+hardware companies, that kind of thing.
+
+00:51.000 --> 00:53.000
+Whoever needs an open CL implementation,
+
+00:53.000 --> 00:57.000
+SQL implementation, and so on, come to us.
+
+00:57.000 --> 01:00.000
+Yeah, so SQL is a single source heterogeneous programming API,
+
+01:00.000 --> 01:02.000
+so you can write single source code
+
+01:02.000 --> 01:07.000
+that can run on NVIDIA Intel AMD GPUs.
+
+01:07.000 --> 01:09.000
+Close to the mic, okay.
+
+01:09.000 --> 01:11.000
+Voice up, sorry.
+
+01:11.000 --> 01:13.000
+Yeah, so it's great for someone who's developing
+
+01:13.000 --> 01:17.000
+scientific applications to be able to write single source code
+
+01:17.000 --> 01:22.000
+that runs on whatever GPU the implementation enables,
+
+01:22.000 --> 01:27.000
+such as CUDA, Level Zero for Intel AMD GPUs, and so on.
+
+01:27.000 --> 01:29.000
+Yeah, this is a really good thing.
+
+01:29.000 --> 01:32.000
+So I work specifically on the NVIDIA and the HIP
+
+01:32.000 --> 01:37.000
+the AMD backends for DPC++.
+
+01:37.000 --> 01:39.000
+Okay, so yeah, I just want to talk a little bit about
+
+01:39.000 --> 01:41.000
+compiler intrinsics and how kind of, you know,
+
+01:41.000 --> 01:45.000
+math function calls work in SQL and DPC++ at the moment,
+
+01:45.000 --> 01:47.000
+and how we can hopefully improve them
+
+01:47.000 --> 01:50.000
+so that we're contributing upstream.
+
+01:50.000 --> 01:52.000
+So what happens to SQL cause?
+
+01:52.000 --> 01:55.000
+So essentially you get your SQL cause in your source code.
+
+01:55.000 --> 01:59.000
+This is redirected to Sphere V OpenCL cause F.
+
+01:59.000 --> 02:01.000
+You compile to Sphere V, you make a Sphere V module.
+
+02:01.000 --> 02:03.000
+This is a symbol within the Sphere V module,
+
+02:03.000 --> 02:06.000
+and then that is the implementation is provided by
+
+02:06.000 --> 02:09.000
+a CL Level Zero Vulkan driver.
+
+02:09.000 --> 02:13.000
+Okay, as I said, I don't work on the Sphere V backend at all.
+
+02:13.000 --> 02:18.000
+I work the PTX, the CUDA, or the AMD GPU backends.
+
+02:18.000 --> 02:21.000
+What do we do with these symbols so that we get to the native implementations?
+
+02:21.000 --> 02:23.000
+We're not trying to reinvent the wheel.
+
+02:23.000 --> 02:27.000
+We're not trying to do anything that the people who are making the GPUs
+
+02:27.000 --> 02:28.000
+aren't doing already.
+
+02:28.000 --> 02:30.000
+We're just trying to redirect to that.
+
+02:30.000 --> 02:34.000
+So how do we go from this to that and then compile to our PTX module,
+
+02:34.000 --> 02:41.000
+our AMD GPU module, HSA module, and so on?
+
+02:41.000 --> 02:47.000
+So yeah, how do we go from Sphere V OCL to NV cause F?
+
+02:47.000 --> 02:50.000
+So use the SHIM library. Easy peasy, that's fine.
+
+02:50.000 --> 02:53.000
+You just redirect it, you compile it to Bitcode,
+
+02:53.000 --> 02:57.000
+you link it at compilation time, and you get to this native Bitcode implementation.
+
+02:57.000 --> 02:58.000
+This is great.
+
+02:58.000 --> 03:00.000
+So we use libclc for this.
+
+03:00.000 --> 03:03.000
+So libclc is written in OpenCL.
+
+03:03.000 --> 03:07.000
+OpenCL does lots of stuff that SQL doesn't expose as easily,
+
+03:07.000 --> 03:09.000
+like address spaces, that kind of thing.
+
+03:09.000 --> 03:11.000
+So we write it in OpenCL.
+
+03:11.000 --> 03:12.000
+This is great.
+
+03:12.000 --> 03:14.000
+This makes our lives really, really easy.
+
+03:14.000 --> 03:16.000
+We can do it.
+
+03:16.000 --> 03:21.000
+So before we get into this, just why do we want to use a BC library in the first place?
+
+03:21.000 --> 03:24.000
+Why don't we use a.so, why don't we just resolve to some symbol
+
+03:24.000 --> 03:28.000
+that then a runtime is called and we don't care about it?
+
+03:28.000 --> 03:32.000
+So on a GPU, the overhead of a function call is really high.
+
+03:32.000 --> 03:35.000
+It's because we lose information about, say, address spaces, that kind of thing.
+
+03:35.000 --> 03:40.000
+The GPU memory hierarchy is a bit more complex than, say, for CPUs.
+
+03:40.000 --> 03:42.000
+So we really, really need to worry about this.
+
+03:42.000 --> 03:45.000
+We want to inline everything so we don't lose any information
+
+03:45.000 --> 03:48.000
+about our memory hierarchies.
+
+03:48.000 --> 03:50.000
+We also allow compile time branching of code
+
+03:50.000 --> 03:53.000
+based on the architecture, based on the backend, that kind of thing.
+
+03:53.000 --> 03:55.000
+We don't want to have these checks at runtime.
+
+03:55.000 --> 03:56.000
+We want high performance.
+
+03:56.000 --> 03:59.000
+That's the name of the game for what we're doing.
+
+03:59.000 --> 04:02.000
+This gives us greater optimization opportunities as well.
+
+04:02.000 --> 04:04.000
+You can do lots of dead code elimination,
+
+04:04.000 --> 04:07.000
+lots of fun stuff in the middle end
+
+04:07.000 --> 04:12.000
+because you're doing all these checks at the IR level.
+
+04:12.000 --> 04:14.000
+Okay, so this is just kind of what it looks like.
+
+04:14.000 --> 04:16.000
+So we just have Spirbio CL, COSF.
+
+04:16.000 --> 04:18.000
+We return nb-cosf. Great. Amazing.
+
+04:18.000 --> 04:20.000
+That's so easy.
+
+04:20.000 --> 04:24.000
+And then this is the implementation which is provided by NVIDIA.
+
+04:24.000 --> 04:26.000
+This is in bit code.
+
+04:26.000 --> 04:29.000
+We link this, and then this is just inlined into our IR.
+
+04:29.000 --> 04:33.000
+This is great.
+
+04:33.000 --> 04:35.000
+Okay.
+
+04:35.000 --> 04:37.000
+Yes, so we're linking the SQL code with libclc.
+
+04:37.000 --> 04:40.000
+Then we link that with the vendor provided BC library.
+
+04:40.000 --> 04:42.000
+So we're linking, linking.
+
+04:42.000 --> 04:44.000
+We get to the implementation. It's all inlined.
+
+04:44.000 --> 04:48.000
+It's all great. We love it.
+
+04:48.000 --> 04:50.000
+Okay. So this works well.
+
+04:50.000 --> 04:54.000
+So this is a bit of code from libclc.
+
+04:54.000 --> 04:57.000
+Because we're dealing in openclc, we could choose something else.
+
+04:57.000 --> 04:58.000
+We could write a native IR.
+
+04:58.000 --> 05:01.000
+We find that opencl is actually easier to use
+
+05:01.000 --> 05:04.000
+than easier to maintain than writing a native IR.
+
+05:04.000 --> 05:07.000
+So we end up with some funny kind of problems with mangling
+
+05:07.000 --> 05:08.000
+and all this kind of thing.
+
+05:08.000 --> 05:09.000
+This isn't nice.
+
+05:09.000 --> 05:11.000
+Sometimes we need manual mangling.
+
+05:11.000 --> 05:15.000
+This has got to do with namespaces when they're interpreted
+
+05:15.000 --> 05:21.000
+by the opencl mangling, unfortunately.
+
+05:21.000 --> 05:23.000
+Yeah, we need to sometimes as well.
+
+05:23.000 --> 05:25.000
+Sometimes opencl isn't as good as we want it to be.
+
+05:25.000 --> 05:27.000
+So we need to actually write in native IR as well.
+
+05:27.000 --> 05:30.000
+So it's a mix of like lvm IR, libclc.
+
+05:30.000 --> 05:35.000
+It's a bit messy. It's not great.
+
+05:35.000 --> 05:39.000
+Yeah, so also we're exposing some compiler internals here.
+
+05:39.000 --> 05:42.000
+This is the nvvm reflect pass,
+
+05:42.000 --> 05:45.000
+which essentially takes your function call for nvvm reflect,
+
+05:45.000 --> 05:46.000
+replaces it with the numeric value.
+
+05:46.000 --> 05:48.000
+This is totally done at the IR level.
+
+05:48.000 --> 05:54.000
+So you can branch at the IR level based on this is a high architecture,
+
+05:54.000 --> 05:57.000
+a newer architecture, do this new implementation,
+
+05:57.000 --> 05:58.000
+do this new built-in.
+
+05:58.000 --> 06:02.000
+This is an old architecture, da-da-da, as well for things like rounding modes.
+
+06:02.000 --> 06:03.000
+This pass is used.
+
+06:03.000 --> 06:06.000
+We're exposing this in source code through hacks.
+
+06:06.000 --> 06:12.000
+This isn't really, you know, it's not kosher.
+
+06:12.000 --> 06:15.000
+But it works. Who cares?
+
+06:15.000 --> 06:20.000
+Okay, but consider the new proposal to add FP accuracy attributes to math built-ins.
+
+06:20.000 --> 06:23.000
+This is where we have, say, FP built-in cause,
+
+06:23.000 --> 06:28.000
+and we specify the accuracy in ULP that we want it to be computed to.
+
+06:28.000 --> 06:31.000
+Okay, this is totally lost on us.
+
+06:31.000 --> 06:33.000
+Okay, so this is what it would look like.
+
+06:33.000 --> 06:35.000
+Yeah, you have this attribute here.
+
+06:35.000 --> 06:37.000
+You've FP max error.
+
+06:37.000 --> 06:41.000
+This is really, really needed in sickle because sickle is targeting lots
+
+06:41.000 --> 06:43.000
+and lots of different platforms.
+
+06:43.000 --> 06:47.000
+All these platforms have different numerical accuracy guarantees.
+
+06:47.000 --> 06:48.000
+We really, really need this.
+
+06:48.000 --> 06:49.000
+We don't use built-ins at all.
+
+06:49.000 --> 06:53.000
+We're sorry, we don't use LLVM intrinsics at all.
+
+06:53.000 --> 06:58.000
+So this is, we need to get to a point where we can start using this compiler infrastructure.
+
+06:58.000 --> 07:02.000
+We're not using it as much as you want to.
+
+07:02.000 --> 07:07.000
+So we could do this using a libclc compiler kind of hack workaround.
+
+07:07.000 --> 07:09.000
+We do another pass.
+
+07:09.000 --> 07:10.000
+You just say compiler precision valve.
+
+07:10.000 --> 07:12.000
+If it's that, do some precise square root.
+
+07:12.000 --> 07:14.000
+If it's not, do some approx thing.
+
+07:14.000 --> 07:16.000
+Yeah, we could do that.
+
+07:16.000 --> 07:20.000
+The problem with libclc and this stuff, it's not upstreamable.
+
+07:20.000 --> 07:22.000
+It's a collection of hacks.
+
+07:22.000 --> 07:25.000
+It's not totally hacks, but it's a little bit messy.
+
+07:25.000 --> 07:27.000
+It's not written in the same API.
+
+07:27.000 --> 07:31.000
+It's opencl and it's lvmyr.
+
+07:31.000 --> 07:32.000
+It's messy.
+
+07:32.000 --> 07:33.000
+We can upstream this.
+
+07:33.000 --> 07:36.000
+We can all benefit from this.
+
+07:36.000 --> 07:38.000
+Okay.
+
+07:38.000 --> 07:43.000
+So the pro about doing some, adding another hack to the kind of pass,
+
+07:43.000 --> 07:45.000
+there's another hack to the bunch, is that it's easy to do.
+
+07:45.000 --> 07:46.000
+Okay.
+
+07:46.000 --> 07:49.000
+We can do this and we can keep going with our libclc implementation.
+
+07:49.000 --> 07:50.000
+It's pretty straightforward.
+
+07:50.000 --> 07:51.000
+We've been doing this the whole time.
+
+07:51.000 --> 07:52.000
+Yeah, fine.
+
+07:52.000 --> 07:56.000
+We don't need to worry about the broader LLVM concerns.
+
+07:56.000 --> 08:00.000
+However, we miss out on LLVM community collaboration, which is why we're here.
+
+08:00.000 --> 08:04.000
+And then how many of these workarounds do we actually need in order to keep up
+
+08:04.000 --> 08:06.000
+with the latest trends?
+
+08:06.000 --> 08:10.000
+And then libclc, as bad as it could be now, like it just degenerates into an
+
+08:10.000 --> 08:14.000
+absolute mess and we don't want that.
+
+08:14.000 --> 08:15.000
+Okay.
+
+08:15.000 --> 08:20.000
+So we think the answer for this is to try and redirect, try and actually have it
+
+08:20.000 --> 08:22.000
+call in the compiler intrinsic.
+
+08:22.000 --> 08:23.000
+Okay.
+
+08:23.000 --> 08:26.000
+We want to use compiler intrinsic and then have some generic behavior of these
+
+08:26.000 --> 08:30.000
+are the intrinsic for offload targets.
+
+08:30.000 --> 08:31.000
+Okay.
+
+08:31.000 --> 08:35.000
+And this would be used by say open MP, by, by, you know, coup de clang and so on,
+
+08:35.000 --> 08:36.000
+all these different targets.
+
+08:36.000 --> 08:37.000
+But we don't have this transformation.
+
+08:37.000 --> 08:40.000
+We're not comfortable with this connection.
+
+08:40.000 --> 08:41.000
+Okay.
+
+08:41.000 --> 08:44.000
+From an intrinsic to a vendor provided BC built in.
+
+08:44.000 --> 08:45.000
+Okay.
+
+08:45.000 --> 08:46.000
+Why is that?
+
+08:46.000 --> 08:51.000
+Essentially this needs to happen as early as possible in the, at the IR level.
+
+08:51.000 --> 08:56.000
+We're adding an external dependency in our LLVM kind of, you know, pipeline.
+
+08:56.000 --> 09:02.000
+We need to link this BC library early on in our, in our pipeline.
+
+09:02.000 --> 09:03.000
+We don't do this.
+
+09:03.000 --> 09:04.000
+We're not comfortable with doing this.
+
+09:04.000 --> 09:07.000
+We need to figure out a way that people will be happy with us doing this.
+
+09:07.000 --> 09:08.000
+Okay.
+
+09:08.000 --> 09:13.000
+Obviously we're used to things resolving to external symbols, but then that's a
+
+09:13.000 --> 09:14.000
+runtime thing.
+
+09:14.000 --> 09:16.000
+It's not, it's not a compile time thing.
+
+09:16.000 --> 09:17.000
+Okay.
+
+09:17.000 --> 09:18.000
+This needs to be in line.
+
+09:18.000 --> 09:22.000
+We need to be able to do some stuff with this at the IR level.
+
+09:22.000 --> 09:23.000
+Okay.
+
+09:23.000 --> 09:27.000
+So there will still be cases where we need libCLC potentially.
+
+09:27.000 --> 09:31.000
+It's not going to, you know, just disappear from our SQL implementation.
+
+09:31.000 --> 09:32.000
+Hopefully.
+
+09:32.000 --> 09:38.000
+But we need to start pushing towards better kind of resolution, better use of
+
+09:38.000 --> 09:41.000
+these intrinsics in LLVM for offload in general.
+
+09:41.000 --> 09:42.000
+Okay.
+
+09:42.000 --> 09:43.000
+So why?
+
+09:43.000 --> 09:48.000
+Shared infrastructure, keep an eye, keep on the cutting edge of new
+
+09:48.000 --> 09:52.000
+developments, left compiler hacks, and we make sickle compilation eventually
+
+09:52.000 --> 09:53.000
+work upstream.
+
+09:53.000 --> 09:56.000
+It doesn't at the moment, but eventually we want it to, of course.
+
+09:56.000 --> 09:59.000
+We're trying to upstream as much as possible, but libCLC is not upstreamable.
+
+09:59.000 --> 10:00.000
+And that's a problem.
+
+10:00.000 --> 10:03.000
+Okay.
+
+10:03.000 --> 10:07.000
+So the first step, try and have this discussion about making the
+
+10:07.000 --> 10:08.000
+intrinsics work for offload.
+
+10:08.000 --> 10:09.000
+Okay.
+
+10:09.000 --> 10:10.000
+So time.
+
+10:10.000 --> 10:11.000
+Okay.
+
+10:11.000 --> 10:12.000
+Time's up.
+
+10:12.000 --> 10:16.000
+So we need to have this link step at the IR level early on in the IR kind of
+
+10:16.000 --> 10:17.000
+pipeline.
+
+10:17.000 --> 10:20.000
+There's problematic for some people, but we need to talk about this.
+
+10:20.000 --> 10:22.000
+So please join in the discussion here.
+
+10:22.000 --> 10:29.000
+This is MVPTX code gen for LLVM sign in front if you have any opinions on this.
+
+10:29.000 --> 10:35.000
+Sorry, I kind of ran over a little bit, but yeah, any questions?
+
+10:35.000 --> 10:42.000
+I was wondering, would it make sense to try to get rid of the mess by going to
+
+10:42.000 --> 10:47.000
+an MLIR type of approach or like what are the benefits or downsides to MLIR?
+
+10:47.000 --> 10:49.000
+So I'm not an expert.
+
+10:49.000 --> 10:52.000
+So the question was, are there benefits?
+
+10:52.000 --> 10:57.000
+Can we avoid this by going to MLIR?
+
+10:57.000 --> 10:59.000
+I think it's more fundamental than MLIR.
+
+10:59.000 --> 11:04.000
+I'm not an expert on MLIR, but I think we need basic resolution of intrinsic
+
+11:04.000 --> 11:06.000
+presumably with MLIR.
+
+11:06.000 --> 11:10.000
+You'll have, you know, other MLIR, our intrinsics that will need the same kind
+
+11:10.000 --> 11:11.000
+of treatment.
+
+11:11.000 --> 11:12.000
+We'll have the same questions there.
+
+11:12.000 --> 11:15.000
+So this is the first case study.
+
+11:15.000 --> 11:16.000
+This is the most simple case.
+
+11:16.000 --> 11:20.000
+We're not trying to implement the new a few built-ins with the accuracy thing.
+
+11:20.000 --> 11:23.000
+We're just trying to decide how do we make this dependency on this external
+
+11:23.000 --> 11:27.000
+BC live work and do it in a very, very confined sort of way.
+
+11:27.000 --> 11:28.000
+Yeah.
+
+11:28.000 --> 11:30.000
+Thank you.
+
+11:30.000 --> 11:31.000
+Yeah.
+
+11:31.000 --> 11:34.000
+I have two questions.
+
+11:34.000 --> 11:37.000
+First one is a tutorial to generate NV for a PTX from MLIR.
+
+11:37.000 --> 11:41.000
+There is a whole section about linking with the Bitcoin library from NVIDIA.
+
+11:41.000 --> 11:43.000
+So what's the difference with this?
+
+11:43.000 --> 11:49.000
+And the second question is you mentioned NVVM, which is the closed source
+
+11:49.000 --> 11:51.000
+PTX generator from NVIDIA.
+
+11:51.000 --> 11:56.000
+And there is also the LLVM NVPTX back end.
+
+11:56.000 --> 12:01.000
+Are we reaching SPE RT with the closed source one?
+
+12:01.000 --> 12:03.000
+It depends on the application.
+
+12:03.000 --> 12:08.000
+We find that with the second question first, is there still a big performance
+
+12:08.000 --> 12:13.000
+gap between the native, say, NVCC compiler and LLVM clang?
+
+12:13.000 --> 12:21.000
+So in terms of DPC++, which is a fork of LLVM, we're attaining, say, roughly
+
+12:21.000 --> 12:27.000
+comparable performance, whether you're using SYCL or you're using CUDA with
+
+12:27.000 --> 12:32.000
+NVCC, and then any improvements that we make to the kind of compiler or whatever.
+
+12:32.000 --> 12:35.000
+They're shared by Clang CUDA as well.
+
+12:35.000 --> 12:39.000
+So the first question again was how is this different from?
+
+12:39.000 --> 12:44.000
+It's a tutorial to link Bitcoin with LLVM.
+
+12:44.000 --> 12:50.000
+So essentially when you're linking Bitcoin or whatever, you're not using any
+
+12:50.000 --> 12:52.000
+LLVM intrinsics.
+
+12:52.000 --> 12:56.000
+You're just redirecting things yourself.
+
+12:56.000 --> 12:57.000
+You're not using intrinsics.
+
+12:57.000 --> 13:00.000
+So you need to do everything explicitly.
+
+13:00.000 --> 13:05.000
+You need to either have a specific kind of driver path that will do this for you
+
+13:05.000 --> 13:10.000
+or you need to specifically say, I want to link this in at this time or whatever.
+
+13:10.000 --> 13:12.000
+And so it's more manual.
+
+13:12.000 --> 13:14.000
+It's not happening automatically.
+
+13:14.000 --> 13:16.000
+It's not happening really within the compiler.
+
+13:16.000 --> 13:20.000
+It's happening at link time, LLVM link time.
+
+13:20.000 --> 13:21.000
+All right.
+
+13:21.000 --> 13:22.000
+Thank you, Hugh.
+
+13:22.000 --> 13:51.000
+Thank you.

@@ -1,0 +1,2344 @@
+1
+0:00:00.000 --> 0:00:10.520
+Okay. Hello. Bonjour.
+
+2
+0:00:10.520 --> 0:00:12.800
+Who did our good talk?
+
+3
+0:00:12.800 --> 0:00:17.120
+I think that's sort of the Brussels welcome.
+
+4
+0:00:17.360 --> 0:00:20.040
+Yeah. So I want to talk about
+
+5
+0:00:20.040 --> 0:00:21.920
+what we're doing in the Postgres project
+
+6
+0:00:21.920 --> 0:00:23.600
+with respect to translation.
+
+7
+0:00:23.600 --> 0:00:25.880
+It seems like the last two talks already
+
+8
+0:00:25.880 --> 0:00:27.960
+solved 50 percent of my problems.
+
+9
+0:00:27.960 --> 0:00:31.680
+So there was already a good outcome of coming here.
+
+10
+0:00:31.680 --> 0:00:33.440
+I want to talk a little bit more sort of
+
+11
+0:00:33.440 --> 0:00:37.440
+the lower levels of what GetTAC specifically does,
+
+12
+0:00:37.440 --> 0:00:38.840
+but I'll also goes kind of through
+
+13
+0:00:38.840 --> 0:00:41.160
+what other things we're doing.
+
+14
+0:00:41.320 --> 0:00:46.000
+So I am in the Postgres project.
+
+15
+0:00:46.000 --> 0:00:47.960
+I'm just a C programmer.
+
+16
+0:00:47.960 --> 0:00:52.840
+It's my job really to do the translation sort of as a hobby on the side.
+
+17
+0:00:52.840 --> 0:00:57.600
+I have done initially sort of most of the setup.
+
+18
+0:00:57.600 --> 0:01:03.160
+So of the source code level,
+
+19
+0:01:03.160 --> 0:01:05.840
+what he called internationalization at that case.
+
+20
+0:01:05.840 --> 0:01:08.680
+Then I'm also doing some of the translation.
+
+21
+0:01:09.280 --> 0:01:13.480
+Yeah. It turns out also
+
+22
+0:01:13.480 --> 0:01:16.880
+the first faucet I went to was 20 years ago.
+
+23
+0:01:16.880 --> 0:01:19.520
+I like coming here because there's
+
+24
+0:01:19.520 --> 0:01:21.080
+a Postgres dev room happening at
+
+25
+0:01:21.080 --> 0:01:22.240
+the same time in a different building,
+
+26
+0:01:22.240 --> 0:01:25.160
+but I like to come to all the other places
+
+27
+0:01:25.160 --> 0:01:26.960
+and sort of intersect with other communities and learn
+
+28
+0:01:26.960 --> 0:01:28.920
+about other kind of stuff that's happening.
+
+29
+0:01:28.920 --> 0:01:32.880
+So it's kind of a good benefit of FOSDEM.
+
+30
+0:01:32.880 --> 0:01:34.640
+So what's Postgres?
+
+31
+0:01:34.640 --> 0:01:36.960
+Don't need to go into details,
+
+32
+0:01:36.960 --> 0:01:40.840
+but it's a little bit different.
+
+33
+0:01:40.840 --> 0:01:42.360
+It has different requirements.
+
+34
+0:01:42.360 --> 0:01:43.360
+It's a database system.
+
+35
+0:01:43.360 --> 0:01:47.040
+It's fairly big and fairly old,
+
+36
+0:01:47.040 --> 0:01:51.840
+but it's different from like a GUI program, let's say.
+
+37
+0:01:51.840 --> 0:01:54.480
+Something we've leave office
+
+38
+0:01:54.480 --> 0:01:56.680
+or hear from KDE later on things like that.
+
+39
+0:01:56.680 --> 0:02:00.520
+I think it just lives much longer
+
+40
+0:02:00.520 --> 0:02:06.760
+and has longer stability requirements and things like that.
+
+41
+0:02:06.760 --> 0:02:10.560
+That also kind of makes the maintenance of everything
+
+42
+0:02:10.560 --> 0:02:11.880
+a little bit more complicated.
+
+43
+0:02:11.880 --> 0:02:14.520
+We also maintain back branches.
+
+44
+0:02:14.520 --> 0:02:16.400
+So we have a yearly release,
+
+45
+0:02:16.400 --> 0:02:21.400
+but we still maintain the old releases for at least five years.
+
+46
+0:02:21.400 --> 0:02:22.600
+So at any given moment,
+
+47
+0:02:22.600 --> 0:02:26.920
+we have four or five or six releases live.
+
+48
+0:02:26.920 --> 0:02:29.480
+That gives it interesting challenges
+
+49
+0:02:29.480 --> 0:02:30.720
+with back-patching stuff.
+
+50
+0:02:30.720 --> 0:02:33.400
+Just I was quite interested in the last question we had
+
+51
+0:02:33.400 --> 0:02:35.440
+in the previous talk about this translation memory
+
+52
+0:02:35.440 --> 0:02:37.040
+and sort of that rung through.
+
+53
+0:02:37.040 --> 0:02:39.840
+Can we automatically apply the memory
+
+54
+0:02:39.840 --> 0:02:43.560
+to the previous branches and stuff like that?
+
+55
+0:02:43.560 --> 0:02:47.960
+So this sort of stuff is a practical challenge
+
+56
+0:02:47.960 --> 0:02:50.080
+because you have to keep copying the same thing
+
+57
+0:02:50.080 --> 0:02:52.840
+to all the different branches and so on.
+
+58
+0:02:56.840 --> 0:03:00.200
+Any case, so what are we doing in Postgres?
+
+59
+0:03:00.200 --> 0:03:03.640
+You know we use GetX as in the title.
+
+60
+0:03:04.800 --> 0:03:07.840
+Now put this sort of standard new question mark.
+
+61
+0:03:07.840 --> 0:03:10.960
+It's kind of weird because again Postgres is old
+
+62
+0:03:10.960 --> 0:03:14.320
+and runs on servers is a little bit different
+
+63
+0:03:14.320 --> 0:03:17.480
+from sort of what runs on a laptop or an app.
+
+64
+0:03:17.480 --> 0:03:21.200
+Because for example, we also support operating systems
+
+65
+0:03:21.200 --> 0:03:25.120
+that might still already be forgotten like AIX and Solaris.
+
+66
+0:03:25.120 --> 0:03:28.800
+And they have GetXed originally came from the sort of
+
+67
+0:03:28.800 --> 0:03:33.800
+solaris sphere somehow and there's still a,
+
+68
+0:03:36.800 --> 0:03:37.720
+well I don't know what it is now,
+
+69
+0:03:37.720 --> 0:03:41.720
+but like a Solaris native Solaris GetXed exists.
+
+70
+0:03:41.720 --> 0:03:44.640
+It's you know, that's distinct from new.
+
+71
+0:03:44.640 --> 0:03:48.400
+But it's sort of old has bugs and doesn't parse stuff
+
+72
+0:03:48.400 --> 0:03:52.400
+correctly sometimes so when you just sort of use
+
+73
+0:03:52.400 --> 0:03:55.200
+you use the new version then sometimes the files
+
+74
+0:03:55.200 --> 0:03:58.240
+you distribute don't work on old Solaris for some reason
+
+75
+0:03:58.240 --> 0:04:00.920
+and then this is sort of just a weird situation.
+
+76
+0:04:00.920 --> 0:04:03.760
+You have to like then fix these things
+
+77
+0:04:03.760 --> 0:04:07.960
+and then or hope that Solaris dies at some point, right?
+
+78
+0:04:07.960 --> 0:04:08.800
+Stuff like that.
+
+79
+0:04:08.800 --> 0:04:10.780
+So it's like that.
+
+80
+0:04:10.780 --> 0:04:15.280
+So we have, I mean, you know, we hear from KDE Next.
+
+81
+0:04:15.280 --> 0:04:17.380
+I already looked at Hetzel at their abstract.
+
+82
+0:04:17.380 --> 0:04:20.380
+This is obviously not a lot in terms of how many languages
+
+83
+0:04:20.380 --> 0:04:22.080
+and message catalogs and strings we have,
+
+84
+0:04:22.080 --> 0:04:26.560
+but it's more than something you can just deal with
+
+85
+0:04:26.560 --> 0:04:27.720
+in an afternoon, right?
+
+86
+0:04:27.720 --> 0:04:29.720
+It's just a lot of stuff to move around.
+
+87
+0:04:29.720 --> 0:04:32.320
+I mentioned with the different branches,
+
+88
+0:04:32.320 --> 0:04:34.480
+we also have it in a separate Git repository.
+
+89
+0:04:34.480 --> 0:04:36.920
+I think that's kind of common, I think,
+
+90
+0:04:36.920 --> 0:04:38.960
+so that you can manage access to translators
+
+91
+0:04:38.960 --> 0:04:40.680
+separate from the source repository
+
+92
+0:04:40.680 --> 0:04:42.680
+and then you just move it back and forth.
+
+93
+0:04:43.880 --> 0:04:46.880
+Again, maybe the web label will help with that
+
+94
+0:04:46.880 --> 0:04:50.460
+and we have also sort of other projects in the vicinity
+
+95
+0:04:50.460 --> 0:04:54.400
+of the core server projects such as JDBC driver,
+
+96
+0:04:54.400 --> 0:04:57.520
+which is obviously in Java, which is slightly different
+
+97
+0:04:57.520 --> 0:04:58.920
+sort of tooling and stuff like that.
+
+98
+0:04:58.920 --> 0:05:01.540
+And PG Admin is a GUI.
+
+99
+0:05:01.540 --> 0:05:02.680
+They have their own workflow.
+
+100
+0:05:02.680 --> 0:05:04.440
+So it's all a little bit all over the place
+
+101
+0:05:04.440 --> 0:05:07.880
+and it's hard to kind of keep that all moving
+
+102
+0:05:07.880 --> 0:05:10.200
+in the same way.
+
+103
+0:05:12.240 --> 0:05:14.980
+And there's also some documentations are being translated,
+
+104
+0:05:14.980 --> 0:05:17.200
+but that's also handled completely separately.
+
+105
+0:05:17.200 --> 0:05:18.480
+We were actually just talking to break.
+
+106
+0:05:18.480 --> 0:05:21.000
+We could use Libra Translate for that maybe at some point.
+
+107
+0:05:21.000 --> 0:05:24.000
+So all kinds of interesting ideas already coming up here.
+
+108
+0:05:27.020 --> 0:05:32.020
+All right, so this is my like web late, but terrible job.
+
+109
+0:05:32.020 --> 0:05:37.020
+This is kind of how we handle it.
+
+110
+0:05:37.180 --> 0:05:42.180
+The web interface is under bobble.postgresql.org.
+
+111
+0:05:42.480 --> 0:05:44.380
+And that just gives you sort of the status, right?
+
+112
+0:05:44.380 --> 0:05:47.900
+Of what languages and what the message catalogs are.
+
+113
+0:05:47.900 --> 0:05:52.900
+And it does sort of the string extraction,
+
+114
+0:05:53.460 --> 0:05:56.860
+the merging in the background as you would do, you know,
+
+115
+0:05:56.860 --> 0:05:59.060
+in the make file, but it just kind of runs it for you
+
+116
+0:05:59.060 --> 0:05:59.900
+from a cron job.
+
+117
+0:05:59.900 --> 0:06:01.180
+Again, it's just sort of really old,
+
+118
+0:06:01.180 --> 0:06:02.180
+but it does the job.
+
+119
+0:06:02.180 --> 0:06:05.620
+And then the workflow is, yeah, you go like, you know,
+
+120
+0:06:05.620 --> 0:06:08.920
+you pick your language, pick what you want to work on.
+
+121
+0:06:08.920 --> 0:06:10.300
+You click on it, you download it,
+
+122
+0:06:10.300 --> 0:06:13.180
+you do the translation with the, you know,
+
+123
+0:06:13.180 --> 0:06:15.380
+the get text tools, whatever editor you want to use,
+
+124
+0:06:15.380 --> 0:06:17.180
+different people use different things.
+
+125
+0:06:18.340 --> 0:06:20.420
+And then you commit it back, right?
+
+126
+0:06:20.420 --> 0:06:24.160
+And there's different, all the branches are available here.
+
+127
+0:06:24.160 --> 0:06:27.220
+So you can scroll down and you're just going to fill these
+
+128
+0:06:27.220 --> 0:06:32.220
+up and so, yeah, these are the languages across here.
+
+129
+0:06:32.700 --> 0:06:36.480
+What the colors mean is that green is 100% translated.
+
+130
+0:06:37.480 --> 0:06:40.500
+And then one thing we did, which I don't,
+
+131
+0:06:40.500 --> 0:06:45.500
+we just kind of made up, but we decided if a message catalog
+
+132
+0:06:46.260 --> 0:06:48.620
+is not translated to at least 80%, we're not going to ship
+
+133
+0:06:48.620 --> 0:06:50.320
+it, right?
+
+134
+0:06:50.320 --> 0:06:52.860
+You don't want to just ship like one string.
+
+135
+0:06:52.860 --> 0:06:54.700
+I mean, you could, but it would be weird for a user
+
+136
+0:06:54.700 --> 0:06:57.140
+that all of a sudden the translated string pops up
+
+137
+0:06:57.140 --> 0:06:58.860
+and nothing else is translated, right?
+
+138
+0:06:58.860 --> 0:07:00.140
+It's maybe a little bit weird.
+
+139
+0:07:00.140 --> 0:07:03.620
+So that's something we sort of decided on until randomly
+
+140
+0:07:03.620 --> 0:07:05.620
+and it seems to actually kind of work pretty well.
+
+141
+0:07:05.620 --> 0:07:08.260
+So the yellow ones are the ones that we would ship
+
+142
+0:07:09.500 --> 0:07:11.460
+and then the white ones are just the ones
+
+143
+0:07:11.460 --> 0:07:13.320
+that are not complete at all.
+
+144
+0:07:16.740 --> 0:07:21.740
+All right, so workflow is the usual get text workflow
+
+145
+0:07:21.780 --> 0:07:23.260
+for at least C programs, you know,
+
+146
+0:07:23.260 --> 0:07:24.460
+there's other stuff happening nowadays.
+
+147
+0:07:24.460 --> 0:07:27.020
+So if the developer marks up the messages
+
+148
+0:07:27.020 --> 0:07:30.700
+with this kind of underscore thing that they recommend
+
+149
+0:07:30.700 --> 0:07:34.620
+and our developers are totally good about that, right?
+
+150
+0:07:34.620 --> 0:07:36.780
+They're all aware of that you need to do that.
+
+151
+0:07:36.780 --> 0:07:41.700
+And for the most part, it's wrapped into things like this.
+
+152
+0:07:41.700 --> 0:07:44.300
+So you don't actually have to manually mock up everything.
+
+153
+0:07:44.300 --> 0:07:46.500
+If you use like this sort of standard internal API,
+
+154
+0:07:46.500 --> 0:07:50.180
+say print an error, log an error, whatever the case may be,
+
+155
+0:07:50.180 --> 0:07:51.340
+then it's already done for you.
+
+156
+0:07:51.340 --> 0:07:52.700
+So that works pretty well.
+
+157
+0:07:52.700 --> 0:07:56.620
+It's, you know, every once in a while something gets missed,
+
+158
+0:07:56.620 --> 0:07:57.500
+but it's not a big problem.
+
+159
+0:07:57.500 --> 0:07:59.940
+All the developer group is aware of that.
+
+160
+0:08:00.940 --> 0:08:05.940
+Then I mentioned the website uses those standard tools
+
+161
+0:08:08.140 --> 0:08:12.180
+to give you something you just have to download
+
+162
+0:08:12.180 --> 0:08:15.980
+and then you just translated and upload it back.
+
+163
+0:08:17.300 --> 0:08:21.660
+Then at release time, someone, often me,
+
+164
+0:08:21.660 --> 0:08:24.100
+just then runs a script to copy that over,
+
+165
+0:08:24.100 --> 0:08:26.500
+which could be automated, but you know,
+
+166
+0:08:26.500 --> 0:08:31.020
+it's one of those things we have releases four times a year
+
+167
+0:08:31.020 --> 0:08:33.460
+and you just do it manually four times a year
+
+168
+0:08:33.460 --> 0:08:36.260
+or you could spend X hours automating it, right?
+
+169
+0:08:36.260 --> 0:08:38.180
+So usually it's just done manually.
+
+170
+0:08:41.980 --> 0:08:44.660
+All right, so this is our tool chain at the moment.
+
+171
+0:08:46.260 --> 0:08:48.660
+Again, GNU, question mark, get text.
+
+172
+0:08:48.660 --> 0:08:51.780
+We have a pretty standard sort of configure,
+
+173
+0:08:51.780 --> 0:08:55.300
+make, make, install, build system.
+
+174
+0:08:55.300 --> 0:08:57.620
+We don't use any of these make file templates
+
+175
+0:08:57.620 --> 0:08:59.140
+and things like that, that ship it, get text,
+
+176
+0:08:59.140 --> 0:09:04.140
+because we have our own sort of very convoluted build system
+
+177
+0:09:04.220 --> 0:09:06.020
+based on GNU make.
+
+178
+0:09:06.020 --> 0:09:07.660
+We're also in the process of getting rid of that.
+
+179
+0:09:07.660 --> 0:09:10.600
+So we're moving to, to Mason now,
+
+180
+0:09:11.580 --> 0:09:15.060
+which has some support for that built in,
+
+181
+0:09:15.060 --> 0:09:16.900
+but it's kind of incomplete.
+
+182
+0:09:16.900 --> 0:09:21.540
+So we're sort of stuck sort of halfway here, halfway there.
+
+183
+0:09:21.540 --> 0:09:22.380
+I have to kind of work,
+
+184
+0:09:22.380 --> 0:09:24.820
+that's kind of work we're doing right now.
+
+185
+0:09:24.820 --> 0:09:26.020
+I have to figure that out.
+
+186
+0:09:28.100 --> 0:09:31.200
+So people use whatever editor they want to use.
+
+187
+0:09:32.340 --> 0:09:34.420
+Poet it seems to be somewhat popular.
+
+188
+0:09:34.420 --> 0:09:35.860
+I use just Emacs.
+
+189
+0:09:36.740 --> 0:09:40.300
+Some teams have used, by teams I mean sort of language teams.
+
+190
+0:09:40.300 --> 0:09:42.780
+They have used crowd in,
+
+191
+0:09:42.780 --> 0:09:47.340
+which I suppose is sort of similar to Webblade maybe.
+
+192
+0:09:48.160 --> 0:09:50.100
+But again, we were just talking to break,
+
+193
+0:09:50.100 --> 0:09:51.860
+maybe we'll look at Webblade.
+
+194
+0:09:51.860 --> 0:09:56.780
+And then a horrible bag of shell scripts and pro scripts
+
+195
+0:09:56.780 --> 0:10:00.120
+and make files that sort of hold it all together,
+
+196
+0:10:01.340 --> 0:10:03.720
+which again could be replaced by something better.
+
+197
+0:10:03.720 --> 0:10:06.620
+It's just never really figured out what that could be.
+
+198
+0:10:09.060 --> 0:10:12.800
+So pros and cons of doing any of this.
+
+199
+0:10:12.800 --> 0:10:15.640
+One thing I obviously we want to translate
+
+200
+0:10:15.640 --> 0:10:16.700
+because we want to translate, right?
+
+201
+0:10:16.700 --> 0:10:20.520
+So that's sort of the ultimate requirement.
+
+202
+0:10:20.520 --> 0:10:22.380
+But what I found interesting
+
+203
+0:10:22.380 --> 0:10:25.900
+as a sort of secondary benefits is actually that
+
+204
+0:10:28.020 --> 0:10:31.340
+by putting all your messages of your programs
+
+205
+0:10:31.340 --> 0:10:32.700
+through a translation process,
+
+206
+0:10:32.700 --> 0:10:36.420
+you get an automatic review of every message string.
+
+207
+0:10:38.100 --> 0:10:40.540
+Because every thing you put in the source code
+
+208
+0:10:40.540 --> 0:10:43.780
+is looked again later by at least one more person
+
+209
+0:10:43.780 --> 0:10:45.860
+or several all the translators.
+
+210
+0:10:45.860 --> 0:10:49.020
+And you catch like typos and stuff like that,
+
+211
+0:10:49.020 --> 0:10:50.900
+but also if something doesn't make any sense, right?
+
+212
+0:10:50.900 --> 0:10:55.420
+Maybe some developer wrote it and it makes sense to them,
+
+213
+0:10:55.420 --> 0:10:58.420
+but then someone else who is not that very developer
+
+214
+0:10:58.420 --> 0:10:59.260
+looks at it again, it's like,
+
+215
+0:10:59.260 --> 0:11:00.740
+okay, I don't really understand this.
+
+216
+0:11:00.740 --> 0:11:03.220
+I can't translate it because I don't understand it.
+
+217
+0:11:03.220 --> 0:11:04.760
+Or it looks weird, could we look at it again?
+
+218
+0:11:04.760 --> 0:11:06.020
+So you get this review process
+
+219
+0:11:06.020 --> 0:11:10.060
+and we've gotten really good in Postgres
+
+220
+0:11:11.220 --> 0:11:13.640
+about really tuning error messages.
+
+221
+0:11:13.640 --> 0:11:15.220
+Because it's a complicated piece of software
+
+222
+0:11:15.220 --> 0:11:18.420
+and you get all these little weird scenarios
+
+223
+0:11:18.420 --> 0:11:21.940
+with sort of transaction processing
+
+224
+0:11:21.940 --> 0:11:24.540
+and weird little write ahead log and replication
+
+225
+0:11:24.540 --> 0:11:25.660
+and all these kinds of things.
+
+226
+0:11:25.660 --> 0:11:27.580
+And so you wanna be really good and precise
+
+227
+0:11:27.580 --> 0:11:30.460
+to explain to you, okay, this failed because of this.
+
+228
+0:11:30.460 --> 0:11:32.900
+And you could try this, but don't try that.
+
+229
+0:11:34.800 --> 0:11:36.980
+So this is really, I think people appreciate it.
+
+230
+0:11:36.980 --> 0:11:38.540
+Independent of translation and everything else,
+
+231
+0:11:38.540 --> 0:11:39.740
+I think people appreciate that.
+
+232
+0:11:39.740 --> 0:11:41.740
+And this process actually helps that
+
+233
+0:11:41.740 --> 0:11:46.380
+because you sort of refine your program's messages
+
+234
+0:11:46.380 --> 0:11:47.980
+through this process as well.
+
+235
+0:11:49.940 --> 0:11:51.580
+And secondly, actually it also turned out
+
+236
+0:11:51.580 --> 0:11:56.180
+that sometimes people come in, do some translation,
+
+237
+0:11:56.180 --> 0:11:59.520
+maybe find a bug or wanna look something up in a source code,
+
+238
+0:11:59.520 --> 0:12:01.900
+go into the source code and then become a programmer.
+
+239
+0:12:01.900 --> 0:12:03.620
+So you can also kind of recruit people that way.
+
+240
+0:12:03.620 --> 0:12:05.520
+It's kind of interesting.
+
+241
+0:12:05.520 --> 0:12:10.520
+So, but then there are many challenges, right?
+
+242
+0:12:15.040 --> 0:12:16.720
+So first of all, you wanna get people in there
+
+243
+0:12:16.720 --> 0:12:17.880
+to use the translation, right?
+
+244
+0:12:17.880 --> 0:12:22.880
+And it's just this, because Postgres is not sort of,
+
+245
+0:12:22.880 --> 0:12:24.640
+or similar systems as well, right?
+
+246
+0:12:24.640 --> 0:12:26.640
+It's not end user facing.
+
+247
+0:12:26.640 --> 0:12:29.920
+It's not used by sort of random average people, right?
+
+248
+0:12:29.920 --> 0:12:33.760
+It's used by technically minded people,
+
+249
+0:12:33.760 --> 0:12:35.720
+experts, database administrators and so on.
+
+250
+0:12:35.720 --> 0:12:40.320
+So a lot of those people, there's not too much pressure
+
+251
+0:12:40.320 --> 0:12:41.600
+to actually have things translated.
+
+252
+0:12:41.600 --> 0:12:44.720
+People will be, okay, it's not translated, it's fine, right?
+
+253
+0:12:44.720 --> 0:12:48.320
+Which is different from if LibreOffice or Firefox
+
+254
+0:12:48.320 --> 0:12:50.000
+is not translated and you install it in the school,
+
+255
+0:12:50.000 --> 0:12:50.840
+it wouldn't work.
+
+256
+0:12:50.840 --> 0:12:51.680
+It's just, you can't do that, right?
+
+257
+0:12:51.680 --> 0:12:55.360
+But here it's like, okay, if it's not,
+
+258
+0:12:55.360 --> 0:12:57.400
+if it doesn't get done, it's not a problem in a way,
+
+259
+0:12:57.400 --> 0:13:00.120
+but we just wanna do it because we like it.
+
+260
+0:13:00.120 --> 0:13:02.080
+But if it doesn't get done, it's like, okay,
+
+261
+0:13:02.080 --> 0:13:03.000
+then we'll just move on, right?
+
+262
+0:13:03.000 --> 0:13:07.560
+So you gotta kind of, it relies on a lot of enthusiasm,
+
+263
+0:13:07.560 --> 0:13:09.000
+individual enthusiasm, right?
+
+264
+0:13:11.600 --> 0:13:15.240
+A lot of the, yeah, I found also, at least personally,
+
+265
+0:13:15.240 --> 0:13:17.640
+as doing some of the translation work myself,
+
+266
+0:13:17.640 --> 0:13:20.560
+terminology is hard sometimes, right?
+
+267
+0:13:20.560 --> 0:13:23.760
+Because again, I just mentioned something like that.
+
+268
+0:13:23.760 --> 0:13:26.280
+It's not just press this button to download a thing.
+
+269
+0:13:26.280 --> 0:13:29.880
+Okay, you can translate that in any language probably by now.
+
+270
+0:13:29.880 --> 0:13:32.400
+But what if you get into terms like, you know,
+
+271
+0:13:32.400 --> 0:13:35.520
+sub-transaction rollback or incremental
+
+272
+0:13:35.520 --> 0:13:38.040
+materialized view maintenance, you know?
+
+273
+0:13:38.040 --> 0:13:41.320
+Some languages might not even have terms for that, maybe.
+
+274
+0:13:41.320 --> 0:13:43.200
+You know, sometimes when I do the work,
+
+275
+0:13:43.200 --> 0:13:46.320
+I pick, you know, I have some textbooks,
+
+276
+0:13:46.320 --> 0:13:50.480
+like academic textbooks in German in my case.
+
+277
+0:13:50.480 --> 0:13:53.200
+And I just go through them, like, anybody in here
+
+278
+0:13:53.200 --> 0:13:54.640
+talk about materialized views?
+
+279
+0:13:54.640 --> 0:13:56.360
+What kind of terminology are they using?
+
+280
+0:13:56.360 --> 0:13:59.960
+And then I have like six books and three do it this way,
+
+281
+0:13:59.960 --> 0:14:02.480
+three do it that way, and then I just pick something
+
+282
+0:14:02.480 --> 0:14:03.480
+at some point, right?
+
+283
+0:14:05.160 --> 0:14:08.000
+So in some way, we have to kind of define,
+
+284
+0:14:08.000 --> 0:14:10.520
+make up the terminology in some cases, even, right?
+
+285
+0:14:13.640 --> 0:14:18.480
+And as I alluded to, the workflow is not as cool
+
+286
+0:14:18.480 --> 0:14:20.160
+as what we saw in the previous talk,
+
+287
+0:14:20.160 --> 0:14:21.640
+so maybe we can improve that.
+
+288
+0:14:24.480 --> 0:14:26.600
+So here's some sort of source code level challenges.
+
+289
+0:14:26.600 --> 0:14:31.600
+Some of those are solvable, some of those are not.
+
+290
+0:14:32.320 --> 0:14:34.280
+People who work in translation know about, like,
+
+291
+0:14:34.280 --> 0:14:35.400
+plural issues, right?
+
+292
+0:14:35.400 --> 0:14:36.400
+We do handle that.
+
+293
+0:14:37.320 --> 0:14:39.400
+Works fine, but then if you, I've never figured out
+
+294
+0:14:39.400 --> 0:14:40.880
+how to handle the first one.
+
+295
+0:14:40.880 --> 0:14:45.880
+Like, if you have two or more numbers in a sentence,
+
+296
+0:14:47.760 --> 0:14:50.520
+like, then you would have to have some combinatorial
+
+297
+0:14:51.520 --> 0:14:53.880
+sort of list of translations.
+
+298
+0:14:53.880 --> 0:14:56.080
+What if the first one is singular and the last one
+
+299
+0:14:56.080 --> 0:14:58.560
+is five, and what if the first one is two
+
+300
+0:14:58.560 --> 0:15:02.120
+and the last one is 18, you know?
+
+301
+0:15:02.120 --> 0:15:03.440
+I don't think you can really solve that,
+
+302
+0:15:03.440 --> 0:15:05.720
+then you start rephrasing things in weird ways.
+
+303
+0:15:06.840 --> 0:15:08.320
+Well, we have the second one, which obviously
+
+304
+0:15:08.320 --> 0:15:11.080
+everybody knows you shouldn't do, if you sort of
+
+305
+0:15:11.080 --> 0:15:13.480
+paste terms together, that doesn't work, right?
+
+306
+0:15:13.480 --> 0:15:15.880
+Let's say you're just gonna make something up,
+
+307
+0:15:15.880 --> 0:15:18.560
+like, you cannot apply a generation expression
+
+308
+0:15:18.560 --> 0:15:20.760
+to a materialized view, let's say, something like that.
+
+309
+0:15:20.760 --> 0:15:23.480
+That's a thing that could happen in Postgres,
+
+310
+0:15:23.480 --> 0:15:24.560
+more or less, right?
+
+311
+0:15:24.560 --> 0:15:27.280
+It's like, okay, you shouldn't do that,
+
+312
+0:15:27.280 --> 0:15:29.000
+you shouldn't sort of stick that into the middle
+
+313
+0:15:29.000 --> 0:15:30.360
+of the sentence because then the grammar
+
+314
+0:15:30.360 --> 0:15:33.520
+doesn't match in some languages.
+
+315
+0:15:34.360 --> 0:15:35.600
+So you write those out.
+
+316
+0:15:36.720 --> 0:15:39.400
+But what if you have, like, five options here
+
+317
+0:15:39.400 --> 0:15:40.560
+and six options there?
+
+318
+0:15:40.560 --> 0:15:43.160
+Are you gonna make 30 strings in your source code?
+
+319
+0:15:45.040 --> 0:15:47.200
+At some point, probably not, right?
+
+320
+0:15:47.200 --> 0:15:52.200
+So, at some point then, developers,
+
+321
+0:15:52.200 --> 0:15:55.000
+the actual developers do get annoyed if you tell them,
+
+322
+0:15:55.000 --> 0:15:56.760
+like, no, you can't do that, you have to write
+
+323
+0:15:56.760 --> 0:15:58.600
+actually 35 error messages by hand,
+
+324
+0:15:58.600 --> 0:16:00.320
+so not gonna do that.
+
+325
+0:16:00.320 --> 0:16:04.480
+So in some cases, we did have 20 messages for some stuff
+
+326
+0:16:04.480 --> 0:16:07.440
+and we had to rephrase so that we only had
+
+327
+0:16:07.440 --> 0:16:08.680
+the number of answers.
+
+328
+0:16:08.680 --> 0:16:13.280
+You start then tweaking it, can you say something,
+
+329
+0:16:13.280 --> 0:16:15.880
+something, semicolon, something, something,
+
+330
+0:16:15.880 --> 0:16:18.040
+and then maybe at that point it's okay, I don't know,
+
+331
+0:16:18.040 --> 0:16:19.660
+but yeah, exactly.
+
+332
+0:16:19.660 --> 0:16:23.660
+So you have to make, use some judgment calls in these cases.
+
+333
+0:16:26.160 --> 0:16:27.760
+One thing that sometimes happens if developers
+
+334
+0:16:27.760 --> 0:16:30.160
+add a new file to source code, then it has to be added
+
+335
+0:16:30.160 --> 0:16:32.680
+somewhere else also to make sure the translation system
+
+336
+0:16:32.680 --> 0:16:35.760
+catches it and that sometimes gets forgotten.
+
+337
+0:16:35.760 --> 0:16:37.280
+It's just one of those things, I don't know
+
+338
+0:16:37.280 --> 0:16:40.640
+if there's a solution for that, you just gotta do it.
+
+339
+0:16:40.640 --> 0:16:42.820
+There's also some weird thing, we have, like, files
+
+340
+0:16:42.820 --> 0:16:44.880
+that get compiled into multiple components
+
+341
+0:16:44.880 --> 0:16:48.960
+and then you kind of have to add them to all of those
+
+342
+0:16:48.960 --> 0:16:53.400
+components and retranslate everything in each component
+
+343
+0:16:53.400 --> 0:16:55.600
+which could be handled with some of those translation
+
+344
+0:16:55.600 --> 0:16:57.680
+memory things and stuff like that, but it's just kind of
+
+345
+0:16:57.680 --> 0:17:02.680
+weird the way we have it laid out and kind of makes it annoying.
+
+346
+0:17:05.560 --> 0:17:10.560
+Yeah, so this is maybe specific to something like,
+
+347
+0:17:12.720 --> 0:17:16.000
+postcodes being A, a client server system, B, a database,
+
+348
+0:17:16.000 --> 0:17:20.520
+and C having its own sort of ideas about what encoding
+
+349
+0:17:20.520 --> 0:17:23.080
+on locale and stuff like that means, right?
+
+350
+0:17:23.080 --> 0:17:28.080
+So in, you know, a database stores data which is often text
+
+351
+0:17:30.180 --> 0:17:35.180
+which has encoding and because of, you know, nowadays
+
+352
+0:17:37.680 --> 0:17:40.740
+you think everything's UTF-8, but in a database
+
+353
+0:17:40.740 --> 0:17:42.280
+you can also store things in other encodings
+
+354
+0:17:42.280 --> 0:17:45.420
+for historical reasons, but, or in some cases
+
+355
+0:17:45.420 --> 0:17:48.540
+because UTF-8 doesn't actually match what doesn't support
+
+356
+0:17:48.540 --> 0:17:51.680
+what you want to store which sounds maybe bizarre
+
+357
+0:17:51.680 --> 0:17:54.880
+but happens especially in sort of Japanese
+
+358
+0:17:54.880 --> 0:17:58.360
+and things like that, so we do support automatic encoding
+
+359
+0:17:58.360 --> 0:18:01.340
+conversion between client and server so that all works
+
+360
+0:18:01.340 --> 0:18:06.340
+and happens, but then this also, what if you have,
+
+361
+0:18:06.960 --> 0:18:08.580
+you know, your strings, your translated strings
+
+362
+0:18:08.580 --> 0:18:10.700
+or in a file, they also have an encoding,
+
+363
+0:18:10.700 --> 0:18:13.200
+they then get loaded into the server process,
+
+364
+0:18:13.200 --> 0:18:16.280
+the server process, prints stuff to its own log
+
+365
+0:18:16.280 --> 0:18:18.980
+but also sends error messages to the client.
+
+366
+0:18:18.980 --> 0:18:22.080
+All of those things could have different ideas
+
+367
+0:18:22.080 --> 0:18:22.920
+of what they want, right?
+
+368
+0:18:22.920 --> 0:18:26.280
+You might want to log stuff in English to your server log
+
+369
+0:18:26.280 --> 0:18:30.280
+but the client wants the error message in French,
+
+370
+0:18:30.280 --> 0:18:33.320
+but, or for some, it maybe it's like legacy client
+
+371
+0:18:33.320 --> 0:18:37.360
+that wants it, you know, transcoded to Latin nine
+
+372
+0:18:39.320 --> 0:18:41.440
+or, and then at the same time there's a different client
+
+373
+0:18:41.440 --> 0:18:43.560
+connected that also is doing things
+
+374
+0:18:43.560 --> 0:18:45.680
+and is sent to a different language,
+
+375
+0:18:45.680 --> 0:18:47.520
+you want to log it to the same server log
+
+376
+0:18:47.520 --> 0:18:49.080
+in the same language and the same encoding
+
+377
+0:18:49.080 --> 0:18:50.440
+hopefully as the other guy.
+
+378
+0:18:51.360 --> 0:18:56.360
+All of this works quite poorly the way the get text
+
+379
+0:18:56.760 --> 0:19:01.760
+or the INTL APIs work, you can sort of have some subsets
+
+380
+0:19:02.000 --> 0:19:03.960
+with this working but if you really try hard,
+
+381
+0:19:03.960 --> 0:19:07.040
+it's a total mess and it just basically doesn't work.
+
+382
+0:19:07.040 --> 0:19:10.480
+And so that's a real problem really
+
+383
+0:19:10.480 --> 0:19:15.480
+and we'd have to really redesign some of this
+
+384
+0:19:15.800 --> 0:19:18.160
+to support all of these combinations.
+
+385
+0:19:20.600 --> 0:19:25.600
+Yeah, also the tools, well the tools are fine,
+
+386
+0:19:27.440 --> 0:19:31.520
+they're actually quite cool and get text has some internal
+
+387
+0:19:31.520 --> 0:19:34.320
+sort of optimizations that are quite interesting,
+
+388
+0:19:34.320 --> 0:19:36.200
+has like sort of internal parallelization
+
+389
+0:19:36.200 --> 0:19:37.920
+and stuff like that so work has been done
+
+390
+0:19:37.920 --> 0:19:40.560
+but I still find it quite slow, you know,
+
+391
+0:19:41.480 --> 0:19:45.280
+even on our scale I'm interested to see what the KDE report
+
+392
+0:19:47.280 --> 0:19:48.760
+is gonna be later on how they handle that
+
+393
+0:19:48.760 --> 0:19:50.840
+but it is still quite slow, right?
+
+394
+0:19:50.840 --> 0:19:52.640
+This sort of website thing I showed,
+
+395
+0:19:52.640 --> 0:19:54.640
+if you just do a full rebuild of that,
+
+396
+0:19:54.640 --> 0:19:56.520
+it takes like 20 minutes or something, right?
+
+397
+0:19:56.520 --> 0:19:59.320
+Just to re-merge and re-extract and recombine everything.
+
+398
+0:19:59.320 --> 0:20:06.320
+So also the format, the PO format is sort of pre-source control,
+
+399
+0:20:11.760 --> 0:20:14.880
+I find, because it has all these like dates
+
+400
+0:20:14.880 --> 0:20:16.880
+and time stems in it and which you don't need
+
+401
+0:20:16.880 --> 0:20:18.760
+because you have it in your source control management
+
+402
+0:20:18.760 --> 0:20:21.680
+but these, hello.
+
+403
+0:20:21.680 --> 0:20:23.720
+Can you be more explicit on the 20 minutes?
+
+404
+0:20:23.720 --> 0:20:25.720
+What do you do in these 20 minutes
+
+405
+0:20:25.720 --> 0:20:27.240
+because it sounds very slow?
+
+406
+0:20:27.240 --> 0:20:31.400
+Well, it runs a loop, it extracts,
+
+407
+0:20:32.480 --> 0:20:35.520
+runs xgettext over the source code
+
+408
+0:20:37.600 --> 0:20:42.280
+and then it runs message merge against all these catalogs
+
+409
+0:20:43.480 --> 0:20:46.000
+which are, you know, sort of this many by that many
+
+410
+0:20:47.160 --> 0:20:48.720
+times that many branches
+
+411
+0:20:50.200 --> 0:20:55.280
+and you run that on just a machine, right?
+
+412
+0:20:55.280 --> 0:20:57.760
+So, I mean, you could optimize this
+
+413
+0:20:57.760 --> 0:20:59.440
+by maybe a beefier machine
+
+414
+0:20:59.440 --> 0:21:01.680
+and you can probably parallelize this a little bit
+
+415
+0:21:01.680 --> 0:21:04.520
+but it's still, you know, the main message catalog
+
+416
+0:21:04.520 --> 0:21:07.120
+for the actual server has like, you know, 5,000 strings
+
+417
+0:21:07.120 --> 0:21:09.720
+and that is still gonna run like,
+
+418
+0:21:11.520 --> 0:21:14.560
+I don't really know why but it runs like a couple of minutes.
+
+419
+0:21:15.440 --> 0:21:19.760
+It's just, it's not, we're doing this build system work now,
+
+420
+0:21:19.760 --> 0:21:22.840
+right, when we go from make to mason or mason or ninja
+
+421
+0:21:22.840 --> 0:21:27.520
+because make is too slow
+
+422
+0:21:27.520 --> 0:21:29.920
+even if you don't have to do anything, right?
+
+423
+0:21:29.920 --> 0:21:32.560
+So we're trying to sort of go from,
+
+424
+0:21:32.560 --> 0:21:34.800
+I can rebuild everything in five seconds to two seconds
+
+425
+0:21:34.800 --> 0:21:36.080
+and this thing takes like 10 minutes
+
+426
+0:21:36.080 --> 0:21:38.080
+so that's just kind of annoying, right?
+
+427
+0:21:40.440 --> 0:21:42.200
+Yeah, and I mentioned sort of the back patching,
+
+428
+0:21:42.200 --> 0:21:46.400
+sort of you, oftentimes what happens is that
+
+429
+0:21:46.400 --> 0:21:47.800
+there's like a bug fix, right?
+
+430
+0:21:47.800 --> 0:21:51.760
+And because of the bug fix, there's a new message changes
+
+431
+0:21:51.760 --> 0:21:54.400
+and one new one is added and then,
+
+432
+0:21:54.400 --> 0:21:59.080
+so that then pops up in your website
+
+433
+0:21:59.080 --> 0:22:01.280
+but then it gets back patched,
+
+434
+0:22:01.280 --> 0:22:02.640
+the same bug fix gets back patched
+
+435
+0:22:02.640 --> 0:22:05.080
+so the same message has to then also be updated
+
+436
+0:22:05.080 --> 0:22:07.080
+in the back branches so you just kind of
+
+437
+0:22:08.000 --> 0:22:09.640
+have to like download this, upload this,
+
+438
+0:22:09.640 --> 0:22:11.360
+then it gets added to the translation memory,
+
+439
+0:22:11.360 --> 0:22:13.320
+then you can do this, I have a bunch of shell scripts
+
+440
+0:22:13.320 --> 0:22:16.320
+to kind of make this work, it's just all, could be better.
+
+441
+0:22:16.320 --> 0:22:21.320
+All right, so a lot of people know this chart here.
+
+442
+0:22:27.520 --> 0:22:32.520
+So, you know, some of the projects that we know,
+
+443
+0:22:33.320 --> 0:22:34.740
+maybe Postgres is somewhere in here,
+
+444
+0:22:34.740 --> 0:22:36.680
+KDE, LibreOffice, they're all pretty good
+
+445
+0:22:36.680 --> 0:22:39.680
+but then there's maybe things like that down here
+
+446
+0:22:39.680 --> 0:22:44.680
+that everybody builds on but they're sort of maintained by,
+
+447
+0:22:44.680 --> 0:22:48.920
+by a few people in there sort of on the side, right?
+
+448
+0:22:48.920 --> 0:22:53.440
+And this way, I mean, this is sort of a general problem.
+
+449
+0:22:53.440 --> 0:22:57.440
+I gave the same, I gave a talk,
+
+450
+0:22:57.440 --> 0:22:59.560
+it was the online one two years ago
+
+451
+0:22:59.560 --> 0:23:02.160
+about the documentation tool chain Postgres,
+
+452
+0:23:02.160 --> 0:23:04.100
+same problem, right?
+
+453
+0:23:05.640 --> 0:23:07.760
+We have, you know, open source,
+
+454
+0:23:07.760 --> 0:23:09.400
+everything's very successful but then there's like
+
+455
+0:23:09.400 --> 0:23:12.280
+these little tools you need just to make your build run,
+
+456
+0:23:12.280 --> 0:23:16.560
+right, and then there's, they don't have the same
+
+457
+0:23:16.560 --> 0:23:19.000
+necessarily amount of staffing and funding
+
+458
+0:23:19.000 --> 0:23:21.280
+and things like that but you still kind of rely on them
+
+459
+0:23:21.280 --> 0:23:22.840
+and they just barely sort of chug along.
+
+460
+0:23:22.840 --> 0:23:27.280
+So, that's a sort of general concern, right?
+
+461
+0:23:27.280 --> 0:23:28.600
+But it's, it applies here.
+
+462
+0:23:30.760 --> 0:23:32.360
+All right, so what are we doing?
+
+463
+0:23:33.840 --> 0:23:34.680
+What do we plan to do?
+
+464
+0:23:34.680 --> 0:23:36.520
+I mentioned we're in the middle, right now,
+
+465
+0:23:36.520 --> 0:23:38.480
+we're sort of redoing our build system
+
+466
+0:23:38.480 --> 0:23:43.480
+that is kind of a good reason to clean up some of that
+
+467
+0:23:45.160 --> 0:23:47.000
+old stuff that we don't need anymore.
+
+468
+0:23:47.000 --> 0:23:50.000
+We're also moving more to using ICU which is, you know,
+
+469
+0:23:50.000 --> 0:23:55.000
+internationalization library that does lots of good things
+
+470
+0:23:56.200 --> 0:24:00.360
+but then it adds another dimension to this issue of,
+
+471
+0:24:00.360 --> 0:24:02.120
+you know, locale encoding and then there's sort of
+
+472
+0:24:02.120 --> 0:24:04.520
+another dimension of what ICU thinks the current locale
+
+473
+0:24:04.520 --> 0:24:07.640
+and encoding is, it just gets ever more messy
+
+474
+0:24:07.640 --> 0:24:12.240
+and complicated and then one sort of important issue
+
+475
+0:24:12.240 --> 0:24:14.080
+in databases is the sort order, right?
+
+476
+0:24:14.080 --> 0:24:15.440
+That's a lot of people care about that,
+
+477
+0:24:15.440 --> 0:24:17.160
+what the sort order of your data is
+
+478
+0:24:17.160 --> 0:24:20.280
+and different collations have to be supported
+
+479
+0:24:20.280 --> 0:24:24.360
+and that's another kind of sort of localization
+
+480
+0:24:24.360 --> 0:24:26.120
+kind of work we do.
+
+481
+0:24:26.120 --> 0:24:28.240
+But all of this is sort of weirdly connector, right?
+
+482
+0:24:28.240 --> 0:24:31.040
+If you configure one part of the system to be
+
+483
+0:24:31.040 --> 0:24:33.000
+in this language then all of a sudden get text
+
+484
+0:24:33.000 --> 0:24:34.960
+also thinks that this is the same but maybe
+
+485
+0:24:34.960 --> 0:24:35.880
+you don't even want that, right?
+
+486
+0:24:35.880 --> 0:24:38.240
+You might want to error messages in French
+
+487
+0:24:38.240 --> 0:24:40.240
+but you want to sort something in Swedish, right?
+
+488
+0:24:40.240 --> 0:24:41.400
+That's why not.
+
+489
+0:24:42.440 --> 0:24:46.520
+But because of these APIs the way they're historically built
+
+490
+0:24:46.520 --> 0:24:49.460
+it just doesn't quite work smoothly.
+
+491
+0:24:52.760 --> 0:24:56.440
+But again, we want to modernize the workflows.
+
+492
+0:24:56.440 --> 0:24:58.000
+Again, maybe web late.
+
+493
+0:24:58.000 --> 0:25:00.640
+I heard of Omega T here also this weekend
+
+494
+0:25:00.640 --> 0:25:03.440
+and there's Crowdin but,
+
+495
+0:25:03.440 --> 0:25:08.440
+so the issue I had, I mean I heard of Web late
+
+496
+0:25:08.480 --> 0:25:11.320
+some years ago too but again the issue is sort of
+
+497
+0:25:11.320 --> 0:25:14.480
+we can't just adopt like the hottest new thing, right?
+
+498
+0:25:14.480 --> 0:25:17.480
+Because again, whatever the way I always think about it
+
+499
+0:25:17.480 --> 0:25:22.160
+is whatever I sort of do today in Postgres, right?
+
+500
+0:25:22.160 --> 0:25:24.440
+Some piece of code or make some infrastructure change
+
+501
+0:25:24.440 --> 0:25:27.440
+still has to work in 10 years, right?
+
+502
+0:25:27.440 --> 0:25:29.800
+And it doesn't, meaning it also has to like build
+
+503
+0:25:29.800 --> 0:25:30.640
+from source, right?
+
+504
+0:25:30.640 --> 0:25:32.340
+Because that's the way open source works, right?
+
+505
+0:25:32.340 --> 0:25:36.560
+So I can't just use a tool that was just invented yesterday
+
+506
+0:25:36.560 --> 0:25:38.520
+and I don't know if it's still gonna be here in two years.
+
+507
+0:25:38.520 --> 0:25:42.000
+Now they mentioned Web late is 11 years old
+
+508
+0:25:42.000 --> 0:25:44.800
+so that's pretty good so I think we can maybe look into that.
+
+509
+0:25:46.800 --> 0:25:49.440
+All right, so this is something maybe a question
+
+510
+0:25:49.440 --> 0:25:52.240
+anybody knows is GetX still the thing
+
+511
+0:25:52.240 --> 0:25:53.760
+or is it something totally different
+
+512
+0:25:53.760 --> 0:25:54.880
+that everybody should be using now
+
+513
+0:25:54.880 --> 0:25:58.880
+as part of those sort of the low level API of how this works?
+
+514
+0:25:58.880 --> 0:26:00.840
+I don't know.
+
+515
+0:26:00.840 --> 0:26:05.400
+Well, sort of half hoping that's from the ICU ecosystem
+
+516
+0:26:05.400 --> 0:26:07.680
+something would be evolving or it's sort of emerging
+
+517
+0:26:07.680 --> 0:26:08.880
+but I haven't seen anything like that
+
+518
+0:26:08.880 --> 0:26:10.480
+so I don't know if there's anything
+
+519
+0:26:12.280 --> 0:26:14.080
+or is this still the thing to use?
+
+520
+0:26:14.080 --> 0:26:15.080
+I don't know.
+
+521
+0:26:15.080 --> 0:26:17.480
+So maybe somebody has a, yes, please.
+
+522
+0:26:17.480 --> 0:26:21.720
+The ICU upcoming solution is Mesut format two.
+
+523
+0:26:21.720 --> 0:26:26.720
+It's currently in the ICU4J72 that came out in October
+
+524
+0:26:26.720 --> 0:26:30.960
+and it's in tech preview there but it's gonna progress
+
+525
+0:26:30.960 --> 0:26:33.720
+from there it's not yet in ICU4C.
+
+526
+0:26:34.680 --> 0:26:36.880
+It's effectively Mesut format two
+
+527
+0:26:36.880 --> 0:26:40.080
+is a new Mesut format syntax.
+
+528
+0:26:40.920 --> 0:26:43.120
+The resource level syntax for that
+
+529
+0:26:43.120 --> 0:26:46.120
+is a little bit more still in progress
+
+530
+0:26:46.120 --> 0:26:49.720
+but if you're moving towards more of an ICU world
+
+531
+0:26:49.720 --> 0:26:54.000
+that's likely going to provide a decent future thing
+
+532
+0:26:54.000 --> 0:26:56.480
+for you to migrate to from GetX.
+
+533
+0:26:56.480 --> 0:26:59.800
+It's not that yet but it's becoming that.
+
+534
+0:26:59.800 --> 0:27:02.400
+That is excellent news.
+
+535
+0:27:02.400 --> 0:27:04.400
+Thank you, I'll definitely look into that.
+
+536
+0:27:12.200 --> 0:27:14.880
+Webulate is adopting that as well or supporting that?
+
+537
+0:27:14.880 --> 0:27:16.640
+It's all compatible.
+
+538
+0:27:17.520 --> 0:27:19.600
+It seems like it supported a bunch of things.
+
+539
+0:27:19.600 --> 0:27:22.360
+So yeah, this is wonderful and useful information
+
+540
+0:27:22.360 --> 0:27:23.200
+we can like.
+
+541
+0:27:23.200 --> 0:27:24.880
+No message format two.
+
+542
+0:27:24.880 --> 0:27:25.720
+It does.
+
+543
+0:27:25.720 --> 0:27:26.560
+It's not there yet.
+
+544
+0:27:26.560 --> 0:27:29.360
+The specifications are two-point-four.
+
+545
+0:27:29.360 --> 0:27:32.280
+So yeah, this is good, thank you.
+
+546
+0:27:32.280 --> 0:27:35.440
+So this is also the end of my presentation.
+
+547
+0:27:35.440 --> 0:27:38.840
+So I just wanted to sort of say what we're doing
+
+548
+0:27:38.840 --> 0:27:40.920
+and what sort of the some of the unique challenges are.
+
+549
+0:27:40.920 --> 0:27:42.200
+I've got some good feedback here.
+
+550
+0:27:42.200 --> 0:27:43.560
+I'm gonna look into Weblate.
+
+551
+0:27:43.560 --> 0:27:48.560
+We're gonna look into sort of emerging ICU things,
+
+552
+0:27:49.560 --> 0:27:51.200
+update some of our infrastructure.
+
+553
+0:27:52.720 --> 0:27:55.080
+We have a few minutes for questions.
+
+554
+0:27:55.080 --> 0:27:57.400
+Otherwise, thank you very much for listening.
+
+555
+0:27:57.400 --> 0:27:58.240
+Yeah.
+
+556
+0:27:58.240 --> 0:28:00.920
+So if you're worried about Weblate,
+
+557
+0:28:05.840 --> 0:28:07.880
+it doesn't really interact with,
+
+558
+0:28:09.280 --> 0:28:12.160
+it doesn't go to the new automation system
+
+559
+0:28:12.160 --> 0:28:16.240
+because the way you communicate with Weblate
+
+560
+0:28:16.240 --> 0:28:19.200
+with the world and the translators is files.
+
+561
+0:28:19.200 --> 0:28:24.200
+Yeah.
+
+562
+0:28:39.920 --> 0:28:41.040
+Yeah, it sounds like it.
+
+563
+0:28:41.040 --> 0:28:51.800
+Yeah, it was kind of funny
+
+564
+0:28:51.800 --> 0:28:54.400
+because I had submitted various bugs
+
+565
+0:28:54.400 --> 0:28:57.040
+to savannah.new.org over the years.
+
+566
+0:28:57.040 --> 0:28:59.720
+Also feature requests and stuff like that.
+
+567
+0:28:59.720 --> 0:29:03.640
+And it just like two or three weeks ago,
+
+568
+0:29:03.640 --> 0:29:05.200
+all of these bugs were like updated
+
+569
+0:29:05.200 --> 0:29:06.520
+and some of them closed and it's like,
+
+570
+0:29:06.520 --> 0:29:09.720
+whoa, somebody know that I'm gonna complain
+
+571
+0:29:09.720 --> 0:29:10.920
+about them at first.
+
+572
+0:29:10.920 --> 0:29:11.760
+I don't know.
+
+573
+0:29:11.760 --> 0:29:13.000
+Is the person here in any case?
+
+574
+0:29:13.000 --> 0:29:14.480
+I don't know who is, no.
+
+575
+0:29:16.520 --> 0:29:18.920
+Well, I guess it's just sort of,
+
+576
+0:29:18.920 --> 0:29:21.760
+I mean, this is a problem or I guess it is a problem
+
+577
+0:29:21.760 --> 0:29:24.600
+in sort of some of these people maintain
+
+578
+0:29:24.600 --> 0:29:25.920
+some of these specially new tools
+
+579
+0:29:25.920 --> 0:29:26.880
+and some of these older tools
+
+580
+0:29:26.880 --> 0:29:28.160
+that are sort of on maintenance.
+
+581
+0:29:28.160 --> 0:29:30.160
+I mean, we don't need tons of new features,
+
+582
+0:29:30.160 --> 0:29:32.560
+but you don't really know, right?
+
+583
+0:29:32.560 --> 0:29:34.360
+It could just be that that person changed his job
+
+584
+0:29:34.360 --> 0:29:37.440
+and then nothing happens again for five years, right?
+
+585
+0:29:37.440 --> 0:29:40.920
+But well, got some good new information here, thank you.
+
+586
+0:29:40.920 --> 0:30:06.920
+All right, then we'll move on to the next one.
+

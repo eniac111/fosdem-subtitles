@@ -1,0 +1,1972 @@
+1
+0:00:00.000 --> 0:00:10.000
+Good afternoon, everyone. I'm Mamda.
+
+2
+0:00:10.000 --> 0:00:14.120
+I work as a software engineer at Leica GeoSystems,
+
+3
+0:00:14.120 --> 0:00:17.480
+and I work mostly in embedded domain.
+
+4
+0:00:17.480 --> 0:00:22.240
+So this is the outline of my talk.
+
+5
+0:00:22.240 --> 0:00:31.800
+So just to keep everyone on the same page,
+
+6
+0:00:31.800 --> 0:00:35.640
+I'll be giving a brief introduction about LLVM and Clang,
+
+7
+0:00:35.640 --> 0:00:39.760
+and so that the terminology is next I'm using are clear.
+
+8
+0:00:39.760 --> 0:00:43.240
+Then I'll talk about compiler RT sanitizers,
+
+9
+0:00:43.240 --> 0:00:45.960
+what they are, how you can build them,
+
+10
+0:00:45.960 --> 0:00:48.560
+and how exactly they work,
+
+11
+0:00:48.560 --> 0:00:54.080
+and then my final thoughts about sanitizers.
+
+12
+0:00:54.080 --> 0:00:57.240
+So this is a typical compiler pipeline,
+
+13
+0:00:57.240 --> 0:00:59.520
+which most of you are aware of,
+
+14
+0:00:59.520 --> 0:01:03.400
+and they call it as a textbook diagram as well.
+
+15
+0:01:03.400 --> 0:01:08.240
+So whenever you write a source or a code in any language
+
+16
+0:01:08.240 --> 0:01:11.880
+to produce a binary executable for your machine,
+
+17
+0:01:11.880 --> 0:01:15.440
+it has to go through multiple stages.
+
+18
+0:01:15.440 --> 0:01:18.560
+So mostly, most important ones are the front end,
+
+19
+0:01:18.560 --> 0:01:20.400
+middle end, and the back end.
+
+20
+0:01:20.400 --> 0:01:26.760
+And the front end actually does all the lexical analysis,
+
+21
+0:01:26.760 --> 0:01:29.720
+semantic analysis, it checks the syntax,
+
+22
+0:01:29.720 --> 0:01:33.680
+and then it generates an intermediate representation.
+
+23
+0:01:33.680 --> 0:01:35.400
+Then it is passed to the middle end,
+
+24
+0:01:35.400 --> 0:01:40.080
+which does optimizations independent of the target.
+
+25
+0:01:40.080 --> 0:01:42.240
+And then it is passed to the back end,
+
+26
+0:01:42.240 --> 0:01:45.760
+which generates much executable,
+
+27
+0:01:45.760 --> 0:01:50.200
+and it has more optimizations depending on the target
+
+28
+0:01:50.200 --> 0:01:52.160
+you are building it for.
+
+29
+0:01:52.160 --> 0:01:55.560
+And sometimes if there are multiple object files,
+
+30
+0:01:55.560 --> 0:01:59.560
+then comes in the picture linker.
+
+31
+0:01:59.560 --> 0:02:03.680
+So how does LLVM fits in our pipeline?
+
+32
+0:02:03.680 --> 0:02:08.600
+So basically, the same, it's LLVM,
+
+33
+0:02:08.600 --> 0:02:12.520
+it's a modular and reusable compiler framework,
+
+34
+0:02:12.520 --> 0:02:16.320
+and it provides front end, back end, and LLVM core,
+
+35
+0:02:16.320 --> 0:02:18.800
+which is the LLVM optimizer.
+
+36
+0:02:18.800 --> 0:02:23.160
+So if we map it to our compiling pipeline,
+
+37
+0:02:23.160 --> 0:02:27.200
+so for depending on the language you are trying to build
+
+38
+0:02:27.200 --> 0:02:29.920
+or use this compiling tool chain,
+
+39
+0:02:29.920 --> 0:02:33.080
+you have LLVM front end,
+
+40
+0:02:33.080 --> 0:02:37.360
+that is the Clang for C languages and Rust,
+
+41
+0:02:37.360 --> 0:02:38.920
+Rust C for Rust,
+
+42
+0:02:38.920 --> 0:02:41.720
+and then depending upon the target,
+
+43
+0:02:41.720 --> 0:02:48.720
+it will use the target as x86, 32-bit or 64.
+
+44
+0:02:50.080 --> 0:02:53.320
+And the main part, which is most reusable
+
+45
+0:02:53.320 --> 0:02:55.360
+from the LLVM perspective,
+
+46
+0:02:55.360 --> 0:02:58.000
+it's the LLVM optimizer and the core.
+
+47
+0:02:58.000 --> 0:03:02.240
+So if I have to develop a new compiler tool chain,
+
+48
+0:03:02.240 --> 0:03:05.000
+I can easily reuse LLVM.
+
+49
+0:03:05.000 --> 0:03:07.640
+I just have to write my own front end,
+
+50
+0:03:07.640 --> 0:03:12.000
+and if there is a new hardware, back end maybe.
+
+51
+0:03:12.000 --> 0:03:16.160
+So in short, I can say LLVM is like a Lego
+
+52
+0:03:16.160 --> 0:03:19.560
+of compiler tool chains.
+
+53
+0:03:19.560 --> 0:03:24.560
+Next, focusing a bit more on one of the LLVM front end Clang,
+
+54
+0:03:24.960 --> 0:03:29.080
+which is built for targeting mostly C, C++,
+
+55
+0:03:29.080 --> 0:03:31.120
+and C-like languages.
+
+56
+0:03:31.120 --> 0:03:35.560
+And here, whenever you provide your source code,
+
+57
+0:03:35.560 --> 0:03:38.160
+it performs some lexical analysis,
+
+58
+0:03:38.160 --> 0:03:40.600
+it generates tokens for parsing,
+
+59
+0:03:41.440 --> 0:03:43.440
+then it does semantic analysis
+
+60
+0:03:43.440 --> 0:03:46.080
+and generates abstract syntax tree,
+
+61
+0:03:46.080 --> 0:03:50.000
+and the end goal should be LLVM intermediate representation.
+
+62
+0:03:51.560 --> 0:03:56.480
+So just to summarize, LLVM is a collection of all modular
+
+63
+0:03:56.480 --> 0:03:58.920
+and reusable compiler technologies,
+
+64
+0:03:58.920 --> 0:04:02.360
+and there is much more to it because it provides now
+
+65
+0:04:02.360 --> 0:04:06.640
+with static analyzers, sanitizers, and more libraries.
+
+66
+0:04:06.640 --> 0:04:10.960
+So it comes under an umbrella project as LLVM.org.
+
+67
+0:04:10.960 --> 0:04:14.320
+And Clang is a compiler front end,
+
+68
+0:04:14.320 --> 0:04:18.960
+which is mostly for C, C++ and C-like languages.
+
+69
+0:04:18.960 --> 0:04:22.560
+But when we say Clang executable,
+
+70
+0:04:22.560 --> 0:04:25.040
+it's more than a front end.
+
+71
+0:04:25.040 --> 0:04:29.520
+So when you build LLVM, you have Clang executable as well.
+
+72
+0:04:29.520 --> 0:04:31.720
+And it's like a compiler driver.
+
+73
+0:04:31.720 --> 0:04:35.680
+So for example, if you have a static compiler,
+
+74
+0:04:35.680 --> 0:04:40.680
+and we have to tell it which directives to use
+
+75
+0:04:40.680 --> 0:04:44.360
+or to use this hyphen I option,
+
+76
+0:04:44.360 --> 0:04:46.320
+where is the standard library path,
+
+77
+0:04:46.320 --> 0:04:49.440
+for example, for C, C++.
+
+78
+0:04:49.440 --> 0:04:53.240
+So Clang as a driver does most of the housekeeping
+
+79
+0:04:53.240 --> 0:04:57.720
+for all this task, and it helps this compiling pipeline
+
+80
+0:04:57.720 --> 0:05:00.760
+to tell you where to look for the libraries
+
+81
+0:05:00.760 --> 0:05:04.760
+and also provide some OS related features
+
+82
+0:05:04.760 --> 0:05:07.960
+and how your OS is.
+
+83
+0:05:09.280 --> 0:05:13.680
+So that was just a brief introduction about Clang and LLVM.
+
+84
+0:05:13.680 --> 0:05:17.520
+So now I'll talk about compiler RT sanitizers.
+
+85
+0:05:17.520 --> 0:05:20.840
+It's one of the sub projects in LLVM.
+
+86
+0:05:20.840 --> 0:05:25.840
+But before that, I'll highlight about the run times.
+
+87
+0:05:25.880 --> 0:05:28.880
+So LLVM comes with compiler RT run times.
+
+88
+0:05:28.880 --> 0:05:33.880
+It's pretty much equivalent of lib GCC for LLVM pipeline.
+
+89
+0:05:33.880 --> 0:05:37.560
+And it provides target specific support
+
+90
+0:05:37.560 --> 0:05:39.480
+for some low level functionalities,
+
+91
+0:05:39.480 --> 0:05:42.280
+which hardware itself cannot do.
+
+92
+0:05:42.280 --> 0:05:45.400
+So it consists of three main components,
+
+93
+0:05:45.400 --> 0:05:49.040
+built-ins, sanitizer, run times and profilers.
+
+94
+0:05:49.040 --> 0:05:52.480
+So built-ins provide implementation
+
+95
+0:05:52.480 --> 0:05:57.440
+for target specific hooks, which hardware itself cannot do.
+
+96
+0:05:57.440 --> 0:05:59.920
+So just to simplify it a bit more,
+
+97
+0:05:59.920 --> 0:06:04.920
+for example, if the 32 bit system cannot do 64 bit division.
+
+98
+0:06:08.120 --> 0:06:10.840
+So here you can see a code snippet.
+
+99
+0:06:10.840 --> 0:06:14.920
+And if I try to compile it using Clang,
+
+100
+0:06:14.920 --> 0:06:19.840
+so first we do a normal compilation on x86 machine,
+
+101
+0:06:19.840 --> 0:06:21.520
+which is a 64 bit.
+
+102
+0:06:21.520 --> 0:06:26.520
+And here on left, you can see it directly calls this diff Q,
+
+103
+0:06:28.160 --> 0:06:31.280
+which means it performs the division itself.
+
+104
+0:06:31.280 --> 0:06:35.120
+But when I use hyphen M32,
+
+105
+0:06:35.120 --> 0:06:38.740
+which is I'm forcing it to compile for 32 bit machine,
+
+106
+0:06:39.920 --> 0:06:41.600
+it depends on another call.
+
+107
+0:06:41.600 --> 0:06:44.880
+It actually calls this U-diff I3,
+
+108
+0:06:44.880 --> 0:06:49.120
+which is basically a built-in implementation in compiler RT.
+
+109
+0:06:49.120 --> 0:06:54.120
+So this is an overall picture of compiler RT run times.
+
+110
+0:06:55.300 --> 0:06:57.760
+So talking about the sanitizers,
+
+111
+0:06:57.760 --> 0:07:00.440
+sanitizers are like runtime checks,
+
+112
+0:07:00.440 --> 0:07:04.400
+which it's like adding a code probe in your code
+
+113
+0:07:05.320 --> 0:07:08.720
+to verify if there are any memory bugs
+
+114
+0:07:08.720 --> 0:07:13.080
+or to sanitize the code or to find any security flaws.
+
+115
+0:07:13.080 --> 0:07:18.080
+So in case of LLVM, it's provided by compiler RT,
+
+116
+0:07:18.080 --> 0:07:21.440
+compiler RT and called as compiler RT sanitizers.
+
+117
+0:07:22.380 --> 0:07:25.400
+And there are multiple kind of sanitizers available.
+
+118
+0:07:26.280 --> 0:07:27.880
+First is address sanitizer,
+
+119
+0:07:27.880 --> 0:07:32.400
+which you can use to detect use after free buffer overflow
+
+120
+0:07:32.400 --> 0:07:34.660
+and memory leaks as well.
+
+121
+0:07:34.660 --> 0:07:37.360
+Then you have undefined behavior sanitizers,
+
+122
+0:07:37.360 --> 0:07:39.440
+memory sanitizers to identify
+
+123
+0:07:39.440 --> 0:07:42.500
+if there is some uninitialized memory.
+
+124
+0:07:42.500 --> 0:07:46.000
+And threat sanitizer to detect some race conditions
+
+125
+0:07:46.000 --> 0:07:47.760
+and deadlocks.
+
+126
+0:07:47.760 --> 0:07:52.420
+So here it's just an example of how sanitizer looks.
+
+127
+0:07:52.420 --> 0:07:54.800
+So here is a very simple code
+
+128
+0:07:54.800 --> 0:07:58.540
+where I'm allocating some memory in heap.
+
+129
+0:07:58.540 --> 0:08:02.360
+And then I'm trying to, I'm freeing it
+
+130
+0:08:02.360 --> 0:08:05.000
+and then I'm trying to access it after free.
+
+131
+0:08:05.000 --> 0:08:09.380
+So if you build this code with your sanitizer flag on
+
+132
+0:08:09.380 --> 0:08:12.480
+and try to run it, immediately it will complain
+
+133
+0:08:12.480 --> 0:08:16.760
+that you are trying to access a memory after free.
+
+134
+0:08:16.760 --> 0:08:18.840
+So that's how it looks like
+
+135
+0:08:18.840 --> 0:08:21.380
+when it's built with address sanitizer.
+
+136
+0:08:22.440 --> 0:08:23.920
+And I will talk in more detail
+
+137
+0:08:23.920 --> 0:08:27.280
+about what goes behind the scene.
+
+138
+0:08:27.280 --> 0:08:31.760
+But before that, how to build compiler RT sanitizers.
+
+139
+0:08:31.760 --> 0:08:34.760
+So there are a lot of documentation around as well.
+
+140
+0:08:34.760 --> 0:08:37.080
+And it's very easy to follow as well,
+
+141
+0:08:37.080 --> 0:08:39.320
+but sometimes it works, sometimes it doesn't.
+
+142
+0:08:39.320 --> 0:08:44.320
+So you can build first compiler RT with LLVM, it's easy.
+
+143
+0:08:46.240 --> 0:08:50.560
+You can directly enable it with LLVM enabled projects
+
+144
+0:08:50.560 --> 0:08:55.480
+when you're building your complete LLVM tool chain.
+
+145
+0:08:55.480 --> 0:08:57.800
+And you can do a separate build as well
+
+146
+0:08:57.800 --> 0:09:00.200
+if you have your LLVM config
+
+147
+0:09:00.200 --> 0:09:02.740
+and use generator of your choice.
+
+148
+0:09:04.560 --> 0:09:06.320
+To enable the sanitizers,
+
+149
+0:09:06.320 --> 0:09:10.760
+so if I'm doing a build along with the complete LLVM tool
+
+150
+0:09:10.760 --> 0:09:14.680
+chain, I just have to use this flag,
+
+151
+0:09:14.680 --> 0:09:17.880
+compiler RT build sanitizers to on.
+
+152
+0:09:17.880 --> 0:09:21.920
+And when you do this, and here I'm using Ninja
+
+153
+0:09:21.920 --> 0:09:26.920
+as a generator, you can see we get a config out of CMake
+
+154
+0:09:27.720 --> 0:09:31.360
+and you can see it is enabling different sanitizers
+
+155
+0:09:31.360 --> 0:09:34.760
+as address sanitizer, leak sanitizers,
+
+156
+0:09:34.760 --> 0:09:37.800
+memory sanitizer, thread and undefined behavior.
+
+157
+0:09:39.480 --> 0:09:42.360
+And same you can do for, and after, sorry,
+
+158
+0:09:42.360 --> 0:09:44.120
+after the installation and build,
+
+159
+0:09:44.120 --> 0:09:46.760
+you can get these set of libraries.
+
+160
+0:09:48.700 --> 0:09:51.520
+You can do the same for the standalone build as well
+
+161
+0:09:51.520 --> 0:09:53.800
+with the similar flag.
+
+162
+0:09:53.800 --> 0:09:55.760
+And this is the config generated
+
+163
+0:09:55.760 --> 0:09:58.740
+when I'm doing a compiler RT standalone build.
+
+164
+0:09:59.960 --> 0:10:04.600
+And then it's also possible to cross compile RT sanitizers.
+
+165
+0:10:04.600 --> 0:10:06.880
+You have to provide a lot of flags
+
+166
+0:10:06.880 --> 0:10:10.200
+and you need to have your arms as well.
+
+167
+0:10:11.040 --> 0:10:13.760
+And I personally don't prefer this way,
+
+168
+0:10:13.760 --> 0:10:16.440
+but there is a talk today in the end from Peter
+
+169
+0:10:17.280 --> 0:10:21.240
+about building embedded tool chain using LLVM.
+
+170
+0:10:22.560 --> 0:10:27.560
+So to make it a bit easier for all the embedded developers,
+
+171
+0:10:28.660 --> 0:10:30.740
+there is a, in Yocto project,
+
+172
+0:10:30.740 --> 0:10:34.400
+there is an open embedded layer called meta-clang.
+
+173
+0:10:34.400 --> 0:10:37.560
+It makes it a bit easy because it provides everything
+
+174
+0:10:37.560 --> 0:10:39.440
+for building your tool chain
+
+175
+0:10:39.440 --> 0:10:42.320
+and you just have to include this layer
+
+176
+0:10:43.840 --> 0:10:47.440
+if people are aware of Yocto builds.
+
+177
+0:10:47.440 --> 0:10:50.080
+And just few configurations are needed.
+
+178
+0:10:50.080 --> 0:10:53.280
+Like you have to enable the SDK,
+
+179
+0:10:53.280 --> 0:10:55.920
+you have to use LLVM run times
+
+180
+0:10:55.920 --> 0:10:58.860
+and then either you can write in your package groups
+
+181
+0:10:58.860 --> 0:11:01.960
+or in local conf to include compiler RT
+
+182
+0:11:01.960 --> 0:11:04.160
+and compiler RT sanitizers.
+
+183
+0:11:04.160 --> 0:11:07.560
+And this actually generates a SDK
+
+184
+0:11:07.560 --> 0:11:10.800
+and it's very easy to distribute this SDK
+
+185
+0:11:10.800 --> 0:11:14.560
+to other developers or like in our case,
+
+186
+0:11:14.560 --> 0:11:18.640
+I used to send it to the application team
+
+187
+0:11:18.640 --> 0:11:20.760
+so that they can use this
+
+188
+0:11:20.760 --> 0:11:24.000
+and the people who are developing C++ code,
+
+189
+0:11:24.000 --> 0:11:25.840
+they can run their code,
+
+190
+0:11:25.840 --> 0:11:29.760
+they can compile their code and run sanitizers on it.
+
+191
+0:11:29.760 --> 0:11:33.960
+So this was actually while contributing to meta-clang,
+
+192
+0:11:33.960 --> 0:11:38.960
+I became more aware about compiler RT sanitizers
+
+193
+0:11:39.040 --> 0:11:43.640
+and also now it's available for ARM32 bit
+
+194
+0:11:43.640 --> 0:11:47.120
+and ARM64 bit and x86 of course.
+
+195
+0:11:47.120 --> 0:11:52.120
+And you can easily test it also on KMU ARM as well,
+
+196
+0:11:52.760 --> 0:11:57.440
+just specifying your sysroot and running your test code
+
+197
+0:11:57.440 --> 0:12:00.760
+to see how it behaves on your actual target.
+
+198
+0:12:00.760 --> 0:12:05.760
+So that was all about what is compiler RT sanitizers,
+
+199
+0:12:06.720 --> 0:12:11.240
+how we build it, but what exactly goes behind the scene.
+
+200
+0:12:12.520 --> 0:12:17.520
+So here I'm using an example of address sanitizer to use
+
+201
+0:12:18.960 --> 0:12:21.360
+and here is a very basic code
+
+202
+0:12:21.360 --> 0:12:24.480
+where we are taking some arguments
+
+203
+0:12:24.480 --> 0:12:27.040
+and converting into integer.
+
+204
+0:12:27.040 --> 0:12:31.760
+But here you can see we are using argument counter
+
+205
+0:12:31.760 --> 0:12:36.760
+and the value for this can be very large as well.
+
+206
+0:12:37.000 --> 0:12:41.880
+So first time when I try to compile it with clang,
+
+207
+0:12:41.880 --> 0:12:46.240
+it compiles and when you run it,
+
+208
+0:12:46.240 --> 0:12:48.640
+after like as you can see easily
+
+209
+0:12:48.640 --> 0:12:50.600
+and it's very easy to spot here,
+
+210
+0:12:50.600 --> 0:12:53.780
+I have defined the size of buffer to be just two.
+
+211
+0:12:53.780 --> 0:12:58.540
+And if I provide input more than two,
+
+212
+0:12:58.540 --> 0:13:01.540
+it should fail actually, that's the case.
+
+213
+0:13:01.540 --> 0:13:05.500
+But it's very, the crooks here is like, it's difficult
+
+214
+0:13:05.500 --> 0:13:08.420
+for some machine it will fail for three
+
+215
+0:13:08.420 --> 0:13:12.900
+and for some machine it will fail with the four input
+
+216
+0:13:12.900 --> 0:13:15.340
+and leads to the segmentation fault
+
+217
+0:13:15.340 --> 0:13:18.480
+and we don't know what happened exactly behind the scene.
+
+218
+0:13:18.480 --> 0:13:22.920
+Second, when you try to build it
+
+219
+0:13:22.920 --> 0:13:26.040
+with address sanitizer enabled
+
+220
+0:13:26.040 --> 0:13:28.020
+or link it with compiler RT
+
+221
+0:13:28.020 --> 0:13:31.380
+and with your address sanitizer flag as well.
+
+222
+0:13:33.160 --> 0:13:35.440
+And the output is actually a bit large,
+
+223
+0:13:35.440 --> 0:13:37.680
+this is the first part of it.
+
+224
+0:13:37.680 --> 0:13:42.680
+So it can easily spot that there was a stack overflow,
+
+225
+0:13:43.160 --> 0:13:46.240
+stack buffer overflow and it also points out
+
+226
+0:13:46.240 --> 0:13:49.200
+if you build it with hyphen G option,
+
+227
+0:13:49.200 --> 0:13:52.160
+it also points out at what line it is failing.
+
+228
+0:13:55.560 --> 0:14:00.560
+But what exactly led to generation of this kind of error.
+
+229
+0:14:00.800 --> 0:14:05.200
+So in very simple term, when address sanitizers,
+
+230
+0:14:05.200 --> 0:14:08.080
+adding sanitizer is like adding an additional code
+
+231
+0:14:08.080 --> 0:14:11.280
+to your actual code to just check
+
+232
+0:14:11.280 --> 0:14:13.920
+when it is going to fail and report the error.
+
+233
+0:14:13.920 --> 0:14:15.520
+So here it looks very easy.
+
+234
+0:14:15.520 --> 0:14:19.000
+Okay, if my buffer size is more than two
+
+235
+0:14:19.000 --> 0:14:22.600
+or sorry, if the input size for the buffer is more than two,
+
+236
+0:14:22.600 --> 0:14:25.000
+just notify it's an error.
+
+237
+0:14:25.000 --> 0:14:27.740
+But behind the scene for address sanitizer,
+
+238
+0:14:27.740 --> 0:14:31.400
+it's much more and it can adopt multiple strategies
+
+239
+0:14:31.400 --> 0:14:32.560
+to implement it.
+
+240
+0:14:33.400 --> 0:14:38.320
+So here address sanitizer uses memory mapping.
+
+241
+0:14:39.520 --> 0:14:42.600
+So memory that should not be accessed
+
+242
+0:14:42.600 --> 0:14:44.960
+is called as poisoned memory.
+
+243
+0:14:44.960 --> 0:14:47.960
+So behind the scene, it's implemented like to check
+
+244
+0:14:47.960 --> 0:14:51.160
+whether this is getting poisoned or not.
+
+245
+0:14:51.160 --> 0:14:53.980
+So here poisoned means either it is referring
+
+246
+0:14:53.980 --> 0:14:58.980
+to some deallocated memory or some already allocated memory
+
+247
+0:15:00.240 --> 0:15:03.760
+or there is getting some overflow or not
+
+248
+0:15:03.760 --> 0:15:05.140
+and just report the error.
+
+249
+0:15:06.080 --> 0:15:10.440
+But there is much more how this memory is mapped.
+
+250
+0:15:10.440 --> 0:15:15.440
+So for any code, any application that you build,
+
+251
+0:15:16.480 --> 0:15:19.480
+the virtual address space is divided
+
+252
+0:15:19.480 --> 0:15:21.000
+into two kind of memories.
+
+253
+0:15:21.000 --> 0:15:24.960
+One is shadow memory and one is application memory.
+
+254
+0:15:24.960 --> 0:15:29.000
+So for address sanitizer, it is more important
+
+255
+0:15:29.000 --> 0:15:32.720
+to implement this is poisoned and report error
+
+256
+0:15:32.720 --> 0:15:34.780
+in a very compact and fast way.
+
+257
+0:15:35.720 --> 0:15:39.720
+Then talking about shadow memory and the application memory.
+
+258
+0:15:39.720 --> 0:15:44.400
+So application memory is the main memory of the code
+
+259
+0:15:44.400 --> 0:15:48.240
+and shadow memory is a copy of application memory,
+
+260
+0:15:48.240 --> 0:15:52.680
+but here eight bytes of your application map memory
+
+261
+0:15:52.680 --> 0:15:55.960
+is mapped as one byte in shadow memory.
+
+262
+0:15:55.960 --> 0:15:59.280
+And when the sanitizer checks,
+
+263
+0:15:59.280 --> 0:16:02.040
+whether this memory is poisoned or not,
+
+264
+0:16:02.040 --> 0:16:04.760
+it is mapped to either zero or one.
+
+265
+0:16:04.760 --> 0:16:08.440
+So here it's a small portion of shadow memory
+
+266
+0:16:08.440 --> 0:16:10.880
+above of our example.
+
+267
+0:16:10.880 --> 0:16:14.760
+And you can see the memory which is accessible
+
+268
+0:16:14.760 --> 0:16:18.600
+and which is in good condition is marked as zero.
+
+269
+0:16:18.600 --> 0:16:23.600
+But here when we are checking the buffer here,
+
+270
+0:16:25.680 --> 0:16:29.680
+you can see after it's marked as the memory
+
+271
+0:16:29.680 --> 0:16:34.000
+which is like more when we are trying to access more
+
+272
+0:16:34.000 --> 0:16:37.680
+than the allocated buffer size, it's marked as one.
+
+273
+0:16:37.680 --> 0:16:41.400
+And these, and here you can see in the square brackets,
+
+274
+0:16:41.400 --> 0:16:45.040
+it is it's marking that hello,
+
+275
+0:16:45.040 --> 0:16:48.080
+this here you are supposed not to access this,
+
+276
+0:16:48.080 --> 0:16:50.680
+it's getting out of the range of the buffer.
+
+277
+0:16:50.680 --> 0:16:53.680
+So that's how this application memory
+
+278
+0:16:53.680 --> 0:16:55.080
+and shadow memory is used.
+
+279
+0:16:55.080 --> 0:17:00.080
+And then you can see here we restrict it as the red zones.
+
+280
+0:17:01.460 --> 0:17:05.520
+So if you have anything greater than these,
+
+281
+0:17:05.520 --> 0:17:07.380
+than the allocated one.
+
+282
+0:17:07.380 --> 0:17:09.660
+So that one gets marked as one
+
+283
+0:17:09.660 --> 0:17:11.800
+and you can see F1, F3 around.
+
+284
+0:17:11.800 --> 0:17:16.600
+And so that's how the address sanitizer works
+
+285
+0:17:16.600 --> 0:17:19.960
+by using this shadow memory and application memory
+
+286
+0:17:19.960 --> 0:17:24.200
+and knowing about your shadow memory.
+
+287
+0:17:24.200 --> 0:17:26.480
+And whenever it spots it's one,
+
+288
+0:17:26.480 --> 0:17:29.280
+then it says, okay, there is a problem.
+
+289
+0:17:29.280 --> 0:17:33.280
+So that's all about the address sanitizer and how it works.
+
+290
+0:17:33.280 --> 0:17:38.280
+So here are my final thoughts about using sanitizers.
+
+291
+0:17:39.860 --> 0:17:44.540
+It's a very great tool to find bugs and memory issues
+
+292
+0:17:44.540 --> 0:17:49.360
+and in a very run in runtime for complex applications.
+
+293
+0:17:49.360 --> 0:17:53.460
+So by using sanitizers, you can improve your development
+
+294
+0:17:53.460 --> 0:17:56.340
+and you can spot the errors very quickly.
+
+295
+0:17:57.180 --> 0:17:59.460
+And since we had a very simple example,
+
+296
+0:17:59.460 --> 0:18:01.840
+but when the code gets more complex,
+
+297
+0:18:01.840 --> 0:18:06.740
+it's more difficult to find what is the problem.
+
+298
+0:18:08.180 --> 0:18:10.860
+And though with the sanitizers,
+
+299
+0:18:10.860 --> 0:18:12.660
+it's more like a tool to check
+
+300
+0:18:12.660 --> 0:18:15.360
+not to be used in your production.
+
+301
+0:18:15.360 --> 0:18:16.900
+It increases the code size,
+
+302
+0:18:16.900 --> 0:18:20.860
+but the sanitizers are comparatively more faster
+
+303
+0:18:20.860 --> 0:18:22.800
+than Valcrant, the existing one.
+
+304
+0:18:23.700 --> 0:18:26.780
+And still there are not all the architectures
+
+305
+0:18:26.780 --> 0:18:28.580
+are supported uniformly.
+
+306
+0:18:28.580 --> 0:18:33.100
+Like for example, for ARM32, we don't have threat sanitizer
+
+307
+0:18:33.100 --> 0:18:35.380
+completely implemented.
+
+308
+0:18:35.380 --> 0:18:39.660
+So I hope we see a better implementation later
+
+309
+0:18:39.660 --> 0:18:41.780
+and it supports threat sanitization
+
+310
+0:18:41.780 --> 0:18:43.860
+on 32-bit machines as well.
+
+311
+0:18:46.060 --> 0:18:46.980
+Questions?
+
+312
+0:18:46.980 --> 0:18:53.980
+Yes, sorry, the question here is like,
+
+313
+0:19:08.140 --> 0:19:11.300
+I'm using the optimization flag
+
+314
+0:19:11.300 --> 0:19:16.300
+for building with address sanitizer enabled.
+
+315
+0:19:16.300 --> 0:19:19.020
+Yes, it can be enabled to up to three as well
+
+316
+0:19:19.020 --> 0:19:21.460
+and you get a similar kind of log.
+
+317
+0:19:36.580 --> 0:19:40.420
+So the question is, where I'm placing the instrumentation
+
+318
+0:19:40.420 --> 0:19:44.740
+to identify whether my buffer is overflowing or not,
+
+319
+0:19:44.740 --> 0:19:46.780
+to use assertion here.
+
+320
+0:19:48.740 --> 0:19:51.060
+I'm not sure I can answer that well,
+
+321
+0:19:51.060 --> 0:19:54.900
+but it's more, the strategy of this one is using more
+
+322
+0:19:54.900 --> 0:19:57.940
+with this memory mapping one.
+
+323
+0:19:57.940 --> 0:20:01.380
+And also here, since this buffer size is very small,
+
+324
+0:20:01.380 --> 0:20:17.420
+so maybe assertion might work here.
+
+325
+0:20:17.420 --> 0:20:24.420
+Okay, thanks.
+
+326
+0:20:40.860 --> 0:20:43.020
+This I'm also not much aware of.
+
+327
+0:20:43.020 --> 0:20:45.660
+So the question is like, if I can sanitize it
+
+328
+0:20:45.660 --> 0:20:48.940
+for a very specific portion of the code, right?
+
+329
+0:20:51.940 --> 0:20:54.860
+Yeah, you can, no, I'm sorry, I'm not much aware of.
+
+330
+0:20:54.860 --> 0:20:59.580
+You can reverse it, you can prevent some specific code
+
+331
+0:20:59.580 --> 0:21:03.260
+from being instrumented, either by annotating the code
+
+332
+0:21:03.260 --> 0:21:05.940
+or by using the blacklist.
+
+333
+0:21:05.940 --> 0:21:08.860
+Hi, yeah, there is this blacklist address sanitizer options
+
+334
+0:21:08.860 --> 0:21:11.060
+as well, yeah.
+
+335
+0:21:11.060 --> 0:21:13.900
+Have you, you say that sanitizers are primarily
+
+336
+0:21:13.900 --> 0:21:16.420
+a development tool, and yes, they mostly are,
+
+337
+0:21:16.420 --> 0:21:19.220
+but have you ever looked into using some of them
+
+338
+0:21:19.220 --> 0:21:22.860
+for actual production executables for hardening?
+
+339
+0:21:22.860 --> 0:21:26.940
+For example, UBSan has a fairly minimal overhead,
+
+340
+0:21:26.940 --> 0:21:29.020
+so it can be used in production,
+
+341
+0:21:29.020 --> 0:21:30.820
+especially if you make it a trap,
+
+342
+0:21:30.820 --> 0:21:35.060
+or if you make it, if you use the minimal runtime,
+
+343
+0:21:35.060 --> 0:21:37.540
+or also there's GWB-asan,
+
+344
+0:21:37.540 --> 0:21:40.180
+which is like a lightweight sampling version
+
+345
+0:21:40.180 --> 0:21:43.580
+of other sanitizers, which can be used in runtime.
+
+346
+0:21:43.580 --> 0:21:46.020
+I think Android is using it actually easily.
+
+347
+0:21:46.020 --> 0:21:49.860
+Okay, so does it support some of the embedded platforms
+
+348
+0:21:49.860 --> 0:21:52.340
+as well, like ARM32 or 64?
+
+349
+0:21:52.340 --> 0:21:55.140
+It supports, I believe it does,
+
+350
+0:21:55.140 --> 0:21:58.900
+well, UBSan works pretty much everywhere, almost everywhere.
+
+351
+0:21:58.900 --> 0:22:02.700
+GWB-asan works, I think, almost everywhere,
+
+352
+0:22:02.700 --> 0:22:07.700
+but it's also dependent on external function
+
+353
+0:22:07.700 --> 0:22:12.700
+for unwinding, so it might not be great in all scenarios.
+
+354
+0:22:13.300 --> 0:22:14.580
+It's really dependent.
+
+355
+0:22:14.580 --> 0:22:15.420
+Okay.
+
+356
+0:22:15.420 --> 0:22:17.020
+But we have to show the first preview.
+
+357
+0:22:17.020 --> 0:22:18.860
+Yes.
+
+358
+0:22:18.860 --> 0:22:23.340
+I was wondering if you can use this for kernel
+
+359
+0:22:23.340 --> 0:22:25.340
+and ring zero code as well.
+
+360
+0:22:25.340 --> 0:22:27.860
+Yeah, you can, but like there's like,
+
+361
+0:22:27.860 --> 0:22:29.020
+But there's a,
+
+362
+0:22:29.020 --> 0:22:32.380
+Why there are, if you provide it in the kernel,
+
+363
+0:22:32.380 --> 0:22:37.380
+you don't have like the runtime is not in the MPM,
+
+364
+0:22:37.860 --> 0:22:41.540
+it's actually open by the kernel and it's in binary.
+
+365
+0:22:41.540 --> 0:22:43.100
+You insert the checks,
+
+366
+0:22:43.100 --> 0:22:45.980
+but the hooks themselves are implemented in the kernel.
+
+367
+0:22:45.980 --> 0:22:50.460
+Well, some sanitizers don't require any runtime, so.
+
+368
+0:22:50.460 --> 0:22:53.100
+So, for instance, you need this implementation.
+
+369
+0:22:53.100 --> 0:22:55.620
+Yeah, but there's a KA center.
+
+370
+0:22:55.620 --> 0:22:59.540
+Yeah, you can use kernel address sanitizer for it, maybe.
+
+371
+0:22:59.540 --> 0:23:02.980
+But like, it's on the phone for it, like the,
+
+372
+0:23:02.980 --> 0:23:05.260
+it's on best point, like the,
+
+373
+0:23:05.260 --> 0:23:08.580
+I think it's just a level implementation of the stuff.
+
+374
+0:23:08.580 --> 0:23:12.060
+There's other sanitizers in kernel which are implemented
+
+375
+0:23:12.060 --> 0:23:14.700
+this way, I think that it's KCFI and,
+
+376
+0:23:17.020 --> 0:23:17.860
+yeah.
+
+377
+0:23:19.940 --> 0:23:20.780
+Yes.
+
+378
+0:23:20.780 --> 0:23:21.620
+All right.
+
+379
+0:23:21.620 --> 0:23:24.500
+Do you know where the code lives currently
+
+380
+0:23:24.500 --> 0:23:26.780
+that does the hooking to malloc and free,
+
+381
+0:23:26.780 --> 0:23:28.460
+like the C library?
+
+382
+0:23:28.460 --> 0:23:32.300
+Like how does the interaction with the C library work?
+
+383
+0:23:32.300 --> 0:23:33.140
+Do you know?
+
+384
+0:23:33.140 --> 0:23:35.020
+Because like I could have, for example,
+
+385
+0:23:35.020 --> 0:23:37.620
+have a muscle instead of a chili C library
+
+386
+0:23:37.620 --> 0:23:40.300
+and I guess the code has to be adapted somehow
+
+387
+0:23:40.300 --> 0:23:43.060
+or there must be some book infrastructure.
+
+388
+0:23:43.060 --> 0:23:45.220
+So do you know how that works and where the code lives
+
+389
+0:23:45.220 --> 0:23:48.300
+that books malloc and free, for example?
+
+390
+0:23:49.180 --> 0:23:51.140
+Is it in this compiler RT library?
+
+391
+0:23:51.140 --> 0:23:53.900
+It's in compiler RT built-ins, if I'm right.
+
+392
+0:23:55.060 --> 0:23:56.420
+It's a great point.
+
+393
+0:23:56.420 --> 0:24:00.980
+So if you change the version of library you have,
+
+394
+0:24:00.980 --> 0:24:02.980
+you need a different kind of sanitizer
+
+395
+0:24:02.980 --> 0:24:05.380
+to support all of these things.
+
+396
+0:24:05.380 --> 0:24:06.220
+It's horrible.
+
+397
+0:24:06.220 --> 0:24:07.580
+It's essentially a shared library.
+
+398
+0:24:07.580 --> 0:24:10.660
+So it's basically just intercepting using.
+
+399
+0:24:10.660 --> 0:24:12.540
+Yeah, the FM runtime, I have to input
+
+400
+0:24:12.540 --> 0:24:14.300
+that for malloc and free.
+
+401
+0:24:14.300 --> 0:24:17.100
+Okay, that's just so it acts outside of the C library.
+
+402
+0:24:17.100 --> 0:24:17.940
+Yeah.
+
+403
+0:24:17.940 --> 0:24:19.220
+So I could write my own C of library
+
+404
+0:24:19.220 --> 0:24:20.460
+and it would still work.
+
+405
+0:24:20.460 --> 0:24:21.620
+As long as it's dynamically,
+
+406
+0:24:21.620 --> 0:24:22.740
+I mean this is one of the problems
+
+407
+0:24:22.740 --> 0:24:24.740
+that sanitizers have at the moment.
+
+408
+0:24:24.740 --> 0:24:27.220
+Well, for ASAN, yes, but for example,
+
+409
+0:24:27.220 --> 0:24:29.460
+for L-san, for leak sanitizer,
+
+410
+0:24:29.460 --> 0:24:31.300
+which is enabled by ASAN,
+
+411
+0:24:31.300 --> 0:24:33.980
+you need to actually, you need to be aware of things
+
+412
+0:24:33.980 --> 0:24:35.900
+like the TLS layout and so on,
+
+413
+0:24:35.900 --> 0:24:38.580
+which needs to have some support.
+
+414
+0:24:38.580 --> 0:24:40.980
+But the runtime in LLVM definitely
+
+415
+0:24:40.980 --> 0:24:42.860
+implements both GLF2 and malloc.
+
+416
+0:24:42.860 --> 0:24:43.700
+Oh, good.
+
+417
+0:24:44.940 --> 0:24:46.060
+Yes.
+
+418
+0:24:46.060 --> 0:24:50.620
+Are the sanitizers shared between GCC and LLVM
+
+419
+0:24:50.620 --> 0:24:53.220
+or does it have its own implementation?
+
+420
+0:24:53.220 --> 0:24:54.060
+They are.
+
+421
+0:24:54.060 --> 0:24:54.900
+They have.
+
+422
+0:24:54.900 --> 0:24:55.900
+They are shared.
+
+423
+0:24:55.900 --> 0:24:56.740
+Sorry.
+
+424
+0:24:56.740 --> 0:24:57.580
+Sorry.
+
+425
+0:24:57.580 --> 0:25:00.580
+Yeah, they're shared, yes.
+
+426
+0:25:00.580 --> 0:25:03.860
+I noticed that one shadow byte corresponds
+
+427
+0:25:03.860 --> 0:25:05.460
+to eight actual bytes.
+
+428
+0:25:05.460 --> 0:25:08.420
+However, considering that there are special values for it,
+
+429
+0:25:08.420 --> 0:25:10.420
+does it mean that there could be situations
+
+430
+0:25:10.420 --> 0:25:11.580
+where there could be some byte
+
+431
+0:25:11.580 --> 0:25:14.220
+which are not protected necessarily by this?
+
+432
+0:25:14.220 --> 0:25:16.140
+Yeah, there can be some cases
+
+433
+0:25:16.140 --> 0:25:19.180
+where you can call it as a false, positive kind of thing
+
+434
+0:25:19.180 --> 0:25:22.940
+or sometimes it is checking very much in the end.
+
+435
+0:25:22.940 --> 0:25:25.060
+So it was a very small example,
+
+436
+0:25:25.060 --> 0:25:30.060
+but it can happen that you get these square brackets
+
+437
+0:25:30.620 --> 0:25:33.820
+at the very end and it's an overrun case.
+
+438
+0:25:33.820 --> 0:25:35.660
+So that can happen, yes.
+
+439
+0:25:35.660 --> 0:25:38.260
+Okay, so there are the situations
+
+440
+0:25:38.260 --> 0:25:40.300
+where the address sanitizer is just getting it wrong
+
+441
+0:25:40.300 --> 0:25:42.900
+because of the fact is actually valid code,
+
+442
+0:25:42.900 --> 0:25:45.860
+but there are just limitations to the parallel byte system.
+
+443
+0:25:45.860 --> 0:25:46.700
+Yes.
+
+444
+0:25:46.700 --> 0:25:47.540
+Good, okay.
+
+445
+0:25:47.540 --> 0:25:48.380
+Thanks.
+
+446
+0:25:49.300 --> 0:25:50.140
+Yes.
+
+447
+0:25:50.140 --> 0:25:54.220
+So could you get a false negative in some sense
+
+448
+0:25:54.220 --> 0:25:59.220
+in the sense that if you have two almost adjacent blocks
+
+449
+0:25:59.820 --> 0:26:02.500
+of allocated application memory
+
+450
+0:26:03.620 --> 0:26:05.980
+and you access a pointer from one to the other,
+
+451
+0:26:05.980 --> 0:26:09.020
+could you get a false negative in this sense?
+
+452
+0:26:09.020 --> 0:26:10.980
+So because that would not be a point
+
+453
+0:26:10.980 --> 0:26:12.740
+and it would still be part of the application,
+
+454
+0:26:12.740 --> 0:26:17.740
+but for example, what an address sanitizer has there?
+
+455
+0:26:17.740 --> 0:26:22.740
+Yeah, it can be, like it can be a false positive case,
+
+456
+0:26:24.620 --> 0:26:25.460
+maybe.
+
+457
+0:26:25.460 --> 0:26:28.060
+I think the valid negative is like if A-Fam
+
+458
+0:26:28.060 --> 0:26:29.900
+will not catch it.
+
+459
+0:26:29.900 --> 0:26:31.580
+The other case puts red zone.
+
+460
+0:26:31.580 --> 0:26:32.420
+Yes.
+
+461
+0:26:32.420 --> 0:26:34.580
+It makes it harder to dig up.
+
+462
+0:26:34.580 --> 0:26:35.420
+Okay.
+
+463
+0:26:38.700 --> 0:26:39.900
+Yeah, it's one question,
+
+464
+0:26:39.900 --> 0:26:42.020
+I think it was already partially answered before,
+
+465
+0:26:42.020 --> 0:26:44.100
+but I'm not sure, so I'm just gonna ask it.
+
+466
+0:26:44.100 --> 0:26:46.500
+So for example, I'm also working on embeddits
+
+467
+0:26:46.500 --> 0:26:48.780
+in an embedded scenario and we don't use,
+
+468
+0:26:48.780 --> 0:26:51.540
+I think we don't use gilets or muscle,
+
+469
+0:26:51.540 --> 0:26:54.620
+like we have our own set of proteins for malochic free.
+
+470
+0:26:54.620 --> 0:26:55.460
+Yes.
+
+471
+0:26:55.460 --> 0:26:56.620
+Would it also work in that case
+
+472
+0:26:56.620 --> 0:26:59.780
+or is that then something that you would need to,
+
+473
+0:26:59.780 --> 0:27:01.620
+are there any more requirements
+
+474
+0:27:01.620 --> 0:27:04.220
+before you can use these sanitizers on both devices?
+
+475
+0:27:05.780 --> 0:27:06.820
+For my experience,
+
+476
+0:27:06.820 --> 0:27:10.620
+I have been just using this meta clang layer included.
+
+477
+0:27:10.620 --> 0:27:15.380
+And for testing with like for just doing on the SDKs
+
+478
+0:27:15.380 --> 0:27:18.740
+and emulator, it was perfectly fine.
+
+479
+0:27:18.740 --> 0:27:20.820
+So not on the actual devices
+
+480
+0:27:20.820 --> 0:27:23.580
+because it's just meant for testing.
+
+481
+0:27:23.580 --> 0:27:24.980
+Because you need virtual memory
+
+482
+0:27:24.980 --> 0:27:26.980
+at the moment to set up the shuttle.
+
+483
+0:27:26.980 --> 0:27:30.780
+So you can in theory do a bit of fixed offset,
+
+484
+0:27:30.780 --> 0:27:32.780
+but not in a full point.
+
+485
+0:27:35.260 --> 0:27:36.980
+Is the kernel address the driver
+
+486
+0:27:36.980 --> 0:27:38.980
+that hard codes to you?
+
+487
+0:27:38.980 --> 0:27:40.820
+I don't know.
+
+488
+0:27:40.820 --> 0:27:42.820
+You have to write your own
+
+489
+0:27:42.820 --> 0:27:45.820
+set of memory allocation.
+
+490
+0:28:02.820 --> 0:28:04.140
+All right.
+
+491
+0:28:04.140 --> 0:28:04.980
+Thank you, Manja.
+
+492
+0:28:04.980 --> 0:28:05.820
+Thank you.
+
+493
+0:28:05.820 --> 0:28:12.820
+Thank you.
+

@@ -1,0 +1,1244 @@
+1
+0:00:00.000 --> 0:00:14.200
+All right. Thanks everyone for coming so early. I admire your... I'm very impressed to tee
+
+2
+0:00:14.200 --> 0:00:22.280
+up this early in the morning. I'm David Llewelyn-Jones. I work for a company called Yolo O in Finland.
+
+3
+0:00:22.280 --> 0:00:29.980
+We make an operating system called Selfish OS for mobile phones like this one. And today
+
+4
+0:00:29.980 --> 0:00:36.000
+I'm going to talk to you about COVID exposure notification. It's actually a project that
+
+5
+0:00:36.000 --> 0:00:40.800
+was done... It was a personal project rather than something related to the company. But
+
+6
+0:00:40.800 --> 0:00:44.640
+it was something that relates to Selfish OS. So hopefully it all kind of comes together
+
+7
+0:00:44.640 --> 0:00:54.880
+in some kind of sensible way. Okay. So exposure notification. It's almost certainly something
+
+8
+0:00:54.880 --> 0:01:01.400
+that you've all come across individually. Essentially it's the apps that people ran on their phones
+
+9
+0:01:01.400 --> 0:01:06.960
+that did contact tracing. They would give you an alert if you had been in contact with
+
+10
+0:01:06.960 --> 0:01:14.000
+someone who had a COVID diagnosis. And I guess they were a big deal during COVID. I guess
+
+11
+0:01:14.000 --> 0:01:21.360
+probably they're less of a big deal now. Although I track the numbers on my phone while I'm
+
+12
+0:01:21.360 --> 0:01:27.920
+at FOSDEM and there's still a lot of people at FOSDEM using them. I can tell that. And
+
+13
+0:01:27.920 --> 0:01:34.760
+the idea about this talk is that I want to talk about a very particular implementation
+
+14
+0:01:34.760 --> 0:01:40.120
+of it. And that's the Google Apple Exposure Notification Protocol, which was released
+
+15
+0:01:40.120 --> 0:01:49.920
+I guess in April 2020. And it was an implementation that went out to Android devices and iPhones
+
+16
+0:01:49.920 --> 0:01:56.480
+in order to basically provide the services needed in order to allow countries or medical
+
+17
+0:01:56.480 --> 0:02:02.440
+organisations to build apps on top of it in order to perform this contact tracing process.
+
+18
+0:02:02.440 --> 0:02:06.440
+And initially when it was released it was called, as you can see here, the contact tracing
+
+19
+0:02:06.440 --> 0:02:10.960
+API. Later on I guess that name was a little bit ambiguous, a little bit confusing. They
+
+20
+0:02:10.960 --> 0:02:16.040
+changed it to the Google and Apple Exposure Notification API. I guess when people think
+
+21
+0:02:16.040 --> 0:02:19.440
+about contact tracing they think about maybe people phoning them up and asking them who
+
+22
+0:02:19.440 --> 0:02:27.280
+they've been close to. But it is all the same thing. And this was the original specification.
+
+23
+0:02:27.280 --> 0:02:34.160
+Like I say, the original one was released in April 2020. And it's made up of these three
+
+24
+0:02:34.160 --> 0:02:38.600
+documents. It was initially, this was version 1.1. I think they're up to version 1.4 or
+
+25
+0:02:38.600 --> 0:02:42.840
+later now. There's been several versions that have come out since. So they've refined the
+
+26
+0:02:42.840 --> 0:02:49.280
+protocol. And I guess it's worth putting it in a little bit of context. Back then when
+
+27
+0:02:49.280 --> 0:02:56.400
+this was released there was no vaccine. So at that point in time people thought that
+
+28
+0:02:56.400 --> 0:03:01.880
+the World Health Organisation predicted that vaccine was about 16 months away but no one
+
+29
+0:03:01.880 --> 0:03:07.800
+was entirely sure. In practice the first vaccine was actually approved about nine months after
+
+30
+0:03:07.800 --> 0:03:13.440
+this. But you can imagine that at this point in time people were very worried about COVID.
+
+31
+0:03:13.440 --> 0:03:17.140
+They were concerned about how it was going to be dealt with. And this was seen as kind
+
+32
+0:03:17.140 --> 0:03:24.480
+of like a kind of one really quite exciting way to address the problem given that there
+
+33
+0:03:24.480 --> 0:03:30.400
+were so few tools at that time to deal with things. So let me just talk about these three
+
+34
+0:03:30.400 --> 0:03:33.720
+documents. The first one on the left here is the Bluetooth specification. So it's made
+
+35
+0:03:33.720 --> 0:03:38.920
+up of three parts. The Bluetooth specification, I'll talk about how it works in practice in
+
+36
+0:03:38.920 --> 0:03:43.880
+a second or two. But it's sending beacons using Bluetooth from your phone. So the Bluetooth
+
+37
+0:03:43.880 --> 0:03:52.440
+specification tells you essentially how to pack the data into a Bluetooth beacon and
+
+38
+0:03:52.440 --> 0:03:57.840
+also other details like for example for privacy reasons the information in the beacon changes
+
+39
+0:03:57.840 --> 0:04:02.920
+periodically and you have to change the MAC address of your phone in sequence with that
+
+40
+0:04:02.920 --> 0:04:07.440
+in order to avoid privacy problems coming up. So that's that part. There's a cryptography
+
+41
+0:04:07.440 --> 0:04:13.960
+specification because the data that is sent in the beacons is cryptographically I guess
+
+42
+0:04:13.960 --> 0:04:19.720
+hidden in order for privacy reasons. And then finally there's the framework documentation
+
+43
+0:04:19.720 --> 0:04:27.440
+which is the API which is really describing how organizations can make use of these tools.
+
+44
+0:04:27.440 --> 0:04:32.680
+And I guess another important point about it is that there are two parts to the process.
+
+45
+0:04:32.680 --> 0:04:38.120
+So Google and Apple released this API for all phones but that's actually only half of
+
+46
+0:04:38.120 --> 0:04:42.640
+it. That sends out the beacons. But as those beacons go around eventually you have to do
+
+47
+0:04:42.640 --> 0:04:47.280
+something with that data that's being sent. And for that you needed an app that was going
+
+48
+0:04:47.280 --> 0:04:52.960
+to be written by a government organization, a government level organization, like it could
+
+49
+0:04:52.960 --> 0:04:59.080
+be a health organization. And Google and Apple had nothing to do with that. They said you
+
+50
+0:04:59.080 --> 0:05:04.920
+know you've got to write that part. We'll just give you this piece here. And the project
+
+51
+0:05:04.920 --> 0:05:09.080
+that I'm essentially talking about is about a reimplementation of this for Salesforce OS.
+
+52
+0:05:09.080 --> 0:05:12.640
+And so of course we had to also deal with those two parts separately. So this is only
+
+53
+0:05:12.640 --> 0:05:16.680
+one part of it. All right. So one of the nice things about this protocol is it's actually
+
+54
+0:05:16.680 --> 0:05:20.920
+heavily privacy focused. So you can imagine also at that time there was a lot of concern
+
+55
+0:05:20.920 --> 0:05:24.720
+about the fact that you're sending beacons out on your mobile phone. There are privacy
+
+56
+0:05:24.720 --> 0:05:29.200
+concerns about that. And the protocol tries to address that in a very careful way. And
+
+57
+0:05:29.200 --> 0:05:34.400
+that's actually rather a nice feature about it. All right. So when it was released this
+
+58
+0:05:34.400 --> 0:05:40.560
+is actually a slide from Google and Apple. I did not draw these pictures. And this basically
+
+59
+0:05:40.560 --> 0:05:49.440
+describes how it works. So very briefly, Alice and Bob wandering around the world, they have
+
+60
+0:05:49.440 --> 0:05:53.960
+the app installed on their device sending out beacons. When they get into close contact
+
+61
+0:05:53.960 --> 0:05:58.760
+with each other, their phones are communicating via Bluetooth. Well, they're not exactly communicating.
+
+62
+0:05:58.760 --> 0:06:02.960
+They're listening for these beacons and they're storing the beacons that they hear. OK. So
+
+63
+0:06:02.960 --> 0:06:07.240
+that's that's step one. So when they get close to each other, Bob's beacons get stored on
+
+64
+0:06:07.240 --> 0:06:16.840
+Alice's phone. Later on, Bob turns out to have COVID and he gets a positive diagnosis.
+
+65
+0:06:16.840 --> 0:06:23.920
+And he basically goes to his doctor. He gets an official diagnosis. And he puts that information
+
+66
+0:06:23.920 --> 0:06:30.920
+into the app. And he voluntarily uploads data about his beacons to some cloud server that's
+
+67
+0:06:30.920 --> 0:06:37.160
+run by a government or health authority. And he uploads 14 days worth of his beacons. So
+
+68
+0:06:37.160 --> 0:06:42.200
+in practice, these beacons are actually generated using a cryptographic process. So you don't
+
+69
+0:06:42.200 --> 0:06:47.320
+have to store on your phone 14 days worth. You just store essentially the seed that generates
+
+70
+0:06:47.320 --> 0:06:53.440
+them. But they change frequently. So they change between every 10 and 20 minutes. It's
+
+71
+0:06:53.440 --> 0:06:57.840
+actually a random interval somewhere between those two. In order to prevent people from
+
+72
+0:06:57.840 --> 0:07:02.120
+tracking you, they are unlinkable. So when they change, you can't link one from the other.
+
+73
+0:07:02.120 --> 0:07:07.160
+And that means that there's a limit to how far you can track people. But Bob can regenerate
+
+74
+0:07:07.160 --> 0:07:13.560
+those keys to upload to the server. Alice just gets random, essentially random numbers.
+
+75
+0:07:13.560 --> 0:07:19.520
+She can't tell what those numbers are essentially or what they mean. So then later on, so I
+
+76
+0:07:19.520 --> 0:07:23.400
+guess the next day. So this happens later. But then the next day or later on that day,
+
+77
+0:07:23.400 --> 0:07:27.960
+the keys get uploaded to the server and the server then dumps all of the keys that it's
+
+78
+0:07:27.960 --> 0:07:32.600
+received, received back to every single device out there. It downloads these keys to all of
+
+79
+0:07:32.600 --> 0:07:36.840
+their phones, to everyone's phones. So it downloads them to Alice's phone. Alice then
+
+80
+0:07:36.840 --> 0:07:42.840
+Alice's phone then matches them up with the keys that she captured along the way. And
+
+81
+0:07:42.840 --> 0:07:47.980
+she then knows that she was in contact with someone who has a positive diagnosis for COVID.
+
+82
+0:07:47.980 --> 0:07:52.360
+She gets an alert on her app and then her life is held for two weeks. That's basically
+
+83
+0:07:52.360 --> 0:07:58.640
+the process. She has to isolate and go through all of the steps that you have to go through.
+
+84
+0:07:58.640 --> 0:08:09.520
+We don't know whether Alice has COVID or not, the idea is she might have. So at the time
+
+85
+0:08:09.520 --> 0:08:12.860
+it was a kind of a big deal, like I said, because it was seen as a kind of a white horse
+
+86
+0:08:12.860 --> 0:08:16.400
+to get us out of the problem of COVID. At that time, everyone was focused on this thing
+
+87
+0:08:16.400 --> 0:08:21.400
+called the R number, where the idea being that the R number was the number of people
+
+88
+0:08:21.400 --> 0:08:25.120
+you essentially go on to reinfect after you have COVID. And the objective was to keep
+
+89
+0:08:25.120 --> 0:08:29.340
+that down. If the R number was above one, there was an exponential growth in the number
+
+90
+0:08:29.340 --> 0:08:33.440
+of people that would have COVID. If it was below one, then it would be reducing numbers.
+
+91
+0:08:33.440 --> 0:08:37.640
+And the aim of all of this process was to keep people isolated if they might have COVID
+
+92
+0:08:37.640 --> 0:08:45.040
+in order to reduce that R number and prevent it from spreading. Google and Apple came out
+
+93
+0:08:45.040 --> 0:08:48.660
+with this protocol because they immediately identified that there were going to be serious
+
+94
+0:08:48.660 --> 0:08:57.120
+risks involved in tracking people with their mobile phone to do this stuff. So they knew,
+
+95
+0:08:57.120 --> 0:09:00.520
+for example, that there were privacy risks associated with it. They knew that if they
+
+96
+0:09:00.520 --> 0:09:04.120
+let governments go ahead and just do it, they would just collect everyone's data, was the
+
+97
+0:09:04.120 --> 0:09:08.080
+concern. Or some of them might do. Maybe not all of them, but some of them might. They
+
+98
+0:09:08.080 --> 0:09:11.680
+also knew that sending out Bluetooth beacons... Sorry, you have a question.
+
+99
+0:09:11.680 --> 0:09:18.680
+Sorry, if Alice receives keys from infected people, can she not match back with the time,
+
+100
+0:09:18.680 --> 0:09:25.680
+relative time she got the re-elected key? So she knows that the key is the one that she
+
+101
+0:09:25.680 --> 0:09:32.920
+found two days ago, and two days ago was the time she met Bob. So is there a problem?
+
+102
+0:09:32.920 --> 0:09:38.240
+So I guess I should make clear. So I mean, there are privacy controls in this, but they're
+
+103
+0:09:38.240 --> 0:09:44.120
+not complete. And the idea is that essentially at the point when you upload your keys, you've
+
+104
+0:09:44.120 --> 0:09:51.640
+got your diagnosis, that's essentially when some of your privacy is lost. But you voluntarily
+
+105
+0:09:51.640 --> 0:09:57.200
+choose to do that. That doesn't happen automatically. Does that make sense? Okay. But it's a good
+
+106
+0:09:57.200 --> 0:10:02.560
+point. So yes, but Google and Apple were concerned about the privacy implications because it
+
+107
+0:10:02.560 --> 0:10:08.200
+reflects badly on their systems, if their phones are doing this stuff. Also, the power
+
+108
+0:10:08.200 --> 0:10:13.160
+consumption is a problem, so they didn't want organizations to deploy apps that would have
+
+109
+0:10:13.160 --> 0:10:17.360
+problems in terms of battery on their phone. And they also wanted it to be effective, because
+
+110
+0:10:17.360 --> 0:10:20.680
+if it's not effective, that also reflects badly on them. So they identified that there
+
+111
+0:10:20.680 --> 0:10:25.560
+were all these risks that they wanted to avoid. And even at that time, the APIs that Google
+
+112
+0:10:25.560 --> 0:10:30.200
+and Apple provide prevented people from doing this kind of stuff for precisely those reasons.
+
+113
+0:10:30.200 --> 0:10:33.040
+I mean, it was nothing to do with COVID. I mean, they've always just prevented you from
+
+114
+0:10:33.040 --> 0:10:37.960
+sending out beacons and collecting beacons like this in a sensible way. Primarily for
+
+115
+0:10:37.960 --> 0:10:41.520
+power consumption reasons, right? They don't want people draining the battery of the phone
+
+116
+0:10:41.520 --> 0:10:51.200
+to do that. So my concern as a YOLO employee was that, well, Google and Apple have released
+
+117
+0:10:51.200 --> 0:10:56.000
+this stuff. It's probably going to get quite popular. And I didn't want selfish users who
+
+118
+0:10:56.000 --> 0:11:00.440
+are using an alternative operating system, which is not Android or iOS, to essentially
+
+119
+0:11:00.440 --> 0:11:04.360
+get sidelined by this process and be left in a situation where they can't basically
+
+120
+0:11:04.360 --> 0:11:11.280
+participate in this scheme. So the objective then was to create an open source implementation
+
+121
+0:11:11.280 --> 0:11:16.360
+that could be used on other sorts of phones. So this is selfish. Selfish OS is a version
+
+122
+0:11:16.360 --> 0:11:25.360
+of Linux, it's a Linux distribution that has a Qt UI layer on top of it. And it is sold
+
+123
+0:11:25.360 --> 0:11:30.800
+by, well, it's released by YOLO. And then there is also a paid for license that you
+
+124
+0:11:30.800 --> 0:11:36.880
+can get for it to get additions on top of that. So yeah, the idea was to write an application
+
+125
+0:11:36.880 --> 0:11:45.720
+that essentially mimicked that functionality. And so this was the app that myself and Oscar
+
+126
+0:11:45.720 --> 0:11:50.680
+Roseler, I don't know if Oscar is here. Is Oscar in there? I guess not. He said he might
+
+127
+0:11:50.680 --> 0:11:55.880
+turn up, but I guess he's not here at the moment. So we developed this together as a
+
+128
+0:11:55.880 --> 0:12:01.000
+kind of a personal project. And you can see here's the process. This was like the first
+
+129
+0:12:01.000 --> 0:12:05.520
+time that we actually got beacons appearing on the device. So that was kind of an exciting
+
+130
+0:12:05.520 --> 0:12:10.720
+moment. And there are, I guess, several steps. There's the collecting beacons, there's sending
+
+131
+0:12:10.720 --> 0:12:16.200
+beacons, and there's also uploading your data if you get a positive diagnosis. So we implemented
+
+132
+0:12:16.200 --> 0:12:20.400
+all those parts. And we tried to implement it in the same way that the Google and Apple
+
+133
+0:12:20.400 --> 0:12:24.160
+did in terms of structure. So you have a service underneath that sends out these beacons. And
+
+134
+0:12:24.160 --> 0:12:28.200
+we had a separate app, which was the app that was the equivalent to the app that had to
+
+135
+0:12:28.200 --> 0:12:32.880
+be developed by governments. And in theory, other people could have developed other apps
+
+136
+0:12:32.880 --> 0:12:37.720
+on top of the service. I don't think that ever happened. We only implemented one version.
+
+137
+0:12:37.720 --> 0:12:42.280
+And the version we implemented was the COVID warn app, which was Germany's implementation.
+
+138
+0:12:42.280 --> 0:12:47.520
+And the reason we did that was because it was both very early in the process in terms
+
+139
+0:12:47.520 --> 0:12:51.800
+of being deployed. But it was also incredibly open. It was an open source deployment. And
+
+140
+0:12:51.800 --> 0:12:58.920
+they were really committed to doing it as an open source project. Not just an open source
+
+141
+0:12:58.920 --> 0:13:04.480
+chunk of code, but the development model was also supposed to be open. It was actually
+
+142
+0:13:04.480 --> 0:13:09.040
+developed by SAP and Deutsche Telekom. I think my understanding is that SAP did all the code
+
+143
+0:13:09.040 --> 0:13:13.560
+development. Deutsche Telekom provided the infrastructure for it, the back end service
+
+144
+0:13:13.560 --> 0:13:20.760
+infrastructure. So like I say, we did this independently of Yola. For those interested,
+
+145
+0:13:20.760 --> 0:13:25.720
+it was Qt based. It used Bluetooth for the Bluetooth stack and open SSL for the crypto
+
+146
+0:13:25.720 --> 0:13:33.720
+stuff. And this was the timeline, essentially, that we worked to. We didn't work to that
+
+147
+0:13:33.720 --> 0:13:38.240
+we ended up with, I guess. So on the 10th of April, that's when the Google Apple specs
+
+148
+0:13:38.240 --> 0:13:43.640
+first came out. We released our first version implementation of those specs on the 19th.
+
+149
+0:13:43.640 --> 0:13:48.880
+So that was quite soon afterwards. Then the COVID warn app from Germany came out on the
+
+150
+0:13:48.880 --> 0:13:54.040
+16th of June. And then on the 30th of June, so quite a few weeks later, but we got out
+
+151
+0:13:54.040 --> 0:14:02.080
+our first app that had equivalent functionality. So we were pretty happy with that. We thought
+
+152
+0:14:02.080 --> 0:14:08.080
+that was kind of could be considered a success. But it was only possible because the specifications
+
+153
+0:14:08.080 --> 0:14:11.600
+that Google and Apple rolled out were very good. They were clear specifications that
+
+154
+0:14:11.600 --> 0:14:19.480
+you could re implement. And the COVID warn app team also did a lot of good work in releasing
+
+155
+0:14:19.480 --> 0:14:24.920
+source code very early. They had a huge amount of documentation that was all on GitHub. They
+
+156
+0:14:24.920 --> 0:14:35.880
+even had a, I guess, a CCC evaluation of the project in terms of its privacy. So they were
+
+157
+0:14:35.880 --> 0:14:42.960
+really quite committed to being open with their stuff. In practice, what we found was,
+
+158
+0:14:42.960 --> 0:14:51.960
+so they released some reference versions of the servers. And we found that really helpful.
+
+159
+0:14:51.960 --> 0:14:57.520
+That was really important. They also released the source code for their app that we re implemented.
+
+160
+0:14:57.520 --> 0:15:00.760
+We actually ultimately found that that was not so useful. It was useful for some edge
+
+161
+0:15:00.760 --> 0:15:09.760
+cases, but really it was a server deployment that was really helpful for us. So I guess
+
+162
+0:15:09.760 --> 0:15:14.040
+the real reason that I wanted to talk today was to talk about our experience working with
+
+163
+0:15:14.040 --> 0:15:20.440
+these companies as small developers, as independent developers. And I guess it was very much as
+
+164
+0:15:20.440 --> 0:15:24.480
+you might expect in terms of Google and Apple. They produce, I mean, they re phenomenal at
+
+165
+0:15:24.480 --> 0:15:27.800
+producing good specifications and good APIs. That s what they do. That s their bread and
+
+166
+0:15:27.800 --> 0:15:32.920
+butter. They re absolutely phenomenal at it. But zero engagement. So we tried to contact
+
+167
+0:15:32.920 --> 0:15:38.680
+them and talk to them about their stuff to try and get information or to get help. Nothing
+
+168
+0:15:38.680 --> 0:15:42.720
+at all. Which is, I guess, not surprising, right? They re a massive company. There s
+
+169
+0:15:42.720 --> 0:15:50.080
+no reason why particularly they would. They promised test data to test stuff against and
+
+170
+0:15:50.080 --> 0:15:55.640
+that never materialized. So there were also some bumps in the road for us. And although
+
+171
+0:15:55.640 --> 0:16:00.360
+they did release the source code, they released the source code for an app, for a reference
+
+172
+0:16:00.360 --> 0:16:04.160
+app quite early, but they didn t release the source code for the underlying system, the
+
+173
+0:16:04.160 --> 0:16:11.760
+Bluetooth system, until somewhat later. Until I guess that was late in July. So for us that
+
+174
+0:16:11.760 --> 0:16:17.320
+was already too late. So working with them, like I say, there were good points, but they
+
+175
+0:16:17.320 --> 0:16:24.680
+were not really having an open source development model. For SAP, working with the SAP code was
+
+176
+0:16:24.680 --> 0:16:30.640
+a little bit different. So this is essentially the SAP implementation that they developed
+
+177
+0:16:30.640 --> 0:16:36.880
+on top of the Google Apple notification protocol. So this is the app and this is the server
+
+178
+0:16:36.880 --> 0:16:43.480
+backend on the left-hand side. And the main parts of it are this verification server and
+
+179
+0:16:43.480 --> 0:16:47.320
+from our point of view, in the Corona Warn app server. So essentially what they do, you
+
+180
+0:16:47.320 --> 0:16:50.240
+have to have a download server to download all of these keys that are going to Alice
+
+181
+0:16:50.240 --> 0:16:56.240
+s phone and to everybody s phone. That happened in the Corona Warn app server. You have to
+
+182
+0:16:56.240 --> 0:17:02.520
+have a verification server so that when you get a positive diagnosis, you can upload it
+
+183
+0:17:02.520 --> 0:17:06.760
+in a secure way with your identity, essentially proving that, not with your identity, but
+
+184
+0:17:06.760 --> 0:17:11.000
+proving that you ve got a positive diagnosis from your doctor. And then you need an upload
+
+185
+0:17:11.000 --> 0:17:15.320
+server to upload your keys to. And that happened also in the Corona Warn app server. So in
+
+186
+0:17:15.320 --> 0:17:19.240
+practice this was actually two servers, not one. So those were the two bits we were interested
+
+187
+0:17:19.240 --> 0:17:26.080
+in. And we had to deploy them to test against. We couldn t deploy the whole lot. That was
+
+188
+0:17:26.080 --> 0:17:30.400
+going to be impossible. That was not really a plausible thing to do. But they did have
+
+189
+0:17:30.400 --> 0:17:34.880
+a reference implementation of these two servers. And so we tried to deploy, we tried to deploy,
+
+190
+0:17:34.880 --> 0:17:39.680
+well, so we did end up deploying those to an AWS server and testing our code against
+
+191
+0:17:39.680 --> 0:17:44.360
+those. And what we found was that the download server implementation was a little bit broken.
+
+192
+0:17:44.360 --> 0:17:50.960
+We had to fix it. But it was otherwise pretty good. There were just some glitches. Whereas
+
+193
+0:17:50.960 --> 0:17:55.640
+the verification server and the upload server were pretty minimal. So we actually essentially
+
+194
+0:17:55.640 --> 0:18:01.600
+had to re-implement parts of those based on the specification in order to do our testing.
+
+195
+0:18:01.600 --> 0:18:04.400
+But they did release a lot of code with this stuff. And the fact that they had these reference
+
+196
+0:18:04.400 --> 0:18:12.280
+servers was absolutely key in allowing us to re-implement the protocol. So our overall
+
+197
+0:18:12.280 --> 0:18:18.520
+experience was that they produced lots of code and lots of documentation, which was
+
+198
+0:18:18.520 --> 0:18:28.000
+really good. They were one of the earliest teams to get this stuff out into the wild,
+
+199
+0:18:28.000 --> 0:18:34.120
+in terms of source code, which was also phenomenally good. They worked through GitHub issues. So
+
+200
+0:18:34.120 --> 0:18:40.400
+when we found problems, we would submit pull requests to try and fix the code. And it was
+
+201
+0:18:40.400 --> 0:18:44.520
+clear that they were trying to engage with that process. But in practice, they were just
+
+202
+0:18:44.520 --> 0:18:50.120
+taking way too long. So by the time, so for example, we would fix a bit of a, we would
+
+203
+0:18:50.120 --> 0:18:56.960
+fix something in one of the reference servers. And people would be using our PR code to deploy
+
+204
+0:18:56.960 --> 0:19:01.320
+elsewhere. But by the time they got to actually thinking about integrating it, it was already
+
+205
+0:19:01.320 --> 0:19:07.840
+too stale. It was no longer useful. So they were clearly trying to do that. But I guess
+
+206
+0:19:07.840 --> 0:19:13.600
+it was just a question of time. So as a consequence, some of the code was left broken for quite
+
+207
+0:19:13.600 --> 0:19:18.920
+a long time, even though there were fixes that they could have just integrated. Some
+
+208
+0:19:18.920 --> 0:19:23.640
+of the reference implementations differed quite significantly from reality in terms of
+
+209
+0:19:23.640 --> 0:19:29.480
+the servers. But there was something to work with, and that was really helpful. And so
+
+210
+0:19:29.480 --> 0:19:32.840
+our overall impression was that they had this real commitment to openness. They were genuinely
+
+211
+0:19:32.840 --> 0:19:37.800
+committed to doing this well. They had an open development process. But the team were
+
+212
+0:19:37.800 --> 0:19:40.560
+just a bit overwhelmed with the amount of effort involved in doing it. That was the
+
+213
+0:19:40.560 --> 0:19:47.240
+impression we got from the outside. So we were very impressed by this. But obviously,
+
+214
+0:19:47.240 --> 0:19:54.040
+there's obviously scope for learning there in terms of how to do it better. So my overall
+
+215
+0:19:54.040 --> 0:20:02.480
+reflections on how things went were that at the time, I think, again, you have to put
+
+216
+0:20:02.480 --> 0:20:07.040
+this into context. There was huge pressure on governments all over the world to get this
+
+217
+0:20:07.040 --> 0:20:14.360
+stuff deployed. So the first deployment in South Korea was, I think, the COVID 100-meter
+
+218
+0:20:14.360 --> 0:20:19.280
+app. And that went out really early. And as soon as that went out, and that used a GPS
+
+219
+0:20:19.280 --> 0:20:26.800
+position in GNSS so that it uploaded people's locations to the cloud. I mean, essentially,
+
+220
+0:20:26.800 --> 0:20:32.080
+zero privacy in that situation. But as soon as that was out, all other governments, there
+
+221
+0:20:32.080 --> 0:20:36.240
+was a lot of pressure for them to do something similar. There was a huge rush to deploy this
+
+222
+0:20:36.240 --> 0:20:40.560
+stuff. And so there was a lot of pressure. And there was a lot of competing requirements.
+
+223
+0:20:40.560 --> 0:20:43.680
+There were a lot of competing requirements. The requirements for openness was just one
+
+224
+0:20:43.680 --> 0:20:49.960
+requirement. There was also requirements for efficacy, requirements for speed, requirements
+
+225
+0:20:49.960 --> 0:20:56.840
+in terms of privacy. All of these things combined are actually quite challenging to get right.
+
+226
+0:20:56.840 --> 0:21:02.360
+And both Google and Apple and the CWA team, the SAP team, the impression I got was they
+
+227
+0:21:02.360 --> 0:21:05.960
+really got that. They really understood these competing impressions, but they also understood
+
+228
+0:21:05.960 --> 0:21:11.040
+the need for openness. They understood that in order for people, not just for them to
+
+229
+0:21:11.040 --> 0:21:14.720
+do it well, but for people to trust the apps that they were running, they also needed to
+
+230
+0:21:14.720 --> 0:21:18.440
+be open about it. And that's one of the reasons they did it. And in that sense, I think they
+
+231
+0:21:18.440 --> 0:21:25.600
+were pretty successful. Like I say, there was scope for improvement. There was, as I
+
+232
+0:21:25.600 --> 0:21:29.680
+said, with Google and Apple, there was zero inward flow of information. With SAP, there
+
+233
+0:21:29.680 --> 0:21:34.240
+was, and so with both teams, there was a lot of outward flow of information that was excellent.
+
+234
+0:21:34.240 --> 0:21:39.400
+With SAP, there was some inward flow, but not as much as perhaps we as independent developers
+
+235
+0:21:39.400 --> 0:21:46.520
+would have liked. And I guess more generally, what we kind of felt was that there was a,
+
+236
+0:21:46.520 --> 0:21:50.680
+there was this commitment to openness, but not necessarily a full appreciation of how
+
+237
+0:21:50.680 --> 0:21:55.040
+much effort was involved in that process, in getting that process to work really well
+
+238
+0:21:55.040 --> 0:22:01.400
+and effectively for the companies involved. So for example, and I guess I should say that
+
+239
+0:22:01.400 --> 0:22:05.360
+YOLA also works with a lot of open source code. So we also have an open development
+
+240
+0:22:05.360 --> 0:22:11.280
+process for a lot of our stuff and we have the same challenges, right? So people provide
+
+241
+0:22:11.280 --> 0:22:15.960
+PRs for us to integrate into the system and knowing what is good to integrate and what
+
+242
+0:22:15.960 --> 0:22:20.520
+is bad to integrate takes a lot of time and effort, right? It sounds like you're getting
+
+243
+0:22:20.520 --> 0:22:24.240
+free implementation, which I guess in some sense you are, but there's still a lot of
+
+244
+0:22:24.240 --> 0:22:29.120
+effort involved in that process. And like I said, I guess with this process that we
+
+245
+0:22:29.120 --> 0:22:34.120
+as independent developers experienced from the outside, it felt like that perhaps these
+
+246
+0:22:34.120 --> 0:22:41.560
+other competing things were impacting on the effort that they could put into that process.
+
+247
+0:22:41.560 --> 0:22:47.000
+So yeah, so overall, given that these organizations had absolutely no duty towards us as independent
+
+248
+0:22:47.000 --> 0:22:51.800
+developers, we were kind of very happy that we could work with the things that they've
+
+249
+0:22:51.800 --> 0:22:55.080
+given us and that they were actually high quality. So we were very pleased with how
+
+250
+0:22:55.080 --> 0:22:59.920
+it went, but like I say, we felt that there was definitely some room for improvement.
+
+251
+0:22:59.920 --> 0:23:05.920
+Okay, so that's my summary of how things went. Thanks for taking the time to listen. There's
+
+252
+0:23:05.920 --> 0:23:10.960
+some links in case you're interested in more. We are actually on the Linux on mobile stand
+
+253
+0:23:10.960 --> 0:23:15.360
+in Building K at the top of the stairs. So if you want to talk more about it later, please
+
+254
+0:23:15.360 --> 0:23:27.360
+come and visit us and we'd be happy to do that. Thanks very much. Is there time for
+
+255
+0:23:27.360 --> 0:23:28.360
+questions?
+
+256
+0:23:28.360 --> 0:23:46.360
+Okay, especially for the live stream. Right. Understood.
+
+257
+0:23:46.360 --> 0:24:06.640
+Right. So your question is, what's my experience with the Bluetooth parts, the Bluetooth notifications?
+
+258
+0:24:06.640 --> 0:24:10.320
+Because as you were saying, at the time there was a lot of discussion about whether it was
+
+259
+0:24:10.320 --> 0:24:16.040
+going to give enough accuracy in terms of proximity detection. So the key thing, the
+
+260
+0:24:16.040 --> 0:24:22.160
+key thing with the COVID notifications, of course, is that there was this two meter,
+
+261
+0:24:22.160 --> 0:24:27.240
+there was always this like, or some distance that you were supposed to stay away from people.
+
+262
+0:24:27.240 --> 0:24:31.400
+And so in terms of the Bluetooth, you wanted to try and mimic that process. You wanted
+
+263
+0:24:31.400 --> 0:24:35.960
+to actually distinguish that someone was within two meters or some distance or outside that
+
+264
+0:24:35.960 --> 0:24:41.520
+distance. Right. That's essentially what you're talking about in terms of proximity. So it's
+
+265
+0:24:41.520 --> 0:24:48.000
+interesting actually. So when we started out the process, the protocol didn't specify greatly
+
+266
+0:24:48.000 --> 0:24:52.520
+how to tackle that. So what happened, what actually Google and Apple did is they set
+
+267
+0:24:52.520 --> 0:24:58.360
+a bunch of risk parameters in their implementation that you could tweak, that you could change.
+
+268
+0:24:58.360 --> 0:25:03.120
+And they came from the download server. They were set by the government organizations,
+
+269
+0:25:03.120 --> 0:25:08.160
+not by Google and Apple. And they basically said, you know, how much risk do you, they
+
+270
+0:25:08.160 --> 0:25:13.440
+gave weightings, how much risk do you associate with a power level of this for the Bluetooth?
+
+271
+0:25:13.440 --> 0:25:18.880
+And how much risk association do you put with how long that association went on for? Like,
+
+272
+0:25:18.880 --> 0:25:23.240
+is it five minutes or 10 minutes that they're within range of this, of this distance? So
+
+273
+0:25:23.240 --> 0:25:29.320
+you could tweak those parameters. And later on in the process, Google actually released
+
+274
+0:25:29.320 --> 0:25:36.800
+a lot of information that provided essentially weightings for some of the parameters that
+
+275
+0:25:36.800 --> 0:25:41.200
+almost every phone on the market. So they had a process where they would basically put
+
+276
+0:25:41.200 --> 0:25:47.120
+two phones on stands next to each other and measure the power consumption that came through.
+
+277
+0:25:47.120 --> 0:25:52.440
+And then based on which phone was communicating with it, which other phone, they would then
+
+278
+0:25:52.440 --> 0:25:57.840
+tweak the parameters to try and make that proximity more effective. So we, so we, we
+
+279
+0:25:57.840 --> 0:26:02.720
+use those parameters, but I have to say we didn't really, we were not in a position to
+
+280
+0:26:02.720 --> 0:26:07.000
+check whether or not they were working effectively because what's happening behind the scene
+
+281
+0:26:07.000 --> 0:26:11.440
+is quite opaque, right? We're sending data upload up to a server. And the whole point
+
+282
+0:26:11.440 --> 0:26:16.200
+is that you then know nothing about what happens after that because of the privacy aspects.
+
+283
+0:26:16.200 --> 0:26:21.040
+So, so it's actually very hard for us to judge whether or not it was working well or working
+
+284
+0:26:21.040 --> 0:26:26.400
+badly. But it was clear that there was a lot of work going on to get it to work well in
+
+285
+0:26:26.400 --> 0:26:32.680
+the background. My, my, my more general experience with Bluetooth is it's not great at this stuff.
+
+286
+0:26:32.680 --> 0:26:37.480
+You know, if there's a person between you and another person, then water is a big problem
+
+287
+0:26:37.480 --> 0:26:43.160
+for signal propagation. So stuff that's in between causes a lot of dampening of the,
+
+288
+0:26:43.160 --> 0:26:47.920
+of the signal. So it's quite tough. It was the impression I got. Yeah, but I'm not an
+
+289
+0:26:47.920 --> 0:26:49.920
+expert in that. I have to say.
+
+290
+0:26:49.920 --> 0:26:50.920
+Okay.
+
+291
+0:26:50.920 --> 0:26:51.920
+Okay.
+
+292
+0:26:51.920 --> 0:27:05.440
+So I'm just going to come a bit closer so I can hear from you.
+
+293
+0:27:05.440 --> 0:27:23.320
+Right.
+
+294
+0:27:23.320 --> 0:27:37.400
+Right. Okay. So, so the question, the question was, is, was there any evidence that all of
+
+295
+0:27:37.400 --> 0:27:41.880
+this open source release of code resulted in reuse of code by other governments? That's
+
+296
+0:27:41.880 --> 0:27:47.200
+essentially your question, right? And I think there was, so I can't think of specific instances,
+
+297
+0:27:47.200 --> 0:27:51.320
+but my understanding was that, that people did take the COVID war nap code and use it
+
+298
+0:27:51.320 --> 0:27:55.640
+in their implementations or perhaps more generally, I think people definitely took the Google
+
+299
+0:27:55.640 --> 0:28:00.000
+reference implementation and use that in their code, which was open source. And of course
+
+300
+0:28:00.000 --> 0:28:06.560
+was a, was a yes. I'm sorry. Which was, which I guess was an example of open source being
+
+301
+0:28:06.560 --> 0:28:14.560
+reused. Perhaps more specifically with the COVID war nap because the Google and Apple
+
+302
+0:28:14.560 --> 0:28:18.640
+notification protocol was the foundation for it. It was used really quite widely across
+
+303
+0:28:18.640 --> 0:28:23.000
+Europe. Not all countries used it, but a lot of countries did. And at this point in time,
+
+304
+0:28:23.000 --> 0:28:28.960
+I think there's 11 countries that all use the same backend. So they're all uploading
+
+305
+0:28:28.960 --> 0:28:35.040
+their keys to servers. So now if you use the COVID war nap, you or contract our version
+
+306
+0:28:35.040 --> 0:28:39.640
+of it, you actually get keys from countries across Europe, half of Europe, essentially
+
+307
+0:28:39.640 --> 0:28:45.180
+is quite a large, large area. So I mean, you could argue that's not perhaps a con that's
+
+308
+0:28:45.180 --> 0:28:51.780
+more a consequence of having a common API than it is open source, but, but there definitely
+
+309
+0:28:51.780 --> 0:28:57.080
+was benefit in, in, you know, sharing of information, sharing of code. It did happen. I think it
+
+310
+0:28:57.080 --> 0:29:03.080
+did happen, but perhaps it's not, it's not as, not as clear that it happened as it might
+
+311
+0:29:03.080 --> 0:29:17.080
+otherwise seem. Yeah. All right. I'm being told my time's up. So.
+
