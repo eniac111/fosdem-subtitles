@@ -1,0 +1,2376 @@
+1
+0:00:00.000 --> 0:00:09.520
+Okay. So hello everyone.
+
+2
+0:00:10.720 --> 0:00:14.320
+This presentation is about OpenCSD,
+
+3
+0:00:14.320 --> 0:00:17.360
+which is a computational storage emulation platform.
+
+4
+0:00:17.360 --> 0:00:19.320
+The reason we're emulating that,
+
+5
+0:00:19.320 --> 0:00:20.760
+I'll get into shortly.
+
+6
+0:00:20.760 --> 0:00:23.440
+But first, I think I owe you an explanation of
+
+7
+0:00:23.440 --> 0:00:26.200
+computational storage and what it's actually is.
+
+8
+0:00:26.200 --> 0:00:28.640
+Because I don't think many people are familiar with that.
+
+9
+0:00:28.640 --> 0:00:30.000
+Even in this dev room,
+
+10
+0:00:30.000 --> 0:00:33.400
+but I'm pretty sure most people are familiar with camera and eBPF.
+
+11
+0:00:33.400 --> 0:00:36.000
+You can email me, there's a link to the repo.
+
+12
+0:00:36.000 --> 0:00:41.520
+This has been a long time collaboration with my master's thesis at the food.
+
+13
+0:00:41.520 --> 0:00:43.560
+So let's get started.
+
+14
+0:00:43.560 --> 0:00:45.680
+I'm going to briefly explain who am I.
+
+15
+0:00:45.680 --> 0:00:48.600
+I'm Kone Luka. My handle online is mostly Dentalian.
+
+16
+0:00:48.600 --> 0:00:50.920
+I'm also a licensed ham radio operator,
+
+17
+0:00:50.920 --> 0:00:53.160
+Papa Delta 3CR uniform that is.
+
+18
+0:00:53.160 --> 0:00:56.600
+My expertise is in parallel and distributed system.
+
+19
+0:00:56.600 --> 0:00:58.400
+I've been in academia for some while,
+
+20
+0:00:58.400 --> 0:01:01.160
+associate degree, bachelor degree, master's degree.
+
+21
+0:01:01.160 --> 0:01:03.880
+I've had some experiences throughout that time.
+
+22
+0:01:03.880 --> 0:01:06.960
+So I've worked on health technology for officially impaired people.
+
+23
+0:01:06.960 --> 0:01:09.840
+Worked on OpenStack with Cloud optimizations.
+
+24
+0:01:09.840 --> 0:01:13.000
+I've done computational storage for my master thesis.
+
+25
+0:01:13.000 --> 0:01:14.440
+That's what this talk is about.
+
+26
+0:01:14.440 --> 0:01:19.560
+Currently, we're on SCADA systems for the lower two radio telescope at Ostrone.
+
+27
+0:01:19.560 --> 0:01:23.120
+So why do we actually need computational storage?
+
+28
+0:01:23.120 --> 0:01:26.760
+That's because we live in a data-driven society nowadays.
+
+29
+0:01:26.760 --> 0:01:29.400
+So the world is practically exploding with data.
+
+30
+0:01:29.400 --> 0:01:34.640
+So much so that we're expected to store 200 setabytes of data by 2050.
+
+31
+0:01:34.640 --> 0:01:37.240
+These high data and throughput requirements
+
+32
+0:01:37.240 --> 0:01:39.120
+pose significant challenges on
+
+33
+0:01:39.120 --> 0:01:42.640
+storage interfaces and technologies that we are using today.
+
+34
+0:01:42.640 --> 0:01:47.080
+So if you look at your traditional computer architecture,
+
+35
+0:01:47.080 --> 0:01:49.600
+the one that's being used on x86,
+
+36
+0:01:49.600 --> 0:01:51.920
+it's based on the Von Neumann architecture.
+
+37
+0:01:51.920 --> 0:01:54.800
+Here, we basically need to move all data into
+
+38
+0:01:54.800 --> 0:01:58.080
+main system memory before we can begin processing.
+
+39
+0:01:58.080 --> 0:02:00.280
+So this poses memory bottlenecks and
+
+40
+0:02:00.280 --> 0:02:04.520
+Internet interconnect bottlenecks on networks or PCI Express.
+
+41
+0:02:04.520 --> 0:02:09.280
+It also drastically it hinders energy efficiency to an extent.
+
+42
+0:02:09.280 --> 0:02:13.120
+So how much of a bandwidth gap are we talking here?
+
+43
+0:02:13.120 --> 0:02:16.440
+Well, if you look at the server from 2021,
+
+44
+0:02:16.440 --> 0:02:19.840
+say using Epic Milan with 64 SSDs,
+
+45
+0:02:19.840 --> 0:02:23.280
+we're losing about four and a half times the amount of bandwidth that could be
+
+46
+0:02:23.280 --> 0:02:25.600
+offered by all the SSDs in tandem but can't be
+
+47
+0:02:25.600 --> 0:02:28.680
+utilized because we can't move it into memory that fast.
+
+48
+0:02:28.680 --> 0:02:31.120
+So that's quite significant.
+
+49
+0:02:31.120 --> 0:02:33.240
+What is this computational sort?
+
+50
+0:02:33.240 --> 0:02:34.840
+How does this solve this actually?
+
+51
+0:02:34.840 --> 0:02:38.520
+Well, we fit a computational storage device,
+
+52
+0:02:38.520 --> 0:02:41.520
+so a flash storage device with its own CPU in memory.
+
+53
+0:02:41.520 --> 0:02:44.040
+Now the user, the host processor,
+
+54
+0:02:44.040 --> 0:02:47.520
+can submit small programs to this computational device,
+
+55
+0:02:47.520 --> 0:02:50.400
+let it execute, and only the result data from
+
+56
+0:02:50.400 --> 0:02:54.200
+this computation can then be returned over the interconnect into system memory,
+
+57
+0:02:54.200 --> 0:02:58.640
+thereby reducing data movement and potentially improving energy efficiency.
+
+58
+0:02:58.640 --> 0:03:03.040
+Because these lower power cores using more specialized hardware are
+
+59
+0:03:03.040 --> 0:03:07.760
+typically more energy efficient than your general purpose x86 processor.
+
+60
+0:03:07.760 --> 0:03:12.000
+If we then look at the state of current prototypes as of September 2022,
+
+61
+0:03:12.000 --> 0:03:14.400
+we see three main impediments.
+
+62
+0:03:14.400 --> 0:03:17.600
+Firstly is the API between the host and device interface.
+
+63
+0:03:17.600 --> 0:03:19.360
+There's no standardization here.
+
+64
+0:03:19.360 --> 0:03:21.440
+People aren't building hardware prototypes,
+
+65
+0:03:21.440 --> 0:03:24.160
+but not so much looking at the software interfaces.
+
+66
+0:03:24.160 --> 0:03:27.680
+We also have the problem of a file system because these flash devices,
+
+67
+0:03:27.680 --> 0:03:29.520
+they have file systems and we want to keep
+
+68
+0:03:29.520 --> 0:03:31.680
+that synchronized between the host and device.
+
+69
+0:03:31.680 --> 0:03:33.320
+So how do we achieve that?
+
+70
+0:03:33.320 --> 0:03:37.800
+We can't use cache-coherent interconnect or shared virtual memory because by the time
+
+71
+0:03:37.800 --> 0:03:40.760
+we back round trip between the PCI Express interface,
+
+72
+0:03:40.760 --> 0:03:44.240
+we'll have lost all the performance that we decide to gain.
+
+73
+0:03:44.240 --> 0:03:47.200
+How do we stick to existing interfaces?
+
+74
+0:03:47.200 --> 0:03:49.440
+People that access file systems, they read,
+
+75
+0:03:49.440 --> 0:03:50.840
+they write, they use system calls.
+
+76
+0:03:50.840 --> 0:03:52.720
+They are very used to this.
+
+77
+0:03:52.720 --> 0:03:56.920
+If you would suddenly need to link a shared library to access your file system,
+
+78
+0:03:56.920 --> 0:03:58.480
+people wouldn't be up for that.
+
+79
+0:03:58.480 --> 0:04:00.880
+So we need some solutions here.
+
+80
+0:04:00.880 --> 0:04:04.280
+That's what OpenCSD and FluffleFS introduce.
+
+81
+0:04:04.280 --> 0:04:06.680
+We have a simple and intuitive system.
+
+82
+0:04:06.680 --> 0:04:10.320
+All the dependencies and the software itself can run in user space.
+
+83
+0:04:10.320 --> 0:04:12.720
+You don't need any kernel modules or things like this.
+
+84
+0:04:12.720 --> 0:04:15.080
+We manage to entirely reuse a system,
+
+85
+0:04:15.080 --> 0:04:18.600
+system calls that are available in all operating systems,
+
+86
+0:04:18.600 --> 0:04:21.320
+most typical operating systems,
+
+87
+0:04:21.320 --> 0:04:23.040
+freeBSD, Windows, Mac,
+
+88
+0:04:23.040 --> 0:04:24.560
+iOS, and Linux.
+
+89
+0:04:24.560 --> 0:04:26.160
+So I'd say that's pretty good.
+
+90
+0:04:26.160 --> 0:04:30.240
+We do something that's never been done before in computational storage.
+
+91
+0:04:30.240 --> 0:04:35.160
+We allow our regular user on the host to access a file concurrently
+
+92
+0:04:35.160 --> 0:04:37.120
+while a kernel that is executing on
+
+93
+0:04:37.120 --> 0:04:40.080
+the computational storage device is also accessing that file.
+
+94
+0:04:40.080 --> 0:04:42.200
+This has never been done before.
+
+95
+0:04:42.200 --> 0:04:46.880
+We managed to do this using existing open source libraries.
+
+96
+0:04:46.880 --> 0:04:48.560
+So we've Boost, Cine infuse,
+
+97
+0:04:48.560 --> 0:04:50.320
+UBPF, and SPDK.
+
+98
+0:04:50.320 --> 0:04:54.000
+Some of you will be familiar with some of these.
+
+99
+0:04:54.000 --> 0:04:57.640
+This allows any user like you to after this talk,
+
+100
+0:04:57.640 --> 0:04:59.560
+try and experience this yourself in
+
+101
+0:04:59.560 --> 0:05:01.960
+Canvas without buying any additional hardware.
+
+102
+0:05:01.960 --> 0:05:04.560
+I'll get into that hardware in a second because there's
+
+103
+0:05:04.560 --> 0:05:08.040
+some specialized hardware that if we want to have this physically in our hands,
+
+104
+0:05:08.040 --> 0:05:10.080
+we have to do some things.
+
+105
+0:05:10.080 --> 0:05:12.280
+If you look at the design,
+
+106
+0:05:12.280 --> 0:05:14.600
+then we see four key components and
+
+107
+0:05:14.600 --> 0:05:16.840
+a fifth one that I'll explain on the next slide.
+
+108
+0:05:16.840 --> 0:05:19.440
+We're using a lock structured file system,
+
+109
+0:05:19.440 --> 0:05:21.680
+which supports no in-place updates.
+
+110
+0:05:21.680 --> 0:05:24.120
+So everything is appended and appended.
+
+111
+0:05:24.120 --> 0:05:28.560
+We have a module interface where we have backends and frontends.
+
+112
+0:05:28.560 --> 0:05:31.920
+So this allows us to experiment and try out new things.
+
+113
+0:05:31.920 --> 0:05:35.800
+We can basically swap the backends and keep the frontend the same.
+
+114
+0:05:35.800 --> 0:05:40.040
+We're using this new technology in Flash SSDs that's called zone namespaces.
+
+115
+0:05:40.040 --> 0:05:42.840
+They are commercially available now,
+
+116
+0:05:42.840 --> 0:05:44.600
+but they're pretty hard to get still,
+
+117
+0:05:44.600 --> 0:05:47.600
+but that's going to improve in the future.
+
+118
+0:05:47.600 --> 0:05:51.240
+The system calls that we managed to reuse,
+
+119
+0:05:51.240 --> 0:05:53.320
+those are extended attributes.
+
+120
+0:05:53.320 --> 0:05:58.520
+So extended attributes on any file and directory on most file systems,
+
+121
+0:05:58.520 --> 0:06:00.960
+on the file system you are using likely now,
+
+122
+0:06:00.960 --> 0:06:04.960
+you can set arbitrary key value pairs on these files.
+
+123
+0:06:04.960 --> 0:06:08.360
+We can use this as a hint from the user to
+
+124
+0:06:08.360 --> 0:06:12.880
+the file system to instruct the file system that something special needs to happen.
+
+125
+0:06:12.880 --> 0:06:18.400
+Basically, we just reserve some keys there and assign special behavior to them.
+
+126
+0:06:18.400 --> 0:06:20.960
+Now, let's get back to the topic of
+
+127
+0:06:20.960 --> 0:06:24.400
+zone namespaces because I own you some explanation here.
+
+128
+0:06:24.400 --> 0:06:26.440
+Back when we had hard drives,
+
+129
+0:06:26.440 --> 0:06:30.440
+we could perform arbitrary reads and writes to arbitrary sectors.
+
+130
+0:06:30.440 --> 0:06:38.040
+Sectors could be rewritten all the time without requiring any erasure beforehand.
+
+131
+0:06:38.040 --> 0:06:41.400
+This is what is known as the traditional block interface.
+
+132
+0:06:41.400 --> 0:06:44.000
+But there's a problem and that is that
+
+133
+0:06:44.000 --> 0:06:47.000
+NAND flash doesn't actually support this behavior.
+
+134
+0:06:47.000 --> 0:06:49.800
+So when you have NAND flash,
+
+135
+0:06:49.800 --> 0:06:56.920
+your sectors are concentrated in blocks and this block needs to be linearly written.
+
+136
+0:06:56.920 --> 0:07:00.280
+Before you can rewrite the information in a block,
+
+137
+0:07:00.280 --> 0:07:02.440
+the block needs to be erased as a whole.
+
+138
+0:07:02.440 --> 0:07:05.720
+So in order to accommodate Flash SSDs have to
+
+139
+0:07:05.720 --> 0:07:08.680
+incorporate what is known as a Flash translation layer,
+
+140
+0:07:08.680 --> 0:07:11.280
+where basically all these requests that go to
+
+141
+0:07:11.280 --> 0:07:15.240
+the same sectors are somehow translated and put somewhere else physically,
+
+142
+0:07:15.240 --> 0:07:17.160
+just so that the user can still use
+
+143
+0:07:17.160 --> 0:07:21.280
+the same block interface that they have been used to from the time of hard drives.
+
+144
+0:07:21.280 --> 0:07:25.840
+So there's this physical translation between these logical and physical blocks.
+
+145
+0:07:25.840 --> 0:07:29.000
+When we try to synchronize the file system from the host with
+
+146
+0:07:29.000 --> 0:07:31.080
+the device while a kernel is running,
+
+147
+0:07:31.080 --> 0:07:33.720
+this introduces a whole lot of problems.
+
+148
+0:07:33.720 --> 0:07:35.280
+So how do we solve this?
+
+149
+0:07:35.280 --> 0:07:38.360
+Now, you know the answer, it's the sound namespaces.
+
+150
+0:07:38.360 --> 0:07:41.560
+We basically present an interface that's not a block interface,
+
+151
+0:07:41.560 --> 0:07:45.320
+and it's an interface that fits to NAND flash behavior.
+
+152
+0:07:45.320 --> 0:07:48.040
+So when you use the sound namespaces SSD,
+
+153
+0:07:48.040 --> 0:07:52.520
+you need as a developer of a file system or the kernel,
+
+154
+0:07:52.520 --> 0:07:55.600
+need to linearly write each sector in the block,
+
+155
+0:07:55.600 --> 0:07:57.480
+and you need to erase the block as a whole.
+
+156
+0:07:57.480 --> 0:08:03.000
+So effectively, you become the manager of this SSD,
+
+157
+0:08:03.000 --> 0:08:07.200
+the flash translation layer and the garbage collection lives on the host,
+
+158
+0:08:07.200 --> 0:08:10.360
+and we call this whole system host managed.
+
+159
+0:08:10.360 --> 0:08:14.440
+If we now combine this with a lock-structured file system,
+
+160
+0:08:14.440 --> 0:08:17.000
+which also didn't have any in-place updates,
+
+161
+0:08:17.000 --> 0:08:20.600
+and then you naturally see that this becomes a very good fit.
+
+162
+0:08:20.600 --> 0:08:23.360
+Now, together with these two technologies,
+
+163
+0:08:23.360 --> 0:08:27.000
+we can finally synchronize the host and the file system,
+
+164
+0:08:27.000 --> 0:08:32.960
+and we can do that by making the file temporarily immutable while the kernel is running.
+
+165
+0:08:32.960 --> 0:08:38.960
+And we do that using a snapshot consistency model by creating in-memory snapshots.
+
+166
+0:08:38.960 --> 0:08:42.960
+So we were able to create a representation of the file as it was on the host,
+
+167
+0:08:42.960 --> 0:08:47.960
+with metadata, put that to the computational storage device memory,
+
+168
+0:08:47.960 --> 0:08:52.240
+and we can assure that all the data that is there will remain immutable
+
+169
+0:08:52.240 --> 0:08:54.640
+during the execution of the kernel.
+
+170
+0:08:54.640 --> 0:08:58.440
+Meanwhile, the user can actually still write to the file,
+
+171
+0:08:58.440 --> 0:09:01.520
+and the metadata of the file on the host will differ,
+
+172
+0:09:01.520 --> 0:09:03.840
+but that's not a problem.
+
+173
+0:09:03.840 --> 0:09:06.800
+So this is very powerful,
+
+174
+0:09:06.800 --> 0:09:11.000
+and it allows us to also understand kernel behavior in a way,
+
+175
+0:09:11.000 --> 0:09:17.160
+because we can now have metadata and send it to the computational storage device that says,
+
+176
+0:09:17.160 --> 0:09:20.040
+well, actually, if the kernel tries to do this,
+
+177
+0:09:20.040 --> 0:09:21.680
+remember it's a user-submitted program,
+
+178
+0:09:21.680 --> 0:09:22.920
+it might be malicious,
+
+179
+0:09:22.920 --> 0:09:24.800
+then we want to block those actions.
+
+180
+0:09:24.800 --> 0:09:27.160
+So we have a security interface as well.
+
+181
+0:09:27.160 --> 0:09:31.040
+The final kick in the bucket for this design is that we want to be
+
+182
+0:09:31.040 --> 0:09:34.120
+architecture independent and we do that through eBPF,
+
+183
+0:09:34.120 --> 0:09:36.920
+the system that you're also using for network hooks
+
+184
+0:09:36.920 --> 0:09:39.640
+and event hooks in the Linux kernel nowadays.
+
+185
+0:09:39.640 --> 0:09:46.280
+With eBPF, you can define system calls and expose those in a header,
+
+186
+0:09:46.280 --> 0:09:48.400
+and this is actually the format of how you would do that,
+
+187
+0:09:48.400 --> 0:09:49.880
+that's a real example,
+
+188
+0:09:49.880 --> 0:09:52.720
+and then the fender would implement that code,
+
+189
+0:09:52.720 --> 0:09:56.520
+and you would define in a specification some behavior,
+
+190
+0:09:56.520 --> 0:09:59.720
+but the fender doesn't have to open source their code,
+
+191
+0:09:59.720 --> 0:10:01.240
+which in the case of Flash,
+
+192
+0:10:01.240 --> 0:10:06.320
+SSDs and fenders is pretty important because they don't seem to be that keen on that.
+
+193
+0:10:06.320 --> 0:10:08.640
+This way, we can still have an interface,
+
+194
+0:10:08.640 --> 0:10:14.720
+the users can write programs once and reuse them across all fenders without any problem.
+
+195
+0:10:14.720 --> 0:10:19.160
+The nice thing about eBPF is that this instruction set architecture,
+
+196
+0:10:19.160 --> 0:10:21.520
+what eBPF essentially is,
+
+197
+0:10:21.520 --> 0:10:24.320
+is easily implementable in a VM.
+
+198
+0:10:24.320 --> 0:10:28.680
+So there's even pre-existing open source implementations of this,
+
+199
+0:10:28.680 --> 0:10:31.760
+and that's what we're using, eBPF.
+
+200
+0:10:33.040 --> 0:10:39.640
+Now that I've explained all the key components to OpenCSD and FluffleFS,
+
+201
+0:10:39.640 --> 0:10:43.120
+I want to start with a little demo and show you what are
+
+202
+0:10:43.120 --> 0:10:45.760
+some of the actual practical use cases for this.
+
+203
+0:10:45.760 --> 0:10:51.160
+So how can we use such a computational storage system in a way that it
+
+204
+0:10:51.160 --> 0:10:55.480
+makes sense in terms of data reduction and energy efficiency?
+
+205
+0:10:55.480 --> 0:10:58.840
+For that, we're going to go to the example of Shannon entropy.
+
+206
+0:10:58.840 --> 0:11:02.440
+This is heavily used by file systems who can perform
+
+207
+0:11:02.440 --> 0:11:08.360
+background compression or by just compression programs that compress in the background.
+
+208
+0:11:08.360 --> 0:11:12.920
+What you basically do is you try to quantify the randomness you have in a file.
+
+209
+0:11:12.920 --> 0:11:14.920
+Typically, it's between 0 and 1,
+
+210
+0:11:14.920 --> 0:11:17.400
+but for computers that doesn't really make sense.
+
+211
+0:11:17.400 --> 0:11:23.720
+So we use this lock B that's over here to normalize this for bytes.
+
+212
+0:11:23.720 --> 0:11:27.800
+Then we can say what's the distribution of bytes.
+
+213
+0:11:27.800 --> 0:11:32.200
+So we create, because a byte has 265 different possible values,
+
+214
+0:11:32.200 --> 0:11:36.880
+we create 265 bins and we submit a program to calculate this,
+
+215
+0:11:36.880 --> 0:11:43.080
+it runs in the background and only the result is returned to the host operating system.
+
+216
+0:11:43.080 --> 0:11:45.480
+Then the host operating system is free to
+
+217
+0:11:45.480 --> 0:11:49.040
+decide whether or not this file should be compressed or not.
+
+218
+0:11:49.040 --> 0:11:53.640
+So how does such a kernel look like?
+
+219
+0:11:53.640 --> 0:11:57.000
+The kernel that you actually submit to the computational storage device,
+
+220
+0:11:57.000 --> 0:12:00.400
+or you can just write them in C and compile them with Clang.
+
+221
+0:12:00.400 --> 0:12:02.840
+So you write them in C and we have
+
+222
+0:12:02.840 --> 0:12:06.720
+two individual interfaces here that we are exposing.
+
+223
+0:12:06.720 --> 0:12:11.280
+The yellow commands, those are introduced by the system calls,
+
+224
+0:12:11.280 --> 0:12:14.400
+the EBPF ABI that we are defining,
+
+225
+0:12:14.400 --> 0:12:15.960
+and the purple ones,
+
+226
+0:12:15.960 --> 0:12:20.760
+those are introduced by a file system.
+
+227
+0:12:20.760 --> 0:12:25.560
+What that means is that using this system as is now,
+
+228
+0:12:25.560 --> 0:12:28.600
+that it's not agnostic to the file system.
+
+229
+0:12:28.600 --> 0:12:32.920
+So it is agnostic to the vendor and the architecture of the vendor.
+
+230
+0:12:32.920 --> 0:12:35.760
+If it's ARM or x86, that doesn't matter.
+
+231
+0:12:35.760 --> 0:12:40.000
+But now it's specific to the FluffleFS file system that we have written.
+
+232
+0:12:40.000 --> 0:12:44.240
+I will address some possible solutions for this at the end.
+
+233
+0:12:44.240 --> 0:12:46.840
+Other things we need to realize is that
+
+234
+0:12:46.840 --> 0:12:49.560
+the EBPF stack size is typically very small.
+
+235
+0:12:49.560 --> 0:12:52.160
+We're talking bytes here instead of kilobytes.
+
+236
+0:12:52.160 --> 0:12:55.600
+So we need a way to address this.
+
+237
+0:12:55.600 --> 0:12:57.720
+So what you can do is in UBPF,
+
+238
+0:12:57.720 --> 0:13:01.960
+you can allocate a heap just as your stack,
+
+239
+0:13:01.960 --> 0:13:05.760
+and then we have this BPF get mem info
+
+240
+0:13:05.760 --> 0:13:08.000
+that we have defined as part of the ABI
+
+241
+0:13:08.000 --> 0:13:10.200
+that allows you to get your heap pointer.
+
+242
+0:13:10.200 --> 0:13:13.000
+Now, currently, you have to manually offset this,
+
+243
+0:13:13.000 --> 0:13:15.280
+which is a bit tedious, if you will.
+
+244
+0:13:15.280 --> 0:13:18.320
+You see that that is actually done here.
+
+245
+0:13:18.320 --> 0:13:22.880
+To store the bins, we offset the buffer by the sector size,
+
+246
+0:13:22.880 --> 0:13:28.320
+and then the data from the sector reads is actually stored at the top of the buffer,
+
+247
+0:13:28.320 --> 0:13:32.520
+and the bins are stored at the offset for precisely one sector size.
+
+248
+0:13:32.520 --> 0:13:36.840
+Now, when we go to look at the file system interface,
+
+249
+0:13:36.840 --> 0:13:38.880
+and all the helpers and data structures
+
+250
+0:13:38.880 --> 0:13:41.200
+and additional function calls that we introduced,
+
+251
+0:13:41.200 --> 0:13:44.480
+we can later see that we can also make
+
+252
+0:13:44.480 --> 0:13:46.640
+a basic implementation of malloc and free here,
+
+253
+0:13:46.640 --> 0:13:48.360
+and then just resolve this.
+
+254
+0:13:48.360 --> 0:13:52.600
+But for now, for this example, it's a bit tedious.
+
+255
+0:13:53.200 --> 0:13:55.880
+Now, how do you actually trigger this?
+
+256
+0:13:55.880 --> 0:13:57.720
+So we had the extended attributes,
+
+257
+0:13:57.720 --> 0:13:59.680
+we had all these systems in place,
+
+258
+0:13:59.680 --> 0:14:01.320
+but now you just have this kernel,
+
+259
+0:14:01.320 --> 0:14:02.400
+you have compiled it,
+
+260
+0:14:02.400 --> 0:14:03.960
+you have stored it to a file,
+
+261
+0:14:03.960 --> 0:14:07.600
+and now you want to actually offload your computation,
+
+262
+0:14:07.600 --> 0:14:09.480
+well, in an emulated fashion,
+
+263
+0:14:09.480 --> 0:14:12.320
+but you want to see how you do that.
+
+264
+0:14:12.320 --> 0:14:16.480
+So the first thing you do is you call start on the kernel object.
+
+265
+0:14:16.480 --> 0:14:18.840
+So this is your compiled die code,
+
+266
+0:14:18.840 --> 0:14:21.760
+and then you get the inode number.
+
+267
+0:14:21.760 --> 0:14:24.720
+This inode number you have tend to remember,
+
+268
+0:14:24.720 --> 0:14:28.640
+and you then open the file that you want to read upon,
+
+269
+0:14:28.640 --> 0:14:32.240
+or write upon, but for the examples we're using read mostly.
+
+270
+0:14:32.240 --> 0:14:34.840
+Then you use set extended attributes,
+
+271
+0:14:34.840 --> 0:14:37.040
+you use our reserved key,
+
+272
+0:14:37.040 --> 0:14:40.280
+and you set it to the inode number of the kernel file,
+
+273
+0:14:40.280 --> 0:14:43.200
+and then when you actually issue read commands,
+
+274
+0:14:43.200 --> 0:14:45.720
+the read commands will actually go to
+
+275
+0:14:45.720 --> 0:14:51.040
+the computational storage device and they'll run on there.
+
+276
+0:14:51.040 --> 0:14:53.880
+But when do you actually take these snapshots?
+
+277
+0:14:53.880 --> 0:14:56.600
+The trick is as soon as you set extended attributes.
+
+278
+0:14:56.600 --> 0:14:58.120
+This is just by design, right?
+
+279
+0:14:58.120 --> 0:15:00.000
+Could also be once you call the first read,
+
+280
+0:15:00.000 --> 0:15:01.920
+or once you execute the first write.
+
+281
+0:15:01.920 --> 0:15:03.600
+But we have decided to do it at
+
+282
+0:15:03.600 --> 0:15:05.840
+the moment that you set extended attribute.
+
+283
+0:15:05.840 --> 0:15:08.800
+That means that if you make any changes to your kernel,
+
+284
+0:15:08.800 --> 0:15:11.560
+once you've actually set extended attributes,
+
+285
+0:15:11.560 --> 0:15:13.560
+then nothing changes anymore,
+
+286
+0:15:13.560 --> 0:15:16.080
+and the same goes to the file.
+
+287
+0:15:16.240 --> 0:15:18.480
+Now, I want to briefly explain
+
+288
+0:15:18.480 --> 0:15:21.160
+some different types of kernel that you can have,
+
+289
+0:15:21.160 --> 0:15:24.200
+and what the example here is mainly
+
+290
+0:15:24.200 --> 0:15:26.560
+showing is what we call a stream kernel.
+
+291
+0:15:26.560 --> 0:15:28.480
+So a stream kernel happens in
+
+292
+0:15:28.480 --> 0:15:31.080
+place of the regular read or write request.
+
+293
+0:15:31.080 --> 0:15:33.800
+So the regular read or write request doesn't happen,
+
+294
+0:15:33.800 --> 0:15:36.480
+only the computational storage request
+
+295
+0:15:36.480 --> 0:15:39.880
+happens on the computational storage device.
+
+296
+0:15:39.960 --> 0:15:41.960
+With an event kernel,
+
+297
+0:15:41.960 --> 0:15:44.400
+it's like the opposite way around.
+
+298
+0:15:44.400 --> 0:15:47.280
+First, the regular event happens normally,
+
+299
+0:15:47.280 --> 0:15:49.440
+and then the kernel is presented with
+
+300
+0:15:49.440 --> 0:15:53.160
+the metadata from that request and can do additional things.
+
+301
+0:15:53.160 --> 0:15:55.960
+This is for databases interesting.
+
+302
+0:15:55.960 --> 0:15:58.600
+For example, say you're writing a big table,
+
+303
+0:15:58.600 --> 0:16:01.720
+and you want to know the average or the minimum or the maximum,
+
+304
+0:16:01.720 --> 0:16:05.160
+and you want to emit that as metadata at the end of your table write.
+
+305
+0:16:05.160 --> 0:16:09.800
+Well, you could use an event kernel to let it write as is,
+
+306
+0:16:09.800 --> 0:16:12.280
+then you get presented with the data,
+
+307
+0:16:12.280 --> 0:16:14.760
+the kernel runs on the computational storage device,
+
+308
+0:16:14.760 --> 0:16:17.160
+and you emit the metadata after,
+
+309
+0:16:17.160 --> 0:16:20.040
+and you can store it as like an index.
+
+310
+0:16:20.040 --> 0:16:23.880
+We have also decided to isolate
+
+311
+0:16:23.880 --> 0:16:26.920
+the context of this computational storage offloading.
+
+312
+0:16:26.920 --> 0:16:29.560
+So what is considered once you set
+
+313
+0:16:29.560 --> 0:16:32.600
+that set its attributes by PID,
+
+314
+0:16:32.600 --> 0:16:35.000
+but we also could make this by file handle,
+
+315
+0:16:35.000 --> 0:16:37.760
+or you could even set it for the whole I-node.
+
+316
+0:16:37.760 --> 0:16:44.360
+More so, we could use specific keys for file handle PID or I-node offloading.
+
+317
+0:16:44.360 --> 0:16:47.360
+So it's just a matter of semantics here.
+
+318
+0:16:49.040 --> 0:16:52.800
+Now, I have some source code in Python of
+
+319
+0:16:52.800 --> 0:16:55.560
+this execution steps that I've just shown here,
+
+320
+0:16:55.560 --> 0:16:59.520
+because there's a little bit of details that are left out in the brief overview.
+
+321
+0:16:59.520 --> 0:17:03.080
+The first is that you have to stride your requests,
+
+322
+0:17:03.080 --> 0:17:06.000
+and those have to be strided by 500 to 12K.
+
+323
+0:17:06.000 --> 0:17:07.200
+Why is this so?
+
+324
+0:17:07.200 --> 0:17:10.120
+Well, infuse the amount of kernel pages that are
+
+325
+0:17:10.120 --> 0:17:14.880
+allocated to move data between the kernel and the user space is statically fixed.
+
+326
+0:17:14.880 --> 0:17:16.560
+So if you go over this,
+
+327
+0:17:16.560 --> 0:17:20.040
+then your request will seem fine from the user perspective,
+
+328
+0:17:20.040 --> 0:17:23.040
+but what the kernel will do is it will chop up your requests.
+
+329
+0:17:23.040 --> 0:17:24.680
+Why is that problematic?
+
+330
+0:17:24.680 --> 0:17:27.640
+Well, then multiple kernels spawn,
+
+331
+0:17:27.640 --> 0:17:29.680
+because from the context of the file system,
+
+332
+0:17:29.680 --> 0:17:31.520
+every time it sees a read or write request,
+
+333
+0:17:31.520 --> 0:17:36.000
+it's going to spawn this kernel and move it to the computational storage device.
+
+334
+0:17:39.200 --> 0:17:43.840
+Then here, you can see how I set the extended attribute and get the kernel,
+
+335
+0:17:43.840 --> 0:17:45.520
+the I-node number.
+
+336
+0:17:45.520 --> 0:17:49.520
+What I want to show here at the bottom is that I'm getting
+
+337
+0:17:49.520 --> 0:17:56.160
+265 integers and that's for each of the buckets of the entropy read,
+
+338
+0:17:56.160 --> 0:17:59.440
+but I'm having a request of 512K.
+
+339
+0:17:59.440 --> 0:18:04.120
+So that shows you the amount of data reduction that you can achieve using systems like this.
+
+340
+0:18:04.120 --> 0:18:06.080
+Do you want to 65 integers?
+
+341
+0:18:06.080 --> 0:18:08.920
+512K? Pretty good.
+
+342
+0:18:08.920 --> 0:18:10.240
+Could be better though.
+
+343
+0:18:10.240 --> 0:18:13.360
+The reason it's not better is floating point support in
+
+344
+0:18:13.360 --> 0:18:18.920
+EBPF is limited to the fact where you need to implement fixed point match yourself.
+
+345
+0:18:18.920 --> 0:18:22.520
+So we could do this as part of the file system helpers,
+
+346
+0:18:22.520 --> 0:18:25.920
+but that's not done for this prototype at the moment.
+
+347
+0:18:25.920 --> 0:18:30.040
+Now, some limitations.
+
+348
+0:18:30.040 --> 0:18:31.800
+This was Amostites' work.
+
+349
+0:18:31.800 --> 0:18:34.960
+This was my first time defining a file system ever.
+
+350
+0:18:34.960 --> 0:18:36.880
+It's solely a proof of concept.
+
+351
+0:18:36.880 --> 0:18:38.320
+There's no garbage collection,
+
+352
+0:18:38.320 --> 0:18:41.320
+no deletion, no space reclaiming.
+
+353
+0:18:41.320 --> 0:18:44.040
+Please don't use it.
+
+354
+0:18:44.040 --> 0:18:46.560
+Please don't use it to store your files.
+
+355
+0:18:46.560 --> 0:18:52.120
+Yeah. EBPF has an endianness just like any ISA would have,
+
+356
+0:18:52.120 --> 0:18:54.040
+and there's currently no conversions.
+
+357
+0:18:54.040 --> 0:18:56.920
+So if you happen to use something that uses different endianness,
+
+358
+0:18:56.920 --> 0:18:58.480
+all your data will be upside down.
+
+359
+0:18:58.480 --> 0:19:02.080
+So you have to deal with that yourself for now.
+
+360
+0:19:02.080 --> 0:19:06.160
+But once again, we can make it part of the file system helpers to
+
+361
+0:19:06.160 --> 0:19:10.440
+help with these data structure layout conversions and the endianess conversions.
+
+362
+0:19:10.440 --> 0:19:12.680
+As I mentioned briefly earlier,
+
+363
+0:19:12.680 --> 0:19:15.560
+floating point support in EBPF is practically non-existent,
+
+364
+0:19:15.560 --> 0:19:18.480
+but we can implement fixed point match.
+
+365
+0:19:18.480 --> 0:19:25.040
+Currently, I haven't shown any performance examples
+
+366
+0:19:25.040 --> 0:19:27.680
+because I don't think they are that interesting.
+
+367
+0:19:27.680 --> 0:19:31.640
+Because what's currently happening when you emulate offloading,
+
+368
+0:19:31.640 --> 0:19:35.680
+is that it just runs on the host processor as is in EBPF.
+
+369
+0:19:35.680 --> 0:19:37.600
+So it isn't representative of
+
+370
+0:19:37.600 --> 0:19:40.160
+the microcontrollers that you would find on SSDs.
+
+371
+0:19:40.160 --> 0:19:45.400
+So the runtime that it would take to execute these kernels would be much too fast.
+
+372
+0:19:45.400 --> 0:19:47.640
+So that's something that we need to deal on,
+
+373
+0:19:47.640 --> 0:19:50.800
+I think, because then we can more easily reason
+
+374
+0:19:50.800 --> 0:19:56.480
+about what would be the actual performance if we would offload these applications to SSDs.
+
+375
+0:19:56.480 --> 0:20:00.440
+Frankly, these SSDs do have very capable microcontrollers,
+
+376
+0:20:00.440 --> 0:20:02.320
+typically even multiple processors.
+
+377
+0:20:02.320 --> 0:20:06.360
+The reason they do that is because they need to manage the flash sensorias layer.
+
+378
+0:20:06.360 --> 0:20:09.760
+So they are already fairly capable devices actually.
+
+379
+0:20:09.760 --> 0:20:14.760
+Only read stream kernels have been fully implemented for this prototype as well.
+
+380
+0:20:14.760 --> 0:20:19.480
+That's mainly because event kernel performance is problematic.
+
+381
+0:20:19.480 --> 0:20:22.840
+Because the data from the event kernel,
+
+382
+0:20:22.840 --> 0:20:25.640
+remember the IO request happens regularly.
+
+383
+0:20:25.640 --> 0:20:29.200
+So all the data is moved back into the host processor,
+
+384
+0:20:29.200 --> 0:20:32.360
+and only then is the event kernel started.
+
+385
+0:20:32.360 --> 0:20:36.000
+But what you really need is a two-stage system where
+
+386
+0:20:36.000 --> 0:20:39.120
+you prevent the data being moved back from the host.
+
+387
+0:20:39.120 --> 0:20:42.120
+This requires some more tinkering.
+
+388
+0:20:42.120 --> 0:20:47.440
+The final thing, we need to make this agnostic to the file system.
+
+389
+0:20:47.440 --> 0:20:52.880
+We can very easily achieve this using this file system runtime,
+
+390
+0:20:52.880 --> 0:20:56.480
+where tune ICD, an installable client driver,
+
+391
+0:20:56.480 --> 0:21:00.000
+much the same way that Vulkan and OpenCL and OpenGL are working,
+
+392
+0:21:00.000 --> 0:21:02.560
+you can dynamically load a shared library that
+
+393
+0:21:02.560 --> 0:21:06.160
+implements all the functions you have defined in a header.
+
+394
+0:21:06.160 --> 0:21:09.680
+This can also dynamically compile your programs and then
+
+395
+0:21:09.680 --> 0:21:12.640
+store cache versions of this program.
+
+396
+0:21:12.640 --> 0:21:17.360
+Using statifers, we can easily identify on what file system it is running.
+
+397
+0:21:17.360 --> 0:21:20.520
+That allows users to write their programs one,
+
+398
+0:21:20.520 --> 0:21:22.120
+run on any architecture,
+
+399
+0:21:22.120 --> 0:21:24.640
+and for any computational file system,
+
+400
+0:21:24.640 --> 0:21:27.800
+which I think is pretty powerful and flexible.
+
+401
+0:21:27.800 --> 0:21:30.040
+So that's it.
+
+402
+0:21:30.040 --> 0:21:32.360
+I encourage you to try this.
+
+403
+0:21:32.360 --> 0:21:36.640
+I've also written a thesis on this that does have some performance metrics.
+
+404
+0:21:36.640 --> 0:21:40.120
+It also shows you some interesting data structures that we had to
+
+405
+0:21:40.120 --> 0:21:44.200
+design for the file system to be able to support these in-memory snapshots.
+
+406
+0:21:44.200 --> 0:21:47.040
+There's a previous work called SetCSD.
+
+407
+0:21:47.040 --> 0:21:51.440
+It also has some early performance information.
+
+408
+0:21:51.440 --> 0:21:56.960
+I've written quite an extensive survey on the last decade history or so
+
+409
+0:21:56.960 --> 0:21:59.240
+of computational flash storage devices,
+
+410
+0:21:59.240 --> 0:22:11.680
+which also quite interesting. So thank you.
+
+411
+0:22:11.680 --> 0:22:13.880
+Seven minutes for questions.
+
+412
+0:22:13.880 --> 0:22:15.760
+It's quite good.
+
+413
+0:22:15.760 --> 0:22:21.240
+I imagine this is quite difficult, right?
+
+414
+0:22:21.240 --> 0:22:23.320
+Computational storage, what the fuck's that?
+
+415
+0:22:23.320 --> 0:22:29.120
+So please don't hesitate to ask questions if anything is unclear.
+
+416
+0:22:29.120 --> 0:22:34.560
+What's the availability of hardware that can do this?
+
+417
+0:22:34.560 --> 0:22:36.640
+The computational storage?
+
+418
+0:22:36.640 --> 0:22:38.160
+Yes, the computational storage.
+
+419
+0:22:38.160 --> 0:22:43.200
+There's one vendor that is selling a computational storage device
+
+420
+0:22:43.200 --> 0:22:46.640
+that's not based on zoned namespaces storage.
+
+421
+0:22:46.640 --> 0:22:49.200
+So it's using conventional SSDs.
+
+422
+0:22:49.200 --> 0:22:53.840
+It supports computational storage to a network interface.
+
+423
+0:22:53.840 --> 0:22:55.840
+So you have the normal PCIe interface,
+
+424
+0:22:55.840 --> 0:23:00.640
+and then there's this transport over needs to do TCP IP,
+
+425
+0:23:00.640 --> 0:23:03.200
+and then you basically just connect over it to SSH,
+
+426
+0:23:03.200 --> 0:23:05.160
+and then you can do things on the SSD.
+
+427
+0:23:05.160 --> 0:23:07.040
+That one's commercially available.
+
+428
+0:23:07.040 --> 0:23:11.040
+I don't know what they would ask for that product.
+
+429
+0:23:11.040 --> 0:23:16.640
+What does the CSD have to do with zoned namespaces?
+
+430
+0:23:16.640 --> 0:23:18.640
+Nothing in principle,
+
+431
+0:23:18.640 --> 0:23:21.880
+but you need a way to synchronize the file system between the host and device,
+
+432
+0:23:21.880 --> 0:23:24.280
+and zoned namespaces make that trivial.
+
+433
+0:23:24.280 --> 0:23:26.440
+Whereas conventional SSDs,
+
+434
+0:23:26.440 --> 0:23:29.360
+the logical and physical block translation,
+
+435
+0:23:29.360 --> 0:23:31.840
+severely hinders this,
+
+436
+0:23:31.840 --> 0:23:35.040
+makes it extremely difficult to perform.
+
+437
+0:23:36.960 --> 0:23:42.040
+So why didn't you include the performance metrics from your thesis?
+
+438
+0:23:42.040 --> 0:23:45.440
+Because the performance.
+
+439
+0:23:45.440 --> 0:23:46.560
+Oh, sorry.
+
+440
+0:23:46.560 --> 0:23:49.440
+Yeah. Very good.
+
+441
+0:23:49.440 --> 0:23:51.200
+I forgot that actually all the time.
+
+442
+0:23:51.200 --> 0:23:57.240
+Yeah. So why didn't I include any performance metrics if I have them?
+
+443
+0:23:57.240 --> 0:24:00.600
+The answer is because I don't think I would have time,
+
+444
+0:24:00.600 --> 0:24:03.160
+and I don't think they're interesting enough to include.
+
+445
+0:24:03.160 --> 0:24:05.280
+This is a very complicated subject.
+
+446
+0:24:05.280 --> 0:24:07.680
+It's very new for most people, computational storage.
+
+447
+0:24:07.680 --> 0:24:09.240
+Most people have never heard of it.
+
+448
+0:24:09.240 --> 0:24:12.720
+So I'd much rather spend the time to explain this properly,
+
+449
+0:24:12.720 --> 0:24:17.320
+and try to show you that this is a very interesting concept to solve this bandwidth gap,
+
+450
+0:24:17.320 --> 0:24:20.560
+rather than show you some metrics that are not representative anyway,
+
+451
+0:24:20.560 --> 0:24:23.000
+because the kernel is running on the host CPU,
+
+452
+0:24:23.000 --> 0:24:27.120
+and you're not going to have an additional CPU on the Flash SSD.
+
+453
+0:24:28.120 --> 0:24:33.240
+Can you talk about what kind of test setup you have for your metric?
+
+454
+0:24:33.240 --> 0:24:36.680
+So I don't have the metrics themselves.
+
+455
+0:24:36.680 --> 0:24:38.000
+Yeah. So the framework.
+
+456
+0:24:38.000 --> 0:24:39.480
+Okay. Yeah. Yeah. Very good.
+
+457
+0:24:39.480 --> 0:24:45.600
+What kind of test setup I had to do all these analysis and to try these things out.
+
+458
+0:24:45.600 --> 0:24:48.240
+So I run Camu on my own host machine,
+
+459
+0:24:48.240 --> 0:24:50.520
+just a normal laptop, basically this one.
+
+460
+0:24:50.520 --> 0:24:54.520
+And Camu then creates a virtual sound namespaces device.
+
+461
+0:24:54.520 --> 0:24:57.000
+That's actually quite recently introduced to Camu.
+
+462
+0:24:57.000 --> 0:25:00.880
+So you can now try sound namespaces without owning sound namespaces.
+
+463
+0:25:00.880 --> 0:25:03.240
+That's the whole reason Camu comes into play,
+
+464
+0:25:03.240 --> 0:25:07.760
+because otherwise people wouldn't need to buy a sound namespace SSD,
+
+465
+0:25:07.760 --> 0:25:09.600
+which is quite badly available.
+
+466
+0:25:09.600 --> 0:25:12.960
+And then you just run the prototype as is.
+
+467
+0:25:12.960 --> 0:25:14.320
+So that's all you need,
+
+468
+0:25:14.320 --> 0:25:18.080
+and you really don't need any special hardware.
+
+469
+0:25:18.080 --> 0:25:22.280
+Yeah. It could be even on an ARM laptop. It doesn't matter.
+
+470
+0:25:22.280 --> 0:25:23.560
+Did you test them?
+
+471
+0:25:23.560 --> 0:25:25.480
+No, I did not test it.
+
+472
+0:25:25.480 --> 0:25:27.800
+But whether or not I tested it,
+
+473
+0:25:27.800 --> 0:25:30.400
+if it works on ARM, the answer is no, I did not test it.
+
+474
+0:25:30.400 --> 0:25:32.800
+But I'm pretty sure Camu compiles from ARM.
+
+475
+0:25:32.800 --> 0:25:34.600
+So I'm pretty sure we're good there.
+
+476
+0:25:34.600 --> 0:25:37.920
+Because you have to remember that's
+
+477
+0:25:37.920 --> 0:25:40.760
+maybe not intrinsically clear from this presentation,
+
+478
+0:25:40.760 --> 0:25:42.800
+but we didn't extend Camu in any way.
+
+479
+0:25:42.800 --> 0:25:44.480
+It's just a normal Camu accumulation.
+
+480
+0:25:44.480 --> 0:25:46.400
+You don't even need to custom install it.
+
+481
+0:25:46.400 --> 0:25:49.640
+You can just get it from the package manager and use this.
+
+482
+0:25:49.640 --> 0:25:52.720
+I have a lot of questions over here.
+
+483
+0:25:52.720 --> 0:25:55.680
+Regarding the computational part,
+
+484
+0:25:55.680 --> 0:25:59.880
+what are the limitations of what kind of CPU or kernel
+
+485
+0:25:59.880 --> 0:26:02.200
+that it may run on these devices?
+
+486
+0:26:02.200 --> 0:26:04.880
+I think the main limitations, yeah, yeah.
+
+487
+0:26:04.880 --> 0:26:08.960
+What are the limitations of the kernels that you run on these devices?
+
+488
+0:26:08.960 --> 0:26:12.080
+Well, first of all, you need to have data reduction, right?
+
+489
+0:26:12.080 --> 0:26:15.400
+If you're going to read one gigabyte from the flash storage,
+
+490
+0:26:15.400 --> 0:26:18.520
+and you're going to return one gigabyte of data to the host,
+
+491
+0:26:18.520 --> 0:26:20.680
+then there's no real point in offloading this,
+
+492
+0:26:20.680 --> 0:26:23.920
+because the data is going to be moved anyway.
+
+493
+0:26:23.920 --> 0:26:27.240
+So the first thing that the limitation is that you have to
+
+494
+0:26:27.240 --> 0:26:30.120
+find an application that is reductive in nature.
+
+495
+0:26:30.120 --> 0:26:33.320
+Once you do the computation, you return less data.
+
+496
+0:26:33.320 --> 0:26:38.800
+The nice thing is that's 99 percent of all workloads, right?
+
+497
+0:26:38.800 --> 0:26:40.280
+So that's pretty good.
+
+498
+0:26:40.280 --> 0:26:44.280
+The second thing is that if it's time in critical,
+
+499
+0:26:44.280 --> 0:26:46.320
+and the computation takes a long time,
+
+500
+0:26:46.320 --> 0:26:48.400
+then it's probably not that interesting,
+
+501
+0:26:48.400 --> 0:26:51.440
+because the latency will then be too bad,
+
+502
+0:26:51.440 --> 0:26:53.080
+because the performance of these cores
+
+503
+0:26:53.080 --> 0:26:55.240
+is much less than your host processor.
+
+504
+0:26:55.240 --> 0:27:00.600
+But you can implement specialized instructions that could be
+
+505
+0:27:00.600 --> 0:27:03.560
+very efficient in doing database filtering or things like this,
+
+506
+0:27:03.560 --> 0:27:07.720
+and that is where the whole ASIC and FPGA part would come into play.
+
+507
+0:27:07.720 --> 0:27:12.040
+But if it's not time in critical and it's in the background,
+
+508
+0:27:12.040 --> 0:27:14.520
+like the Shannon-Manser pre-compassion,
+
+509
+0:27:14.520 --> 0:27:16.320
+those are ideal cases,
+
+510
+0:27:16.320 --> 0:27:20.000
+reduction in data and not time in critical.
+
+511
+0:27:20.000 --> 0:27:23.880
+So what you mean is we can have software kernels with
+
+512
+0:27:23.880 --> 0:27:29.440
+a back-end in hardware so we can also program the hardware?
+
+513
+0:27:29.440 --> 0:27:34.240
+So like maybe a core CPU board or GPU board?
+
+514
+0:27:34.240 --> 0:27:36.240
+To repeat the question,
+
+515
+0:27:36.240 --> 0:27:40.920
+whether or not it's just software or whether we also program the hardware.
+
+516
+0:27:40.920 --> 0:27:44.000
+Of course, FPGAs can be reprogrammed on the fly,
+
+517
+0:27:44.000 --> 0:27:46.160
+and we have seen prototypes in the past for
+
+518
+0:27:46.160 --> 0:27:48.680
+computational storage devices where they do just that.
+
+519
+0:27:48.680 --> 0:27:53.240
+From the host device, the user sends a bitstream that dynamically reprograms
+
+520
+0:27:53.240 --> 0:27:55.560
+the FPGA and then the kernel starts running.
+
+521
+0:27:55.560 --> 0:27:57.960
+That's not what we're trying to achieve here.
+
+522
+0:27:57.960 --> 0:27:59.760
+What I envision in this study,
+
+523
+0:27:59.760 --> 0:28:06.040
+FPGA has specialized logic to do certain computations,
+
+524
+0:28:06.040 --> 0:28:09.560
+and then from the EBPF ABI,
+
+525
+0:28:09.560 --> 0:28:12.240
+once the Fender code triggers those instructions,
+
+526
+0:28:12.240 --> 0:28:15.240
+we'll utilize the FPGA to do those computations.
+
+527
+0:28:15.240 --> 0:28:18.760
+But it would be defined in the specification beforehand.
+
+528
+0:28:18.760 --> 0:28:22.080
+Because typically, re-flashing
+
+529
+0:28:22.080 --> 0:28:24.640
+FPGA with a new bitstream takes quite some time.
+
+530
+0:28:24.640 --> 0:28:26.440
+So in the interest of performance,
+
+531
+0:28:26.440 --> 0:28:28.840
+it might not be that interesting.
+
+532
+0:28:28.840 --> 0:28:36.360
+So I'm going to ask a question.
+
+533
+0:28:36.360 --> 0:28:39.280
+So you might have mentioned it,
+
+534
+0:28:39.280 --> 0:28:43.320
+but are there like close source competitors?
+
+535
+0:28:43.320 --> 0:28:47.360
+If there are close source competitors in the space of computational storage.
+
+536
+0:28:47.360 --> 0:28:50.680
+Well, actually, that's one of the things that's been growing really well.
+
+537
+0:28:50.680 --> 0:28:55.760
+In the scene, I'd say the vast majority of everything is open source.
+
+538
+0:28:55.760 --> 0:29:00.920
+At least if you look at the recent things.
+
+539
+0:29:00.920 --> 0:29:02.680
+If you look at the past decade,
+
+540
+0:29:02.680 --> 0:29:05.040
+then it's a bit worse because there's a lot of research
+
+541
+0:29:05.040 --> 0:29:07.960
+published that doesn't actually publish the source codes,
+
+542
+0:29:07.960 --> 0:29:10.120
+or rather the source codes is published,
+
+543
+0:29:10.120 --> 0:29:12.560
+but everything is a hardware prototype and they didn't publish
+
+544
+0:29:12.560 --> 0:29:15.480
+the bitstreams or the VHDL or the Fairlock.
+
+545
+0:29:15.480 --> 0:29:17.120
+So you then stuck as well,
+
+546
+0:29:17.120 --> 0:29:19.520
+but it didn't have any PCB designs,
+
+547
+0:29:19.520 --> 0:29:22.880
+or you can't reproduce the work, if you will.
+
+548
+0:29:22.880 --> 0:29:25.840
+I say this is a much bigger problem than just
+
+549
+0:29:25.840 --> 0:29:28.360
+computational storage in the field of academia,
+
+550
+0:29:28.360 --> 0:29:32.160
+but it's also present here.
+
+551
+0:29:34.160 --> 0:29:35.480
+Yes.
+
+552
+0:29:35.480 --> 0:29:38.040
+Can we go back to the Python code?
+
+553
+0:29:38.040 --> 0:29:40.920
+Which one? The Python code.
+
+554
+0:29:40.920 --> 0:29:44.800
+Yeah, this one. We were talking about the moments and questions.
+
+555
+0:29:44.800 --> 0:29:25.580
+I was just wondering about the complexity of the
+
+556
+0:29:25.580 --> 0:29:50.760
+complexity in terms of?
+
+557
+0:29:50.760 --> 0:29:53.360
+I have a nested loop there.
+
+558
+0:29:57.400 --> 0:30:00.920
+The reason this is a nested loop,
+
+559
+0:30:00.920 --> 0:30:03.160
+in the phase of performance,
+
+560
+0:30:03.160 --> 0:30:04.240
+I have a nested loop here.
+
+561
+0:30:04.240 --> 0:30:05.480
+So why that?
+
+562
+0:30:05.480 --> 0:30:07.720
+In the terms of performance, how?
+
+563
+0:30:07.720 --> 0:30:08.560
+The Python.
+
+564
+0:30:08.560 --> 0:30:11.080
+Python. Yeah. The trick is,
+
+565
+0:30:11.080 --> 0:30:13.160
+this is just for demonstration purposes.
+
+566
+0:30:13.160 --> 0:30:16.200
+There's one you can easily make this example in C or C++,
+
+567
+0:30:16.200 --> 0:30:18.240
+and you shit if you care about performance.
+
+568
+0:30:18.240 --> 0:30:20.560
+The trick is that this program is already spending
+
+569
+0:30:20.560 --> 0:30:22.600
+99 percent of its time in IO weight,
+
+570
+0:30:22.600 --> 0:30:24.280
+because it's waiting for the kernel to complete.
+
+571
+0:30:24.280 --> 0:30:26.880
+So in the face of that, it's not that interesting.
+
+572
+0:30:26.880 --> 0:30:29.960
+The reason we have a nested loop is because
+
+573
+0:30:29.960 --> 0:30:35.800
+the floating points in eBPF is not
+
+574
+0:30:35.800 --> 0:30:38.800
+existent or at least I didn't implement the fixed point mod.
+
+575
+0:30:38.800 --> 0:30:40.920
+So what I have to do after this,
+
+576
+0:30:40.920 --> 0:30:46.120
+at the bottom what you don't see here is that from all these buckets of these bins,
+
+577
+0:30:46.120 --> 0:30:49.440
+I'm actually computing the distribution using
+
+578
+0:30:49.440 --> 0:30:52.160
+fixed point using floating point mat in Python,
+
+579
+0:30:52.160 --> 0:30:55.520
+which is why I don't get a single number from this kernel.
+
+580
+0:30:55.520 --> 0:31:00.440
+Because if I would have floating point implementation in eBPF,
+
+581
+0:31:00.440 --> 0:31:05.360
+I could already do that computation in eBPF and only return
+
+582
+0:31:05.360 --> 0:31:11.320
+a single 32-bit float as a result instead of these 265 integers.
+
+583
+0:31:12.280 --> 0:31:16.080
+But the reason this is a loop is because I still have to
+
+584
+0:31:16.080 --> 0:31:19.640
+try for the read request because I can't go above 512K,
+
+585
+0:31:19.640 --> 0:31:22.920
+even if my file is bigger than 512K.
+
+586
+0:31:32.680 --> 0:31:36.360
+Well, the trick is,
+
+587
+0:31:36.360 --> 0:31:41.040
+couldn't I implement multi-threading here?
+
+588
+0:31:41.040 --> 0:31:45.760
+Currently, the eBPF VM runs as a single process.
+
+589
+0:31:45.760 --> 0:31:49.160
+So even if you submit multiple kernels,
+
+590
+0:31:49.160 --> 0:31:51.240
+only one will execute at a time.
+
+591
+0:31:51.240 --> 0:31:53.840
+Why? It's a thesis prototype, right?
+
+592
+0:31:53.840 --> 0:31:57.440
+Time and things like this. Okay.
+
+593
+0:31:57.440 --> 0:31:58.760
+Thank you very much.
+
+594
+0:31:58.760 --> 0:32:16.320
+No worries.
+

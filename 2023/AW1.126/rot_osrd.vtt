@@ -1,0 +1,1009 @@
+WEBVTT
+
+00:00.000 --> 00:20.880
+Hello, everyone, and welcome to this presentation where we talk about automated short-term trend
+
+00:20.880 --> 00:25.560
+planning, what it means, and how we handle it in OSRD.
+
+00:25.560 --> 00:27.120
+So what is the problem?
+
+00:27.120 --> 00:31.480
+Let's say a train wants to go from station 4 to station 4.
+
+00:31.480 --> 00:36.680
+We could easily just find a path, but the problem is there's many trains that have already
+
+00:36.680 --> 00:43.180
+been scheduled, and we need to find a path that doesn't just work havoc on a timetable.
+
+00:43.180 --> 00:47.480
+We can be completely realistic in our simulation.
+
+00:47.480 --> 00:49.480
+We assume everything is on time.
+
+00:49.480 --> 00:55.000
+We know where every train is going to be located at any time.
+
+00:55.000 --> 01:01.560
+So there's a few rules we have to follow to make our blue train go to station bar.
+
+01:01.560 --> 01:05.400
+We can't add the trains that would be delayed by other trains.
+
+01:05.400 --> 01:14.960
+So in those examples, I use a signal system pretty simple where signal is red if there's
+
+01:14.960 --> 01:21.080
+a train behind it and the signal is yellow, meaning slow down, if the next signal is red.
+
+01:21.080 --> 01:27.780
+What I mean here is that our train cannot ever see a yellow signal, meaning slow down.
+
+01:27.780 --> 01:34.880
+We can add delay before it reaches a signal, but once the blue train sees a yellow signal,
+
+01:34.880 --> 01:35.880
+it's game over.
+
+01:35.880 --> 01:38.080
+The solution is invalid.
+
+01:38.080 --> 01:39.600
+The opposite is, of course, true.
+
+01:39.600 --> 01:44.920
+We cannot cause delay on other scheduled trains, meaning by being here, our blue train cannot
+
+01:44.920 --> 01:50.800
+cause another train to see a yellow signal, or red, of course.
+
+01:50.800 --> 01:55.320
+This means that we need to handle all the weird behaviors of the signal systems, which
+
+01:55.320 --> 01:58.760
+can become pretty chaotic quite quickly.
+
+01:58.760 --> 02:03.800
+So in these examples, there's one truck with signals going both ways.
+
+02:03.800 --> 02:11.560
+What happens here actually is that the signals change around the train, but what really matters
+
+02:11.560 --> 02:13.280
+is on the white.
+
+02:13.280 --> 02:18.720
+The other train cannot actually enter the main track at all, even if it's really far
+
+02:18.720 --> 02:21.920
+away, because otherwise it goes face to face.
+
+02:21.920 --> 02:23.320
+So the last signal would be red.
+
+02:23.320 --> 02:30.080
+The signal behind that would be yellow, and as soon as we see it, it's over.
+
+02:30.080 --> 02:32.400
+There's some other weird behavior.
+
+02:32.400 --> 02:37.120
+Sometimes we even have to know in advance where we will go next to know if we would
+
+02:37.120 --> 02:38.120
+be delayed.
+
+02:38.120 --> 02:44.280
+So in this example, if the train continues straightforward, it would see a green signal.
+
+02:44.280 --> 02:50.120
+But if it would turn to the white to the other train, it would see a yellow signal.
+
+02:50.120 --> 02:56.200
+Before we even reach the point where we need to take a decision.
+
+02:56.200 --> 03:02.880
+This may seem pretty minor here, but in some signals systems, we need to know like kilometers
+
+03:02.880 --> 03:03.880
+in advance.
+
+03:03.880 --> 03:07.400
+But there are some things we can do.
+
+03:07.400 --> 03:14.120
+The train can take detours to avoid busy areas, and we can also sometimes not go at maximum
+
+03:14.120 --> 03:15.120
+speed.
+
+03:15.120 --> 03:19.800
+Like if we need to fit between two trains that would go slower than our train, we can
+
+03:19.800 --> 03:21.400
+just slow down.
+
+03:21.400 --> 03:26.880
+What this means is that this is actually not a good thing for us, because we can't just
+
+03:26.880 --> 03:30.820
+find the shortest path and then find the departure time.
+
+03:30.820 --> 03:37.840
+We need to actually consider all the possibilities that we have.
+
+03:37.840 --> 03:39.600
+So that's the problem.
+
+03:39.600 --> 03:43.600
+And in OSRD, we are currently working on a solution to this problem.
+
+03:43.600 --> 03:50.960
+So OSRD, meaning open source railway designer, is an open source tool that can be used to
+
+03:50.960 --> 03:57.320
+edit railway infrastructure and run all kinds of simulations on them.
+
+03:57.320 --> 04:02.000
+Keep in mind that on these specific features, we've come a long way, but it's still very
+
+04:02.000 --> 04:03.360
+much a work in progress.
+
+04:03.360 --> 04:08.960
+So not everything is properly handled for now, and we're still currently working on
+
+04:08.960 --> 04:10.640
+it.
+
+04:10.640 --> 04:13.560
+So how do we deal with this?
+
+04:13.560 --> 04:18.080
+The main problem is that the solution space has a lot of dimensions.
+
+04:18.080 --> 04:24.320
+There's, of course, position, because we do need to find paths that go from origin to
+
+04:24.320 --> 04:25.320
+destination.
+
+04:25.320 --> 04:34.160
+There's also time, because the constraints caused by other trains depends on a certain
+
+04:34.160 --> 04:38.600
+time interval when the other train is here.
+
+04:38.600 --> 04:44.560
+The tricky one is speed, because unlike cars and bikes and most means of transportation,
+
+04:44.560 --> 04:47.920
+a train cannot just speed up really fast.
+
+04:47.920 --> 04:53.320
+It can take dozens of kilometers to just speed up or slow down.
+
+04:53.320 --> 04:57.880
+So if we find, for example, a solution that does reach our destination, avoiding all other
+
+04:57.880 --> 05:02.800
+trains, but where we reach the destination that, say, is 300 kilometers per hour, this
+
+05:02.800 --> 05:03.800
+is not a good solution.
+
+05:03.800 --> 05:06.300
+It's not even a good approximation of a solution.
+
+05:06.300 --> 05:10.960
+So we do need to keep track of the speed that can be reached by the train.
+
+05:10.960 --> 05:17.640
+So the way we do that is that we represent the search space as a graph that considers
+
+05:17.640 --> 05:24.080
+all those dimensions as well as all the constraints, because once we do have a graph like that,
+
+05:24.080 --> 05:26.200
+we can just find a path.
+
+05:26.200 --> 05:29.400
+And at this step, it becomes pretty simple.
+
+05:29.400 --> 05:33.620
+The main challenge is defining the problem itself as a graph.
+
+05:33.620 --> 05:38.200
+So in this case, a node would have a position, a time, and a speed to consider those three
+
+05:38.200 --> 05:44.440
+dimensions and must not be defined implicitly.
+
+05:44.440 --> 05:49.720
+To get the speed and times, we want train simulations, which we already know how to
+
+05:49.720 --> 05:51.220
+do in other parts of the project.
+
+05:51.220 --> 05:57.640
+So we consider everything we need to, like slope, curves, the rolling stock data, and
+
+05:57.640 --> 06:01.480
+everything we need to.
+
+06:01.480 --> 06:04.000
+So I have a small question.
+
+06:04.000 --> 06:08.360
+Is there a speed derivable from the position and time?
+
+06:08.360 --> 06:18.120
+Yes, but we actually compute the speed to get the position and the time.
+
+06:18.120 --> 06:22.200
+So I have a small graphical representation to explain really what I mean by that when
+
+06:22.200 --> 06:25.080
+we add time to our solution.
+
+06:25.080 --> 06:29.200
+So we start from a simple graph that represents the physical infrastructure.
+
+06:29.200 --> 06:32.280
+In this case, that would be, for example, track sections.
+
+06:32.280 --> 06:37.440
+And what we do is, in a way, we duplicate all nodes of the graph at different times,
+
+06:37.440 --> 06:42.880
+meaning that the point A always represents a specific point in space.
+
+06:42.880 --> 06:48.560
+But there's a different node for A at t equals 0 and another node for A at t equals 1 and
+
+06:48.560 --> 06:50.080
+so on.
+
+06:50.080 --> 06:54.800
+And then we link them in a way that actually reflects the travel time.
+
+06:54.800 --> 07:02.480
+So meaning that we start at A at t equals 0 and we can reach C at a certain time after.
+
+07:02.480 --> 07:09.160
+And yeah, we can, for example, go from A to F at the same time because we can't just teleport
+
+07:09.160 --> 07:12.320
+there.
+
+07:12.320 --> 07:14.320
+So this graph is constructed.
+
+07:14.320 --> 07:19.280
+As we explore it, it would be too expensive to just build a whole graph on the whole country
+
+07:19.280 --> 07:20.960
+at first.
+
+07:20.960 --> 07:27.440
+So it's all implicitly defined at first, but then we actually run simulations when we move
+
+07:27.440 --> 07:31.440
+forward in the graph.
+
+07:31.440 --> 07:35.840
+It's also discretized in time, but only when we evaluate visited location.
+
+07:35.840 --> 07:41.720
+What I mean by that is that when we run simulations, we actually keep full track of the time at
+
+07:41.720 --> 07:43.520
+full accuracy.
+
+07:43.520 --> 07:49.760
+But once we reach a point that has already been visited, if we've visited it at too close
+
+07:49.760 --> 07:54.320
+in time, we consider that it's already visited.
+
+07:54.320 --> 08:02.200
+Once we have that graph, we just run an A star on the result, a resulting on the graph.
+
+08:02.200 --> 08:04.720
+So A star means we have two functions to define.
+
+08:04.720 --> 08:07.920
+We have a cost function and an optimization heuristic.
+
+08:07.920 --> 08:13.520
+In this case, a cost function would be the travel time of the train from start to the
+
+08:13.520 --> 08:15.080
+current point.
+
+08:15.080 --> 08:22.440
+And the optimization heuristic is based on geographical data.
+
+08:22.440 --> 08:31.280
+And because our heuristic doesn't overestimate the remaining cost, we are going to find the
+
+08:31.280 --> 08:32.480
+optimal solution.
+
+08:32.480 --> 08:38.280
+So we will find the path that takes the least amount of time.
+
+08:38.280 --> 08:43.520
+But I've talked about how we add time to the graph, but I haven't really talked about speed
+
+08:43.520 --> 08:44.520
+yet.
+
+08:44.520 --> 08:51.240
+So the default behavior is that we always go at full speed unless we need to.
+
+08:51.240 --> 08:55.560
+By full speed, I mean not just the maximum allowed speed, like the train speed up as
+
+08:55.560 --> 09:00.560
+much as it can and always stays at maximum speed.
+
+09:00.560 --> 09:04.920
+But so in this slide, we have a space-time chart.
+
+09:04.920 --> 09:10.920
+So we have time on the horizontal axis and distance on a given path on the vertical axis.
+
+09:10.920 --> 09:15.640
+And there's an area that is unavailable, meaning there's another train, for example, in this
+
+09:15.640 --> 09:18.680
+specific area at a given time.
+
+09:18.680 --> 09:23.120
+And I've shown the edges, the arrows represent edges of the graph.
+
+09:23.120 --> 09:27.800
+So in this case, we can just, if we speed up as much as we can, we can go before that
+
+09:27.800 --> 09:34.200
+other train, but we also could go after that train, which would lead to different solutions.
+
+09:34.200 --> 09:39.800
+So in this case, we actually create several edges that are all considered as valid paths.
+
+09:39.800 --> 09:45.480
+In a way, you can see it as a decision tree, except we can actually reach the same point
+
+09:45.480 --> 09:48.800
+through different paths.
+
+09:48.800 --> 09:55.960
+Okay, so, oops, good matter.
+
+09:55.960 --> 09:59.520
+So I've talked about the general principle of the solution.
+
+09:59.520 --> 10:04.600
+Now I'll talk about a few problems we faced on how we handle them, this problem, what
+
+10:04.600 --> 10:08.920
+are them, concern, speed, because it's actually a pain to manage.
+
+10:08.920 --> 10:15.280
+So as I said, we want simulation to get the speed of the train, but we do that only one
+
+10:15.280 --> 10:19.360
+edge at a time when we explore the graph.
+
+10:19.360 --> 10:22.440
+What that means is that we don't know what comes after.
+
+10:22.440 --> 10:31.080
+So when we reach our destination, we only know that when we explore the graph, the edge
+
+10:31.080 --> 10:34.520
+that contains that destination.
+
+10:34.520 --> 10:43.200
+That doesn't always leave enough distance to properly break.
+
+10:43.200 --> 10:49.640
+So in this example, we have speed plotted with a distance, and we start in the first
+
+10:49.640 --> 10:53.680
+stage by going at full speed, and then we see that we need to stop there.
+
+10:53.680 --> 10:56.520
+We start breaking, and there's a discontinuity.
+
+10:56.520 --> 11:00.200
+This is not a valid solution.
+
+11:00.200 --> 11:05.960
+So in the next slide, it's mostly the same situation, but represented differently.
+
+11:05.960 --> 11:12.200
+Here we have edges of the graph, where in red, we have edges where we speed up, and
+
+11:12.200 --> 11:16.200
+in blue where we try to slow down, and we have the same discontinuity here.
+
+11:16.200 --> 11:20.680
+To stop at the end of section four, we need to enter that section at 10 kilometer per
+
+11:20.680 --> 11:25.520
+hour, but because we've been speeding up, we are at 50 kilometer per hour.
+
+11:25.520 --> 11:30.880
+So the way we do this, we handle this case, is that we go back in the graph, we backtrack
+
+11:30.880 --> 11:36.280
+to back propagate the constraints.
+
+11:36.280 --> 11:40.320
+So we see that there's a discontinuity there, and what we actually do is that we go over
+
+11:40.320 --> 11:46.800
+the previous section, and we create a new graph edge, but this time slowing down, and
+
+11:46.800 --> 11:51.600
+we know that we need to enter the last section at 10 kilometer per hour, so we create an
+
+11:51.600 --> 11:54.880
+edge where we end at 10 kilometer per hour.
+
+11:54.880 --> 11:58.520
+We notice that to do that, we need to enter that section at 20 kilometer per hour, which
+
+11:58.520 --> 12:05.240
+is still not the same as the previous edge, so we keep going, and we continue creating
+
+12:05.240 --> 12:11.980
+new edges going over the previous section until we have something that look like that.
+
+12:11.980 --> 12:17.200
+We have a valid path that actually stops there.
+
+12:17.200 --> 12:23.040
+The two different paths still exist in the graph, because if we go another direction
+
+12:23.040 --> 12:30.600
+or something like that, we can still find paths that would take the top path.
+
+12:30.600 --> 12:32.560
+Then there's another problem.
+
+12:32.560 --> 12:39.440
+I've talked about adding delay previously to go after another train, but I haven't explained
+
+12:39.440 --> 12:41.440
+how we do that.
+
+12:41.440 --> 12:48.720
+So when we can, as soon as we can, we shift the departure time, meaning that the train,
+
+12:48.720 --> 12:55.040
+for example, needs to leave not just at 10 AM, but between 10 and 12 or something like
+
+12:55.040 --> 12:56.040
+that.
+
+12:56.040 --> 13:01.760
+So if we notice that the train reached the final station 15 minutes too early, and the
+
+13:01.760 --> 13:08.720
+other train is already still there, we just make the new train leave 15 minutes later,
+
+13:08.720 --> 13:10.120
+and this fixes the problem.
+
+13:10.120 --> 13:16.000
+But it is not always possible, like in this example.
+
+13:16.000 --> 13:22.240
+If we try to shift the departure time to avoid the problems on the section three, we would
+
+13:22.240 --> 13:24.360
+cause new problem on section one.
+
+13:24.360 --> 13:30.920
+So we actually need to add delay between two specific points of the path without affecting
+
+13:30.920 --> 13:33.040
+the rest.
+
+13:33.040 --> 13:39.560
+The way we handle this is actually the same way as the other problem, meaning that we
+
+13:39.560 --> 13:48.480
+go back, we backtrack on the graph to propagate the, to add the delay.
+
+13:48.480 --> 13:54.720
+So we actually have the old edges that go at maximum speed, but we have a new edges
+
+13:54.720 --> 13:59.560
+going from section one to three that has what we call an engineering allowance.
+
+13:59.560 --> 14:04.040
+I can't go too much into details in how it's computed, but basically the idea is that we
+
+14:04.040 --> 14:09.680
+can do, precisely what we need to do, we add delay between two points of the path by slowing
+
+14:09.680 --> 14:14.000
+the train down without affecting the rest of the path.
+
+14:14.000 --> 14:17.200
+So this edges here isn't changed.
+
+14:17.200 --> 14:24.240
+This one is actually the same, but this one is slowed down.
+
+14:24.240 --> 14:28.360
+So we're in the end of the presentation.
+
+14:28.360 --> 14:34.640
+So to conclude what we can do, we can find paths that avoid delay on any train, the one
+
+14:34.640 --> 14:36.640
+we add and any other.
+
+14:36.640 --> 14:43.200
+We can take detours, we can slow down, we can have all kinds of way to avoid any scheduled
+
+14:43.200 --> 14:44.200
+train.
+
+14:44.200 --> 14:48.440
+There are some features I haven't really talked about because I didn't have the time, but
+
+14:48.440 --> 14:53.120
+for example, the user can input allowance parameter, what it means is that the train
+
+14:53.120 --> 14:57.880
+generally go a bit slower than they can at fastest.
+
+14:57.880 --> 15:01.120
+So as they can catch up, their delay is being delayed.
+
+15:01.120 --> 15:06.600
+And as far as performances go, it takes up to about five seconds.
+
+15:06.600 --> 15:09.640
+So it's not instant, but not really a problem for now.
+
+15:09.640 --> 15:11.720
+This is good enough.
+
+15:11.720 --> 15:15.960
+And some features that we still need to work on.
+
+15:15.960 --> 15:21.280
+For example, the signaling systems, for now we only support the simplest signaling systems.
+
+15:21.280 --> 15:27.840
+The reason for that is because we are currently refactoring the signaling engine in our system.
+
+15:27.840 --> 15:33.880
+We are already, which is actually really amazing and we would have loved to talk about it today.
+
+15:33.880 --> 15:39.840
+But it's almost finished and when it is done, we need to plug the two systems together.
+
+15:39.840 --> 15:45.800
+There's some features a bit more minor, like for now, the user can set the departure time
+
+15:45.800 --> 15:48.320
+and leave the overall time unspecified.
+
+15:48.320 --> 15:52.480
+We also need to do the opposite, meaning we need to arrive at a given time and we don't
+
+15:52.480 --> 15:54.520
+know when we leave.
+
+15:54.520 --> 15:59.120
+And we also need the user to be able to say we want to stop there, there, and there on
+
+15:59.120 --> 16:02.120
+the path.
+
+16:02.120 --> 16:09.520
+Okay, so I've been faster than I thought.
+
+16:09.520 --> 16:15.600
+So what I'm going to do is that I'll show a small video demonstration of the project.
+
+16:15.600 --> 16:22.520
+This is a few months old, but it shows generally what we do, what we can do with this tool.
+
+16:22.520 --> 16:29.760
+So we are on the Brittany region of France and we have the trains that go from Lorient
+
+16:29.760 --> 16:32.680
+to Breist.
+
+16:32.680 --> 16:34.120
+We just set the schedule.
+
+16:34.120 --> 16:37.360
+We have several trains going there, which we can see here.
+
+16:37.360 --> 16:44.200
+I won't go too much into details in what the boxes are, but generally it's like, is this
+
+16:44.200 --> 16:45.200
+box overlap?
+
+16:45.200 --> 16:48.960
+A train is slowed down.
+
+16:48.960 --> 16:58.960
+So now we ask for a last minute train that starts from Rennes to Breist.
+
+16:58.960 --> 17:01.920
+And we do find the path.
+
+17:01.920 --> 17:04.280
+So I'll explain it a bit.
+
+17:04.280 --> 17:05.280
+I do have time.
+
+17:05.280 --> 17:06.680
+I do have time.
+
+17:06.680 --> 17:11.480
+What we see here, horizontal axis is a time, vertical axis is distance.
+
+17:11.480 --> 17:15.840
+And previous trains we already had it at the end of the path.
+
+17:15.840 --> 17:24.400
+So we see them at the top and the new train goes over the whole path.
+
+17:24.400 --> 17:27.040
+Now we add some other trains.
+
+17:27.040 --> 17:29.320
+No, we don't add other trains.
+
+17:29.320 --> 17:37.520
+We move one of the trains so that it blocks one, actually, the path we took at first.
+
+17:37.520 --> 17:44.640
+So if we ask for another train, what we'll see is that it will be shifted to avoid the
+
+17:44.640 --> 17:53.440
+previous one.
+
+17:53.440 --> 17:58.200
+And we notice that it leaves around 720, something like that.
+
+17:58.200 --> 18:10.200
+So what we'll do is that we'll add another train, this time going to Qibron, called
+
+18:10.200 --> 18:20.120
+the Qibron, and we'll make it leave around that time.
+
+18:20.120 --> 18:33.480
+We add a few of them.
+
+18:33.480 --> 18:39.240
+And what we see here is that the train started before, before all those trains that have
+
+18:39.240 --> 18:43.720
+been added on the first, actually, I'll explain a bit more.
+
+18:43.720 --> 18:46.920
+The trains we have added diverge here.
+
+18:46.920 --> 18:50.280
+From here they move away from the path we used to Qibron.
+
+18:50.280 --> 18:54.320
+But so we only see them up to here.
+
+18:54.320 --> 19:05.760
+And the train we add starts before, then it slows down to enter in this section here.
+
+19:05.760 --> 19:09.560
+And we can see the speed of the trains.
+
+19:09.560 --> 19:22.200
+So it, anyway, I'll just move on to the questions.
+
+19:22.200 --> 19:32.880
+I have also a kind of links, website for the project, GitHub link, an email.
+
+19:32.880 --> 19:33.880
+Yes?
+
+19:33.880 --> 19:41.760
+Does this kind of solution is used to create schedules in the advance?
+
+19:41.760 --> 19:44.600
+It's not used to create the schedules, actually.
+
+19:44.600 --> 19:46.600
+It's used once the schedule is set.
+
+19:46.600 --> 19:48.600
+Like in the last minute?
+
+19:48.600 --> 19:49.600
+Yeah.
+
+19:49.600 --> 19:51.600
+You need to add a train on the train?
+
+19:51.600 --> 19:52.600
+Yeah, that's it.
+
+19:52.600 --> 19:58.120
+There's a given date where the, it's something I wanted to talk about, but I didn't really
+
+19:58.120 --> 19:59.840
+have time in this position.
+
+19:59.840 --> 20:08.800
+So there's a train railway manager offers some pass for trains.
+
+20:08.800 --> 20:16.000
+And at a given time, those pass are assigned to trains, like train operators who want their
+
+20:16.000 --> 20:18.800
+trains on those paths.
+
+20:18.800 --> 20:25.160
+And once this is set, all the, there's still room for more trains.
+
+20:25.160 --> 20:30.400
+And this is what we do here, we find the room for new trains.
+
+20:30.400 --> 20:31.400
+Yes?
+
+20:31.400 --> 20:34.400
+Five seconds response time.
+
+20:34.400 --> 20:35.400
+Yes.
+
+20:35.400 --> 20:40.040
+For how many nodes and trains?
+
+20:40.040 --> 20:41.200
+Not a lot of trains.
+
+20:41.200 --> 20:46.680
+We don't have the tools yet to import the whole, what we call SR.
+
+20:46.680 --> 20:52.600
+I'm not sure what the English, like the whole set of trains on the line.
+
+20:52.600 --> 21:02.120
+And there's generally we test with a few trains here on the, like the kind of things I showed
+
+21:02.120 --> 21:04.680
+and the pass of a few hundred kilometers.
+
+21:04.680 --> 21:08.040
+And we do know that it doesn't scale that well with a number of trains.
+
+21:08.040 --> 21:14.120
+And we'll work on that kind of questions once we have something actually working and finished.
+
+21:14.120 --> 21:15.120
+Yep.
+
+21:15.120 --> 21:25.480
+My question about sharing that because we live in France for me, I'm quite concerned
+
+21:25.480 --> 21:28.480
+with the security, from cost, et cetera.
+
+21:28.480 --> 21:35.480
+When you go from France after Paris to me, you are coming from several countries.
+
+21:35.480 --> 21:41.480
+In the France you don't have a go in the railway in between Paris and Lyon.
+
+21:41.480 --> 21:45.600
+You can have some stuff that can block the train, et cetera.
+
+21:45.600 --> 21:48.600
+Why is the problem you have in local countries?
+
+21:48.600 --> 21:54.600
+And especially in Canada, you share that that train for the stuff you see?
+
+21:54.600 --> 21:57.600
+I actually didn't really hear your question that well.
+
+21:57.600 --> 21:58.600
+Sorry.
+
+21:58.600 --> 22:05.800
+If I got it right, like you asked about the troubles we can find along the way.
+
+22:05.800 --> 22:16.840
+Mostly, we assume at this step that everything is on time and works as expected.
+
+22:16.840 --> 22:22.040
+When people work on the trucks or something like that, we know in advance that it's unavailable.
+
+22:22.040 --> 22:23.040
+Yeah.
+
+22:23.040 --> 22:26.040
+It's not real time.
+
+22:26.040 --> 22:28.440
+Not real time.
+
+22:28.440 --> 22:29.440
+Yeah.
+
+22:29.440 --> 22:30.440
+It's not real time.
+
+22:30.440 --> 22:36.240
+It's actually not exactly last minute, it's generally a few days before the train's actually
+
+22:36.240 --> 22:37.240
+won.
+
+22:37.240 --> 22:40.600
+So, yeah, it's a fair assumption to just...
+
+22:40.600 --> 22:42.600
+Theoretical timetable.
+
+22:42.600 --> 22:43.600
+Yeah.
+
+22:43.600 --> 22:44.600
+Theoretical timetable.
+
+22:44.600 --> 22:53.600
+There was one question on the chat that this problem might be a good candidate for an artificial
+
+22:53.600 --> 22:54.600
+intelligent plan to solve.
+
+22:54.600 --> 22:55.600
+I have to consider that.
+
+22:55.600 --> 23:02.600
+Please repeat the question.
+
+23:02.600 --> 23:04.480
+Oh, yeah.
+
+23:04.480 --> 23:10.640
+Someone has got a chat if artificial intelligence have been considered for this problem.
+
+23:10.640 --> 23:17.880
+We do have considered them in the project in general, but not specifically in this context.
+
+23:17.880 --> 23:26.040
+I personally don't think it would tell that much.
+
+23:26.040 --> 23:30.120
+I mean, it would be a good heuristic to know which path to evaluate before another, but
+
+23:30.120 --> 23:35.280
+if we want to still find a good path towards the end, we do need to explore all the kinds
+
+23:35.280 --> 23:36.880
+of solutions.
+
+23:36.880 --> 23:41.800
+The place where we thought about using artificial intelligence is a decision like which train
+
+23:41.800 --> 23:44.280
+goes before one another.
+
+23:44.280 --> 23:51.880
+So the context where we really thought about this is not in this case, but when train are
+
+23:51.880 --> 23:57.880
+actually running late, which one do we favor over one over the other?
+
+23:57.880 --> 24:04.160
+I think it could be a good heuristic in this case, but not really that important.
+
+24:04.160 --> 24:08.560
+There was another question.
+
+24:08.560 --> 24:12.200
+What are the biggest remaining challenges to be solved?
+
+24:12.200 --> 24:18.640
+There is a signaling interface plugging the things together because as I showed in this
+
+24:18.640 --> 24:23.880
+slide, this problem, this is a pain.
+
+24:23.880 --> 24:30.600
+We do have some leads, like some intuitions that we could do things in some way, but I
+
+24:30.600 --> 24:35.840
+won't go too much into details because we don't know if that's true, if the solution
+
+24:35.840 --> 24:40.040
+we are thinking about are valid or not.
+
+24:40.040 --> 24:42.760
+But we'll work on that in the next few months anyway.
+
+24:42.760 --> 24:54.400
+I'm working in an international organization, but an end link aviation, so same kind of
+
+24:54.400 --> 24:57.400
+problems, but we have a different dimension.
+
+24:57.400 --> 25:07.800
+I'm asking how have you managed or your organization has managed to say we will do that open source
+
+25:07.800 --> 25:12.560
+in a region if this type of solution available for others.
+
+25:12.560 --> 25:20.320
+So I guess you are working for SNCF, so you had to get some money from SNCF and make open
+
+25:20.320 --> 25:21.320
+source.
+
+25:21.320 --> 25:26.040
+How have you got agreement on that?
+
+25:26.040 --> 25:30.160
+So the question is how we manage to make the project open source in SNCF.
+
+25:30.160 --> 25:35.080
+So I'm not actually the one taking those decisions or even negotiating them.
+
+25:35.080 --> 25:41.520
+But the general idea, I think, that's my vision of it, is that we don't have any competition
+
+25:41.520 --> 25:43.080
+or something like that.
+
+25:43.080 --> 25:47.760
+We want the infrastructure for France and I think no one else will.
+
+25:47.760 --> 25:53.240
+So maybe the other countries nearby have the same kind of problem and maybe they could
+
+25:53.240 --> 26:00.120
+use our solution and maybe contribute to that solution, to these tools.
+
+26:00.120 --> 26:07.120
+And generally it makes more sense to contribute than to compete in this context.
+
+26:07.120 --> 26:09.120
+Thank you.
+
+26:09.120 --> 26:11.120
+Yeah, cool.
+
+26:11.120 --> 26:17.120
+Thank you for the spread.
+
+26:17.120 --> 26:20.120
+Thank you.
+
+26:20.120 --> 26:30.120
+So the presentation has arrived on time.
+
+26:30.120 --> 26:38.120
+We are starting in a few minutes with the next panel.
+
+26:38.120 --> 26:55.120
+Thank you.
