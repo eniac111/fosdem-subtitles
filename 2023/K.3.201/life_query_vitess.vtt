@@ -1,0 +1,619 @@
+WEBVTT
+
+00:00.000 --> 00:07.000
+Hello everyone.
+
+00:07.000 --> 00:13.360
+Alright, thank you.
+
+00:13.360 --> 00:14.640
+So I am Harshit Gangal.
+
+00:14.640 --> 00:20.800
+I work for PlanetScale and I am a maintainer of VITAS and today I am going to talk about
+
+00:20.800 --> 00:22.000
+life of a query.
+
+00:22.000 --> 00:23.000
+Why not?
+
+00:23.000 --> 00:27.080
+Because I work in query serving team in VITAS.
+
+00:27.080 --> 00:29.240
+So what is VITAS basically?
+
+00:29.240 --> 00:35.040
+VITAS is nothing but it is used to scale out your MySQL and it also manages your MySQL
+
+00:35.040 --> 00:36.040
+for you.
+
+00:36.040 --> 00:43.800
+It is a CNCF gadget project and it is open source with Apache license 2.0.
+
+00:43.800 --> 00:49.040
+So this is the architecture of VITAS which is basically there are so many components
+
+00:49.040 --> 00:53.680
+but today we will just focus on few of them which is one is VT gate where your application
+
+00:53.680 --> 00:58.920
+connects to and then we have VT tablet where once the application connects to VT gate then
+
+00:58.920 --> 01:02.920
+the queries are sent over there and then you have the MySQL where actually your data are
+
+01:02.920 --> 01:06.320
+getting stored.
+
+01:06.320 --> 01:10.640
+Let us talk about few terminologies which I will be using across my presentation which
+
+01:10.640 --> 01:11.640
+is one is Keyspace.
+
+01:11.640 --> 01:17.040
+Keyspace is a logical representation of a database and it is basically a collection
+
+01:17.040 --> 01:19.040
+of your physical databases.
+
+01:19.040 --> 01:28.080
+Shard, it is basically a subset of your data which resides in a Keyspace and there is some
+
+01:28.080 --> 01:29.080
+term called Windex.
+
+01:29.080 --> 01:36.960
+Windex is similar to your MySQL indexes which is basically it is maintained by the VITAS
+
+01:36.960 --> 01:41.440
+and there is a thing called primary Windexes which means it will decide where your row
+
+01:41.440 --> 01:45.040
+actually live in a particular shard or in particular table.
+
+01:45.040 --> 01:50.560
+So once your query comes in then it decides like okay this row while inserting where it
+
+01:50.560 --> 01:56.600
+should actually which shard it should actually go to.
+
+01:56.600 --> 02:00.720
+So let us take some query right then we will go further.
+
+02:00.720 --> 02:06.040
+So let us say we have two tables customer and order table and what we want to do is
+
+02:06.040 --> 02:13.480
+we want to find a customer who has at least a spend of 1000 rupees, 1000 bucks basically
+
+02:13.480 --> 02:15.760
+in their whole order history.
+
+02:15.760 --> 02:20.280
+So we have to take two tables we take a join and do grouping on them and take a filter
+
+02:20.280 --> 02:23.960
+on top of it.
+
+02:23.960 --> 02:28.880
+So first thing first, so now the clients want to send a query to you how they will do it.
+
+02:28.880 --> 02:35.240
+So first the client has to connect to something called VIT gates and so they can use MySQL
+
+02:35.240 --> 02:36.240
+protocol.
+
+02:36.240 --> 02:42.600
+You have your vanilla, you have all the MySQL drivers like in different languages you have
+
+02:42.600 --> 02:47.640
+and you can use the already available MySQL driver to connect directly to VIT gate.
+
+02:47.640 --> 02:51.940
+VIT gate supports the MySQL protocol so you do not have to do anything on that front.
+
+02:51.940 --> 02:59.720
+But it also supports GRPC and it was supported earlier before we implemented the MySQL protocol
+
+02:59.720 --> 03:03.920
+but it still stays here for its own benefits.
+
+03:03.920 --> 03:09.760
+And the reason is like in MySQL protocol once you connect it is like your session is tied
+
+03:09.760 --> 03:13.440
+which means if you open a transaction you have to commit transaction using that.
+
+03:13.440 --> 03:18.640
+But in GRPC what the initial benefit you get is you can connect to any VIT gate and you
+
+03:18.640 --> 03:22.200
+start a transaction over there and then you can connect to any other VIT gate and you
+
+03:22.200 --> 03:26.600
+can commit a transaction using that VIT gate.
+
+03:26.600 --> 03:30.280
+So let's talk about the different phases that we have to go through.
+
+03:30.280 --> 03:35.000
+Once the query is now received by the VIT gate it has to go through parsing, rewriting,
+
+03:35.000 --> 03:39.200
+planning and execution and we'll talk in details about each of the phases but this
+
+03:39.200 --> 03:44.120
+is what the VIT gate does once it receives the query on its end.
+
+03:44.120 --> 03:50.600
+So in the parsing phase now you receive the query now basically it will parse it to know
+
+03:50.600 --> 03:54.680
+the whether the operaries syntactically correct or not and once it is syntactically correct
+
+03:54.680 --> 03:57.560
+then it construct the abstract syntax free output of it.
+
+03:57.560 --> 04:01.680
+So it will have the select expression from clauses, group by and the having for the query
+
+04:01.680 --> 04:05.480
+we mentioned before.
+
+04:05.480 --> 04:10.920
+Now once it's parsed it goes into the rewriting phase and it's very important to have this
+
+04:10.920 --> 04:15.920
+rewriting phase because we are trying to mimic a thing like as a single data store though
+
+04:15.920 --> 04:21.560
+your data is distributed across multiple shards and this rewriting phase what we try to do
+
+04:21.560 --> 04:28.160
+is basically we first try to see oh is there any literals is anything which you can parameterize.
+
+04:28.160 --> 04:32.920
+So once we are done with the planning phase we don't have to plan again and again similar
+
+04:32.920 --> 04:34.360
+kind of query.
+
+04:34.360 --> 04:39.320
+So what we do is we say okay here's I see 1000 but I don't need to plan specifically
+
+04:39.320 --> 04:44.440
+for 1000 so I just make it a parameter and then I plan for this kind of query rather
+
+04:44.440 --> 04:48.960
+than planning with the 1000.
+
+04:48.960 --> 04:52.880
+The other thing we do is we do some replacement functions.
+
+04:52.880 --> 04:57.400
+So like if you want to get last insert ID you cannot just send it to any MySQL and
+
+04:57.400 --> 04:58.780
+get a last insert ID.
+
+04:58.780 --> 05:04.400
+So we do a session management at the VTGet level where for each session we have to know
+
+05:04.400 --> 05:09.300
+what was the last insert ID inserted so you cannot send directly so we need rewriting
+
+05:09.300 --> 05:13.040
+phase for these kind of functions they are multiple but I just talking about one of them
+
+05:13.040 --> 05:18.400
+which is last insert ID so you have to do it at the VTGet level so then you know then
+
+05:18.400 --> 05:24.960
+you are replacing that function with a value and you know what that value is for that session.
+
+05:24.960 --> 05:30.960
+And the third is you might have to add another SQL node like after you construct the AST
+
+05:30.960 --> 05:36.880
+so this is like if on the session you said my I cannot select more than 100 rows so in
+
+05:36.880 --> 05:41.440
+the after AST we have in the rewriting phase we will add a limit clause as well so the
+
+05:41.440 --> 05:47.200
+planning happens with the limit in place in it.
+
+05:47.200 --> 05:53.080
+So before so after rewriting and the AST generation before we go into the planning the planner
+
+05:53.080 --> 05:57.080
+needs some additional information which is it should know what are the key spaces that
+
+05:57.080 --> 06:05.040
+exist and what are the shard that the key space map to and in the key spaces what are
+
+06:05.040 --> 06:10.520
+the tables that exist and what is the primary way what are the in Windexes that you use
+
+06:10.520 --> 06:17.080
+for those tables and those these information is basically cached in the VTGate and you
+
+06:17.080 --> 06:21.440
+have an event watcher which watches and this information comes from actually we have something
+
+06:21.440 --> 06:27.480
+called topo server which is zookeeper HCD sim which is this metadata kind of information
+
+06:27.480 --> 06:33.840
+stored and let us see what the sharding information looks like that we get from that zookeeper
+
+06:33.840 --> 06:38.560
+so what we call is called V schema and here it is saying that there is one thing called
+
+06:38.560 --> 06:44.840
+commerce and it sharded this is the Windex that exists and these are the two tables customer
+
+06:44.840 --> 06:52.900
+and the order table which use and they uses the CID column and they use this Windex function
+
+06:52.900 --> 06:59.160
+to shard their table.
+
+06:59.160 --> 07:06.160
+So now the VTGate knows about everything that now it can go into the planning phase and
+
+07:06.160 --> 07:12.680
+the first thing that it does is does the semantic analysis which is it does basically scoping
+
+07:12.680 --> 07:18.020
+binding and typing which is like it is validating not validated your syntactic thing before
+
+07:18.020 --> 07:21.920
+and now it is trying to validate whether you are using the right columns in the right places
+
+07:21.920 --> 07:26.320
+or not whether they are actually scoped correctly or not is the visibility correct or not for
+
+07:26.320 --> 07:31.720
+those the operations the operations you are using and then once it validates that then
+
+07:31.720 --> 07:36.360
+it goes into the binding phase where it binds those columns to the table that it belongs
+
+07:36.360 --> 07:41.520
+to and then it also does the typing which means it try to understand that okay once
+
+07:41.520 --> 07:47.160
+the results come back we know that what type it will be of.
+
+07:47.160 --> 07:52.240
+The second is once the semantic analysis happens then your AST is converted into an operator
+
+07:52.240 --> 07:58.800
+tree which is basically it is basically a logical operator like you have joints and
+
+07:58.800 --> 08:03.200
+then you have tables and stuff so it convert into those logical operators and then once
+
+08:03.200 --> 08:08.640
+those logical operator are converted it then goes into the optimization phase.
+
+08:08.640 --> 08:14.720
+So in the optimization phase we basically make a decision that how the plan should look
+
+08:14.720 --> 08:21.080
+like and in the innovators basically what we do is we get the sequel and ultimately
+
+08:21.080 --> 08:25.120
+after the planning phase we will get another sequel because the data does not reside on
+
+08:25.120 --> 08:30.760
+the VT gate it resides on the MySQL and we want to optimize on the way that we should
+
+08:30.760 --> 08:35.040
+get less and less information back on the VT gate to process your data.
+
+08:35.040 --> 08:42.040
+So we try to push as much as down to the query to the MySQL so that that can resolve much
+
+08:42.040 --> 08:44.920
+faster for us than we do it at the VT gate.
+
+08:44.920 --> 08:51.400
+So in the optimization phase basically after the optimization completes we call something
+
+08:51.400 --> 08:58.160
+like routes which tell us that okay this query will go to which all shards so that is what
+
+08:58.160 --> 09:05.840
+the ultimate step becomes and that is where we call it as a physical operator and then
+
+09:05.840 --> 09:13.480
+once we have the physical operators we transform the plan into an execution plan and the execution
+
+09:13.480 --> 09:17.400
+plan is nothing but a collection of engine primitives that we call.
+
+09:17.400 --> 09:22.320
+So let us look at how the plan looks like or how the execution plan looks like.
+
+09:22.320 --> 09:29.880
+So if both the tables which I showed in the V schema were using same sharding key, sharding
+
+09:29.880 --> 09:35.080
+function so that is why we were able to basically make it as a single route which is telling
+
+09:35.080 --> 09:41.880
+you that okay just go scatter to all the shards and just gather the result at the VT gate
+
+09:41.880 --> 09:46.120
+level and send it back to the user.
+
+09:46.120 --> 09:52.880
+But if both the tables the customer table and the order table were using some different
+
+09:52.880 --> 09:58.160
+sharding functions then you cannot merge it like that then it says basically it will look
+
+09:58.160 --> 10:02.720
+something like that like you will have now because it gets very complex enough to show
+
+10:02.720 --> 10:07.620
+everything over here so I am just showing that there will be two routes that will happen
+
+10:07.620 --> 10:11.780
+and then ultimately the join will also happen at the VT gate level sorting and projecting
+
+10:11.780 --> 10:17.480
+and aggregation and then finally the filtering based on how much customers have spent those
+
+10:17.480 --> 10:23.200
+thousand bucks so everything happens on the VT gate.
+
+10:23.200 --> 10:27.120
+Let's just look at the two routes that I showed on the left.
+
+10:27.120 --> 10:31.600
+So first one will do is basically doing a scatter and it's trying to do on the order
+
+10:31.600 --> 10:39.000
+table that okay give me for all the customer IDs what is the spend they have done and then
+
+10:39.000 --> 10:44.160
+on the right hand side we need the customer email so for every customer ID I need to get
+
+10:44.160 --> 10:49.880
+their email IDs and because the customer ID was the sharding key the primary index for
+
+10:49.880 --> 10:56.440
+that table we are able to send the second query as a only to a specific shard we don't
+
+10:56.440 --> 11:04.280
+have to do again go to all the shards.
+
+11:04.280 --> 11:07.440
+So what all steps happen in the execution?
+
+11:07.440 --> 11:12.880
+So first thing is once we get the route we resolve it using those indexes and so that
+
+11:12.880 --> 11:16.600
+it can go to the specific correct shard.
+
+11:16.600 --> 11:20.840
+Another is then basically then we take it decide okay now we know which shard we have
+
+11:20.840 --> 11:25.080
+to go to then it then it will also decide okay this is a query that we have to send
+
+11:25.080 --> 11:30.920
+it to something that we call the VT tablets which basically in the shard we have VT tablets
+
+11:30.920 --> 11:37.480
+in MySQL so it sent it to the VT tablet and then it once you receive the result back you
+
+11:37.480 --> 11:44.720
+gather the information but sometimes you also have to do transaction so if transaction is
+
+11:44.720 --> 11:49.080
+needed then the VT gate will also tell VT tablets go and also open the transaction when
+
+11:49.080 --> 11:56.440
+you execute this query and then the session the transactions will be managed by the VT
+
+11:56.440 --> 12:00.080
+gate that will know in which shard what is the transaction being opened so that when
+
+12:00.080 --> 12:03.360
+you do the commit it knows which all shard it has to send the commit information as well
+
+12:03.360 --> 12:06.680
+too.
+
+12:06.680 --> 12:12.000
+And the third and the last thing that execution also handles is basically if you have a select
+
+12:12.000 --> 12:15.840
+query and you want to read it on the replicas then it also does the load balancing for you
+
+12:15.840 --> 12:24.880
+so it doesn't overload a specific a single replica.
+
+12:24.880 --> 12:33.560
+And yeah right so now the query is been sent to VT tablets and now the VT job is to basically
+
+12:33.560 --> 12:37.600
+get the result back to the VT gate so what are the things that goes in the VT tablet
+
+12:37.600 --> 12:43.040
+it's exactly similar thing that goes in the VT tablets as well but what are different
+
+12:43.040 --> 12:48.120
+reasons so first thing is VT gate has some view of the VT tablet of what the state is
+
+12:48.120 --> 12:51.960
+but the first thing that the once the query received by the VT tablet it does this okay
+
+12:51.960 --> 12:56.520
+let me validate whether that's current am I able to serve this query or not if any view
+
+12:56.520 --> 13:03.760
+has changed before after sending the query and before it reads the VT tablet so it validates
+
+13:03.760 --> 13:09.200
+if everything is okay then let's go and do the parsing so it will parse the query and
+
+13:09.200 --> 13:15.460
+the reason is it has to parse the queries because VT tablet has its checks and balances
+
+13:15.460 --> 13:22.320
+over here where it tries to put some limitation like it says that don't overload the MySQL
+
+13:22.320 --> 13:27.520
+resource so it will basically add its own limits on the query so that it doesn't overload
+
+13:27.520 --> 13:33.280
+your MySQL that's that you can configure and do things and then it goes into the planning
+
+13:33.280 --> 13:37.880
+phase and in the planning field it basically tries to see whether did you have did you
+
+13:37.880 --> 13:43.600
+have put any query rules which means like any bad query if you put like okay somebody
+
+13:43.600 --> 13:48.440
+does select star and without a where condition and stuff so it should it should it basically
+
+13:48.440 --> 13:52.720
+says okay this query cannot be executed because it's a bad query so those kind of query rules
+
+13:52.720 --> 13:57.880
+you can put and and and the second and another thing that we check in in the planning phase
+
+13:57.880 --> 14:01.880
+is basically it will say okay this is the user that send this query but is the user
+
+14:01.880 --> 14:06.800
+allowed to even access that tables or not so if if it's not allowed then we throw the
+
+14:06.800 --> 14:13.680
+error back after the planning phase also we detail it does this again and all these are
+
+14:13.680 --> 14:18.400
+there to just not to load a MySQL so another thing that it does is query consolidation
+
+14:18.400 --> 14:23.680
+which is basically it's it's it checks whether any similar same query or some exact same
+
+14:23.680 --> 14:28.680
+query is running on the MySQL or not if it's already running then it put it just waits
+
+14:28.680 --> 14:32.760
+for that query to return the result and all the threads which are waiting for the same
+
+14:32.760 --> 14:37.840
+query will get the result and it will return back so only one query ultimately gets executed
+
+14:37.840 --> 14:43.520
+on the MySQL and not all the queries get executed with the same exact same same query
+
+14:43.520 --> 14:49.600
+yes so once it thinks okay nothing can be done like it it has to finally send it to
+
+14:49.600 --> 14:55.760
+MySQL then it will use the one of the connection from the connection pool to send the query
+
+14:55.760 --> 15:00.120
+to MySQL and once the results are written back it will send it to vtgate if it has to
+
+15:00.120 --> 15:10.040
+do some operations will do it and finally the client will receive the query so yeah
+
+15:10.040 --> 15:14.160
+so that that's what the life of queries but then there are some customized operations
+
+15:14.160 --> 15:19.720
+which also affect your query path and which is like when there's a plan maintenance going
+
+15:19.720 --> 15:27.480
+like you are promoting one replica to primary for some reason and so and the other is basically
+
+15:27.480 --> 15:32.600
+if you are splitting your data like you have some n shards and you want to go to 2n shards
+
+15:32.600 --> 15:40.440
+or n plus 1 shards or such thing like that so while doing those operations what vt tablet
+
+15:40.440 --> 15:46.280
+does is it notifies to topo that some operation is going vtgate understands it so it doesn't
+
+15:46.280 --> 15:52.200
+send query to the vt tablet it basically buffers for certain duration and once everything comes
+
+15:52.200 --> 15:57.960
+back right then it the queries start going to the vt tablet or it times out and vtgate
+
+15:57.960 --> 16:10.840
+does the time out from itself rather than sending it down so yeah thank you questions
+
+16:10.840 --> 16:31.600
+so currently we we don't do cross shard transactions we do it but in the best effort way but it's
+
+16:31.600 --> 16:35.760
+currently on the application to know that they are doing cross shard transactions but
+
+16:35.760 --> 16:42.760
+we allow it but the application should know that they are going cross shard.
+
+16:42.760 --> 16:46.120
+Yes.
+
+16:46.120 --> 17:05.720
+So join I already showed in how we have the two routes and then from one we get the two
+
+17:05.720 --> 17:20.800
+routes and then the other one this is join so we have hash joins available but then it
+
+17:20.800 --> 17:27.280
+will consume your memory and other yes otherwise it's yes it's like from one you will get the
+
+17:27.280 --> 17:47.960
+result and then you send it to the other one so it's just sequential yes
+
+17:47.960 --> 17:53.480
+aggregation happens at the vtgate level we he has a sorting layer so before aggregation
+
+17:53.480 --> 17:59.040
+we have to sort yes that's what it was there in the diagram as well that after join there
+
+17:59.040 --> 18:03.920
+was sort layer because you have to sort so we have a in-memory sort so that there are
+
+18:03.920 --> 18:11.280
+multiple against sort based on what we can do the best so there's a merge sort also and
+
+18:11.280 --> 18:17.400
+then you have a complete sort as well based on what can we do best and then sorting then
+
+18:17.400 --> 18:35.600
+it goes to the aggregation what do you make certain operation yes yes so yes so that's
+
+18:35.600 --> 18:40.800
+why we said we try to push as much as to my sequel so we actually push the sort as well
+
+18:40.800 --> 18:44.760
+to my sequel if possible for the most sort but if you do it in the memory then we still
+
+18:44.760 --> 18:50.120
+sorted so that like we can it depends whether we can push it down or not if you are able
+
+18:50.120 --> 19:12.200
+to push it down we push as much as to the my sequel yes thank you all right I think
+
+19:12.200 --> 19:15.800
+you have nothing thank you thank you

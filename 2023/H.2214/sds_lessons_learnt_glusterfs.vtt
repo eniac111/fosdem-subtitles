@@ -1,0 +1,1267 @@
+WEBVTT
+
+00:00.000 --> 00:10.000
+Please welcome Sanju and Pranik for us and enjoy.
+
+00:10.000 --> 00:16.000
+Thank you guys.
+
+00:16.000 --> 00:22.000
+Thank you. Good morning guys. I'm Sanju and he's Pranik. We work at Foonpei.
+
+00:22.000 --> 00:29.000
+Yeah. Today we are going to discuss about the lessons that we learned while we managed the cluster first cluster at the scale
+
+00:29.000 --> 00:40.000
+and some of the problems we have faced and the solutions that we have came up with.
+
+00:40.000 --> 00:46.000
+Yeah. Foonpei is the leading Indian digital payments and technology company headquartered in Bangalore, India.
+
+00:46.000 --> 00:52.000
+And it uses unified payments interface which is introduced by the Government of India.
+
+00:52.000 --> 01:01.000
+So in India, if you are thinking of any payment, you can do it using Foonpei app. This is how our Foonpei app home screen looks like.
+
+01:01.000 --> 01:11.000
+And we have like a VC 800K RPS on our edge layer every day and we do 130 million daily transactions.
+
+01:11.000 --> 01:22.000
+So this will generate lots of records and this will generate lots of records and that documents that we have to store.
+
+01:22.000 --> 01:28.000
+And as per the regulations in India, we have to store all of them in India only.
+
+01:28.000 --> 01:37.000
+So Foonpei has a private cloud where we store all these things and we need a service to store and retrieve the files from the cloud.
+
+01:37.000 --> 01:46.000
+We have developed a service called DarkStore which will drive the data to GlustrFS and which will fetch the data from the GlustrFS.
+
+01:46.000 --> 01:50.000
+So coming to the question, why did we choose the GlustrFS?
+
+01:50.000 --> 01:57.000
+We didn't want it to have a metadata server because we have lots of small files and storing all the metadata.
+
+01:57.000 --> 02:01.000
+We didn't want it. So GlustrFS has no metadata server.
+
+02:01.000 --> 02:07.000
+So we went ahead with it and our team had earlier success in the GlustrFS project.
+
+02:07.000 --> 02:13.000
+So they were confident that, okay, GlustrFS will work for our use case. So we are here.
+
+02:13.000 --> 02:17.000
+And this is the data flow to and from the GlustrFS.
+
+02:17.000 --> 02:24.000
+So all the traffic is fronted by CDM and the request is forwarded to Nginx.
+
+02:24.000 --> 02:33.000
+And Nginx will send the request to the API gateway and API gateway can choose to store or retrieve any file from the, any file.
+
+02:33.000 --> 02:37.000
+Or it can choose to send the request to any backend service.
+
+02:37.000 --> 02:45.000
+Now if the backend service wants to store this file or if it wants a file, it can be a post or get request.
+
+02:45.000 --> 02:50.000
+I mean like it can store or it can retrieve. It will send the request to DarkStore.
+
+02:50.000 --> 02:56.000
+Now the DarkStore will store the data or retrieve the data from GlustrFS servers.
+
+02:56.000 --> 03:03.000
+And DarkStore also uses Elasticsearch to store some of the metadata.
+
+03:03.000 --> 03:11.000
+And it uses Aerospipe to store the R3 later info and some of the rate limiting features.
+
+03:11.000 --> 03:18.000
+It uses RMQ for asynchronous jobs like deletions and batch operations.
+
+03:18.000 --> 03:22.000
+And this is our team.
+
+03:22.000 --> 03:26.000
+Today's our agenda is an introduction to GlustrFS.
+
+03:26.000 --> 03:33.000
+And then we will discuss about different problems that have faced and the solutions that we are using.
+
+03:33.000 --> 03:37.000
+And we have some proposals as a roadmap.
+
+03:37.000 --> 03:42.000
+What is GlustrFS? GlustrFS, it is a distributed file system.
+
+03:42.000 --> 03:48.000
+That means whenever you do some write, the data is distributed across multiple servers.
+
+03:48.000 --> 03:53.000
+These servers have some of the directories. We call them as BRICs.
+
+03:53.000 --> 03:59.000
+And this is where the data is actually getting stored.
+
+03:59.000 --> 04:03.000
+So this is a typical GlustrFS server.
+
+04:03.000 --> 04:06.000
+Each server can have multiple BRICs.
+
+04:06.000 --> 04:12.000
+The BRICs will have underlying file system where the data will be stored.
+
+04:12.000 --> 04:18.000
+And in the root partition, we store the GlustrFS configuration.
+
+04:18.000 --> 04:23.000
+This is how a 3x3 GlustrFS volume looks like.
+
+04:23.000 --> 04:29.000
+When I say 3x3, whenever a write comes to GlustrFS mount point.
+
+04:29.000 --> 04:32.000
+So how is it one point?
+
+04:32.000 --> 04:38.000
+We can mount GlustrFS volume on any machine over the network.
+
+04:38.000 --> 04:42.000
+And you can read and write from that machine.
+
+04:42.000 --> 04:48.000
+Now from the client where the mount is happened, if any write comes.
+
+04:48.000 --> 04:54.000
+So it is distributed across three sub-volumes based on the hash range allocation.
+
+04:54.000 --> 04:59.000
+We will talk more about the hash range in the coming slides.
+
+04:59.000 --> 05:07.000
+And another three stands for the data is replicated three times.
+
+05:07.000 --> 05:14.000
+So whenever a write comes, the data will choose one of the sub-volume and in a sub-volume.
+
+05:14.000 --> 05:17.000
+Sub-volume is a replica set.
+
+05:17.000 --> 05:21.000
+Here it is a three, so it is replicated thrice.
+
+05:21.000 --> 05:23.000
+Over to Praniv.
+
+05:23.000 --> 05:28.000
+Hello.
+
+05:28.000 --> 05:35.000
+Yeah, so let's look at some numbers that we see at phone pay for doc store service and then to GlustrFS.
+
+05:35.000 --> 05:42.000
+In a day we see about 4.3 million uploads and the downloads are 9 million.
+
+05:42.000 --> 05:46.000
+With peak upload RPS as 200 and download RPS as 800.
+
+05:46.000 --> 05:51.000
+The aggregate upload size per day is just 150 GB, not a lot.
+
+05:51.000 --> 05:54.000
+But the download size is 2.5 TB.
+
+05:54.000 --> 05:57.000
+So it is completely read-heavy workload.
+
+05:57.000 --> 06:00.000
+And this is after a CDN is fronting it.
+
+06:00.000 --> 06:06.000
+That means only when the file is not available in your CDN, the call will come to GlustrFS,
+
+06:06.000 --> 06:11.000
+which will download the file onto the CDN and then it will be served.
+
+06:11.000 --> 06:17.000
+And this is how the RPS is distributed throughout the day.
+
+06:17.000 --> 06:19.000
+RPS is request per second.
+
+06:19.000 --> 06:27.000
+So the uploads actually are reasonably uniform from 6 am to 5 in the evening.
+
+06:27.000 --> 06:30.000
+Then it tapers off for the rest of the day.
+
+06:30.000 --> 06:39.000
+Whereas the downloads are in bimodal distribution with one peak at around 12 pm and another at around 7 pm.
+
+06:39.000 --> 06:43.000
+The latencies are function of the size of the file.
+
+06:43.000 --> 06:53.000
+So we have post upload latencies with mean of about 50ms to the P99 at around 250ms.
+
+06:53.000 --> 07:04.000
+Similarly for GEDS, the mean is around 10ms and P99 is around 100ms.
+
+07:04.000 --> 07:09.000
+Let us look at the configuration that we use at PhonePave for GlustrFS.
+
+07:09.000 --> 07:12.000
+We have 30 nodes in the cluster.
+
+07:12.000 --> 07:20.000
+Each node contributes two bricks and one brick corresponds to 10TB and that is a ZFS pool.
+
+07:20.000 --> 07:26.000
+So 30 into 20, that is 600TB of available capacity and we use replica 3.
+
+07:26.000 --> 07:34.000
+So the available size is 200TB, out of which 130TB is in use at the moment.
+
+07:34.000 --> 07:39.000
+Let us now go to the problems that we face and how we solved it.
+
+07:39.000 --> 07:44.000
+I will start off with the capacity expansion problem that we solved.
+
+07:44.000 --> 07:50.000
+Then Sanju will take over and talk about the data migration problem that we solved.
+
+07:50.000 --> 07:57.000
+I will talk about how performance issues are debugged and how we solved the problems using that method.
+
+07:57.000 --> 08:04.000
+Then Sanju will finish it off with maintenance activities that we do to prevent the problems.
+
+08:04.000 --> 08:11.000
+Before we talk about the capacity expansion problem, let us try to understand a bit about the distribution.
+
+08:11.000 --> 08:20.000
+The data is distributed across the servers based on hashes.
+
+08:20.000 --> 08:25.000
+In this diagram, we have three distributed subvolumes.
+
+08:25.000 --> 08:28.000
+Each subvolume is a replica 3.
+
+08:28.000 --> 08:36.000
+When you create a directory, each of the directory in these three replica sets will get a hash range.
+
+08:36.000 --> 08:45.000
+Whenever you create a file or try to read a file, it will actually compute the hash of the name
+
+08:45.000 --> 08:50.000
+and it will figure out which of these directories in these three subvolumes has that hash range
+
+08:50.000 --> 08:55.000
+and tries to get that file or store that file in that node.
+
+08:55.000 --> 09:02.000
+For folks who are well versed with the database, this is more like sharding.
+
+09:02.000 --> 09:08.000
+The entity here that is getting sharded is the directory based on the file names.
+
+09:08.000 --> 09:12.000
+The files actually can have varying sizes.
+
+09:12.000 --> 09:19.000
+For example, in our setup, the minimum size would be less than a KB, but the maximum size is like 26 GB.
+
+09:19.000 --> 09:25.000
+You will run into this problem where some of the shards or distributed subvolumes that you have
+
+09:25.000 --> 09:28.000
+would fill up the space before the others.
+
+09:28.000 --> 09:31.000
+You need to handle that part as well.
+
+09:31.000 --> 09:36.000
+There is a feature in Lustreff called MinFreeDisk, where if you hit that level,
+
+09:36.000 --> 09:42.000
+when you create the directory again, the hash range will not be allocated for the ones that met the threshold.
+
+09:42.000 --> 09:46.000
+For example, here, even though there are three distributed subvolumes,
+
+09:46.000 --> 09:53.000
+data is going to only two because the middle one actually has met the threshold.
+
+09:53.000 --> 10:03.000
+The hash range will only be distributed between the two, 50% and 50% instead of one third that you would expect normally.
+
+10:03.000 --> 10:10.000
+Let us talk about the actual process of increasing the capacity and why it did not work for us.
+
+10:10.000 --> 10:16.000
+When you want to increase the capacity, that is, you bring in more distributed subvolumes or shards.
+
+10:16.000 --> 10:21.000
+The way that you do it is you first do something called as the LustrePier probe.
+
+10:21.000 --> 10:25.000
+That will bring the new machines into the cluster.
+
+10:25.000 --> 10:30.000
+Then you do another operation called AddBrick that will add the bricks to your volume.
+
+10:30.000 --> 10:40.000
+Then you have to do something called as the LustreVolumeRebalance to redistribute the data among the nodes equally.
+
+10:40.000 --> 10:43.000
+What are the problems that we faced?
+
+10:43.000 --> 10:51.000
+When we did the benchmark, the rebalance had this application latency impact in some cases up to 25 seconds.
+
+10:51.000 --> 10:56.000
+As I mentioned, most of the P99 latencies were just in milliseconds.
+
+10:56.000 --> 11:01.000
+This will be like a partial outage for us.
+
+11:01.000 --> 11:04.000
+This is not going to work for us.
+
+11:04.000 --> 11:11.000
+The other thing that we noticed is for large volumes, the rebalance may take up to months.
+
+11:11.000 --> 11:16.000
+At the moment, the LustreFs rebalance does not have pause and resume.
+
+11:16.000 --> 11:21.000
+We cannot do the maintenance activity in off-peak cars.
+
+11:21.000 --> 11:23.000
+That is one more problem.
+
+11:23.000 --> 11:30.000
+The other one that we have seen is when you do the data migration,
+
+11:30.000 --> 11:34.000
+when it is going from one distributed sub-volume or short to two distributed sub-volumes,
+
+11:34.000 --> 11:37.000
+you would expect 50% of the data to be transferred.
+
+11:37.000 --> 11:38.000
+That is all right.
+
+11:38.000 --> 11:43.000
+When you are going from nine short slash distributed sub-volumes to ten,
+
+11:43.000 --> 11:47.000
+you want to only migrate like 10% of the data.
+
+11:47.000 --> 11:59.000
+LustreFs is still transferring about 30% to 40% irrespective of what the number of sub-volumes are.
+
+11:59.000 --> 12:06.000
+The rebalance itself may take so much time with our workload
+
+12:06.000 --> 12:12.000
+that by the time we want to do the next capacity expansion, the rebalance may not even complete.
+
+12:12.000 --> 12:13.000
+That is also not going to work for us.
+
+12:13.000 --> 12:16.000
+These are the three main problems that we have seen.
+
+12:16.000 --> 12:21.000
+This is the solution that we are using now.
+
+12:21.000 --> 12:24.000
+Then there is a proposal as well.
+
+12:24.000 --> 12:31.000
+Since we know that the hash range allocation is based on both the number of sub-volumes
+
+12:31.000 --> 12:36.000
+and number of free sub-volumes, what we are doing is in our Docsor application,
+
+12:36.000 --> 12:43.000
+every day in the night we create directories with a new basically.
+
+12:43.000 --> 12:48.000
+The directory structure will be something like the namespace that the clients are going to use,
+
+12:48.000 --> 12:52.000
+slash year slash month slash day.
+
+12:52.000 --> 12:55.000
+Each day you are going to create new directories.
+
+12:55.000 --> 12:58.000
+Based on the size that is available,
+
+12:58.000 --> 13:02.000
+only the ones that have space will get the hash range allocation.
+
+13:02.000 --> 13:07.000
+You will never run into the problem where you will have to rebalance that much
+
+13:07.000 --> 13:12.000
+because we have seen that with our workloads, reads are distributed uniformly.
+
+13:12.000 --> 13:18.000
+As we have seen, it is read-heavy workload and writes are just a few.
+
+13:18.000 --> 13:22.000
+We were okay with the solution in the interim.
+
+13:22.000 --> 13:26.000
+Long term, the solution that we have proposed,
+
+13:26.000 --> 13:29.000
+and this is something that is yet to be accepted,
+
+13:29.000 --> 13:32.000
+but there are some POCs that we did.
+
+13:32.000 --> 13:36.000
+Very few use jump-consistent hash instead of the one that we have.
+
+13:36.000 --> 13:41.000
+When you are going from 9 to 10 here, it is only about 10 percent that is getting rebalanced.
+
+13:41.000 --> 13:44.000
+That is what we want to get to.
+
+13:44.000 --> 13:48.000
+This is something that we are focusing on this year.
+
+13:48.000 --> 13:51.000
+All right. Over to you, Sanjiv.
+
+13:56.000 --> 14:01.000
+Let's look at the problems that we have faced while migrating the data.
+
+14:01.000 --> 14:05.000
+We had a use case where we wanted to move complete data
+
+14:05.000 --> 14:09.000
+which is present in one server to another server.
+
+14:09.000 --> 14:16.000
+In ClusterFest, the standard way of doing this is to use a rebalance operation.
+
+14:16.000 --> 14:19.000
+Sorry, replace-brick operation.
+
+14:19.000 --> 14:22.000
+When you do replace-brick operation,
+
+14:22.000 --> 14:25.000
+there is a process called a self-filled daemon
+
+14:25.000 --> 14:30.000
+which will copy all the data which is present in the old server to a new server.
+
+14:30.000 --> 14:37.000
+To copy 10 TB data, it takes around two to three weeks.
+
+14:37.000 --> 14:40.000
+That is like a huge time.
+
+14:40.000 --> 14:45.000
+We wanted to reduce this time, so we came up with a new approach.
+
+14:45.000 --> 14:51.000
+Let us understand a few aspects of ClusterFest before we jump to the solution
+
+14:51.000 --> 14:54.000
+so that we understand our approach better.
+
+14:54.000 --> 14:57.000
+The right-flowing ClusterFest is something like this.
+
+14:57.000 --> 15:02.000
+Whenever a right comes, based on the hash range allocation,
+
+15:02.000 --> 15:07.000
+it will choose one of the sub-volume.
+
+15:07.000 --> 15:15.000
+The data will go to all the servers in that sub-volume.
+
+15:15.000 --> 15:21.000
+Now, let's say we have chosen a replica at 0
+
+15:21.000 --> 15:28.000
+and the right will go to all the machines in that sub-volume.
+
+15:28.000 --> 15:30.000
+It is a client-side replication,
+
+15:30.000 --> 15:33.000
+so the client will send the right to all the machines
+
+15:33.000 --> 15:37.000
+and it will wait for the success response to come.
+
+15:37.000 --> 15:41.000
+The client will assume the right is successful
+
+15:41.000 --> 15:46.000
+only when the core number of success responses has come.
+
+15:46.000 --> 15:49.000
+Let's say one of the nodes is down.
+
+15:49.000 --> 15:53.000
+In our case, we see like a server 2,
+
+15:53.000 --> 15:58.000
+either it can be a node down or the brick process is unhealthy.
+
+15:58.000 --> 16:01.000
+This can be unresponsive at times.
+
+16:01.000 --> 16:03.000
+So something happened.
+
+16:03.000 --> 16:05.000
+The right came to one of the sub-volume
+
+16:05.000 --> 16:08.000
+and it went to all the three replica servers,
+
+16:08.000 --> 16:13.000
+but server 2 didn't respond with the success response.
+
+16:13.000 --> 16:18.000
+Now, server 1 and server 3 have responded with the success response.
+
+16:18.000 --> 16:22.000
+So client assumes that the right is successful.
+
+16:22.000 --> 16:25.000
+Now, when the server 2 is back up,
+
+16:25.000 --> 16:28.000
+to have the consistency of the data,
+
+16:28.000 --> 16:33.000
+server 2 should get the data which it has missed while it was down.
+
+16:33.000 --> 16:35.000
+So who will take care of the job of doing this?
+
+16:35.000 --> 16:37.000
+It is SHD.
+
+16:37.000 --> 16:43.000
+So SHD is a daemon process which will read the pending heal data,
+
+16:43.000 --> 16:48.000
+like whatever the data that was missing, we call it as a pending heal.
+
+16:48.000 --> 16:51.000
+So it will read from one of the good copy.
+
+16:51.000 --> 16:54.000
+In our case, server 1 and server 3 are the good copies
+
+16:54.000 --> 16:56.000
+and server 2 is a bad copy.
+
+16:56.000 --> 17:00.000
+So SHD will read the data from one of the good copy
+
+17:00.000 --> 17:04.000
+and it will write to server 2.
+
+17:04.000 --> 17:07.000
+So server 2 will have all the data
+
+17:07.000 --> 17:11.000
+when the self-heal is completed healing the data.
+
+17:11.000 --> 17:15.000
+We will use this as part of our approach as well.
+
+17:15.000 --> 17:19.000
+Our approach is we will kill the brick
+
+17:19.000 --> 17:26.000
+which we want to migrate from the server 3 to server 4.
+
+17:26.000 --> 17:29.000
+So we have to copy all the data.
+
+17:29.000 --> 17:34.000
+So self-heal is taking 2 to 3 weeks.
+
+17:34.000 --> 17:37.000
+Here in our case, we will kill the brick
+
+17:37.000 --> 17:42.000
+and we are using ZFS file system.
+
+17:42.000 --> 17:44.000
+So we will take a ZFS snapshot
+
+17:44.000 --> 17:50.000
+and we will transfer this snapshot from the server 3 to server 4.
+
+17:50.000 --> 17:52.000
+It's like an old server to the new server.
+
+17:52.000 --> 17:56.000
+And now we will perform the replace brick operation.
+
+17:56.000 --> 18:00.000
+While we are performing the replace brick operation,
+
+18:00.000 --> 18:04.000
+server 4, that is a new server, will already have all the data
+
+18:04.000 --> 18:07.000
+which server 3 had.
+
+18:07.000 --> 18:10.000
+Once the replace brick operation is performed,
+
+18:10.000 --> 18:13.000
+server 4 is now part of the sub-volume
+
+18:13.000 --> 18:23.000
+and the heals will take place from server 1 and server 2 to server 4.
+
+18:23.000 --> 18:28.000
+So now we have reduced the amount of data that we are healing.
+
+18:28.000 --> 18:31.000
+Previously we are copying all the data.
+
+18:31.000 --> 18:35.000
+That is like a 10 Tb of data from server 3 to server 4.
+
+18:35.000 --> 18:39.000
+But here in our case, we are healing only the data
+
+18:39.000 --> 18:46.000
+which came after killing the brick before doing the replace brick operation.
+
+18:46.000 --> 18:50.000
+So the data we heal is reduced hugely.
+
+18:50.000 --> 18:57.000
+With this approach, now it is taking only 50 hours to complete this.
+
+18:57.000 --> 19:00.000
+That is also, if we are using the spinning disk,
+
+19:00.000 --> 19:05.000
+it will take 48 hours to transfer the snapshot of 10 Tb
+
+19:05.000 --> 19:08.000
+and 2 hours for the healing of data.
+
+19:08.000 --> 19:13.000
+But it is only 8 to 9 hours if we are using SSDs.
+
+19:13.000 --> 19:18.000
+If you are using SSD, it takes like 8 hours to transfer the snapshot
+
+19:18.000 --> 19:22.000
+and it takes around 40 minutes to complete the heals.
+
+19:22.000 --> 19:27.000
+So that is like we came from like 2 to 3 weeks to 1 or 2 days,
+
+19:27.000 --> 19:30.000
+or 9 hours we can say.
+
+19:30.000 --> 19:32.000
+We are using Netcat utility.
+
+19:32.000 --> 19:34.000
+It gave us very good performance.
+
+19:34.000 --> 19:37.000
+It is like a 60% performance optimization.
+
+19:37.000 --> 19:41.000
+And we have inflight checksum at both the ends,
+
+19:41.000 --> 19:44.000
+in the old server and also in the new server.
+
+19:44.000 --> 19:50.000
+So that it is like we are checking whether we are transferring the snapshot perfectly or not.
+
+19:50.000 --> 19:52.000
+We are not using any data.
+
+19:52.000 --> 19:56.000
+And yeah, it is at the time.
+
+19:56.000 --> 20:03.000
+I have kept the commands that we have exactly used in this link
+
+20:03.000 --> 20:06.000
+and we also have a rollback plan.
+
+20:06.000 --> 20:10.000
+So let's say that we have started with this activity,
+
+20:10.000 --> 20:13.000
+but we haven't performed the replace brick yet.
+
+20:13.000 --> 20:16.000
+Because once the replace brick is performed,
+
+20:16.000 --> 20:18.000
+it will be something like this.
+
+20:18.000 --> 20:22.000
+The sub volume will already have the server 4 as a part of it.
+
+20:22.000 --> 20:25.000
+Before we perform the replace brick,
+
+20:25.000 --> 20:30.000
+that means when we are here, we don't want to do this anymore.
+
+20:30.000 --> 20:34.000
+All we need to do is start the volume with the force
+
+20:34.000 --> 20:38.000
+so that the brick process that we have killed will come up.
+
+20:38.000 --> 20:43.000
+Once it is up, the good copies that we have,
+
+20:43.000 --> 20:49.000
+SHD will copy the data from good copies to bad copy at the old server
+
+20:49.000 --> 20:54.000
+so that we will have the consistent data across all our replicated servers.
+
+20:54.000 --> 20:57.000
+Yeah, that is so easy.
+
+20:57.000 --> 21:02.000
+And we want to popularize this method so that it helps the community.
+
+21:02.000 --> 21:05.000
+Yeah, over to Pranith.
+
+21:05.000 --> 21:13.000
+Yeah, so we will now talk about the performance issues that we faced
+
+21:13.000 --> 21:15.000
+and how we solved them.
+
+21:15.000 --> 21:19.000
+This is the graph that we have seen in our prod setup
+
+21:19.000 --> 21:25.000
+while doing this migration when something happened that we did not account for.
+
+21:25.000 --> 21:29.000
+So the latencies have shot up to one minute here
+
+21:29.000 --> 21:32.000
+and I have said that it is supposed to be only milliseconds
+
+21:32.000 --> 21:33.000
+so this is horrible.
+
+21:33.000 --> 21:36.000
+There was like two hours of partial outage because of this.
+
+21:36.000 --> 21:41.000
+So let's see how these things can be debugged and how they can be fixed.
+
+21:41.000 --> 21:49.000
+So we have a method called Gluster Volume Profile in GlusterFS.
+
+21:49.000 --> 21:53.000
+So what you do is you start profiling on the volume.
+
+21:53.000 --> 21:57.000
+Then you run your benchmark or whatever is your workload.
+
+21:57.000 --> 22:00.000
+Then you keep executing Gluster Volume Profile info incremental
+
+22:00.000 --> 22:07.000
+and it will keep giving you the stats of what is happening to the volume during that time.
+
+22:07.000 --> 22:09.000
+For each of the bricks that are there in the volume,
+
+22:09.000 --> 22:12.000
+you will get an output like this where for that interval,
+
+22:12.000 --> 22:15.000
+in this case interval 9, for each of the block size,
+
+22:15.000 --> 22:18.000
+you will see the number of reads and writes that came
+
+22:18.000 --> 22:22.000
+and for all of the internal file operations that you see on the volume,
+
+22:22.000 --> 22:25.000
+you will get the number of calls and the latency distribution,
+
+22:25.000 --> 22:28.000
+min max average latency and what is the percentage latency
+
+22:28.000 --> 22:33.000
+that is taken by each of your file operation internally.
+
+22:33.000 --> 22:39.000
+So what we have seen when this ZFS issue happened is the lookup call
+
+22:39.000 --> 22:45.000
+is taking more than a second, which is not what we generally see.
+
+22:45.000 --> 22:50.000
+So we knew something was happening during lookup operation.
+
+22:50.000 --> 22:54.000
+So we did an trace on the brick and we have found
+
+22:54.000 --> 23:00.000
+that there is one internal directory called GlusterFS indices exatrop.
+
+23:00.000 --> 23:05.000
+To list three entries, it is basically taking 0.35 seconds.
+
+23:05.000 --> 23:10.000
+So imagine this, so you do ls, it will just show you three entries,
+
+23:10.000 --> 23:15.000
+but it will take like 0.35 seconds, sometimes it even takes a second.
+
+23:15.000 --> 23:21.000
+So after looking at this, we found that ZFS has this behavior
+
+23:21.000 --> 23:25.000
+where if you create a lot of files in one directory, like millions,
+
+23:25.000 --> 23:31.000
+and then you delete most of them, and then if you do ls, it takes up to a second.
+
+23:31.000 --> 23:36.000
+So this bug is open for more than like two years, I think.
+
+23:36.000 --> 23:40.000
+So we didn't know whether ZFS would fix this issue anytime soon.
+
+23:40.000 --> 23:44.000
+So in GlusterFS, we patched it by caching this information
+
+23:44.000 --> 23:47.000
+so that we don't have to keep doing this operation.
+
+23:47.000 --> 23:55.000
+So now you wouldn't see it if you are using any of the latest GlusterFS releases.
+
+23:55.000 --> 23:59.000
+But yeah, this is one issue that we found and fixed.
+
+23:59.000 --> 24:05.000
+The second one is about increasing the RPS that we have on our volume.
+
+24:05.000 --> 24:09.000
+So there was a new application that was getting launched at the time,
+
+24:09.000 --> 24:16.000
+and the RPS that they wanted was not what we are giving.
+
+24:16.000 --> 24:20.000
+Basically, they wanted something like 360 RPS or something like that.
+
+24:20.000 --> 24:24.000
+But when we did the benchmark, we were getting only like 250 RPS.
+
+24:24.000 --> 24:28.000
+So we wanted to figure out what is happening.
+
+24:28.000 --> 24:32.000
+So we ran benchmarks on product Gluster itself,
+
+24:32.000 --> 24:38.000
+and we saw that one of the threads is getting saturated.
+
+24:38.000 --> 24:43.000
+So there is a feature in GlusterFS called client IOT threads
+
+24:43.000 --> 24:50.000
+where multiple threads would take the responsibility of sending it over the network.
+
+24:50.000 --> 24:53.000
+So we thought, let's just enable it and it would solve all our problems.
+
+24:53.000 --> 24:58.000
+We enabled it and it made it worse, like from 250, it went down.
+
+24:58.000 --> 25:04.000
+So we realized that there is a contention problem in the client side that we are yet to fix.
+
+25:04.000 --> 25:09.000
+So for now, what we did is to, on the containers of DockStore,
+
+25:09.000 --> 25:12.000
+where it was doing only one mount,
+
+25:12.000 --> 25:17.000
+we are now doing three mounts and distributing the uploads and downloads over.
+
+25:17.000 --> 25:19.000
+Yes.
+
+25:19.000 --> 25:24.000
+So can you repeat the...
+
+25:24.000 --> 25:26.000
+Oh, yeah.
+
+25:26.000 --> 25:28.000
+No, I didn't.
+
+25:28.000 --> 25:31.000
+It's a Fuse mount.
+
+25:31.000 --> 25:35.000
+Yeah, the thread that is saturating is Fuse thread.
+
+25:35.000 --> 25:39.000
+Yeah, so the question is, which GlusterFS client we are using?
+
+25:39.000 --> 25:44.000
+The answer is Fuse client and the thread that is saturating is Fuse thread.
+
+25:44.000 --> 25:50.000
+So what we are doing is we have created multiple mounts on the container
+
+25:50.000 --> 25:53.000
+and we are distributing the load in the application itself,
+
+25:53.000 --> 25:57.000
+like the uploads will go to all three and even downloads will go to all three.
+
+25:57.000 --> 26:01.000
+That is one thing that we did to solve the CPU saturation problem.
+
+26:01.000 --> 26:07.000
+The other thing that we noticed, this is like part of the Gluster volume profile output,
+
+26:07.000 --> 26:10.000
+where it will tell you for each block what is the number of reads and writes.
+
+26:10.000 --> 26:16.000
+We have seen that most of the writes are coming as 8 KB.
+
+26:16.000 --> 26:20.000
+So later when we looked at the Java application DockStore,
+
+26:20.000 --> 26:25.000
+we saw that the IOW block that Java is using the default size is 8 KB.
+
+26:25.000 --> 26:28.000
+So we just increased it to 128 KB.
+
+26:28.000 --> 26:34.000
+So these two combined has given us 2X to 3X the number
+
+26:34.000 --> 26:40.000
+and we also increased the number of VMs that we are using to mount the clients.
+
+26:40.000 --> 26:46.000
+So put all together, we got something like 10X performance improvement
+
+26:46.000 --> 26:48.000
+compared to the earlier one.
+
+26:48.000 --> 26:51.000
+So we are set for maybe 2-3 years.
+
+26:51.000 --> 26:57.000
+Alright, so let's now go on to health checks.
+
+26:57.000 --> 27:02.000
+Okay, so for any production cluster,
+
+27:02.000 --> 27:04.000
+some of the health checks are needed.
+
+27:04.000 --> 27:10.000
+So I will talk about the minimal health checks that are needed for GlusterFist cluster.
+
+27:10.000 --> 27:14.000
+So GlusterFist already provides POSIX health checks.
+
+27:14.000 --> 27:22.000
+So it is a health checker thread which will do a write of 1 KB for every 15 or 30 minutes.
+
+27:22.000 --> 27:24.000
+I mean seconds.
+
+27:24.000 --> 27:31.000
+So there is one option to set the time interval in which you want to do this.
+
+27:31.000 --> 27:36.000
+So if you set it as a zero, that means you are disabling the health check.
+
+27:36.000 --> 27:39.000
+So you can set it as like a 10 seconds or something.
+
+27:39.000 --> 27:46.000
+So it sends a write and check if the disk is responsive enough and brick is healthy or not.
+
+27:46.000 --> 27:53.000
+If it didn't get a response in a particular time, it will kill the brick process
+
+27:53.000 --> 27:58.000
+so that like we will get to know that something is wrong with the brick process.
+
+27:58.000 --> 28:06.000
+So the other one we have is the rest of the things are we have a script and we have some config.
+
+28:06.000 --> 28:10.000
+These are the things we have kept externally kind of thing.
+
+28:10.000 --> 28:14.000
+The POSIX health checks are the one which come with the GlusterFist project.
+
+28:14.000 --> 28:23.000
+So the cluster health checks that we have are like we have a config where we will specify number of nodes in the cluster.
+
+28:23.000 --> 28:26.000
+So that is like an expected number of nodes in the cluster.
+
+28:26.000 --> 28:31.000
+And using the GlusterPeerStatus or GlusterPourList command,
+
+28:31.000 --> 28:37.000
+we can check the number of nodes that are present in the cluster.
+
+28:37.000 --> 28:40.000
+And we will check if both of them are equal.
+
+28:40.000 --> 28:46.000
+If not, we will raise an alert saying, okay, something is something unexpected is happening.
+
+28:46.000 --> 28:51.000
+And we will also check whether the node is in connected state or not.
+
+28:51.000 --> 28:56.000
+So in the GlusterFist cluster, the nodes can be in different state.
+
+28:56.000 --> 29:06.000
+So it can be connected or rejected or disconnected based on how the GlusterFist management daemon is working.
+
+29:06.000 --> 29:14.000
+So now we will see whether so the expected is all the nodes should be in a connected state.
+
+29:14.000 --> 29:17.000
+We will check whether the nodes are connected or not.
+
+29:17.000 --> 29:24.000
+If the nodes are not connected, then we will get an alert saying, okay, one of your node is not in a connected state.
+
+29:24.000 --> 29:28.000
+And we have some of the health checks for the bricks as well.
+
+29:28.000 --> 29:33.000
+So we have number of bricks that are present in each volume in the config.
+
+29:33.000 --> 29:40.000
+And in the GlusterVolumeInfoOutput, you will get how many number of volumes that are present in that volume.
+
+29:40.000 --> 29:42.000
+And you will check if they are equal.
+
+29:42.000 --> 29:47.000
+The another check we have on the brick is if the brick is not online,
+
+29:47.000 --> 29:51.000
+we will get to know it by checking the GlusterVolumeStatus command.
+
+29:51.000 --> 29:56.000
+And if it is not online, you will get an alert saying that one of your brick is down.
+
+29:56.000 --> 30:04.000
+And so whenever the server is down or the brick is down, there will be some of the pending heals.
+
+30:04.000 --> 30:10.000
+And you can check the pending heals using the GlusterVolumeHealInfo command.
+
+30:10.000 --> 30:15.000
+And if there are any pending heals, you will see an entry.
+
+30:15.000 --> 30:22.000
+So if the entry is non-zero, then you will get an alert saying that, okay, you have some pending heals in your cluster.
+
+30:22.000 --> 30:26.000
+That means something unexpected, unwanted is going on.
+
+30:26.000 --> 30:29.000
+That can be like a brick is down or node is down, anything.
+
+30:29.000 --> 30:37.000
+And we always log ProfileInfo Incremental to our debug logs using the health check
+
+30:37.000 --> 30:44.000
+so that whenever we see some issue, like the parent just spoke about some of the issues that we can solve
+
+30:44.000 --> 30:47.000
+by looking at the ProfileInfo output.
+
+30:47.000 --> 30:51.000
+So in such cases, this output will be helpful.
+
+30:51.000 --> 30:55.000
+So we always log into our log backup service.
+
+30:55.000 --> 31:03.000
+And the exact commands that we are using are listed in this link.
+
+31:03.000 --> 31:07.000
+So we have some of the maintenance activities.
+
+31:07.000 --> 31:10.000
+So things can go back sometimes.
+
+31:10.000 --> 31:16.000
+So we have a replica 3 set up in our production.
+
+31:16.000 --> 31:21.000
+So at any point of time, the core number of brick process should be up
+
+31:21.000 --> 31:24.000
+so that the reads and writes can go on smoothly.
+
+31:24.000 --> 31:33.000
+So whenever we are doing something which might take some downtime of the brick process
+
+31:33.000 --> 31:43.000
+or which can have some load on particular server, at that time, we do it only on one of the server from each replica set
+
+31:43.000 --> 31:50.000
+so that even if that server goes down or the brick process running on that server goes down,
+
+31:50.000 --> 31:59.000
+we won't be having an issue because there are two other replica servers which can do all the reads and writes.
+
+31:59.000 --> 32:03.000
+So we are doing few activities in this way.
+
+32:03.000 --> 32:10.000
+One is JFS scrubbing. JFS scrubbing is about doing the checksum of the data.
+
+32:10.000 --> 32:14.000
+It will see if the data is in a proper condition or not.
+
+32:14.000 --> 32:18.000
+And we do migrations in this way only.
+
+32:18.000 --> 32:26.000
+So we are doing it on one server from each replica set so that even if it is down for some time
+
+32:26.000 --> 32:30.000
+or something didn't work out, we are in a good place.
+
+32:30.000 --> 32:35.000
+And upgrades also we will do in the same manner.
+
+32:35.000 --> 32:38.000
+We have done some contributions.
+
+32:38.000 --> 32:44.000
+So the data migration part that I have spoke, it's a production ready.
+
+32:44.000 --> 32:46.000
+We have used it in our production.
+
+32:46.000 --> 32:53.000
+And Pranith has given some of the developer sessions which has many internals of Glustrophis.
+
+32:53.000 --> 33:01.000
+They are very useful for any Glustrophis developers who wants to learn about many translators that we have in Glustrophis.
+
+33:01.000 --> 33:10.000
+And recently we have fixed one of the single point of failure which was present in the geo-replication feature.
+
+33:10.000 --> 33:14.000
+It was merged into the upstream very recently last week.
+
+33:14.000 --> 33:21.000
+And this year we are looking at another thing, the hashing strategy that Pranith has proposed.
+
+33:21.000 --> 33:29.000
+Once it is accepted at the community, we will take it and develop it.
+
+33:29.000 --> 33:33.000
+Yeah, that's all we had, folks. Thank you.
+
+33:33.000 --> 33:45.000
+I just want to let you guys know that the production ready thing, we actually migrated in total 375 TB using the method that Sanju talked about.
+
+33:45.000 --> 33:48.000
+So it is ready. So you guys can use it.
+
+33:48.000 --> 33:54.000
+I think it should work even with basically any file system that has a snapshot feature, it should work.
+
+33:54.000 --> 34:01.000
+Yeah, thank you, guys.
+
+34:01.000 --> 34:07.000
+Yeah, I think we have a few minutes for questions if you have any. Otherwise, you guys can catch us there.
+
+34:07.000 --> 34:16.000
+Yeah.
+
+34:16.000 --> 34:20.000
+Yeah. So the question is, how do you handle a disk failure?
+
+34:20.000 --> 34:33.000
+So basically, the problem that I showed you where we had the ZFS issue where it was taking like minutes of latency, that was the first time it happened on production for us.
+
+34:33.000 --> 34:39.000
+And initially, we were waiting for the machine itself to be fixed so that it will come back again.
+
+34:39.000 --> 34:51.000
+And it went for like a week or so. And the amount of data that needed to be healed became too much that it coincided with our PCARS.
+
+34:51.000 --> 35:02.000
+So now the standard operating procedure that we have come up with after this issue is, if a machine goes down or disk goes down, we can just get it back on in nine hours.
+
+35:02.000 --> 35:13.000
+So why do we have to wait? So we just consider that node dead. We get a new machine. We do whatever Sanju mentioned using ZFS snapshot migration.
+
+35:13.000 --> 35:20.000
+And we just bring it up.
+
+35:20.000 --> 35:28.000
+Do you have the ZFS backup somewhere? The answer is no. You have the ZFS data on the active bricks.
+
+35:28.000 --> 35:36.000
+So you take a snapshot on the active bricks and do the snapshot. Yeah, one of the good ones. Yes.
+
+35:36.000 --> 35:41.000
+Any other questions?
+
+35:41.000 --> 35:59.000
+That's it, I think. Thank you, guys. Thanks a lot.

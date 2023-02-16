@@ -1,0 +1,1216 @@
+1
+0:00:00.000 --> 0:00:01.000
+Thank you.
+
+2
+0:00:01.000 --> 0:00:02.000
+So, hi.
+
+3
+0:00:02.000 --> 0:00:25.380
+Today, I'll tell you a success story of adopting Nix at the workplace, all the way from reproducible
+
+4
+0:00:25.380 --> 0:00:30.200
+CI builds to NixOS in production, and also what we have learned in the process.
+
+5
+0:00:30.200 --> 0:00:33.840
+By the way, you can use the QR code to follow the slides on your devices if you want.
+
+6
+0:00:33.840 --> 0:00:36.960
+I have some links there as well.
+
+7
+0:00:36.960 --> 0:00:41.360
+So first, about me, I'm, well, now ex-principal software engineer at Profion.
+
+8
+0:00:41.360 --> 0:00:45.120
+I've been using Nix in NixOS since 2016.
+
+9
+0:00:45.120 --> 0:00:50.680
+Now Profion was a security company, and we were custodians of the NRX open source project.
+
+10
+0:00:50.680 --> 0:00:55.040
+We were mostly focused on developing NRX and also providing network services around NRX.
+
+11
+0:00:55.040 --> 0:00:59.160
+But, unfortunately, just earlier, we actually closed the company because we were out of
+
+12
+0:00:59.160 --> 0:01:02.960
+money and couldn't secure funding or acquisition.
+
+13
+0:01:02.960 --> 0:01:07.800
+So NRX was a confidential computing, well, is a confidential computing platform, providing
+
+14
+0:01:07.800 --> 0:01:14.360
+you ability to run WebAssembly within TEEs, so hardware secure enclaves.
+
+15
+0:01:14.360 --> 0:01:18.080
+And well, I'm not going to go into too much detail, but the relevant part here is that
+
+16
+0:01:18.080 --> 0:01:22.840
+NRX builds trust based upon a remote attestation procedure.
+
+17
+0:01:22.840 --> 0:01:27.720
+And to do that, basically how it works is that we, as Profion, we build a portable,
+
+18
+0:01:27.720 --> 0:01:32.400
+mostly static NRX release binary, then we run it and we measure the memory pages within
+
+19
+0:01:32.400 --> 0:01:33.560
+a TE.
+
+20
+0:01:33.560 --> 0:01:36.600
+Then we add that to a allow list in an attestation service.
+
+21
+0:01:36.600 --> 0:01:41.840
+And finally, then the user uses the release binary, and they, well, they also run it on
+
+22
+0:01:41.840 --> 0:01:42.840
+a TE.
+
+23
+0:01:42.840 --> 0:01:47.000
+And we, in our attestation service, can verify that indeed they are running a trusted system,
+
+24
+0:01:47.000 --> 0:01:50.400
+this trusted release of NRX within a real TE.
+
+25
+0:01:50.400 --> 0:01:53.640
+But there are two questions, of course, which arise, which is what if the release version
+
+26
+0:01:53.640 --> 0:01:59.160
+of NRX is compromised, or what if actually our build pipeline is compromised?
+
+27
+0:01:59.160 --> 0:02:02.880
+So then you can also ask a question, so how can users actually verify that the source
+
+28
+0:02:02.880 --> 0:02:07.000
+code that we have released, we say, okay, this release corresponds to this source code,
+
+29
+0:02:07.000 --> 0:02:10.440
+how can I actually verify that it is indeed true?
+
+30
+0:02:10.440 --> 0:02:15.360
+So if you would try to just do plain cargo build with a Rust project, then you'll notice
+
+31
+0:02:15.360 --> 0:02:19.520
+that actually you get different binaries depending on the system in which you compile your binary.
+
+32
+0:02:19.520 --> 0:02:23.160
+And so the answer to this is actually to use a produceable builds, which, of course, Nix
+
+33
+0:02:23.160 --> 0:02:26.640
+gives us a way to do.
+
+34
+0:02:26.640 --> 0:02:28.040
+So here is an example as well.
+
+35
+0:02:28.040 --> 0:02:32.640
+So if I just compile it in the Docker container, right, and if I just do it locally, I get
+
+36
+0:02:32.640 --> 0:02:33.960
+exactly the same binary.
+
+37
+0:02:33.960 --> 0:02:37.200
+So I get exactly the same digest.
+
+38
+0:02:37.200 --> 0:02:39.640
+But so how do we actually get here?
+
+39
+0:02:39.640 --> 0:02:41.080
+It's all, of course, half of the shell.
+
+40
+0:02:41.080 --> 0:02:45.600
+How do you develop anything without the Nix shell before in your project, right?
+
+41
+0:02:45.600 --> 0:02:53.000
+And I got positive feedback on this, and, well, we infected the project with Nix.
+
+42
+0:02:53.000 --> 0:02:56.840
+Just a few months later after that, something very surprising to me happened.
+
+43
+0:02:56.840 --> 0:03:01.400
+It's one of our first outside contributions was actually an ARX build package.
+
+44
+0:03:01.400 --> 0:03:05.240
+So I just added a shell with actual build script by Vincent from Germany.
+
+45
+0:03:05.240 --> 0:03:09.360
+I don't know if you're here, but thank you very much if he's looking at this.
+
+46
+0:03:09.360 --> 0:03:14.240
+And so by the time we had to ship and release, you know, like a big release of ARX, we already
+
+47
+0:03:14.240 --> 0:03:17.160
+had all our Linux and Mac binary builds in the Flake.
+
+48
+0:03:17.160 --> 0:03:19.360
+And we could also build OCI images in the Flake.
+
+49
+0:03:19.360 --> 0:03:21.360
+I did some changes in the meantime.
+
+50
+0:03:21.360 --> 0:03:25.160
+So yeah, it just made sense to use Nix for this.
+
+51
+0:03:25.160 --> 0:03:31.400
+And we quickly discovered that actually building for ARM64 in QM on x86 runners was just too
+
+52
+0:03:31.400 --> 0:03:33.000
+slow.
+
+53
+0:03:33.000 --> 0:03:35.360
+So that's why I implemented cross compilation.
+
+54
+0:03:35.360 --> 0:03:37.480
+It was tricky, but eventually it worked.
+
+55
+0:03:37.480 --> 0:03:41.080
+But unfortunately it also made all functionality parameterized by the package set and also
+
+56
+0:03:41.080 --> 0:03:44.760
+made Flakes very difficult to maintain a review, especially for people who are not familiar
+
+57
+0:03:44.760 --> 0:03:47.000
+with Nix because I was the only Nix guy in the company.
+
+58
+0:03:47.000 --> 0:03:49.560
+So it complicated things.
+
+59
+0:03:49.560 --> 0:03:50.560
+And here's an example.
+
+60
+0:03:50.560 --> 0:03:57.200
+I don't know if you can see, but before it looked like a just normal kind of build script,
+
+61
+0:03:57.200 --> 0:04:00.560
+you know, like you would, if you, if you did get into packaging or no, Arch Linux packaging,
+
+62
+0:04:00.560 --> 0:04:02.480
+you would kind of understand what's happening here.
+
+63
+0:04:02.480 --> 0:04:05.160
+If you just use Rust, it's kind of clear what's happening.
+
+64
+0:04:05.160 --> 0:04:07.720
+But when you have cross compilation, it gets difficult, right?
+
+65
+0:04:07.720 --> 0:04:10.560
+You have a linker, you have a CC target prefix, right?
+
+66
+0:04:10.560 --> 0:04:16.680
+You have, it's not clear, like let in block, there are two different package sets.
+
+67
+0:04:16.680 --> 0:04:21.520
+So what's even worse is that, well, we had multiple repositories and initially we just
+
+68
+0:04:21.520 --> 0:04:23.200
+duplicated our Flakes, right?
+
+69
+0:04:23.200 --> 0:04:25.280
+Because we want to build everything reproducibly as well.
+
+70
+0:04:25.280 --> 0:04:26.280
+We want to have cross compilation.
+
+71
+0:04:26.280 --> 0:04:29.360
+We want to have just consistent, you know, CI.
+
+72
+0:04:29.360 --> 0:04:33.880
+And we basically each Flake was branched off from a different version of the original Flake,
+
+73
+0:04:33.880 --> 0:04:34.880
+right?
+
+74
+0:04:34.880 --> 0:04:36.880
+Because we also, we're keeping developing and changing things.
+
+75
+0:04:36.880 --> 0:04:41.320
+So they start to diverge in some supple ways, but they still largely were doing exactly
+
+76
+0:04:41.320 --> 0:04:42.520
+the same thing.
+
+77
+0:04:42.520 --> 0:04:46.420
+And another thing is that because the Flake logs were actually managed independently,
+
+78
+0:04:46.420 --> 0:04:51.240
+so we could benefit from some CI caching, but we actually couldn't because those potential
+
+79
+0:04:51.240 --> 0:04:53.440
+hits will actually become a miss.
+
+80
+0:04:53.440 --> 0:04:56.800
+So and then maintenance just became a burden over time.
+
+81
+0:04:56.800 --> 0:05:00.900
+So let's just take a step back and think about, okay, what do we actually want to do?
+
+82
+0:05:00.900 --> 0:05:04.040
+We just want to build some static Rust binaries, just like Cargo does, except it won't do
+
+83
+0:05:04.040 --> 0:05:05.040
+it reproducibly, right?
+
+84
+0:05:05.040 --> 0:05:08.840
+We also want to have an OCI image for that binary, and ideally you also want to have
+
+85
+0:05:08.840 --> 0:05:12.120
+a fast CI, but if you can't, all right, fine.
+
+86
+0:05:12.120 --> 0:05:14.800
+But we don't really care how any of this is done, right?
+
+87
+0:05:14.800 --> 0:05:18.080
+All we care about is that if Cargo can do it, we actually be able to do it as well.
+
+88
+0:05:18.080 --> 0:05:20.440
+It should just add functionality, not remove any functionality.
+
+89
+0:05:20.440 --> 0:05:23.220
+It doesn't make anything harder for us.
+
+90
+0:05:23.220 --> 0:05:25.920
+And you could say, right, there are templates in Flakes, right?
+
+91
+0:05:25.920 --> 0:05:30.080
+You could just write it once and then propagate across repositories and just use that.
+
+92
+0:05:30.080 --> 0:05:33.560
+But it's not much different from just duplicating the Flake as I did before, right?
+
+93
+0:05:33.560 --> 0:05:38.040
+You still have to adapt your template for the actual project, and you still have to
+
+94
+0:05:38.040 --> 0:05:42.640
+maintain it's going to get out of date, and there should be a better way.
+
+95
+0:05:42.640 --> 0:05:45.960
+So that's why I built a Mixify library.
+
+96
+0:05:45.960 --> 0:05:51.040
+It's designed to be an easy to use, batteries-included library with opinionated but customizable defaults,
+
+97
+0:05:51.040 --> 0:05:52.840
+and it just works well in CI.
+
+98
+0:05:52.840 --> 0:05:56.520
+It doesn't try to cover all use cases, but it should be good enough for most.
+
+99
+0:05:56.520 --> 0:06:00.960
+It just simply plugs into your existing language tooling and currently supports only Rust by
+
+100
+0:06:00.960 --> 0:06:05.160
+a crane backend, but it could support other back-ends as well if you want to, and there
+
+101
+0:06:05.160 --> 0:06:09.520
+is also support for other languages just kind of designed for.
+
+102
+0:06:09.520 --> 0:06:11.160
+So what does it actually do?
+
+103
+0:06:11.160 --> 0:06:16.600
+So per each default system, it provides you with a Flake check for listening and testing,
+
+104
+0:06:16.600 --> 0:06:20.920
+development shell of your tool chain, format of your to-do, nixfumt, and then releasing
+
+105
+0:06:20.920 --> 0:06:25.840
+debug builds for all targets with cross-compilation and OCI images and whatnot.
+
+106
+0:06:25.840 --> 0:06:26.840
+Here's an example.
+
+107
+0:06:26.840 --> 0:06:29.320
+So this is actually just a Rust Hello World application, right?
+
+108
+0:06:29.320 --> 0:06:34.680
+I have just simply one input, which is Mixify, and I have just outputs generated by this
+
+109
+0:06:34.680 --> 0:06:39.400
+makeFlake function, and the absolute minimum is just if I have one argument, which is a
+
+110
+0:06:39.400 --> 0:06:41.180
+source.
+
+111
+0:06:41.180 --> 0:06:44.600
+So Mixify will parse actually the Rust tool chain, a cargo.toml file if you're unfamiliar
+
+112
+0:06:44.600 --> 0:06:45.600
+with Rust.
+
+113
+0:06:45.600 --> 0:06:49.600
+So Rust tool chain defines basically what version of a tool chain I want, what targets
+
+114
+0:06:49.600 --> 0:06:54.280
+I want to have, and cargo.toml is just basically metadata about the package.
+
+115
+0:06:54.280 --> 0:06:55.880
+So let's look at the Mixflake shell.
+
+116
+0:06:55.880 --> 0:07:00.520
+I formatted the output because it just wouldn't fit on the screen, so this is the checks.
+
+117
+0:07:00.520 --> 0:07:06.680
+So I get my linting, my formatter, the Rust formatter, and the testing on check.
+
+118
+0:07:06.680 --> 0:07:10.840
+I get also a development shell with my tool chain and all the different systems.
+
+119
+0:07:10.840 --> 0:07:16.360
+I get nixfumt already predefined, and I also have an overlay with actually the tool chain
+
+120
+0:07:16.360 --> 0:07:19.220
+and all the packages, so including OCI images.
+
+121
+0:07:19.220 --> 0:07:21.400
+And finally, that's the packages that are generated.
+
+122
+0:07:21.400 --> 0:07:24.040
+So I have the native default build.
+
+123
+0:07:24.040 --> 0:07:29.200
+I have also profiles for release builds and debug builds.
+
+124
+0:07:29.200 --> 0:07:32.240
+You'll notice that there's no Darwin builds here, because again, I formatted.
+
+125
+0:07:32.240 --> 0:07:37.080
+On Darwin, you would see also builds for Darwin, but you cannot cross-compile from Linux to
+
+126
+0:07:37.080 --> 0:07:38.400
+Darwin, but you can do other way around.
+
+127
+0:07:38.400 --> 0:07:40.160
+So on Darwin, you would see that as well.
+
+128
+0:07:40.160 --> 0:07:43.320
+In fact, there was an issue with Mixpacker set right now.
+
+129
+0:07:43.320 --> 0:07:48.800
+There is no, like one of the Darwin was not able to compile for the other one, unless
+
+130
+0:07:48.800 --> 0:07:50.800
+you can check yourself.
+
+131
+0:07:50.800 --> 0:07:54.320
+So here's an example of nRx packaging with this tool.
+
+132
+0:07:54.320 --> 0:07:58.720
+So I can also configure, for example, some paths to ignore to improve caching.
+
+133
+0:07:58.720 --> 0:08:04.200
+I can configure the Clippy features, whatever I wanted to do there.
+
+134
+0:08:04.200 --> 0:08:06.400
+So it's pretty small, pretty simple.
+
+135
+0:08:06.400 --> 0:08:12.280
+I can add some, like for example, OpenSSL in my shell, and yeah, and it works.
+
+136
+0:08:12.280 --> 0:08:15.840
+And nRx itself is, by the way, anything but a simple project.
+
+137
+0:08:15.840 --> 0:08:16.840
+So it's using Nightly Rust.
+
+138
+0:08:16.840 --> 0:08:18.680
+It has seven crates in the workspace.
+
+139
+0:08:18.680 --> 0:08:21.840
+We actually use bin depth as well, so sometimes we build for three different targets at the
+
+140
+0:08:21.840 --> 0:08:28.480
+same time, basically the trim and the execution layer, which are merged later in one binary.
+
+141
+0:08:28.480 --> 0:08:33.240
+So this is what it means to actually build something in CI with this.
+
+142
+0:08:33.240 --> 0:08:36.720
+So we just simply have a match for all our hosts and targets, and we just simply do nix
+
+143
+0:08:36.720 --> 0:08:39.800
+build, and this is consistent in the same everywhere.
+
+144
+0:08:39.800 --> 0:08:43.520
+The only difference would be the name of the package, but again, it could be removed if
+
+145
+0:08:43.520 --> 0:08:46.160
+I wanted to.
+
+146
+0:08:46.160 --> 0:08:48.960
+So next we have testing, and we have linting.
+
+147
+0:08:48.960 --> 0:08:50.360
+It's pretty much exactly the same thing.
+
+148
+0:08:50.360 --> 0:08:54.040
+Again, it could be a shared GitHub action workflow and just used everywhere.
+
+149
+0:08:54.040 --> 0:08:57.200
+So how do we actually maintain and update this?
+
+150
+0:08:57.200 --> 0:09:02.360
+Nixify changes are actually, for us, was propagated automatically, so we used GitHub action to
+
+151
+0:09:02.360 --> 0:09:04.720
+actually do Nixflake update.
+
+152
+0:09:04.720 --> 0:09:08.680
+So the changes were already reviewed by me, so I've audited the changes essentially, and
+
+153
+0:09:08.680 --> 0:09:12.800
+then anyone in the team can actually, well, you can actually see the bottom, but you can
+
+154
+0:09:12.800 --> 0:09:17.160
+actually review and auto-merge this because the team trusts me.
+
+155
+0:09:17.160 --> 0:09:20.800
+This actually brings me to a trust question, which is an open question I just wanted to
+
+156
+0:09:20.800 --> 0:09:21.800
+raise.
+
+157
+0:09:21.800 --> 0:09:25.200
+So the Nixify state is essentially a root of a miracle tree, right, because it includes
+
+158
+0:09:25.200 --> 0:09:27.220
+all the dependencies and digests of those.
+
+159
+0:09:27.220 --> 0:09:31.920
+So I audit the state of the world, so a mixed package set and all the dependencies, so team
+
+160
+0:09:31.920 --> 0:09:36.600
+trusts me, therefore they trust the world or my audit of it, so it's a transitive trust.
+
+161
+0:09:36.600 --> 0:09:38.900
+But how can the team actually verify my audit?
+
+162
+0:09:38.900 --> 0:09:41.720
+So can I sign the Nixify root in any way?
+
+163
+0:09:41.720 --> 0:09:43.520
+Can I maybe add my signature on this?
+
+164
+0:09:43.520 --> 0:09:47.960
+So maybe Nix could validate my signature, maybe it could be like a parameter, trust,
+
+165
+0:09:47.960 --> 0:09:49.280
+only these projects.
+
+166
+0:09:49.280 --> 0:09:51.440
+So that's just an open question.
+
+167
+0:09:51.440 --> 0:09:55.100
+If you have answers, please let me know.
+
+168
+0:09:55.100 --> 0:09:59.160
+So eventually it was time to deploy our services, and for NRXP it requires the amount of three
+
+169
+0:09:59.160 --> 0:10:05.040
+kernel patches, Intel provided ASMD, PCCS service running, some U-Dev rules for the
+
+170
+0:10:05.040 --> 0:10:06.040
+hardware.
+
+171
+0:10:06.040 --> 0:10:11.020
+We had no dedicated operations engineer, and all our repositories were already Nixified,
+
+172
+0:10:11.020 --> 0:10:15.640
+so we just made, well, we also had two cloud providers, which is AWS, Nix, Linux, both had
+
+173
+0:10:15.640 --> 0:10:18.880
+Nix-OS support out of the box.
+
+174
+0:10:18.880 --> 0:10:24.280
+Before we had Nix, we actually used custom OCI images for PCCS and ASMD, and those were
+
+175
+0:10:24.280 --> 0:10:28.120
+basically just compiled once to some binaries that were put inside the image, and those
+
+176
+0:10:28.120 --> 0:10:32.120
+images were outdated, largely annotated, no one knew what to do with them.
+
+177
+0:10:32.120 --> 0:10:36.800
+We required custom provisioning steps, like to do podman secret create or something, and
+
+178
+0:10:36.800 --> 0:10:39.680
+we also need manual U-Dev rules set up.
+
+179
+0:10:39.680 --> 0:10:44.160
+So once again, open source come to help, so the PCCS and ASMD were actually turned out
+
+180
+0:10:44.160 --> 0:10:46.880
+to actually be supported by Nix-OS already.
+
+181
+0:10:46.880 --> 0:10:48.720
+Also the Intel SGX hardware was supported.
+
+182
+0:10:48.720 --> 0:10:51.960
+By the way, again, it's either Vincent or one of his team, someone from his team who
+
+183
+0:10:51.960 --> 0:10:54.520
+actually added this, so again, thank you.
+
+184
+0:10:54.520 --> 0:10:58.840
+So if we just list, just these six lines were enough for us to just enable the services
+
+185
+0:10:58.840 --> 0:11:01.720
+and all the hardware support.
+
+186
+0:11:01.720 --> 0:11:06.560
+So next step was that I just added some simple Nix-OS modules for our services, set up secret
+
+187
+0:11:06.560 --> 0:11:11.400
+management with soft-set Nix and deployment for deploy-RS, again, like simple tooling,
+
+188
+0:11:11.400 --> 0:11:13.480
+automate deployments to testing environments.
+
+189
+0:11:13.480 --> 0:11:19.280
+I set up CI to just test all PRs, so if the CI fails, the PR doesn't go through, so we
+
+190
+0:11:19.280 --> 0:11:20.560
+don't update anything.
+
+191
+0:11:20.560 --> 0:11:24.040
+And of course we have the automated updates, just like everywhere else, just for every
+
+192
+0:11:24.040 --> 0:11:26.560
+other repository.
+
+193
+0:11:26.560 --> 0:11:30.640
+So to begin with, we actually ended up doing this, so we actually were tracking tags of
+
+194
+0:11:30.640 --> 0:11:31.640
+different projects.
+
+195
+0:11:31.640 --> 0:11:36.640
+So you can see there are three groups of, well, these are the services, different environments,
+
+196
+0:11:36.640 --> 0:11:41.120
+so we just have three different inputs, and essentially we progress, we test things in
+
+197
+0:11:41.120 --> 0:11:43.720
+staging, then we go to production, right?
+
+198
+0:11:43.720 --> 0:11:48.080
+If I were to redo this, I would actually use branches, something like Nix package-set channels
+
+199
+0:11:48.080 --> 0:11:52.640
+where you essentially just do a release, right, then you merge it to, say, unstable, eventually
+
+200
+0:11:52.640 --> 0:11:54.560
+you test that, you can promote it to stable.
+
+201
+0:11:54.560 --> 0:12:00.080
+So I think that's more work upstream, but it's easier to, well, maintain downstream,
+
+202
+0:12:00.080 --> 0:12:02.520
+it just makes sense.
+
+203
+0:12:02.520 --> 0:12:07.200
+So you could ask, okay, why don't we just use OCI for this, but the thing to understand,
+
+204
+0:12:07.200 --> 0:12:11.400
+with Nix, we get source code references, not binary references, so essentially we get all
+
+205
+0:12:11.400 --> 0:12:14.040
+the benefits of binaries without actually sacrificing any usability.
+
+206
+0:12:14.040 --> 0:12:19.000
+In fact, we will get things, like updates, and the flag.log is nothing else than really
+
+207
+0:12:19.000 --> 0:12:22.000
+a software-built materials, right, which is the buzzword today, and everyone really cares
+
+208
+0:12:22.000 --> 0:12:23.480
+about it.
+
+209
+0:12:23.480 --> 0:12:27.400
+So because in the flag.log, what you get is that you can audit the whole state of the
+
+210
+0:12:27.400 --> 0:12:33.080
+world, right, you can audit all the service source code, you can audit all the build dependencies,
+
+211
+0:12:33.080 --> 0:12:37.560
+and you can audit also all the tooling that you used to actually deploy this stuff, right,
+
+212
+0:12:37.560 --> 0:12:42.120
+and you have a consistent, simple update procedure, which is Nix flag update, it's super fast
+
+213
+0:12:42.120 --> 0:12:46.360
+to deploy once you have your module set up and you know how to use Nix, it's just, boom,
+
+214
+0:12:46.360 --> 0:12:51.600
+you're just there, and of course you get rollbacks with Nix OS or really any deployment tool
+
+215
+0:12:51.600 --> 0:12:53.960
+that's used Nix.
+
+216
+0:12:53.960 --> 0:12:58.560
+So next step was actually providing things like AMIs and whatever else, so I used just
+
+217
+0:12:58.560 --> 0:13:04.600
+Nix OS generators for it, and the way I did it, I just simply imported the Nix OS module,
+
+218
+0:13:04.600 --> 0:13:08.440
+like a common module from our infrastructure, and it took me less than a day to set up,
+
+219
+0:13:08.440 --> 0:13:13.240
+and this is for SGX and AMD, SCV, again, it's extremely powerful and just extremely simple
+
+220
+0:13:13.240 --> 0:13:15.640
+to use.
+
+221
+0:13:15.640 --> 0:13:20.240
+I do have to mention that we asked ourselves a question, okay, so how many enterprises
+
+222
+0:13:20.240 --> 0:13:25.360
+would actually use Nix OS to deploy NARX, that was probably not so many, so once we
+
+223
+0:13:25.360 --> 0:13:29.720
+actually got a dedicated operations engineer, we eventually moved most of our services to
+
+224
+0:13:29.720 --> 0:13:35.560
+Kubernetes, but there was a little win, because for every service that actually required custom
+
+225
+0:13:35.560 --> 0:13:40.280
+kernel, custom services, custom U-dev rules, those things are difficult to set up, and
+
+226
+0:13:40.280 --> 0:13:45.080
+those actually were kept in Nix OS, which brings me to my next point, that Nix and Nix
+
+227
+0:13:45.080 --> 0:13:50.120
+OS actually, in my opinion at least, make difficult things simple, right, and in this
+
+228
+0:13:50.120 --> 0:13:54.720
+case for me it was great for prototyping, it was great for productivity, for composability,
+
+229
+0:13:54.720 --> 0:13:59.800
+for building literally anything anywhere, and for audibility and trust.
+
+230
+0:13:59.800 --> 0:14:03.880
+One particular thing I want to mention about productivity here is, like if you ask me one
+
+231
+0:14:03.880 --> 0:14:08.160
+killer feature of Nix, at least from my perspective, this is that, right, so we had for example
+
+232
+0:14:08.160 --> 0:14:13.240
+lab machines with SGX and AMD, SCV hardware, and I did it countless times when I was just
+
+233
+0:14:13.240 --> 0:14:17.240
+developing something as a feature branch, and I just needed to test it out, I just SSH,
+
+234
+0:14:17.240 --> 0:14:22.040
+I do Nix run, GitHub colon, you know, my repository, my branch, and I just run it, I don't need
+
+235
+0:14:22.040 --> 0:14:26.480
+to use Git to add a new remote, I don't need to set up my toolchain, nothing, I can just
+
+236
+0:14:26.480 --> 0:14:31.080
+SSH and run it, so I think that's really powerful.
+
+237
+0:14:31.080 --> 0:14:35.360
+So another thing is that if you introduce Nix, of course it's also your responsibility
+
+238
+0:14:35.360 --> 0:14:40.880
+to T-shirt, right, so you are the FM in RTFM, right, so for my case I had the Nix 101 classes
+
+239
+0:14:40.880 --> 0:14:47.200
+on Fridays, and the real uncommon thing about Nix, I think, to people, is the functional
+
+240
+0:14:47.200 --> 0:14:51.720
+programming part, so I ended up teaching a lot of functional programming principles to
+
+241
+0:14:51.720 --> 0:14:57.040
+actually explain Nix, and also just introducing teams to the ecosystem, because, well, if
+
+242
+0:14:57.040 --> 0:15:02.320
+you just newcomer to Nix, it may be overwhelming, it's not clear why there's Nix, a Nix package
+
+243
+0:15:02.320 --> 0:15:07.120
+set, a Nix device, how they're related, and I also created a Nix channel for questions,
+
+244
+0:15:07.120 --> 0:15:10.240
+so whenever people had questions I would just answer them.
+
+245
+0:15:10.240 --> 0:15:16.240
+So some derivations from this, it's really important to give people examples of how to
+
+246
+0:15:16.240 --> 0:15:21.040
+get things done, like real examples, and it's very great also to give analogies with known
+
+247
+0:15:21.040 --> 0:15:26.440
+technologies, and, okay, so this is not exactly what you would do in Nix, but I implemented
+
+248
+0:15:26.440 --> 0:15:30.960
+Fibonacci in Nix and in Rust, right, you have to just show them two side by side, right,
+
+249
+0:15:30.960 --> 0:15:34.960
+I have a main function here in Nix, I have a main function over here, both of which are
+
+250
+0:15:34.960 --> 0:15:40.400
+in both print Fibonacci examples, right, so it just works, you don't see but up here the
+
+251
+0:15:40.400 --> 0:15:46.120
+same, and yeah, so this kind of is an example of how you can show the people that, you know,
+
+252
+0:15:46.120 --> 0:15:49.200
+it's not so scary after all, right, it's just the same function, just look at it, right,
+
+253
+0:15:49.200 --> 0:15:51.960
+it's the same thing.
+
+254
+0:15:51.960 --> 0:15:56.720
+So one thing I noticed also that Nix is perceived as being pretty novel, so I asked people the
+
+255
+0:15:56.720 --> 0:16:01.440
+question like, okay, so how long do you think Nix exists, and I got answers all the way
+
+256
+0:16:01.440 --> 0:16:05.840
+from two to ten years, where ten was like a real stretch, you know, it can't be so long,
+
+257
+0:16:05.840 --> 0:16:09.240
+but the real answer is 20 years, if you look at the Git log, right, I don't know, maybe
+
+258
+0:16:09.240 --> 0:16:13.080
+it was not developed before, maybe it was earlier, but that's what I see from the Git
+
+259
+0:16:13.080 --> 0:16:15.160
+log.
+
+260
+0:16:15.160 --> 0:16:19.480
+Some frequently asked questions they've received is, okay, I'm not on Nix OS, how do I use
+
+261
+0:16:19.480 --> 0:16:20.480
+Nix?
+
+262
+0:16:20.480 --> 0:16:24.200
+Or I'm trying to use the flakes, but I get an error, and why are flakes experimental?
+
+263
+0:16:24.200 --> 0:16:27.160
+It is safe to depend on some other features, what if I get abandoned?
+
+264
+0:16:27.160 --> 0:16:29.400
+Where is our shell?
+
+265
+0:16:29.400 --> 0:16:34.800
+So a few things we can note here that, at least in my experience, Nix is tightly associated
+
+266
+0:16:34.800 --> 0:16:39.600
+with Nix OS, but we need to understand, or at least explain to newcomers, I believe,
+
+267
+0:16:39.600 --> 0:16:45.160
+that Nix is not just another package manager, right, so Nix OS is just one possible output
+
+268
+0:16:45.160 --> 0:16:50.240
+for Nix build, but it's just that, right, it can build many other things, and I think
+
+269
+0:16:50.240 --> 0:16:56.160
+we should present it as a generic build tool, which is not tied to a particular OS, and
+
+270
+0:16:56.160 --> 0:17:00.040
+sometimes for people familiar with Docker, I even presented something like Docker or
+
+271
+0:17:00.040 --> 0:17:04.000
+Podman, where you basically have a Docker file, you can build a Docker file, it's put
+
+272
+0:17:04.000 --> 0:17:10.800
+in your store, and you can run it afterwards, right, it's something like that, maybe.
+
+273
+0:17:10.800 --> 0:17:14.440
+So yeah, this thing was such a pain.
+
+274
+0:17:14.440 --> 0:17:17.760
+So come on, guys, we need to do something about this, right?
+
+275
+0:17:17.760 --> 0:17:22.920
+I mean, you hear about this Nix thing, it's so cool, but it's so difficult, so out there,
+
+276
+0:17:22.920 --> 0:17:28.560
+and your very first try in Nix is a failure, right, I understand that this error is descriptive,
+
+277
+0:17:28.560 --> 0:17:33.200
+yes, you read this, you kind of understand what to do, mostly, but it's just not a good
+
+278
+0:17:33.200 --> 0:17:38.800
+developer experience, right, and I think we should, I don't know, I don't know what to
+
+279
+0:17:38.800 --> 0:17:44.880
+do, there are possible solutions, but we really need to do something about this as a community.
+
+280
+0:17:44.880 --> 0:17:48.880
+So thank you, this, you can...
+
+281
+0:17:48.880 --> 0:18:01.680
+Yeah, as I said, profing close, I'm looking for a job, by the way, but yeah, any questions,
+
+282
+0:18:01.680 --> 0:18:02.680
+maybe?
+
+283
+0:18:02.680 --> 0:18:03.680
+Yeah, go ahead.
+
+284
+0:18:03.680 --> 0:17:50.880
+So you say Nix can basically be a generic build system, like the Nix or the Post
+
+285
+0:17:50.880 --> 0:18:12.680
+Connect, and there are any examples, like if you have a C project, Nix or the other,
+
+286
+0:18:12.680 --> 0:18:15.120
+then it's wrong.
+
+287
+0:18:15.120 --> 0:18:21.440
+Right, so the question is, can Nix be a generic build system like Maison, or you know, Autotools,
+
+288
+0:18:21.440 --> 0:18:27.000
+whatever, so I'm not a C developer, I've never was, I believe so, I believe you will be able
+
+289
+0:18:27.000 --> 0:18:31.360
+to do, at least for Rust, it was a breeze to do, I can definitely imagine doing that
+
+290
+0:18:31.360 --> 0:18:37.520
+for Go as well, and I think that was pretty, so for example, I compile, so we had a collection
+
+291
+0:18:37.520 --> 0:18:43.000
+of examples where we mostly compiled to Wazi, so for C it was actually very, very simple,
+
+292
+0:18:43.000 --> 0:18:45.160
+so I would think so.
+
+293
+0:18:45.160 --> 0:18:49.160
+The only thing to care, to think about though, so it's great for releases, not so great for
+
+294
+0:18:49.160 --> 0:18:52.480
+development because, for example, with Rust, you have this target directory with all your
+
+295
+0:18:52.480 --> 0:18:54.920
+cache, so you don't get that anymore, right?
+
+296
+0:18:54.920 --> 0:18:59.200
+Or, I mean, you have to, you can do things around it, you can maybe build some library
+
+297
+0:18:59.200 --> 0:19:04.640
+to actually achieve that.
+
+298
+0:19:04.640 --> 0:19:05.640
+Maybe you can do it and contribute.
+
+299
+0:19:05.640 --> 0:19:13.520
+If I may add about this, there is some RFC on how you can enable things to become, make
+
+300
+0:19:13.520 --> 0:19:18.200
+replacements, but there are much more things which are a bit complicated on how you make
+
+301
+0:19:18.200 --> 0:19:19.200
+it fast.
+
+302
+0:19:19.200 --> 0:19:36.200
+So, yeah, that is what he's looking for, I would say.
+
+303
+0:19:36.200 --> 0:19:56.920
+Okay, I'll check it out, thanks, I don't know that.
+
+304
+0:19:56.920 --> 0:20:07.840
+Thank you.
+

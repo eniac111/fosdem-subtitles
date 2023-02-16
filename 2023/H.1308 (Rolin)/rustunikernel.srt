@@ -1,0 +1,1216 @@
+1
+0:00:00.000 --> 0:00:11.360
+Okay, now that Pierre is here, we can get started.
+
+2
+0:00:11.360 --> 0:00:19.280
+So it's my pleasure to invite Martin to talk about Rust-based unicernel.
+
+3
+0:00:19.280 --> 0:00:24.240
+So combining the two cool words here, unicernels and Rust and security.
+
+4
+0:00:24.240 --> 0:00:25.240
+Go ahead, Martin.
+
+5
+0:00:25.240 --> 0:00:27.480
+Yeah, there were two words.
+
+6
+0:00:27.480 --> 0:00:29.240
+Okay, hi, everyone.
+
+7
+0:00:29.240 --> 0:00:31.520
+Thanks for coming to our talk.
+
+8
+0:00:31.520 --> 0:00:37.680
+I'm going to be talking about Rust-y-Hermid, which is our Rust-based modular unicernel
+
+9
+0:00:37.680 --> 0:00:39.240
+for micro-VMs.
+
+10
+0:00:39.240 --> 0:00:43.160
+Who are we?
+
+11
+0:00:43.160 --> 0:00:44.600
+This is us.
+
+12
+0:00:44.600 --> 0:00:49.200
+So there's Stefan, who initiated the project a few years ago.
+
+13
+0:00:49.200 --> 0:00:51.400
+There's Jonathan, and there's Martin.
+
+14
+0:00:51.400 --> 0:00:52.640
+That's me.
+
+15
+0:00:52.640 --> 0:01:00.240
+We are from the Institute for Automation of Complex Power Systems at RWTH Aachen University.
+
+16
+0:01:00.240 --> 0:01:02.560
+Stefan is the academic director.
+
+17
+0:01:02.560 --> 0:01:04.680
+Jonathan is a PhD student.
+
+18
+0:01:04.680 --> 0:01:06.320
+And I'm a master student.
+
+19
+0:01:06.320 --> 0:01:14.120
+I'm currently writing my master's thesis with both Stefan and Jonathan as my supervisors.
+
+20
+0:01:14.120 --> 0:01:21.120
+And yeah, I'm happy to be able to present our project to you now.
+
+21
+0:01:21.120 --> 0:01:25.840
+Just a remark, this project has been funded through EU projects.
+
+22
+0:01:25.840 --> 0:01:30.320
+Okay, Rust-y-Hermid.
+
+23
+0:01:30.320 --> 0:01:35.600
+Rust-y-Hermid is a library operating system for creating unicernel images, similar to what
+
+24
+0:01:35.600 --> 0:01:41.000
+you've seen before with unicraft, if you were here.
+
+25
+0:01:41.000 --> 0:01:49.760
+It started as a Hermit core research project around eight years ago, started by Stefan.
+
+26
+0:01:49.760 --> 0:01:56.480
+That project was written in C and had a focus on HPC, high performance computing.
+
+27
+0:01:56.480 --> 0:02:04.120
+And in 2018, it was completely rewritten in Rust.
+
+28
+0:02:04.120 --> 0:02:05.400
+Every component of it.
+
+29
+0:02:05.400 --> 0:02:09.480
+Well, and assembly, but that doesn't count.
+
+30
+0:02:09.480 --> 0:02:12.280
+Quick recap, unicernels.
+
+31
+0:02:12.280 --> 0:02:17.200
+Very similar to a slide you've seen before presented by Simon.
+
+32
+0:02:17.200 --> 0:02:24.320
+On the left, we have the classical Linux VM running on a hypervisor type two here.
+
+33
+0:02:24.320 --> 0:02:29.900
+And we have a fully fledged operating system inside of the VM image, which is quite large
+
+34
+0:02:29.900 --> 0:02:37.240
+and has its own distinction between kernel and user space inside the virtual machine.
+
+35
+0:02:37.240 --> 0:02:44.480
+Docker containers run on a container runtime, which have their own user space, but share
+
+36
+0:02:44.480 --> 0:02:52.360
+the kernel with the host system, which makes it faster and more flexible.
+
+37
+0:02:52.360 --> 0:02:56.200
+Unicernels on the right are very small.
+
+38
+0:02:56.200 --> 0:03:02.200
+They are created by linking your application against a library operating system to create
+
+39
+0:03:02.200 --> 0:03:10.560
+a tightly integrated unicernel image, which can then run on machines, real or virtual
+
+40
+0:03:10.560 --> 0:03:11.560
+machines.
+
+41
+0:03:11.560 --> 0:03:20.400
+It has the same isolation from the host or other guests as classical Linux VMs.
+
+42
+0:03:20.400 --> 0:03:27.480
+And since it's just one application and one process, we have a single address-based operating
+
+43
+0:03:27.480 --> 0:03:31.880
+system and no distinction between user space and kernel space.
+
+44
+0:03:31.880 --> 0:03:36.600
+This is really good for performance because we don't need to do any privileged context
+
+45
+0:03:36.600 --> 0:03:40.200
+switches, which are costly otherwise.
+
+46
+0:03:40.200 --> 0:03:49.800
+And we don't have preemptions and don't do interruptions in that case either.
+
+47
+0:03:49.800 --> 0:03:54.160
+Also it's very small in this case because we can just throw away everything we don't
+
+48
+0:03:54.160 --> 0:04:04.700
+need from the binary and have a runnable Hello World image at around half a megabyte.
+
+49
+0:04:04.700 --> 0:04:08.600
+We also focus on microVMs.
+
+50
+0:04:08.600 --> 0:04:14.720
+MicroVMs are a special type of virtual machine platform, which are more bare-bones because
+
+51
+0:04:14.720 --> 0:04:20.120
+we don't need to emulate things like PCI or ACPI.
+
+52
+0:04:20.120 --> 0:04:23.120
+This of course requires para virtualization.
+
+53
+0:04:23.120 --> 0:04:30.560
+So the guest image needs to be specialized and know that we don't want to talk about
+
+54
+0:04:30.560 --> 0:04:33.520
+PCI in this case.
+
+55
+0:04:33.520 --> 0:04:38.280
+That can make the unicernel image even smaller in some cases.
+
+56
+0:04:38.280 --> 0:04:44.160
+And let's talk about Rust.
+
+57
+0:04:44.160 --> 0:04:48.320
+Our unicernel is written in Rust for a number of reasons.
+
+58
+0:04:48.320 --> 0:04:53.960
+It's productive, it's fun, and it's safe.
+
+59
+0:04:53.960 --> 0:04:59.820
+Rust has many modern language features that are really nice to work with compared to C
+
+60
+0:04:59.820 --> 0:05:02.320
+or other older languages.
+
+61
+0:05:02.320 --> 0:05:07.040
+It has a strong type system, helpful compiler errors, which are really a bliss if you're
+
+62
+0:05:07.040 --> 0:05:11.400
+coming from C++ template errors.
+
+63
+0:05:11.400 --> 0:05:13.120
+It's a growing ecosystem.
+
+64
+0:05:13.120 --> 0:05:16.840
+It's being adopted by several big projects.
+
+65
+0:05:16.840 --> 0:05:25.640
+I'm sure you've heard of Linux adopting Rust, at least in some parts, already upstream.
+
+66
+0:05:25.640 --> 0:05:27.480
+Rust has also great tooling.
+
+67
+0:05:27.480 --> 0:05:34.800
+There's a very nice package manager that virtually everyone uses to put their projects into so-called
+
+68
+0:05:34.800 --> 0:05:36.960
+crates in Rust.
+
+69
+0:05:36.960 --> 0:05:41.160
+And there's great tooling for formatting and linting, for example.
+
+70
+0:05:41.160 --> 0:05:47.080
+For our case in OS programming, it's also very cool that you can use very much of the
+
+71
+0:05:47.080 --> 0:05:51.400
+Rust standard library without an operating system.
+
+72
+0:05:51.400 --> 0:06:00.480
+Like for example a vector for a growable dynamically allocated array, for example.
+
+73
+0:06:00.480 --> 0:06:05.800
+The biggest point which really put Rust on the landscape is the last point, which is
+
+74
+0:06:05.800 --> 0:06:08.600
+that Rust is a safe language.
+
+75
+0:06:08.600 --> 0:06:14.920
+It's the first major systems programming language that guarantees memory safety.
+
+76
+0:06:14.920 --> 0:06:18.960
+That's pretty cool because memory safety is hard if you do it manually.
+
+77
+0:06:18.960 --> 0:06:25.480
+I think if you've programmed C or C++ before, you might have dereferenced a null pointer
+
+78
+0:06:25.480 --> 0:06:29.920
+and resulted in some segford or something.
+
+79
+0:06:29.920 --> 0:06:33.800
+And it's very cool if you don't do that.
+
+80
+0:06:33.800 --> 0:06:37.440
+Just don't.
+
+81
+0:06:37.440 --> 0:06:46.040
+In big projects like Chromium or other cases, it's been shown that around more than 60%
+
+82
+0:06:46.040 --> 0:06:50.880
+of vulnerabilities are caused by memory unsafety.
+
+83
+0:06:50.880 --> 0:06:59.760
+And moving those projects to Rust is in the spirit of hoping that that alleviates this
+
+84
+0:06:59.760 --> 0:07:00.760
+problem.
+
+85
+0:07:00.760 --> 0:07:08.280
+I have an example, proof of coolness of the Rust language.
+
+86
+0:07:08.280 --> 0:07:15.000
+Just one example that I picked to demonstrate the modernity and elegance.
+
+87
+0:07:15.000 --> 0:07:20.200
+It's sometimes a.k.a. tagged unions.
+
+88
+0:07:20.200 --> 0:07:27.120
+You can see on the bottom here that there is a generic enum type option, which is either
+
+89
+0:07:27.120 --> 0:07:31.600
+none or sum and then has some data in it.
+
+90
+0:07:31.600 --> 0:07:35.400
+And in Rust, these types are coupled.
+
+91
+0:07:35.400 --> 0:07:39.400
+So the sum variant of the enumeration contains the data.
+
+92
+0:07:39.400 --> 0:07:41.240
+And it's really nice working with that.
+
+93
+0:07:41.240 --> 0:07:48.800
+If we have an option as shown at the bottom, we can match this option and then either unpack
+
+94
+0:07:48.800 --> 0:07:54.120
+the none or the sum variant and then reuse it directly.
+
+95
+0:07:54.120 --> 0:07:58.160
+Okay.
+
+96
+0:07:58.160 --> 0:08:03.920
+I've kind of lied to you before because Rust is really two languages.
+
+97
+0:08:03.920 --> 0:08:07.480
+First there's safe Rust and unsafe Rust.
+
+98
+0:08:07.480 --> 0:08:08.480
+Okay.
+
+99
+0:08:08.480 --> 0:08:11.040
+What does that mean?
+
+100
+0:08:11.040 --> 0:08:17.200
+Safe Rust is awesome because safe Rust gives us all the guarantees that we want.
+
+101
+0:08:17.200 --> 0:08:23.200
+Things like accessing invalid pointers, which would result in use after three, double, three
+
+102
+0:08:23.200 --> 0:08:30.040
+or out of bounds problems as well as data races are classified as undefined behavior
+
+103
+0:08:30.040 --> 0:08:31.040
+in Rust.
+
+104
+0:08:31.040 --> 0:08:40.560
+And using only safe Rust, these problems can't happen to you.
+
+105
+0:08:40.560 --> 0:08:45.280
+These problems don't guarantee correctness though.
+
+106
+0:08:45.280 --> 0:08:50.400
+So things like race conditions, which are different from data races or logic errors
+
+107
+0:08:50.400 --> 0:08:55.360
+can occur, which is natural, I think.
+
+108
+0:08:55.360 --> 0:09:00.920
+When doing OS development and other low level stuff, we have a few additional requirements
+
+109
+0:09:00.920 --> 0:09:02.240
+though.
+
+110
+0:09:02.240 --> 0:09:08.880
+We might want to do raw memory access for MMIO or we have to sometimes write assembly
+
+111
+0:09:08.880 --> 0:09:14.420
+code for invoking special CPU instructions.
+
+112
+0:09:14.420 --> 0:09:20.260
+This unfortunately cannot be checked by the compiler for safety invariants.
+
+113
+0:09:20.260 --> 0:09:23.640
+That means this is not possible to do in safe Rust.
+
+114
+0:09:23.640 --> 0:09:29.000
+This is why unsafe Rust exists.
+
+115
+0:09:29.000 --> 0:09:32.080
+Unsafe Rust is a strict superset of safe Rust.
+
+116
+0:09:32.080 --> 0:09:38.900
+So it means you can do everything that you can do in safe Rust, but a few things more.
+
+117
+0:09:38.900 --> 0:09:46.680
+But you have to tell the compiler that you promise to be extra careful and don't do
+
+118
+0:09:46.680 --> 0:09:50.120
+any bad stuff.
+
+119
+0:09:50.120 --> 0:09:51.760
+You have special superpowers then.
+
+120
+0:09:51.760 --> 0:09:56.400
+You can access raw pointers and call unsafe functions, which is required for inline assembly,
+
+121
+0:09:56.400 --> 0:09:58.120
+for example.
+
+122
+0:09:58.120 --> 0:10:05.400
+At the bottom you can see how we can access raw pointers or write inline assembly, which
+
+123
+0:10:05.400 --> 0:10:10.280
+if we are not careful might really do bad stuff.
+
+124
+0:10:10.280 --> 0:10:13.520
+This is why we have to put this in unsafe blocks.
+
+125
+0:10:13.520 --> 0:10:20.760
+That means if something goes wrong, we can just grab for any unsafe things and rethink
+
+126
+0:10:20.760 --> 0:10:23.800
+if we did everything correctly there.
+
+127
+0:10:23.800 --> 0:10:29.320
+When writing this unsafe code, we have to be sure not to violate Rust's fundamental
+
+128
+0:10:29.320 --> 0:10:36.520
+soundness property, which says that no matter what, safe Rust cannot cause undefined behavior.
+
+129
+0:10:36.520 --> 0:10:42.960
+If we encapsulate some unsafe code in some safe function, we have to make sure that this
+
+130
+0:10:42.960 --> 0:10:48.720
+API cannot be misused in any way.
+
+131
+0:10:48.720 --> 0:10:50.160
+Enough about Rust.
+
+132
+0:10:50.160 --> 0:10:55.360
+Let's talk about Rusty Hermit again.
+
+133
+0:10:55.360 --> 0:11:00.120
+Rusty Hermit is tightly integrated with the Rust language.
+
+134
+0:11:00.120 --> 0:11:06.160
+It's our first language of choice for applications and very specialized.
+
+135
+0:11:06.160 --> 0:11:12.600
+Now I'm going to show you how you would port a Rust application that runs on Linux to Rusty
+
+136
+0:11:12.600 --> 0:11:16.520
+Hermit, which is really easy, I think.
+
+137
+0:11:16.520 --> 0:11:17.840
+But let's see.
+
+138
+0:11:17.840 --> 0:11:19.600
+We have a few requirements.
+
+139
+0:11:19.600 --> 0:11:24.200
+Rust up the first one is the Rust toolchain manager that virtually every Rust developer
+
+140
+0:11:24.200 --> 0:11:26.040
+has already installed.
+
+141
+0:11:26.040 --> 0:11:28.600
+We then need, of course, a hypervisor for our choice.
+
+142
+0:11:28.600 --> 0:11:36.160
+We can either use the ubiquitous Kuemu or UHIVE.
+
+143
+0:11:36.160 --> 0:11:43.280
+UHIVE is a specialized hypervisor created by us in Rust, of course, that is specialized
+
+144
+0:11:43.280 --> 0:11:53.480
+for the Rusty Hermit operating system to have really fast API between those two.
+
+145
+0:11:53.480 --> 0:11:59.120
+If we are compiling with simultaneous multiprocessing for interprocessors, we also need nothing,
+
+146
+0:11:59.120 --> 0:12:03.560
+but that's not important if you don't need that.
+
+147
+0:12:03.560 --> 0:12:05.540
+This is a bare bones Rust project.
+
+148
+0:12:05.540 --> 0:12:13.400
+We have a cargo tome, which is a manifest file for the cargo package manager, which
+
+149
+0:12:13.400 --> 0:12:16.360
+describes the package metadata.
+
+150
+0:12:16.360 --> 0:12:19.840
+It just says, hello world, version, edition, something.
+
+151
+0:12:19.840 --> 0:12:21.000
+Not very important.
+
+152
+0:12:21.000 --> 0:12:25.400
+We have then our main source file, the main RS, which is just a main function and prints
+
+153
+0:12:25.400 --> 0:12:27.800
+hello world.
+
+154
+0:12:27.800 --> 0:12:34.880
+Everything that we need to do to get Rusty Hermit support is first add a Rusty Hermit
+
+155
+0:12:34.880 --> 0:12:36.960
+dependency.
+
+156
+0:12:36.960 --> 0:12:42.200
+It's written a bit complicated to just include this dependency if we actually compile for
+
+157
+0:12:42.200 --> 0:12:45.280
+the Hermit operating system.
+
+158
+0:12:45.280 --> 0:12:52.840
+And then we just need to add two more lines to the main RS to import this dependency.
+
+159
+0:12:52.840 --> 0:12:59.480
+And what this does then is that Hermit sys in the background transparently builds the
+
+160
+0:12:59.480 --> 0:13:06.240
+Hermit kernel, the library operating system, and then by importing it like this, we make
+
+161
+0:13:06.240 --> 0:13:08.920
+sure we actually link against this.
+
+162
+0:13:08.920 --> 0:13:20.160
+And what we then get is a runnable, a unicorn image that can be run in Qemu or UHive.
+
+163
+0:13:20.160 --> 0:13:27.420
+To then build this, we have to pin a Rust compiler version because we have some internal
+
+164
+0:13:27.420 --> 0:13:33.480
+things that require that, but we're working on getting rid of that and then just build
+
+165
+0:13:33.480 --> 0:13:34.600
+it.
+
+166
+0:13:34.600 --> 0:13:41.320
+We say cargo build, then specify the Hermit target, which is our target, and then we tell
+
+167
+0:13:41.320 --> 0:13:47.280
+it to build the standard library on the fly because we are small yet and only tier three
+
+168
+0:13:47.280 --> 0:13:54.360
+target which is why Rust does not support us natively yet, but we support Rust.
+
+169
+0:13:54.360 --> 0:13:58.400
+And yeah, that was easy.
+
+170
+0:13:58.400 --> 0:14:04.040
+And to make sure that all of you can believe me, I have prepared a small demo.
+
+171
+0:14:04.040 --> 0:14:08.000
+I have to get on this screen, okay?
+
+172
+0:14:08.000 --> 0:14:11.960
+Right here you can see exactly the project I talked about.
+
+173
+0:14:11.960 --> 0:14:16.480
+It's just a hello world with the Hermit sys dependency.
+
+174
+0:14:16.480 --> 0:14:21.580
+It's a main RS which does hello world.
+
+175
+0:14:21.580 --> 0:14:32.440
+And then we can go ahead and open a terminal, then do cargo build, which is really fast
+
+176
+0:14:32.440 --> 0:14:36.440
+right now because I pre-built it, normally takes around one minute on this machine I'm
+
+177
+0:14:36.440 --> 0:14:38.060
+logged into.
+
+178
+0:14:38.060 --> 0:14:42.080
+And then we can run it on UHive.
+
+179
+0:14:42.080 --> 0:14:43.920
+Hello world.
+
+180
+0:14:43.920 --> 0:14:51.160
+And to make sure that we didn't cheat, I can also show you the verbose messages which tells
+
+181
+0:14:51.160 --> 0:14:55.380
+UHive to please print the kernel messages along with it.
+
+182
+0:14:55.380 --> 0:15:00.120
+And we can see that there's Rust, the Hermit booting and initializing all the hardware
+
+183
+0:15:00.120 --> 0:15:05.880
+and preparing the memory and everything and then in the end jumping into our application
+
+184
+0:15:05.880 --> 0:15:07.960
+and printing hello world.
+
+185
+0:15:07.960 --> 0:15:09.960
+After that, that's just shut down.
+
+186
+0:15:09.960 --> 0:15:13.800
+Okay, back to the presentation.
+
+187
+0:15:13.800 --> 0:15:14.800
+Yes.
+
+188
+0:15:14.800 --> 0:15:21.400
+Okay, now a bit about our modularity story in Rust.
+
+189
+0:15:21.400 --> 0:15:22.400
+The Hermit.
+
+190
+0:15:22.400 --> 0:15:25.840
+There are several modularity stories.
+
+191
+0:15:25.840 --> 0:15:28.940
+The first one is user facing.
+
+192
+0:15:28.940 --> 0:15:36.440
+This is the same similar dependency declaration in our cargo manifest as before, but a little
+
+193
+0:15:36.440 --> 0:15:37.480
+bit expanded.
+
+194
+0:15:37.480 --> 0:15:40.080
+We added features.
+
+195
+0:15:40.080 --> 0:15:49.520
+Features are a thing in the cargo package manager that allows us to select and configure
+
+196
+0:15:49.520 --> 0:15:52.040
+conditional compilation in our dependency.
+
+197
+0:15:52.040 --> 0:15:54.120
+In this case, Hermit Sys.
+
+198
+0:15:54.120 --> 0:16:02.080
+And we use this to be able to specify in this manner which features we want to be present
+
+199
+0:16:02.080 --> 0:16:03.960
+in the unicorn image.
+
+200
+0:16:03.960 --> 0:16:13.600
+In this case, I enabled SMP, TCP and DHCP4 and disabled PCI and ACPI.
+
+201
+0:16:13.600 --> 0:16:18.440
+This means that this should be runnable in a micro VM, for example, with no PCI support
+
+202
+0:16:18.440 --> 0:16:20.680
+present.
+
+203
+0:16:20.680 --> 0:16:25.640
+Internally, we are also quite modular.
+
+204
+0:16:25.640 --> 0:16:29.400
+And we're working on further modularizing our kernel.
+
+205
+0:16:29.400 --> 0:16:36.040
+So at the top, you can see the libhermit kernel which has a few dependencies.
+
+206
+0:16:36.040 --> 0:16:45.160
+The first one is a internal hermit entry dependency which is shared between the kernel and anything
+
+207
+0:16:45.160 --> 0:16:47.680
+that loads and jumps into the kernel.
+
+208
+0:16:47.680 --> 0:16:55.520
+We then have hermit sync for internal collection of synchronization primitives like mutexes.
+
+209
+0:16:55.520 --> 0:17:01.800
+And the other crates are really provided by the rust ecosystem which is really rich.
+
+210
+0:17:01.800 --> 0:17:08.740
+So the linked list allocator is our allocation algorithm that we just import and then use.
+
+211
+0:17:08.740 --> 0:17:14.480
+We can also just import and use some device drivers or architecture specific abstractions
+
+212
+0:17:14.480 --> 0:17:18.920
+so that we don't even have to write assembly code ourselves.
+
+213
+0:17:18.920 --> 0:17:24.160
+Also small TCPs, our TCP stack, just import it and configure it.
+
+214
+0:17:24.160 --> 0:17:30.000
+And yeah, we also contribute back upstream which is cool.
+
+215
+0:17:30.000 --> 0:17:44.080
+But this shows the strength of the rust ecosystem and community for rust OS development, I think.
+
+216
+0:17:44.080 --> 0:17:49.480
+In the end, this is a broad overview of the hermit ecosystem as it is today.
+
+217
+0:17:49.480 --> 0:17:54.880
+On the left, you can see a unicurner image that has been built.
+
+218
+0:17:54.880 --> 0:17:57.160
+At the top, we have the application.
+
+219
+0:17:57.160 --> 0:18:04.680
+It's either a rust application or a C application, although rust application is our primary focus,
+
+220
+0:18:04.680 --> 0:18:11.120
+which then either uses the rust standard library or a new C library.
+
+221
+0:18:11.120 --> 0:18:23.080
+Those are then customized by us to invoke the special syscalls into the kernel to do
+
+222
+0:18:23.080 --> 0:18:26.280
+the required functionality.
+
+223
+0:18:26.280 --> 0:18:30.840
+And this all together then makes up the unicurner image.
+
+224
+0:18:30.840 --> 0:18:37.080
+This can then be run on either our specialized virtual machine monitor UHive or a generic
+
+225
+0:18:37.080 --> 0:18:39.040
+VM like KEMO.
+
+226
+0:18:39.040 --> 0:18:44.800
+For KEMO, we have a rusty loader which then chain loads our unicurner image and rusty
+
+227
+0:18:44.800 --> 0:18:53.680
+loader supports some boot protocols as you can see here.
+
+228
+0:18:53.680 --> 0:18:55.160
+That's been the main part.
+
+229
+0:18:55.160 --> 0:18:58.360
+So what are we working on right now?
+
+230
+0:18:58.360 --> 0:19:04.360
+I'm working on the first three things, further code-based oxidization, which means making
+
+231
+0:19:04.360 --> 0:19:06.920
+it more rusty.
+
+232
+0:19:06.920 --> 0:19:11.760
+That means applying more rust idioms more throughoutly because there have been a few
+
+233
+0:19:11.760 --> 0:19:18.080
+C-isms that we've been stuck with from the original part.
+
+234
+0:19:18.080 --> 0:19:23.640
+I'm personally also working on Miri's part, also as part of my master thesis.
+
+235
+0:19:23.640 --> 0:19:31.680
+Miri is an interpreter for rust, which initially sounds strange, but using Miri, we can spot
+
+236
+0:19:31.680 --> 0:19:38.440
+a few cases of undefined behavior if we do something wrong in unsafe code.
+
+237
+0:19:38.440 --> 0:19:43.120
+If something runs in Miri though, that doesn't mean that this is guaranteed to be correct,
+
+238
+0:19:43.120 --> 0:19:46.920
+but it can help us in some cases.
+
+239
+0:19:46.920 --> 0:19:50.280
+Third point is more modularization, and I already talked about that.
+
+240
+0:19:50.280 --> 0:19:56.240
+It's about spinning out internal drivers, for example, in separate projects and crates.
+
+241
+0:19:56.240 --> 0:20:02.520
+Then TCPI stack overhaul is something that Stefan is currently working on, and UHive
+
+242
+0:20:02.520 --> 0:20:06.960
+network overhaul is something that Jonathan oversees.
+
+243
+0:20:06.960 --> 0:20:11.400
+We are also generally working on firecracker support and arm support, both of which have
+
+244
+0:20:11.400 --> 0:20:17.880
+working prototypes but have not really been mainlined that much.
+
+245
+0:20:17.880 --> 0:20:20.920
+Please find us at GitHub.
+
+246
+0:20:20.920 --> 0:20:27.320
+We are always happy to have conversations and contributions.
+
+247
+0:20:27.320 --> 0:20:28.400
+That's been it.
+
+248
+0:20:28.400 --> 0:20:30.600
+Thanks for listening.
+
+249
+0:20:30.600 --> 0:20:35.600
+Thank you so much Martin.
+
+250
+0:20:35.600 --> 0:20:38.880
+Okay, any questions for Martin?
+
+251
+0:20:38.880 --> 0:20:41.880
+UniCernels, Rust Security.
+
+252
+0:20:41.880 --> 0:20:43.880
+Alrighty.
+
+253
+0:20:43.880 --> 0:20:46.880
+There's one.
+
+254
+0:20:46.880 --> 0:20:54.240
+I just want to know what is the primary focus of this project.
+
+255
+0:20:54.240 --> 0:21:00.160
+Do you have some industry which is already picking up on Hermit, or is it pure science
+
+256
+0:21:00.160 --> 0:21:01.160
+so far?
+
+257
+0:21:01.160 --> 0:21:03.200
+What are the plans?
+
+258
+0:21:03.200 --> 0:21:08.680
+As far as I understand, it started as a research project, and it's much there now, I think,
+
+259
+0:21:08.680 --> 0:21:09.680
+Stefan?
+
+260
+0:21:09.680 --> 0:21:14.680
+Yeah, it's still a research project.
+
+261
+0:21:14.680 --> 0:21:26.360
+But we use it in two new projects, and they are mostly partners from the cloud area and
+
+262
+0:21:26.360 --> 0:21:34.680
+edge computing, and we want to use it.
+
+263
+0:21:34.680 --> 0:21:35.680
+Thanks.
+
+264
+0:21:35.680 --> 0:21:37.680
+Thank you for your talk.
+
+265
+0:21:37.680 --> 0:21:38.680
+I have a question.
+
+266
+0:21:38.680 --> 0:21:44.520
+As far as I know, the original C implementation supported quite a few more targets than only
+
+267
+0:21:44.520 --> 0:21:50.200
+Rust and C. As far as I remember, you could run Go code as well, and Fortran, and some
+
+268
+0:21:50.200 --> 0:21:55.560
+other stuff that linked against Glib C, if I'm remembering correctly.
+
+269
+0:21:55.560 --> 0:21:57.560
+Newlib, I think.
+
+270
+0:21:57.560 --> 0:22:02.960
+Is there any plan to open up your targets as well for the new Rust implementation to
+
+271
+0:22:02.960 --> 0:22:07.080
+support some more stuff, not only Rust and C?
+
+272
+0:22:07.080 --> 0:22:09.920
+As far as I've been there, it's been only Rust.
+
+273
+0:22:09.920 --> 0:22:15.520
+I'm not that old into the project.
+
+274
+0:22:15.520 --> 0:22:19.560
+I'm not sure what the plans are on further supporting that.
+
+275
+0:22:19.560 --> 0:22:25.880
+We currently have bare-bound support for C, and I don't think the Go implementation
+
+276
+0:22:25.880 --> 0:22:28.600
+is currently working.
+
+277
+0:22:28.600 --> 0:22:36.680
+It's possible to get it working, but we are not really working on that actively, I think.
+
+278
+0:22:36.680 --> 0:22:39.360
+Any plans for RISC-V support?
+
+279
+0:22:39.360 --> 0:22:40.360
+RISC-V support.
+
+280
+0:22:40.360 --> 0:22:46.360
+This is also done by two students.
+
+281
+0:22:46.360 --> 0:23:00.680
+It didn't need time to just manifest this, so it's there, but the lack of time.
+
+282
+0:23:00.680 --> 0:23:04.400
+Proof of concept is working, but not upstream yet.
+
+283
+0:23:04.400 --> 0:23:05.400
+Okay.
+
+284
+0:23:05.400 --> 0:23:06.400
+Anything?
+
+285
+0:23:06.400 --> 0:23:07.400
+Yep.
+
+286
+0:23:07.400 --> 0:23:16.200
+This question obviously has to be asked, is there async support?
+
+287
+0:23:16.200 --> 0:23:17.200
+Is there what?
+
+288
+0:23:17.200 --> 0:23:18.200
+Async support.
+
+289
+0:23:18.200 --> 0:23:19.200
+Async.
+
+290
+0:23:19.200 --> 0:23:20.200
+Rust async.
+
+291
+0:23:20.200 --> 0:23:23.120
+We have a runtime, or async runtime.
+
+292
+0:23:23.120 --> 0:23:26.240
+I think not mainline yet, right?
+
+293
+0:23:26.240 --> 0:23:33.320
+In the kernel, it says async support, but there's coming up your support or something
+
+294
+0:23:33.320 --> 0:23:34.320
+to start with.
+
+295
+0:23:34.320 --> 0:23:41.280
+I know the kernel uses it internally for networking, and I think the exposure to user space via
+
+296
+0:23:41.280 --> 0:23:46.560
+MIO or something is not merged upstream, but it's something that we are actively interested
+
+297
+0:23:46.560 --> 0:23:48.520
+in, yes.
+
+298
+0:23:48.520 --> 0:23:49.520
+Right.
+
+299
+0:23:49.520 --> 0:23:50.520
+Anything else?
+
+300
+0:23:50.520 --> 0:23:51.520
+Okay.
+
+301
+0:23:51.520 --> 0:23:52.520
+If not, thank you again, Martin.
+
+302
+0:23:52.520 --> 0:23:53.520
+Thank you all for coming.
+
+303
+0:23:53.520 --> 0:23:54.520
+Thanks.
+
+304
+0:23:54.520 --> 0:24:12.980
+Thank you.
+

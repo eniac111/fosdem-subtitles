@@ -1,0 +1,844 @@
+1
+0:00:00.000 --> 0:00:16.400
+Okay. Now we have Trolls Brozgad and he's going to speak to us of Biner pattern matching and
+
+2
+0:00:16.400 --> 0:00:21.360
+Elixir and Erlang, one of the cool features of Erlang and Elixir. So, do you speak binary
+
+3
+0:00:21.360 --> 0:00:33.280
+to me? Give it up for Trolls. Thank you. Don't worry, I'm not going to speak binary, but
+
+4
+0:00:33.280 --> 0:00:38.840
+yes, this is talk about speaking binary to other devices. And this is me and you can
+
+5
+0:00:38.840 --> 0:00:50.520
+find me around the web at TRARBR. Yes. I work as a software developer in Denmark and a company
+
+6
+0:00:50.520 --> 0:00:57.600
+called IndieLab and part of my job is to work on innovations in the Internet of Things realm.
+
+7
+0:00:57.600 --> 0:01:05.120
+So things like smart buildings, smart cities and smart factories. In practice, this involves
+
+8
+0:01:05.120 --> 0:01:10.360
+building gateways that link many different kinds of stupid things together and then when
+
+9
+0:01:10.360 --> 0:01:15.520
+we have a network of things, we can exchange information and we can embed the smartest
+
+10
+0:01:15.520 --> 0:01:21.440
+into the system. And by many different stupid things, things like remote terminal units,
+
+11
+0:01:21.440 --> 0:01:27.320
+which are used in the grid, electric grid and other utilities, PLCs, which are used heavily
+
+12
+0:01:27.320 --> 0:01:34.280
+in factories for automation, solar inverters, heat pumps, thermostats, all kinds of smart
+
+13
+0:01:34.280 --> 0:01:42.000
+home equipment and at the lowest level we have simple sensors and actuators. And the
+
+14
+0:01:42.000 --> 0:01:47.680
+thing that all these things have in common is that we had to speak binary to them. They
+
+15
+0:01:47.680 --> 0:01:54.040
+don't speak JSON, they don't know XML, they don't know protocol even. They had their own
+
+16
+0:01:54.040 --> 0:02:01.560
+custom binary dialects depending on the protocol that they are using. And later in this talk
+
+17
+0:02:01.560 --> 0:02:09.240
+I'll show an example of a simple binary dialect so that we all know what that is. When I'm
+
+18
+0:02:09.240 --> 0:02:14.040
+building an integration for a system like this, I always read for Alexa first. This
+
+19
+0:02:14.040 --> 0:02:18.160
+is because Alexa has a special authority system that makes it extremely good at this kind
+
+20
+0:02:18.160 --> 0:02:26.240
+of work. This is also the case for Erlang and LFE and Beam and Gleam and the other languages
+
+21
+0:02:26.240 --> 0:02:33.040
+on the Erlang virtual machine, but Alexa happens to be my happy space. Some of the Beam's
+
+22
+0:02:33.040 --> 0:02:39.480
+known strong points in this area are fault tolerance, state machines and concurrency.
+
+23
+0:02:39.480 --> 0:02:44.520
+And then there's bits and text. That's what I'll be talking about today. This is a beginner
+
+24
+0:02:44.520 --> 0:02:50.680
+level talk. I don't assume you know anything about Alexa or the previously mentioned systems.
+
+25
+0:02:50.680 --> 0:02:54.120
+But my hope is that if you should find yourself in a situation where you need to speak binary
+
+26
+0:02:54.120 --> 0:02:59.240
+to something, this talk will help you get started.
+
+27
+0:02:59.240 --> 0:03:07.600
+So binaries. Computers today work by manipulating electric signals. And a signal can be either
+
+28
+0:03:07.600 --> 0:03:12.920
+a logic high or a logic low. Such a signal is known as a bit. And a sequence of eight
+
+29
+0:03:12.920 --> 0:03:19.480
+bits is a byte. And this is also how computers communicate. No matter if it's ethernet or
+
+30
+0:03:19.480 --> 0:03:27.800
+Wi-Fi or whatever, it's about transferring a logic signal of high and low bits. And there
+
+31
+0:03:27.800 --> 0:03:35.040
+are different ways we can write down the sort of binary signals. The first notation that
+
+32
+0:03:35.040 --> 0:03:41.960
+I highlighted here isn't binary, where we just take every bit in the sequence and we
+
+33
+0:03:41.960 --> 0:03:47.560
+write it down as a zero or a one. And then it prefixes it with a zero or a B so that
+
+34
+0:03:47.560 --> 0:03:55.360
+it's easier to tell from other numbers. And in this case, the sequence of eight bits,
+
+35
+0:03:55.360 --> 0:04:03.480
+which is a byte, can also be turned into a decimal number. Because in a byte we can have
+
+36
+0:04:03.480 --> 0:04:12.360
+256 different combinations. So it's a number from zero to 255. And in decimal notation,
+
+37
+0:04:12.360 --> 0:04:22.440
+this sequence of bits is 75. There's also a hex notation where we use the characters
+
+38
+0:04:22.440 --> 0:04:29.240
+zero to nine and A to F. This means we can have described the concept of a byte with
+
+39
+0:04:29.240 --> 0:04:37.800
+just two characters. So this is very convenient when we are dealing with binary numbers. Just
+
+40
+0:04:37.800 --> 0:04:43.960
+a common example of where we write the bytes as decimals. We do that with IPv4 addresses.
+
+41
+0:04:43.960 --> 0:04:48.760
+Because an IPv4 address is just four bytes. But then for human consumption, we write it
+
+42
+0:04:48.760 --> 0:04:57.800
+as a binary number. Or sorry, a decimal number. And Mac addresses use a hex notation instead
+
+43
+0:04:57.800 --> 0:05:10.860
+of the binary notation. While all the operations in our computers are processing bits and bytes,
+
+44
+0:05:10.860 --> 0:05:17.560
+we rarely think about them when we are programming. We think in terms of integers, floats, strings,
+
+45
+0:05:17.560 --> 0:05:26.720
+lists, maps, and other structures. But binary data is just a flat stream of bits. There's
+
+46
+0:05:26.720 --> 0:05:33.080
+nothing inherent in it to tell one field from the other. Or any kind of structure. It's
+
+47
+0:05:33.080 --> 0:05:39.240
+all down to how we interpret those bits. This means that when we need to speak binary to
+
+48
+0:05:39.240 --> 0:05:44.120
+something from our programs, we need to write a translation layer that can take whatever
+
+49
+0:05:44.120 --> 0:05:53.560
+list of maps we have in our program and turn it into a binary sequence. I prefer calling
+
+50
+0:05:53.560 --> 0:05:59.720
+this translation layer a codec because it's short to write. And you can say that a codec
+
+51
+0:05:59.720 --> 0:06:07.880
+encodes our data structures in bytes for sending. And then we receive data, the codec decodes
+
+52
+0:06:07.880 --> 0:06:16.200
+that data into our higher level data structures. And sometimes we're lucky we can find a library
+
+53
+0:06:16.200 --> 0:06:20.920
+that will do that for us. But sometimes we need to do it ourselves. And that's where
+
+54
+0:06:20.920 --> 0:06:30.440
+bits and text comes in handy. So let's take a look at that. Let's say I need to send a
+
+55
+0:06:30.440 --> 0:06:38.920
+sequence of three bytes to some other system. They need to have values 10, 20, and 30. To
+
+56
+0:06:38.920 --> 0:06:48.760
+do that, I use distance X. So I use double-ankle brackets to start the binary sequence. And
+
+57
+0:06:48.760 --> 0:06:54.920
+then I write the bytes that I need in sequence and separate it by a comma. So that's pretty
+
+58
+0:06:54.920 --> 0:07:05.000
+simple. Yes. And when I need to receive that data, like if I'm receiving the same sequence
+
+59
+0:07:05.000 --> 0:07:12.280
+of bytes, I need to decode that into three variables, A, B, and C. Then I use distance
+
+60
+0:07:12.280 --> 0:07:18.520
+X, again, double brackets. Then I put the variables instead of the numbers that I want
+
+61
+0:07:18.520 --> 0:07:30.520
+to extract. So it's pretty simple. But of course, we're not really done yet. There's
+
+62
+0:07:30.520 --> 0:07:37.800
+very few domains where we only work with integers in the sequence of 0 to 255. We need larger
+
+63
+0:07:37.800 --> 0:07:44.840
+numbers. We need negative numbers. We need loads and strings. But many languages will
+
+64
+0:07:44.840 --> 0:07:51.480
+just give a byte stream. And then you need to sort of do a lot of strange computations
+
+65
+0:07:51.480 --> 0:07:59.080
+to turn that into lists and strings. But in Elixir and on the Beam, we have the distance
+
+66
+0:07:59.080 --> 0:08:09.960
+X and we can do more. Specifically, with distance X, we have the option or the ability to specify
+
+67
+0:08:09.960 --> 0:08:25.720
+modifiers. And the modifiers can specify the type, the size, unit, and indianness of the
+
+68
+0:08:25.720 --> 0:08:34.560
+sequence of bits we want to extract from the binary. So here you see that the type is integer.
+
+69
+0:08:34.560 --> 0:08:40.720
+It's unsigned, so it's positive numbers only. It has a size of eight units. And one unit
+
+70
+0:08:40.720 --> 0:08:48.440
+is said to be one bit long. And it's big indian, which I will talk about later. So these are
+
+71
+0:08:48.440 --> 0:08:57.960
+all equivalent, 10, 20, 30. They're encoded the same way as just different syntaxes. So
+
+72
+0:08:57.960 --> 0:09:07.720
+you can see if you don't specify any modifiers, these are the defaults that I used instead.
+
+73
+0:09:07.720 --> 0:09:14.120
+And in the second line, I omitted size of just row eight. That's something you can do
+
+74
+0:09:14.120 --> 0:09:19.640
+when you know it has a constant at compile time. If the size is variable, you will need
+
+75
+0:09:19.640 --> 0:09:27.320
+to use the full size modifier. And the modifiers can be combined in any order. So you can do
+
+76
+0:09:27.320 --> 0:09:34.360
+whatever you like. And when we decode it, we use exactly the same syntax. We can say
+
+77
+0:09:34.360 --> 0:09:40.560
+the same things like grab the first byte, tell it to compile it as an integer, and then
+
+78
+0:09:40.560 --> 0:09:50.120
+it will extract it like this. And instead of just going through all the different modifiers
+
+79
+0:09:50.120 --> 0:09:56.000
+and the combinations, I move on to showcasing some examples. But before we do that, I want
+
+80
+0:09:56.000 --> 0:10:04.840
+to mention where the bits and text came from. Bits and text comes from a place of pain.
+
+81
+0:10:04.840 --> 0:10:15.080
+These two guys, Claire, we're working at the computer science laboratory on implementing
+
+82
+0:10:15.080 --> 0:10:25.920
+networking protocols for Erlang. And it was painful. And so they sat down since they were
+
+83
+0:10:25.920 --> 0:10:33.520
+so close to the makers of the language, they could invent a new syntax for use in Erlang.
+
+84
+0:10:33.520 --> 0:10:38.800
+And this paper, which is published in 1998, describes the first version of the syntax
+
+85
+0:10:38.800 --> 0:10:45.600
+as it was implemented in an experimental version of Erlang. I think a few months later it was
+
+86
+0:10:45.600 --> 0:10:56.040
+released with a slightly different syntax, but with all the same concepts. And that paper
+
+87
+0:10:56.040 --> 0:11:03.520
+also explains what Indianness is. And it's actually just a fun word for byte order. Because
+
+88
+0:11:03.520 --> 0:11:08.760
+if you have a 16-bit integer that you need to send to some other system, that's two bytes,
+
+89
+0:11:08.760 --> 0:11:15.640
+right? And you have to figure out the one byte is A2 and the other byte is C1. And you
+
+90
+0:11:15.640 --> 0:11:23.840
+have to figure out which byte do you send first. Some systems will send the most significant
+
+91
+0:11:23.840 --> 0:11:32.480
+byte first. So that's A2. But other systems will send the least significant byte first.
+
+92
+0:11:32.480 --> 0:11:40.640
+That's C1. And so this obviously has consequences because you need to know the byte order that
+
+93
+0:11:40.640 --> 0:11:49.240
+the system you're talking to, what it expects. Otherwise, you just get confused. And yes,
+
+94
+0:11:49.240 --> 0:11:54.120
+the byte ordering is said to be big Indian when you start with the most significant byte
+
+95
+0:11:54.120 --> 0:11:58.640
+and it's said to be little Indian if you start with the least significant byte. And this
+
+96
+0:11:58.640 --> 0:12:04.480
+is kind of a thing. I've been working with this for years, but I didn't really know what
+
+97
+0:12:04.480 --> 0:12:11.000
+Indian means because it's a sort of weird name, right? But the paper by class and Tony
+
+98
+0:12:11.000 --> 0:12:16.160
+hinted me in the direction of finding that by pointing me to this Internet experiment
+
+99
+0:12:16.160 --> 0:12:23.040
+note from 1980, which is I think the first sort of place where Indian and byte order
+
+100
+0:12:23.040 --> 0:12:31.440
+was used together on holy wars of the plea for peace. And that sort of shows that this
+
+101
+0:12:31.440 --> 0:12:40.920
+is an important topic, sort of like VIM versus HEMEX, I guess. And it's actually just Indian
+
+102
+0:12:40.920 --> 0:12:47.160
+is just a pop culture reference to a book called Golovac Travels where a seagull travels
+
+103
+0:12:47.160 --> 0:12:53.400
+out into the world and meets the people of the Lilliput and Blya Fusco, I think, and
+
+104
+0:12:53.400 --> 0:13:00.720
+the armed conflict because the emperor of Lilliput has commanded that X must be broken
+
+105
+0:13:00.720 --> 0:13:07.720
+at the little end when you eat them for breakfast or whatever. So that's obviously absurd and
+
+106
+0:13:07.720 --> 0:13:14.240
+so they wait a war. So big Indian means we send the big end of the number first and the
+
+107
+0:13:14.240 --> 0:13:24.320
+little Indian means we send a little end of the number. So examples of bits and texts.
+
+108
+0:13:24.320 --> 0:13:29.560
+For the purpose of this talk, I have invented the T-box, which is very simple device. It
+
+109
+0:13:29.560 --> 0:13:34.600
+has a name and it can measure the temperature and it can tell you if there's an error in
+
+110
+0:13:34.600 --> 0:13:43.240
+the timestamp or the measurement. It has a binary dialect or protocol, which I also invented.
+
+111
+0:13:43.240 --> 0:13:46.560
+And this sort of mirrors what you will find in a real protocol description for some kind
+
+112
+0:13:46.560 --> 0:13:56.960
+of device. A client can connect to a T-box and can send requests to the T-box and the
+
+113
+0:13:56.960 --> 0:14:03.800
+T-box will respond with a reply. Every message that is sent includes a header, which is one
+
+114
+0:14:03.800 --> 0:14:15.160
+byte long and replies from the T-box will also contain a value. The header starts with
+
+115
+0:14:15.160 --> 0:14:22.080
+four bits of magic, which is a constant value that is always there and is used to sort of
+
+116
+0:14:22.080 --> 0:14:26.960
+make sure this is the beginning of a message. Then there's a direction bit, which tells
+
+117
+0:14:26.960 --> 0:14:34.320
+whether this message is a request or a reply. And there's the attribute free bits, which
+
+118
+0:14:34.320 --> 0:14:43.720
+are used to tell if this is a name or temperature message. Yes, there are extra, we only use
+
+119
+0:14:43.720 --> 0:14:48.240
+one bit in the attribute, but that's just because they expect to expand the protocol
+
+120
+0:14:48.240 --> 0:14:53.720
+someday. So this is an example of a sequence request
+
+121
+0:14:53.720 --> 0:15:02.200
+reply. First we send the request with the header with the magic bits first, then it's
+
+122
+0:15:02.200 --> 0:15:07.560
+a zero because the direction is a request. And then we're requesting one, which means
+
+123
+0:15:07.560 --> 0:15:12.840
+we're requesting the temperature. And then the reply has almost the same header at the
+
+124
+0:15:12.840 --> 0:15:25.680
+beginning is just one in place of the direction and then the bytes with the value after that.
+
+125
+0:15:25.680 --> 0:15:33.440
+If you're requesting the name of the T-box, then it will respond with 12 bytes and it's
+
+126
+0:15:33.440 --> 0:15:38.560
+always 12 bytes. If the name is shorter than 12 bytes, then the rest of the bytes are just
+
+127
+0:15:38.560 --> 0:15:48.920
+null bytes. And that looks like this. If the name of the box is first, then you have six
+
+128
+0:15:48.920 --> 0:15:57.360
+bytes of actual characters and then null bytes for the rest.
+
+129
+0:15:57.360 --> 0:16:02.600
+And the temperature is a little more complicated. It has three fields. There's the time, which
+
+130
+0:16:02.600 --> 0:16:09.600
+is a 32 bit integer. Counting the number of seconds since 1st of January 1970. Then there's
+
+131
+0:16:09.600 --> 0:16:14.640
+the temperature, which is a 16 bit float. And then there's a quality byte which tells you
+
+132
+0:16:14.640 --> 0:16:22.480
+whether there's an error in some of the measurements. It's the two last bits in the cube byte that
+
+133
+0:16:22.480 --> 0:16:26.680
+are used. The second to last bit tells you there's an error in the clock. And the last
+
+134
+0:16:26.680 --> 0:16:32.040
+bit tells you there's an error in the temperature measurement. And it's important to note that
+
+135
+0:16:32.040 --> 0:16:38.720
+the numbers are a little Indian. So this is what a temperature value looks like. First
+
+136
+0:16:38.720 --> 0:16:43.600
+it has a time stamp, which is a couple days ago. Then the temperature, which is 32 degrees
+
+137
+0:16:43.600 --> 0:16:52.920
+about that. And then both of the error bits are high, so you should not trust this sample.
+
+138
+0:16:52.920 --> 0:17:01.360
+So bit syntax. We want to send a request to the T-box to get the name. I used the double
+
+139
+0:17:01.360 --> 0:17:06.840
+anchor brackets again. It's all integers and it's all unsigned, so the only thing I have
+
+140
+0:17:06.840 --> 0:17:13.480
+to specify is the size. And here I specify the magic is four bits. Then I have my direction,
+
+141
+0:17:13.480 --> 0:17:22.920
+one bit. And the attribute, which is zero for getting the name. So this shows how we
+
+142
+0:17:22.920 --> 0:17:31.320
+can use the bits and text to easily encode things which are smaller than bytes. And the
+
+143
+0:17:31.320 --> 0:17:41.040
+reply that comes back looks like this. But when we receive the reply, I do it like this.
+
+144
+0:17:41.040 --> 0:17:51.600
+First I assert that the message I get back is what I expect. So in place of the header,
+
+145
+0:17:51.600 --> 0:17:56.720
+I assert that the values are what I expect. I assert that I get the magic bits first,
+
+146
+0:17:56.720 --> 0:18:05.440
+that I get the direction bit is high so that I know it's a reply. And that the attribute
+
+147
+0:18:05.440 --> 0:18:11.280
+is zero so that I know it's a name. And when this is all true, I know that the rest of
+
+148
+0:18:11.280 --> 0:18:21.400
+the message is 12 bytes long. And I want to assign that to the variable name. And here
+
+149
+0:18:21.400 --> 0:18:28.480
+you can see I used the bytes modifier. This changes the type. And it changes the size
+
+150
+0:18:28.480 --> 0:18:34.400
+or the unit property. So before with integers, I would specify, like in the header, you can
+
+151
+0:18:34.400 --> 0:18:40.800
+see it's the colon, colon four for the magic. That means four bits. But when I specify bytes,
+
+152
+0:18:40.800 --> 0:18:47.840
+that the type of name is bytes, then I also say that it's the 12 means 12 bytes long and
+
+153
+0:18:47.840 --> 0:18:57.160
+not 12 bits long. Yeah, so that's just interesting that the bytes is the type that has different
+
+154
+0:18:57.160 --> 0:19:06.160
+defaults than integers. When I get the T box temperature, I request it like this. Pretty
+
+155
+0:19:06.160 --> 0:19:12.400
+much the same as before, just with a one for the attribute. And for the reply, I again
+
+156
+0:19:12.400 --> 0:19:17.800
+assert on the header that I expect what I get back what I expect. Then I have the timestamp
+
+157
+0:19:17.800 --> 0:19:24.960
+which was the 32 bit integer, but little indian. So let's put that in there. And the temperature,
+
+158
+0:19:24.960 --> 0:19:32.640
+which is a float, 16 bits, also little indian. Then I discard six bits from the Q byte because
+
+159
+0:19:32.640 --> 0:19:37.800
+they were not used. And then I just pluck the second to last and the last bit out as
+
+160
+0:19:37.800 --> 0:19:48.800
+clock error and temperature error. Yeah. So that's the basics of bits and text. There's
+
+161
+0:19:48.800 --> 0:19:54.760
+so much more to cover with writing whole applications to libraries to do this kind of stuff. Like
+
+162
+0:19:54.760 --> 0:20:00.640
+what do we do when you don't receive the entire message at once? You have to frame messages
+
+163
+0:20:00.640 --> 0:20:08.200
+when you're streaming them or receiving them as a stream. There's generators. There's a
+
+164
+0:20:08.200 --> 0:20:13.360
+special, it looks like just a normal four generator, but it actually has some interlanks
+
+165
+0:20:13.360 --> 0:20:18.720
+and special optimizations for working with binaries when you need to generate a binary.
+
+166
+0:20:18.720 --> 0:20:23.720
+We could talk about performance tuning, but as I said, I've been working with this for
+
+167
+0:20:23.720 --> 0:20:27.800
+years and I've never had to really do any performance tuning. It's pretty performant
+
+168
+0:20:27.800 --> 0:20:38.960
+as is. That's also one of the points in the paper by Claire and Tony is that this is performant.
+
+169
+0:20:38.960 --> 0:20:43.800
+And yeah, there are many other tools for working with binaries that help us when we're looking
+
+170
+0:20:43.800 --> 0:20:49.800
+at this data and not understanding why it's not doing what we expect. WhyShark is definitely
+
+171
+0:20:49.800 --> 0:20:58.440
+one of them. I recommend checking that out. I also recommend if you want to explore more
+
+172
+0:20:58.440 --> 0:21:07.000
+depth that you check out ProtoHackers, which is a sort of admin of code challenge thing,
+
+173
+0:21:07.000 --> 0:21:13.600
+but about the networking protocols. And Andrea Lo Party from the Elixir core team has a live
+
+174
+0:21:13.600 --> 0:21:17.840
+stream on YouTube or has streams on YouTube where he sort of goes through the problems
+
+175
+0:21:17.840 --> 0:21:23.760
+one by one. So that's very good for learning that. And they also started writing a book
+
+176
+0:21:23.760 --> 0:21:37.680
+about this kind of stuff. So that's it. Thank you.
+
+177
+0:21:37.680 --> 0:21:51.880
+And for the thought, Charles, do you have any questions?
+
+178
+0:21:51.880 --> 0:21:58.640
+So I've done, I've implemented a few binary protocols like network protocols, like HTTP2
+
+179
+0:21:58.640 --> 0:22:06.680
+or other stuff like that. I'd love to know how you, if you have done any like streaming
+
+180
+0:22:06.680 --> 0:22:12.160
+of data and passing of messages coming from streaming data and generators also would be
+
+181
+0:22:12.160 --> 0:22:17.920
+interesting. Just know like how you approached it because I know I did something, but I don't
+
+182
+0:22:17.920 --> 0:22:23.840
+know how we did it. I think I've implemented a few protocols that use, for example, TCP
+
+183
+0:22:23.840 --> 0:22:29.520
+as the underlying transport and then that's like a stream. And then there are a few patterns
+
+184
+0:22:29.520 --> 0:22:38.320
+for how you want to handle that. I think Frank and the NERF team wrote a sort of framing
+
+185
+0:22:38.320 --> 0:22:43.760
+behavior which where you have a couple of callbacks that you need to implement in order
+
+186
+0:22:43.760 --> 0:22:49.120
+to handle a stream so that they give you bytes and then you return back messages when you
+
+187
+0:22:49.120 --> 0:22:54.960
+see a full message. It's actually a very good sort of guideline for how to do that. Another
+
+188
+0:22:54.960 --> 0:23:01.880
+approach is taken by Andrei Luapati in his library for the Redis, where it's like you
+
+189
+0:23:01.880 --> 0:23:09.160
+call off when you call the decoding function and it returns a result, the result will be
+
+190
+0:23:09.160 --> 0:23:14.360
+whatever messages was in that binary you gave it and then a continuation function which
+
+191
+0:23:14.360 --> 0:23:31.840
+you call next time with more bytes so that continues to return new messages. Any question?
+
+192
+0:23:31.840 --> 0:23:39.280
+If I would buy a T-box from you, do I still get support in about 16 years from now? No.
+
+193
+0:23:39.280 --> 0:23:46.760
+Maybe five minutes. I actually have a question for you if there are no other questions. Do
+
+194
+0:23:46.760 --> 0:23:57.600
+you have a library you suggest to see because I implemented a library to decode the QOAI
+
+195
+0:23:57.600 --> 0:24:02.760
+which is the quite okay image format which is a new image format just to get my ions
+
+196
+0:24:02.760 --> 0:24:09.520
+dirty with binary pattern matching in Elixir but it gets very unwieldy very fast. So I
+
+197
+0:24:09.520 --> 0:24:14.560
+saw like in JZone they have some macros that generate binary pattern matching. Do you have
+
+198
+0:24:14.560 --> 0:24:24.560
+any libraries you recommend to check out? I think the Redis library is pretty nice.
+
+199
+0:24:24.560 --> 0:24:30.200
+I also have a KNX library which is like a small home protocol which I don't know if
+
+200
+0:24:30.200 --> 0:24:38.880
+I would recommend but when I wrote it I thought it made sense. Okay, thank you. Any other
+
+201
+0:24:38.880 --> 0:24:49.480
+questions? Okay. The last one I guess. Maybe a word about exceptions when patterns don't
+
+202
+0:24:49.480 --> 0:24:56.440
+match. You didn't talk about that if I'm correct. That's true. I mean sometimes we say we should
+
+203
+0:24:56.440 --> 0:25:01.600
+just let it crash and this community that's not always the case. Sometimes the protocol
+
+204
+0:25:01.600 --> 0:25:08.120
+will say that if you're unable to decode a message you must ignore it and just continue
+
+205
+0:25:08.120 --> 0:25:17.760
+going. In that case what I usually do is I define functions where I match on the data
+
+206
+0:25:17.760 --> 0:25:23.000
+I received and then I always need to have a fallback clause in case it didn't match
+
+207
+0:25:23.000 --> 0:25:32.640
+anything and then just lock an error and continue. But I mean probably the proper thing to do
+
+208
+0:25:32.640 --> 0:25:39.360
+in Erlang is to just try to die. There's also you could when you receive a message you could
+
+209
+0:25:39.360 --> 0:25:45.680
+have a special process that is only for decoding so you start a task, decode message and get
+
+210
+0:25:45.680 --> 0:25:52.880
+the data structure back. But I think it depends on the use case how you want to handle bad
+
+211
+0:25:52.880 --> 0:25:56.920
+data. Okay. Thank you very much.
+

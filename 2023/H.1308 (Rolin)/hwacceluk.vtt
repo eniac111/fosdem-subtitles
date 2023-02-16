@@ -1,0 +1,1030 @@
+WEBVTT
+
+00:00.000 --> 00:09.080
+Hi everyone, so it's my pleasure to introduce Babi and Anastasios.
+
+00:09.080 --> 00:14.320
+They're going to give you the talk on using VXL for hard acceleration in your kernels.
+
+00:14.320 --> 00:15.480
+Babi's please.
+
+00:15.480 --> 00:17.580
+So hello everyone, I'm Babi's.
+
+00:17.580 --> 00:21.560
+My absolute name is Haroldos Minus, but you can just call me Babi's.
+
+00:21.560 --> 00:27.120
+So we're going to give a talk about hardware acceleration and our effort to having some
+
+00:27.120 --> 00:31.880
+support in the unicurnals and we do that with VXL.
+
+00:31.880 --> 00:37.080
+So yeah, can you, oh sorry, I forgot about that.
+
+00:37.080 --> 00:39.400
+I will just forget.
+
+00:39.400 --> 00:45.400
+Yeah, put that over there and maybe you can just keep it here.
+
+00:45.400 --> 00:53.680
+So yeah, we already heard from Simon, so we don't have to repeat what the unicurnals are.
+
+00:53.680 --> 00:57.120
+There are a lot of projects and we know that they are promising.
+
+00:57.120 --> 00:58.600
+It's a promising technology.
+
+00:58.600 --> 01:06.260
+We can have very fast boot times, low memory footprint and some increased security.
+
+01:06.260 --> 01:11.600
+We also know some of the use cases for unicurnals, which are usually traditional applications
+
+01:11.600 --> 01:16.120
+that you might have heard like web servers and stuff like that.
+
+01:16.120 --> 01:21.240
+But they have also been used for NFV and we think that they are also a good fit for serverless
+
+01:21.240 --> 01:26.200
+and in general microservices deployments, either in the cloud or the aids.
+
+01:26.200 --> 01:31.520
+And we also think that they can also be a good fit for, especially in this case for
+
+01:31.520 --> 01:33.880
+ML and AI applications.
+
+01:33.880 --> 01:40.160
+And that sounds a bit weird because as we know, ML and AI workloads, they are quite
+
+01:40.160 --> 01:41.760
+huge and heavy.
+
+01:41.760 --> 01:46.760
+So maybe you have heard about PyTorch, maybe you have heard about TensorFlow.
+
+01:46.760 --> 01:48.720
+We're not going to touch them, don't worry.
+
+01:48.720 --> 01:53.960
+But what we want to say here is that they're very, very heavy frameworks, very difficult
+
+01:53.960 --> 01:56.680
+to add support for them.
+
+01:56.680 --> 02:02.440
+And secondly, we know that these kinds of applications are usually compute intensive
+
+02:02.440 --> 02:07.040
+applications that can take a lot of resources.
+
+02:07.040 --> 02:11.320
+And for that exact reason, we see that there is also a shift in the hardware that exists
+
+02:11.320 --> 02:16.040
+in the data centers, not only in the data center, but also in the aids.
+
+02:16.040 --> 02:21.200
+We see devices that are equipped with a lot of new processing units.
+
+02:21.200 --> 02:27.240
+Of course, we have the traditional FPGAs and CPUs, but we also have specialized processing
+
+02:27.240 --> 02:32.880
+units like TPUs and also some ASICs.
+
+02:32.880 --> 02:39.720
+And first of all, as we know, ML and AI workloads cannot be executed in uni kernels, that's
+
+02:39.720 --> 02:42.840
+for sure, because there is no support for these frameworks.
+
+02:42.840 --> 02:47.240
+And secondly, there is no support for hardware acceleration, so there is not really any benefit
+
+02:47.240 --> 02:52.360
+if we run it in a CPU.
+
+02:52.360 --> 03:03.440
+So I'm going to go through the acceleration stack and how we can visualize it with the
+
+03:03.440 --> 03:06.480
+current approaches.
+
+03:06.480 --> 03:09.920
+So in general, what we have is pretty simple.
+
+03:09.920 --> 03:13.840
+You have an application which is written in an acceleration framework, can be OpenCL,
+
+03:13.840 --> 03:18.480
+can be CUDA, can be TensorFlow, PyTorch, all of these frameworks.
+
+03:18.480 --> 03:26.280
+Usually underneath that you have the operator for the GPU or maybe a runtime for FPGAs.
+
+03:26.280 --> 03:31.920
+And then you also have, of course, a device driver which resides inside the kernel.
+
+03:31.920 --> 03:35.000
+So this is what we have to virtualize.
+
+03:35.000 --> 03:38.840
+And as we know, uni kernels are virtual machines.
+
+03:38.840 --> 03:41.760
+So we can use the same techniques that we have for virtual machines.
+
+03:41.760 --> 03:45.320
+We can also use them in uni kernels.
+
+03:45.320 --> 03:50.560
+Some of these techniques are hardware partitioning, para-virtualization, and remote API.
+
+03:50.560 --> 03:59.480
+So in the case of hardware partitioning, the hardware accelerator has the capability to
+
+03:59.480 --> 04:00.600
+partition itself.
+
+04:00.600 --> 04:08.560
+And we assign this small part of the accelerator to the VM, and the VM can access directly
+
+04:08.560 --> 04:12.120
+the hardware accelerator.
+
+04:12.120 --> 04:13.240
+This has very good performance.
+
+04:13.240 --> 04:18.360
+On the other hand, we need to have the entire acceleration stack inside the VM from the
+
+04:18.360 --> 04:25.360
+device driver to the application, to the acceleration framework.
+
+04:25.360 --> 04:30.000
+There is also the case of, also I forgot to mention here that this is something that it
+
+04:30.000 --> 04:36.120
+has to be supported from the device and a device driver needs also to be in the VM.
+
+04:36.120 --> 04:41.680
+And in the case of para-virtualization, things are getting a bit better because we can have
+
+04:41.680 --> 04:44.320
+a generic, let's say, device.
+
+04:44.320 --> 04:54.160
+And then the hypervisor simply manages the accelerator, and then we can have the request
+
+04:54.160 --> 04:56.880
+to the accelerator managed from the hypervisor.
+
+04:56.880 --> 05:02.520
+So we don't need to have all these kind of different drivers for every accelerator inside
+
+05:02.520 --> 05:03.520
+the VM.
+
+05:03.520 --> 05:09.160
+On the other hand, we still need to have the vendor runtime and the acceleration framework.
+
+05:09.160 --> 05:16.600
+In the case of remote API, we even have a lighter approach.
+
+05:16.600 --> 05:18.720
+Everything is managed from the servers.
+
+05:18.720 --> 05:23.880
+The server might be even locally in the same machine, or it can be a remote server.
+
+05:23.880 --> 05:31.320
+And what happens here is that the acceleration framework intersects the calls from the application
+
+05:31.320 --> 05:38.400
+and forwards them to the acceleration framework that resides on the server.
+
+05:38.400 --> 05:43.920
+This has some performance overhead, of course, because of the transport that happens.
+
+05:43.920 --> 05:45.440
+And it's also framework specific.
+
+05:45.440 --> 05:52.240
+So it has to be supported like there is remote CUDA, for example, that supports it.
+
+05:52.240 --> 05:53.960
+So great.
+
+05:53.960 --> 05:56.520
+But what is the best for unique kernels?
+
+05:56.520 --> 06:01.020
+In the case of hardware partitioning, this means that we have to port the entire software
+
+06:01.020 --> 06:05.920
+acceleration stack and every device driver to the unique kernel, which is not a good
+
+06:05.920 --> 06:07.920
+and not an easy task.
+
+06:07.920 --> 06:10.360
+Again in power virtualization, things are a bit better.
+
+06:10.360 --> 06:12.880
+We have to port only maybe one driver.
+
+06:12.880 --> 06:16.520
+But still we need to port all this acceleration stack.
+
+06:16.520 --> 06:21.240
+The case of a remote API, this is something that sounds much more feasible because we
+
+06:21.240 --> 06:26.520
+can port only the, let's say, remote CUDA, only one framework.
+
+06:26.520 --> 06:28.600
+But how easy is that?
+
+06:28.600 --> 06:30.040
+And it's not easy.
+
+06:30.040 --> 06:33.040
+Because as I said before, these kind of frameworks are huge.
+
+06:33.040 --> 06:36.320
+They have very, very big code base.
+
+06:36.320 --> 06:46.360
+They have dynamic linking, which comes in contrast with the unique kernels and a lot
+
+06:46.360 --> 06:49.200
+of dependencies.
+
+06:49.200 --> 06:55.440
+So it's not going to be easy to port in any existing unique kernel framework right now.
+
+06:55.440 --> 07:03.560
+So for that, we think that VXL is suitable for unique kernels.
+
+07:03.560 --> 07:11.200
+So I will give to Tassos to present a bit of how VXL is working.
+
+07:11.200 --> 07:14.640
+Thank you, Bobby.
+
+07:14.640 --> 07:20.200
+Can I take the table?
+
+07:20.200 --> 07:21.200
+Thank you.
+
+07:21.200 --> 07:29.560
+So hi, from my side two, I'm going to talk a bit about the framework that we're building.
+
+07:29.560 --> 07:40.000
+So we started working on VXL to actually handle the hardware acceleration virtualization in
+
+07:40.000 --> 07:41.000
+VMs.
+
+07:41.000 --> 07:45.000
+So it's not tailored to unique kernels.
+
+07:45.000 --> 07:52.680
+We have been playing with semantically exposing hardware acceleration functionality from hardware
+
+07:52.680 --> 07:56.840
+acceleration frameworks to VMs.
+
+07:56.840 --> 08:04.000
+And the software stack is shown in the figure.
+
+08:04.000 --> 08:05.880
+We use a hardware agnostic API.
+
+08:05.880 --> 08:14.960
+So we expose the whole function call of the hardware accelerated operation.
+
+08:14.960 --> 08:24.280
+And we focus on the portability and on interoperability, meaning that the same binary code originating
+
+08:24.280 --> 08:29.640
+from the application can be executed in many type of architectures.
+
+08:29.640 --> 08:35.640
+And it is decoupled from the hardware specific implementation.
+
+08:35.640 --> 08:38.200
+A closer look to the software stack.
+
+08:38.200 --> 08:47.160
+So we have an application, this application consumes the VXL API, which has specific support
+
+08:47.160 --> 08:51.080
+specific operations.
+
+08:51.080 --> 08:59.720
+These operations are mapped through a mapping layer through VXLRT to the relevant plugins,
+
+08:59.720 --> 09:05.040
+which are shown in greenish.
+
+09:05.040 --> 09:13.440
+And they actually are the glue code between the API calls and the hardware specific implementation,
+
+09:13.440 --> 09:19.440
+which in this figure resides in the external libraries layer.
+
+09:19.440 --> 09:28.160
+And then it's the hardware where it executes whatever there is in the external libraries.
+
+09:28.160 --> 09:35.720
+So digging a bit more into how VXL works.
+
+09:35.720 --> 09:46.720
+So the core library, the core component of VXL exposes the API to the application and
+
+09:46.720 --> 09:56.880
+maps the API calls to the relevant hardware plugins, which by the way are loaded at runtime.
+
+09:56.880 --> 10:07.440
+The these plugins are actually glue code between the API calls and the hardware specific implementation.
+
+10:07.440 --> 10:14.480
+So for example, we have an API call of doing image classification, image inference in general.
+
+10:14.480 --> 10:21.840
+The only thing that the application needs to submit to VXL is I want to do image classify.
+
+10:21.840 --> 10:27.120
+This is the image, this is the model and the parameters and blah, blah, blah.
+
+10:27.120 --> 10:30.840
+And this gets mapped to the relevant plugin implementation.
+
+10:30.840 --> 10:37.840
+For instance, in this figure, we can use the Jetch on inference image classification implementation,
+
+10:37.840 --> 10:44.160
+which translates these arguments and this operation to the actual Jetch on inference
+
+10:44.160 --> 10:50.520
+framework provided by NVIDIA that does the image classification operation.
+
+10:50.520 --> 11:00.600
+Apart from the hardware specific plugins, we also have the transport layer plugins.
+
+11:00.600 --> 11:10.640
+So imagine this same operation, the image inference could be executed in a VM using a virtual plugin.
+
+11:10.640 --> 11:19.640
+So this information, the operation, the arguments, the models, everything will be transferred
+
+11:19.640 --> 11:25.800
+to the host machine that will use hardware plugin.
+
+11:25.800 --> 11:36.600
+So apart from the from the glue code for the hardware specific implementation, we also have the VM plugins.
+
+11:36.600 --> 11:48.440
+We also some of the of the of the plugins and the API operation support a subset of acceleration frameworks,
+
+11:48.440 --> 11:56.960
+such as TensorFlow or PyTorch.
+
+11:56.960 --> 12:01.000
+And what I mentioned earlier about the virtual plugins.
+
+12:01.000 --> 12:08.200
+So essentially what happens is that the request of the operation and the arguments is forwarded
+
+12:08.200 --> 12:21.160
+to another instance of of the V-XL library, either in the on the hypervisor layer or on a socket interface.
+
+12:21.160 --> 12:25.040
+So we currently support two modes of operations.
+
+12:25.040 --> 12:32.960
+We have a virtual driver and currently support we support Firecracker and Kimmel.
+
+12:32.960 --> 12:37.320
+And so we load the driver on the VM.
+
+12:37.320 --> 12:46.480
+This driver transfers the arguments and the operation to the back end to the back end or the Firecracker back end,
+
+12:46.480 --> 12:51.440
+which in turn calls the library to do the actual operation.
+
+12:51.440 --> 12:54.680
+And the the other option is using sockets.
+
+12:54.680 --> 13:00.840
+So we load a socket interface as a socket agent on the host.
+
+13:00.840 --> 13:09.720
+We have the visual plugin on the guest and they communicate over simple sockets.
+
+13:09.720 --> 13:24.680
+I'm going to hand over to Bobby for the stuff.
+
+13:24.680 --> 13:30.200
+So how how can V-XL be used in unit kernels?
+
+13:30.200 --> 13:35.720
+Absolutely, it's quite easy compared to any other acceleration framework that exists.
+
+13:35.720 --> 13:44.640
+And I think is that the only thing that we need to do is just have that V-XL RT that you see over there.
+
+13:44.640 --> 13:50.000
+That's the only thing that we need to port because that's and this is a very, very thin layer of SQL.
+
+13:50.000 --> 13:54.080
+This can be easily ported to any unit kernel that exists.
+
+13:54.080 --> 14:04.400
+And we, of course, we need some kind of transport plugin for to forward the requests.
+
+14:04.400 --> 14:14.920
+So as TASSOS already explained, usually the application is the same application that we can run in the host or in any container or in any VM can be also used in the unit kernel.
+
+14:14.920 --> 14:23.360
+The same node changes and it simply uses the specific API of the Excel and then we simply forward the request to the host.
+
+14:23.360 --> 14:34.400
+And then we have another version of V-XL, which is in the host and simply maps to the hardware accelerator framework that is implementing the specific function.
+
+14:34.400 --> 14:42.880
+So this, as I said, this this allow us to have the same application running either in the host, either in the VM without any changes.
+
+14:42.880 --> 14:49.480
+So it's easy to debug, easy to easy to execute.
+
+14:49.480 --> 14:56.040
+And we can also access different kind of hardware, different kind of frameworks that exist.
+
+14:56.040 --> 14:58.000
+And we don't need to change their application.
+
+14:58.000 --> 15:02.320
+We can simply change the configuration in the host.
+
+15:02.320 --> 15:10.040
+So, yes, we have another acceleration framework and maybe we can think that this is not going to be easy to use.
+
+15:10.040 --> 15:16.360
+But let's take an example and see how we can extend the excellent to see if it is easier.
+
+15:16.360 --> 15:23.040
+So let's get a typical vector addition example in open cell, which can be executed in the CPU or in the FPGA.
+
+15:23.040 --> 15:30.880
+And the steps that usually happens is that we set up the bitstream in the FPGA and the FPGA starts the reconfiguration.
+
+15:30.880 --> 15:34.800
+We transfer, of course, we transfer the data to the FPGA.
+
+15:34.800 --> 15:38.600
+Then we invoke the kernel as soon as it's ready.
+
+15:38.600 --> 15:42.360
+And we also get the results back to the host.
+
+15:42.360 --> 15:44.640
+So this is what the application is already doing.
+
+15:44.640 --> 15:52.960
+So if you have this application already running in your machine, the only thing that you have to do is that somehow you need to leave the application.
+
+15:52.960 --> 15:58.320
+And that's instead of just exposing an API to do that.
+
+15:58.320 --> 16:04.840
+And the next thing is that you can integrate the library in the VXL as a plugin.
+
+16:04.840 --> 16:08.360
+And we have a very simplistic API that you can use.
+
+16:08.360 --> 16:14.440
+And therefore, the application will be seen as a plugin for the VXL.
+
+16:14.440 --> 16:25.320
+Later, you can also update VXL, just adding one more API to the VXL RT so the application can directly use it with the correct parameters, of course.
+
+16:25.320 --> 16:34.760
+So I will give you a sort of demo of how this works using UniCrafts specifically.
+
+16:34.760 --> 16:43.720
+We can we we yeah, I will transfer a bit so we can have maybe an image classification at first.
+
+16:43.720 --> 16:52.440
+And then we can see how this how could a blast could operation can be executed in the CPU without any changes.
+
+16:52.440 --> 16:55.920
+And maybe some if we have time.
+
+16:55.920 --> 17:00.920
+So, OK, this is not good.
+
+17:00.920 --> 17:09.120
+This is better. So we are in a typical working environment for.
+
+17:09.120 --> 17:12.400
+So we are in a typical environment for UniCrafts.
+
+17:12.400 --> 17:17.040
+We have we have created our application.
+
+17:17.040 --> 17:21.920
+We have a new Libby we we're not going to use actually.
+
+17:21.920 --> 17:26.680
+And we have also UniCraft. So let's go to here.
+
+17:26.680 --> 17:30.520
+So this is a repo that we have created. I will show it to you later.
+
+17:30.520 --> 17:38.680
+So this is I want to show you.
+
+17:38.680 --> 17:55.820
+So here you can see that we only have we only expose nine PFS and we use it because we want to transfer the data inside the UniC
+
+17:55.820 --> 18:00.320
+So we're not going to use any network. We're just going to share a directory with the VM.
+
+18:00.320 --> 18:04.240
+And the only thing that you need to do is port to select the XLRT.
+
+18:04.240 --> 18:08.640
+And that's all. As you see, we don't have any Libcy because we don't need it for the specific example.
+
+18:08.640 --> 18:12.480
+So we're going to use UniCraft. You can try them out by yourself.
+
+18:12.480 --> 18:18.680
+So let's we're going to use image classification.
+
+18:18.680 --> 18:29.320
+So we'll take some time. Let me.
+
+18:29.320 --> 18:35.680
+We'll take some time to build. But I will also try to show you how the application looks like.
+
+18:35.680 --> 18:42.720
+As soon as it finishes and it should finish right now. Almost.
+
+18:42.720 --> 18:49.240
+And that's application. So as you can see,
+
+18:49.240 --> 18:52.880
+yeah, we can skip the reading of the file. So this application is quite simple.
+
+18:52.880 --> 18:57.560
+Like we have a session that we have to create with VXL with the host.
+
+18:57.560 --> 19:06.040
+Then we simply call the function that is called VXL limits classification.
+
+19:06.040 --> 19:16.480
+It has the arguments that are also needed. And then we simply release the resources that we have used.
+
+19:16.480 --> 19:26.720
+So I will try to do an image classification for this beautiful hedgehog that we have here.
+
+19:26.720 --> 19:32.920
+And let's see what's going to happen.
+
+19:32.920 --> 19:39.920
+OK, so all the all these logs that you see here are from the Jetchon inference plugin.
+
+19:39.920 --> 19:47.720
+And we see that we have a hedgehog. So it was identified.
+
+19:47.720 --> 19:55.040
+And the thing here is to you can see that all of these logs are not from the unicorn.
+
+19:55.040 --> 19:58.960
+All of these logs are from the host that is running.
+
+19:58.960 --> 20:12.440
+I can also show you this small demo with the cool with some operations for arrays using Kudl.
+
+20:12.440 --> 20:19.960
+So same the same same here. We are just we're going to export the back end.
+
+20:19.960 --> 20:25.240
+First we're going to use a no op plugin which is simply doesn't do anything.
+
+20:25.240 --> 20:28.520
+You can mostly maybe use the only 40 bug.
+
+20:28.520 --> 20:35.200
+So we have here the application which is a scan.
+
+20:35.200 --> 20:43.960
+And you can see that it doesn't do anything because it's just a no op like in it doesn't do anything special.
+
+20:43.960 --> 20:57.000
+So we can change the configuration the host and specify that the back end that we want to use is the actual Kudl implementation for maybe CPU.
+
+20:57.000 --> 21:06.520
+Yes. OK, so then we will run it and you will see that we have the actual min max operation.
+
+21:06.520 --> 21:16.440
+It's not the game. And then you can also we will also run the same thing in a GPU.
+
+21:16.440 --> 21:21.600
+Again we are just in the host again. We can simply change the configuration.
+
+21:21.600 --> 21:31.240
+And now we started again the unit kernel and we get the result from the GPU.
+
+21:31.240 --> 21:40.280
+You can also get all these debug messages. You can remove them of course.
+
+21:40.280 --> 21:47.280
+So we also have the yes. This is also min max still.
+
+21:47.280 --> 21:53.280
+Now we will go to this game. Do we have time still? OK.
+
+21:53.280 --> 22:02.160
+So yeah we can just use this again. No hope nothing happens. Nothing really special.
+
+22:02.160 --> 22:08.600
+We will do the export for to specify the CPU plug in again.
+
+22:08.600 --> 22:20.880
+And we will execute and we'll see that the execution time it's quite not very big but it's just remember that number.
+
+22:20.880 --> 22:31.520
+And now we'll run into the GPU and you can see here that the execution time is much better than before.
+
+22:31.520 --> 22:43.760
+And that's all. We can also solve the the.
+
+22:43.760 --> 22:53.280
+The FPGA which is OK. So this is an FPGA right. So we need to have a bit stream.
+
+22:53.280 --> 22:57.240
+And this is a black schools application by the way.
+
+22:57.240 --> 23:03.520
+And we will run it natively in the beginning and then we will also run it in the unit craft.
+
+23:03.520 --> 23:16.560
+So first we just run the application natively and you can see all of the logs and everything all the execution in the FPGA.
+
+23:16.560 --> 23:25.800
+And then we can we will see how this is executed in a unit kernel.
+
+23:25.800 --> 23:36.160
+So this is I forgot to solve it but I will say I will explain later what are all of these things.
+
+23:36.160 --> 23:41.520
+Usually what we have to do is just to export the VXL back in that we want to use.
+
+23:41.520 --> 23:45.760
+That's how we configure the host to use a specific plugin.
+
+23:45.760 --> 23:52.040
+And then we have the chemical mind that I can explain in more details after this video.
+
+23:52.040 --> 24:02.400
+Still this is from the unit kernel now and we access the FPGA and we have the black schools operation running there.
+
+24:02.400 --> 24:10.800
+And we also have one more FPGA application but I think you got the point.
+
+24:10.800 --> 24:17.080
+You can also we have all these links for the videos and everything in the in our talk in FOSDIM.
+
+24:17.080 --> 24:21.280
+So you can also see them from there.
+
+24:21.280 --> 24:26.200
+Let me talk a bit about the chemo the chemo plugin that we have.
+
+24:26.200 --> 24:29.920
+This is a bit more. This is just from our repo.
+
+24:29.920 --> 24:36.800
+So here we need the chemo which has a very tight back end for VXL.
+
+24:36.800 --> 24:45.840
+And if if a unit cost for example had support for VSoC we didn't have to use the retail back end.
+
+24:45.840 --> 24:57.360
+So we didn't have to modify chemo. But since chemo is since since we have no VSoC support then we have to use a virtual.
+
+24:57.360 --> 25:02.600
+And therefore we change a bit chemo adding the back end as you can see here.
+
+25:02.600 --> 25:14.640
+And these are all the already you already know from the previous talk all the configurations for UNIcraft the command line options.
+
+25:14.640 --> 25:20.320
+I can I will also show you our docs.
+
+25:20.320 --> 25:26.280
+We have here an extended documentation.
+
+25:26.280 --> 25:32.320
+You can find how to run the VXL application in VM how to run it remotely.
+
+25:32.320 --> 25:40.480
+We also have it. It doesn't show here but we also have a.
+
+25:40.480 --> 25:46.040
+OK maybe more.
+
+25:46.040 --> 25:54.880
+OK so here we also have all the things that you need to do to try to out by yourself in UNIcraft.
+
+25:54.880 --> 26:02.800
+And all of them are open source. You can check them out and you can clone them by yourself.
+
+26:02.800 --> 26:18.920
+So let me return. So currently VXL has bindings for we we actually released the version 0.5 and we currently there is a bind.
+
+26:18.920 --> 26:25.320
+We have language bindings for C C plus plus Python Rust and also for TensorFlow.
+
+26:25.320 --> 26:34.200
+And we we have the plugin API that I talked before. It talks before about extending VXL.
+
+26:34.200 --> 26:41.800
+You can also see how it how it is. These are all the things that we have tested and we support right now.
+
+26:41.800 --> 26:48.480
+So from the hypervisor perspective we have support for chemo over Vitaleo and Visok.
+
+26:48.480 --> 27:02.080
+And for these new rust VMMs like firecracker cloud hypervisor and Dragon Ball regarding unique kernels we have working.
+
+27:02.080 --> 27:05.280
+It's currently working in UNIcraft and in run brand.
+
+27:05.280 --> 27:11.480
+But we want to also port it in OSB and maybe some more unique frameworks.
+
+27:11.480 --> 27:19.960
+And we also have integration with Kubernetes catacontainers and OpenFuzz for serverless deployment.
+
+27:19.960 --> 27:25.880
+And these are all the acceleration frameworks that we have tested and work with VXL.
+
+27:25.880 --> 27:31.880
+So the JSON inference that you saw that we did the immense classification.
+
+27:31.880 --> 27:41.160
+We have TensorFlow and PyTorch support TensorRT into OpenVINO OpenCello CUDA that you saw with the other demo.
+
+27:41.160 --> 27:51.400
+And regarding hardware we have tested with GPUs, edge devices like Coral and also FPGAs.
+
+27:51.400 --> 28:04.920
+So to sum up, hardware accelerations are stacks. The software stack of hardware accelerators are huge and complicated to be ported easily in UNI kernels.
+
+28:04.920 --> 28:13.000
+And we have VXL which is able to abstract the heterogeneity both in the hardware and in the software.
+
+28:13.000 --> 28:17.480
+And it sounds like a perfect fit for UNI kernels.
+
+28:17.480 --> 28:25.400
+So if you want you can try it out by yourselves. Here are all the links that you can use and test them out.
+
+28:25.400 --> 28:37.400
+And we would like to mention that this work is partially funded from two Horizon projects, Seran and 5G Complete.
+
+28:37.400 --> 28:44.680
+And we will also like to invite you in the UNIcraft hackathon that will take place in Athens at the end of March.
+
+28:44.680 --> 28:56.520
+And thank you for your attention. If you have any questions we will be happy to answer them.
+
+28:56.520 --> 29:01.800
+Thank you so much, Bobby. So for the third time we'll welcome you in Athens in late March for the hackathon.
+
+29:01.800 --> 29:08.280
+If there are any questions from the audience? Yeah please, Jansen.
+
+29:08.280 --> 29:18.760
+Thank you. Great stuff. I have a question about the potential future and the performance that we are currently
+
+29:18.760 --> 29:24.840
+maybe possibly losing through the usage of API and transport. What do you think is a potential
+
+29:24.840 --> 29:30.680
+in more increase of performance given that framework?
+
+29:30.680 --> 29:38.360
+Yeah, actually the transport is actually, yes, it's a bottleneck since you have all these transfers that take place.
+
+29:38.360 --> 29:51.720
+But we think that at the end we will have still very good execution times, very good performance.
+
+29:51.720 --> 29:59.000
+And it's also important to mention that you can also set up the environment and everything.
+
+29:59.000 --> 30:04.040
+So you can minimize the transfers, for example. You can have your model, you don't have to,
+
+30:04.040 --> 30:09.160
+like if you have a TensorFlow model or anything, like we are working on how it can be done
+
+30:09.160 --> 30:14.200
+and prefetching it before you deploy the function in the host and having everything there
+
+30:14.200 --> 30:19.560
+so you don't have to transfer from the VM to the host and vice versa and all of these things.
+
+30:19.560 --> 30:26.920
+Actually, if I may intervene. So these are two issues. The first issue is all the resources,
+
+30:26.920 --> 30:36.760
+the models, the out of bounds stuff that you can do in a separate API, in a cloud environment,
+
+30:36.760 --> 30:42.920
+in a serverless deployment. And the second thing about the actual transfers for Virtayor,
+
+30:42.920 --> 30:49.640
+Rishok, the thing is that since we semantically abstract the whole operation, you don't have to do
+
+30:50.200 --> 30:56.680
+CUDA memcpy, CUDA malloc, CUDA something, set kernel, whatever, and you don't have this latency
+
+30:56.680 --> 31:03.480
+in the transfers. So it minimizes the overhead just to the part of copying the data across,
+
+31:04.040 --> 31:12.440
+so the actual data, the input data and the output. So this is really, really minimal. So in VMs that
+
+31:12.440 --> 31:19.000
+we have tested remotely, but the network is not that good, so we need to do more tests there.
+
+31:19.000 --> 31:28.120
+But in VMs that we have tested, the overhead is less than 5%. For an image classification of 32k
+
+31:28.120 --> 31:35.160
+to a meg, something like that. So it's really, really small, the overhead for the transport
+
+31:35.160 --> 31:40.520
+layer, both Virtayor and Vishok. The Vishok part is a bit more because it serializes the stuff
+
+31:40.520 --> 31:46.360
+through the protobufs and the stack is a bit complicated, but the Virtayor stuff is really
+
+31:46.360 --> 31:57.960
+super efficient. Hi, so thank you for the talk. My question would be kind of almost on the same
+
+31:57.960 --> 32:03.880
+thing, but from the security perspective. So if we kind of offload a lot of computation out of the
+
+32:03.880 --> 32:12.120
+unique kernel to the host again, I guess security, at least the isolation is a thing to think about.
+
+32:12.120 --> 32:19.400
+So if you have any words on this topic? Sure, you can take it. It's yours.
+
+32:20.680 --> 32:28.280
+Okay, we agree. Yes, we have the same concerns. There are issues with security because you
+
+32:29.000 --> 32:34.600
+essentially need to run on a unique kernel to be isolated and now we push the execution to the
+
+32:34.600 --> 32:43.160
+host. So one of the things that we have thought about is that when you run that on a cloud
+
+32:43.160 --> 32:51.720
+environment, the vendor should make sure that whatever application is supported to be run on
+
+32:51.720 --> 32:58.120
+the host should be secure, should be audited. So the user doesn't have all the possibilities
+
+32:58.120 --> 33:04.440
+available. They cannot just exec something in the host. They will be able to exec specific stuff
+
+33:04.440 --> 33:14.280
+that are audited in libraries in the plugin system. So one approaches this. Another response
+
+33:14.920 --> 33:21.880
+to the security implications is that at the moment you have no opportunity to run
+
+33:24.120 --> 33:33.000
+from a unique kernel hardware accelerated workload. So if you want to be able to deploy
+
+33:33.000 --> 33:43.240
+such an application somewhere, then you can run isolated. You can use the whole hardware accelerator
+
+33:45.720 --> 33:52.120
+and have the same binary that you would deploy in a non-secure environment. So you could secure
+
+33:52.120 --> 34:02.200
+the environment but have this compatibility and software supply mode using a unique kernel,
+
+34:02.200 --> 34:04.680
+using this semantic abstraction.
+
+34:09.560 --> 34:10.280
+Any other question?
+
+34:14.200 --> 34:21.240
+Please. So my question is similar to the first question, but I'm wondering because you can also
+
+34:21.240 --> 34:33.560
+do GPU pass through via KVU and KVU and just pass the GPU to a virtual machine. So I'm wondering
+
+34:33.560 --> 34:39.720
+what is the performance difference between doing that and doing it in VR?
+
+34:39.720 --> 34:44.840
+Yes, actually we want to evaluate it and we need to evaluate it and see how, for example,
+
+34:44.840 --> 34:52.120
+we even pass through directly exposing the whole GPU to the VM. This could be also one baseline
+
+34:52.120 --> 35:02.520
+for the evaluation. Currently we, I don't remember if we have any, do we have any measurements already?
+
+35:02.520 --> 35:04.760
+We can consider the pass through case the same as me.
+
+35:04.760 --> 35:21.880
+Yeah, but I mean if we have any, okay. So actually from GPU virtualization, for example,
+
+35:23.640 --> 35:32.120
+I'm not sure how many VMs can be supported in one single GPU, for example. I'm not aware of
+
+35:32.120 --> 35:42.760
+any solution that can scale to like tens of VMs, even tens of VMs. I'm not sure if there is any
+
+35:43.320 --> 35:51.080
+existing solution for that. But yes, we plan it. We want to do some extended evaluation on
+
+35:52.440 --> 35:59.640
+compared also to some, let's say, virtual GPU that exists or even the pass through and
+
+35:59.640 --> 36:06.200
+and native execution. We want to do that and hopefully we can also publish the results
+
+36:07.000 --> 36:13.080
+in our blog. Okay, thank you. Any other questions? Yep.
+
+36:18.200 --> 36:26.520
+So in response to the first security question about, yeah, we are offloading, now compute to
+
+36:26.520 --> 36:32.520
+the hypervisor and host. So does it imply that there is a possibility to break out of the
+
+36:32.520 --> 36:48.200
+containerization with the Excel? Well, there's, yes, yes. Code is going to be executing on the
+
+36:48.200 --> 37:02.520
+host in a privileged level. Yes. But the other option is what? So yeah, there is a trade.
+
+37:04.040 --> 37:10.360
+We are actually working. We want to see what available sources we have there. How can we
+
+37:10.360 --> 37:16.760
+make it more secure? How we can sandbox it somehow to make it look better? But on the other hand,
+
+37:16.760 --> 37:22.600
+like for example, in FPGAs, there's no MMU, there's nothing. If you run two kernels,
+
+37:22.600 --> 37:27.560
+one kernel can access, if you kind of know what to do, one kernel can access all the memory in
+
+37:27.560 --> 37:33.160
+the whole FPGA, for example. So in one hand, you also need support from the hardware. And
+
+37:34.680 --> 37:39.720
+regarding, for example, the software stack, we are looking on it and see how this can, how can we
+
+37:39.720 --> 37:53.080
+extend and make it more, at least increase the difficulty for having any... So for example,
+
+37:53.080 --> 38:00.520
+in the catacontainers integration that we have, so when you spawn a container, you sandbox
+
+38:00.520 --> 38:10.120
+the container in a VM, our agent, the host part of the Excel is running on the same sandbox,
+
+38:10.120 --> 38:17.960
+not in the VM, outside the VM, but it runs in the sandbox. So yes, there is code executing
+
+38:17.960 --> 38:23.800
+on the host, but it's in the sandbox. So it's kind of a trade.
+
+38:23.800 --> 38:30.760
+Anything else? All right. If not, thank you, Anastasia. Thank you, Babies.

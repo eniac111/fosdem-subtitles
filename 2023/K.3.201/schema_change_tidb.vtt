@@ -1,0 +1,1144 @@
+WEBVTT
+
+00:00.000 --> 00:08.140
+I'm Matthias, I work at the Pincap.
+
+00:08.140 --> 00:11.560
+We are doing a distributed SQL database called the TIDB.
+
+00:11.560 --> 00:13.440
+It's MySQL compatible,
+
+00:13.440 --> 00:16.800
+so for the clients it's just looks the same.
+
+00:16.800 --> 00:23.520
+I do have a short talk about online schematics at scale in TIDB.
+
+00:24.520 --> 00:27.360
+Compared to MySQL,
+
+00:27.360 --> 00:30.800
+a distributed database is slightly different.
+
+00:30.800 --> 00:33.160
+MySQL does a metadata lock,
+
+00:33.160 --> 00:35.920
+so it basically needs to stop the world.
+
+00:35.920 --> 00:39.240
+No transaction can go through the metadata lock,
+
+00:39.240 --> 00:41.840
+just to change the metadata.
+
+00:41.840 --> 00:47.920
+That means that it's a short lock when you do any kind of DDL.
+
+00:47.920 --> 00:51.000
+It also means that when you're doing replication,
+
+00:51.000 --> 00:54.480
+these metadata locks actually stops replication a bit.
+
+00:54.480 --> 00:57.440
+So if it's not an instant DDL,
+
+00:57.440 --> 01:01.600
+you would start getting replication delay when the DDL goes through.
+
+01:02.640 --> 01:06.880
+So a distributed database is of course different.
+
+01:06.880 --> 01:09.100
+From the client perspective,
+
+01:09.100 --> 01:11.440
+you should just see a normal database.
+
+01:11.440 --> 01:14.200
+You should just expect that it to be transactional,
+
+01:14.200 --> 01:19.280
+it should be an asset compliant query with your normal SQL queries.
+
+01:19.280 --> 01:21.200
+For the user, you shouldn't see any changes.
+
+01:21.200 --> 01:23.020
+But of course, underneath,
+
+01:23.020 --> 01:26.200
+it's distributed on multiple nodes, etc.
+
+01:26.200 --> 01:30.560
+So if you take add index as an example of a DDL,
+
+01:30.560 --> 01:34.000
+we can't do the synchronous stop the world scenario
+
+01:34.000 --> 01:37.800
+with SMDL example in MySQL.
+
+01:37.800 --> 01:40.520
+So that's something that we need to solve.
+
+01:40.520 --> 01:43.080
+During that, we do need to copy and create
+
+01:43.080 --> 01:49.240
+all the index entries for creating a new index while normal traffic comes in.
+
+01:49.240 --> 01:50.720
+So in the beginning,
+
+01:50.720 --> 01:54.440
+MySQL did more or less stop the full table and
+
+01:54.440 --> 01:57.280
+copied everything over and then it released it again.
+
+01:57.280 --> 02:01.560
+Nowadays, they are much better on the online and only keeping the metadata lock.
+
+02:01.560 --> 02:06.400
+But that's something we need to do better in a distributed database.
+
+02:06.840 --> 02:11.200
+So the proposed solution is to version the schema.
+
+02:11.200 --> 02:14.420
+So every change you're doing to a schema or a table,
+
+02:14.420 --> 02:17.200
+you do with that as a specific version.
+
+02:17.200 --> 02:22.760
+You would need to allow sessions to use either the most up-to-date version,
+
+02:22.760 --> 02:25.960
+the current version of the schema or a previous version.
+
+02:25.960 --> 02:30.880
+So then you can do transitions in between these states or versions.
+
+02:30.880 --> 02:33.600
+We need to guarantee that
+
+02:33.600 --> 02:39.360
+the states between the previous version and the current version are compatible.
+
+02:39.360 --> 02:44.040
+So that basically means we need to create some kind of states from
+
+02:44.040 --> 02:49.760
+the before or the start states to the public state where it's usable.
+
+02:51.640 --> 02:56.920
+I think it's easy to go backwards to actually see what kind of states are needed.
+
+02:56.920 --> 02:59.760
+So here the VN,
+
+02:59.760 --> 03:04.800
+it's the current version and we start by the public.
+
+03:04.800 --> 03:07.040
+It's the end state, everyone sees the index.
+
+03:07.040 --> 03:11.560
+So select goes there, insert updates, everything goes there.
+
+03:11.560 --> 03:16.040
+The previous version, we can actually remove the selects,
+
+03:16.040 --> 03:20.720
+but it still needs to do all the updates, insert some deletes there.
+
+03:21.360 --> 03:25.240
+As you see, regardless,
+
+03:25.240 --> 03:28.360
+the time here can be a bit confusing.
+
+03:28.360 --> 03:33.360
+So the transactions are of course using the real-time, current time,
+
+03:33.360 --> 03:36.600
+but it might see a different version of the schema because we
+
+03:36.600 --> 03:41.760
+can't require all transactions to
+
+03:41.760 --> 03:46.840
+constantly check for the new schema and stop the world for that.
+
+03:48.440 --> 03:52.480
+Let's then move and say we are in this right only states.
+
+03:52.480 --> 03:54.800
+Before state for that,
+
+03:54.800 --> 03:57.800
+then of course we cannot do selects.
+
+03:57.800 --> 04:01.920
+Do we need to do inserts before to make them compatible?
+
+04:01.920 --> 04:04.920
+Well, we don't actually serve the reads.
+
+04:04.920 --> 04:09.680
+So we do not need to do the inserts in this state.
+
+04:09.680 --> 04:11.720
+Backfill will handle it.
+
+04:11.720 --> 04:14.080
+Then of course comes the question,
+
+04:14.080 --> 04:16.440
+how would backfill handle it?
+
+04:16.440 --> 04:19.080
+So for backfill to handle this correctly,
+
+04:19.080 --> 04:22.400
+we actually need to have another state between
+
+04:22.400 --> 04:25.680
+public and the right only state.
+
+04:25.680 --> 04:29.720
+As you see, state-wise for transactions,
+
+04:29.720 --> 04:31.960
+it doesn't really change anything,
+
+04:31.960 --> 04:35.240
+but it gives time for doing this backfilling.
+
+04:35.240 --> 04:38.920
+Because when we enter the right reorganization state,
+
+04:38.920 --> 04:41.080
+then we know that the state before,
+
+04:41.080 --> 04:42.440
+it's the right only.
+
+04:42.440 --> 04:46.080
+So all changes will be double right.
+
+04:47.880 --> 04:51.880
+That means that updates can be a bit tricky
+
+04:51.880 --> 04:54.240
+because we say we're not doing insert,
+
+04:54.240 --> 04:56.000
+but how do we handle updates?
+
+04:56.000 --> 05:02.360
+So we need to go a bit deeper to see how that's handled.
+
+05:02.360 --> 05:05.200
+In the add index example,
+
+05:05.200 --> 05:08.000
+we do have the table data that's public.
+
+05:08.000 --> 05:09.760
+So everyone should be able to read
+
+05:09.760 --> 05:12.880
+the directly from the table without the index.
+
+05:12.880 --> 05:15.880
+So let's say we have at time zero,
+
+05:15.880 --> 05:20.600
+a session that sees this new right only state,
+
+05:20.600 --> 05:22.200
+and it doesn't insert,
+
+05:22.200 --> 05:25.480
+it inserts into the road,
+
+05:25.480 --> 05:28.840
+into the table, and it updates the index.
+
+05:28.840 --> 05:32.640
+So you can find the row through the index.
+
+05:33.000 --> 05:38.480
+Then later on, another session comes in,
+
+05:38.480 --> 05:40.560
+but that session has not yet
+
+05:40.560 --> 05:42.760
+transitioned to this right only state.
+
+05:42.760 --> 05:45.080
+So it's in the state before,
+
+05:45.080 --> 05:47.760
+and it wants to update this.
+
+05:47.760 --> 05:50.800
+So it goes to the table and updates the row.
+
+05:50.800 --> 05:53.680
+That's public, so that's what it needs to do.
+
+05:53.680 --> 05:56.520
+But then how about the index?
+
+05:56.520 --> 06:00.400
+We don't actually need to insert into the index here,
+
+06:00.400 --> 06:02.960
+because that will be handled by
+
+06:02.960 --> 06:05.760
+the backfill in the right row organization stage.
+
+06:05.760 --> 06:08.640
+But the trick here is that we actually need to
+
+06:08.640 --> 06:14.160
+remove the old entry as a part of the update.
+
+06:14.160 --> 06:18.640
+So update actually means that we need to propagate
+
+06:18.640 --> 06:21.360
+the deletes into this new index object,
+
+06:21.360 --> 06:24.520
+but we do not need to do with inserts.
+
+06:26.120 --> 06:30.920
+So we need to propagate updates as delete only,
+
+06:30.920 --> 06:33.800
+and that also makes it easy to handle the deletes.
+
+06:33.800 --> 06:37.280
+So we do need to handle deletes in the new index.
+
+06:37.280 --> 06:39.520
+That also gives a name for the state,
+
+06:39.520 --> 06:40.800
+so delete only state.
+
+06:40.800 --> 06:43.400
+That's when you're reading this,
+
+06:43.400 --> 06:47.920
+it's inspired by a paper from Google about
+
+06:47.920 --> 06:51.920
+the online asynchronous schema changes in F1,
+
+06:51.920 --> 06:53.520
+so on top of Spanner.
+
+06:53.520 --> 06:57.520
+Then it takes some time before you understand exactly why
+
+06:57.520 --> 06:59.360
+you do need a delete state,
+
+06:59.360 --> 07:02.440
+but this is the reason to be
+
+07:02.440 --> 07:05.640
+able to move through the different stages.
+
+07:05.640 --> 07:08.800
+By not inserting the new row in the index,
+
+07:08.800 --> 07:10.520
+or the new entry in the index,
+
+07:10.520 --> 07:12.640
+does that not mean that nothing else in
+
+07:12.640 --> 07:14.120
+the system can use it because you
+
+07:14.120 --> 07:15.960
+have to wait for the backfill to complete?
+
+07:15.960 --> 07:19.320
+Yeah, so you don't read from the index until it goes public.
+
+07:19.320 --> 07:20.840
+It has to complete, okay, so you have to wait for it to
+
+07:20.840 --> 07:22.160
+read it so it doesn't matter either way.
+
+07:22.160 --> 07:22.440
+Yeah.
+
+07:22.440 --> 07:24.040
+It just delays that you could have done it at
+
+07:24.040 --> 07:25.640
+the same time while you're alternating.
+
+07:25.640 --> 07:29.280
+So if you would insert it,
+
+07:29.280 --> 07:31.280
+then it would more or less be overwritten by
+
+07:31.280 --> 07:34.000
+the reorg phase anyway because the reorg needs to
+
+07:34.000 --> 07:38.160
+read from a snapshot and take all that data.
+
+07:38.160 --> 07:40.560
+So a snapshot taken somewhere
+
+07:40.560 --> 07:42.680
+when everything were on the right only.
+
+07:42.680 --> 07:44.280
+Just simply to do it that way.
+
+07:44.280 --> 07:46.600
+So it would just be overhead to doing the insert.
+
+07:46.600 --> 07:48.840
+It wouldn't actually mess up anything.
+
+07:48.840 --> 07:49.840
+It will still be correct,
+
+07:49.840 --> 07:53.640
+but it will just be unnecessary.
+
+07:54.400 --> 07:58.200
+Then if we move on from the delete only state,
+
+07:58.200 --> 08:00.760
+the previous version can actually be the start state
+
+08:00.760 --> 08:05.280
+because as long as deletes are done,
+
+08:05.280 --> 08:07.120
+the previous version does not need to
+
+08:07.120 --> 08:08.920
+do anything with previous states.
+
+08:08.920 --> 08:11.680
+So there we have the different states
+
+08:11.680 --> 08:13.840
+that it needs to transition through.
+
+08:13.840 --> 08:18.200
+For keeping transactions running without being blocked.
+
+08:18.200 --> 08:20.640
+So here we do have the full part of
+
+08:20.640 --> 08:26.240
+the asynchronous DDL in online.
+
+08:26.240 --> 08:29.040
+That's done online in a distributed database.
+
+08:29.040 --> 08:31.400
+Do you support distributed transactions?
+
+08:31.400 --> 08:36.200
+If you do, what transactions in XA prepare state?
+
+08:36.200 --> 08:40.000
+So we do not support XA transactions right now.
+
+08:40.000 --> 08:42.600
+But of course, if you're connecting to
+
+08:42.600 --> 08:47.120
+different SQL nodes, it looks just like it is a master,
+
+08:47.120 --> 08:48.680
+or a primary wherever.
+
+08:48.680 --> 08:54.480
+So full read and write in however you connect.
+
+08:54.480 --> 08:57.200
+So I suppose all this happens
+
+08:57.200 --> 08:59.840
+when the remote transaction is committed.
+
+08:59.840 --> 09:03.720
+These changes are only then being applied to the.
+
+09:03.720 --> 09:06.960
+So transaction is a bit slightly different.
+
+09:06.960 --> 09:10.280
+So you cannot have transactions
+
+09:10.280 --> 09:12.960
+spanning more than two versions.
+
+09:12.960 --> 09:17.000
+So you need to either wait or you need to block,
+
+09:17.000 --> 09:24.320
+stop and fail transactions that are too long-running.
+
+09:24.320 --> 09:26.560
+Okay. These versions, you have
+
+09:26.560 --> 09:28.600
+several versions associated with
+
+09:28.600 --> 09:31.360
+a single all-night schema change.
+
+09:31.360 --> 09:32.560
+Did I get it right?
+
+09:32.560 --> 09:36.440
+Yes. So a single DDL goes through multiple stages.
+
+09:36.440 --> 09:38.360
+Okay. I'm calling the inversions.
+
+09:38.360 --> 09:44.240
+Thank you. Currently, I'm actually working with
+
+09:44.240 --> 09:48.560
+partitioning and for all the table,
+
+09:48.560 --> 09:52.120
+reorganized partition will take one set of partitions into a new set.
+
+09:52.120 --> 09:55.200
+Then there's another thing.
+
+09:55.200 --> 09:59.560
+So during the reorganized phase,
+
+09:59.560 --> 10:01.720
+when you're copying data,
+
+10:01.720 --> 10:05.240
+you do select from the old one.
+
+10:05.240 --> 10:07.600
+Then you go to public.
+
+10:07.600 --> 10:09.000
+So you select from this one,
+
+10:09.000 --> 10:15.600
+which means that if someone is actually on the right reorganization state,
+
+10:15.600 --> 10:19.320
+then they will select from that that's not updated in this one.
+
+10:19.320 --> 10:23.560
+So you need to add an additional state between
+
+10:23.560 --> 10:29.120
+the right reorganization and the public state just for moving the select.
+
+10:29.120 --> 10:33.240
+So it's a double right while moving the reads.
+
+10:33.240 --> 10:38.040
+All this is done in TIDB,
+
+10:38.040 --> 10:41.720
+and I'm not sure how many is familiar with TIDB.
+
+10:41.720 --> 10:47.160
+Okay. Good. Then let's do a quick introduction to this.
+
+10:47.160 --> 10:54.360
+TIDB is mainly architecture around three different components.
+
+10:54.360 --> 10:57.120
+You have PD, which stands for placement driver.
+
+10:57.120 --> 11:00.440
+It creates the timestamps for
+
+11:00.440 --> 11:06.280
+transaction handling and it knows about the data locations.
+
+11:06.280 --> 11:10.280
+So it knows on which nodes the data are.
+
+11:10.280 --> 11:15.320
+Then we have an SQL layer that is stateless.
+
+11:15.320 --> 11:21.480
+So it's very easy to spin up or scale in the different number of nodes.
+
+11:21.480 --> 11:25.200
+Here we have re-implemented the MySQL protocol.
+
+11:25.200 --> 11:27.840
+So this is actually written in Go,
+
+11:27.840 --> 11:31.080
+and all of it is in Apache 2 license.
+
+11:31.080 --> 11:34.320
+So we do not share any code from MySQL or Maria.
+
+11:34.320 --> 11:40.040
+It's completely new since 2015 when the project started.
+
+11:40.040 --> 11:43.360
+Then we have a storage layer.
+
+11:43.360 --> 11:46.800
+The base storage layer is TIDB,
+
+11:46.800 --> 11:49.560
+so it's a distributed key value store.
+
+11:49.560 --> 11:53.840
+We even have people that runs that as a distributed key value store and
+
+11:53.840 --> 11:56.560
+don't bother about the SQL part.
+
+11:56.560 --> 11:58.840
+So that's what you can do as well.
+
+11:58.840 --> 12:03.600
+Then we do also have an additional and optional way of
+
+12:03.600 --> 12:06.800
+storing the data in what we call TIE flash.
+
+12:06.800 --> 12:08.480
+That's a column store.
+
+12:08.480 --> 12:11.840
+So by connecting it here,
+
+12:11.840 --> 12:16.080
+you can actually do analytics like aggregations and so on,
+
+12:16.080 --> 12:19.520
+on the same data within the same transaction even.
+
+12:19.520 --> 12:24.120
+The optimizer here would choose what is the fastest way,
+
+12:24.120 --> 12:28.120
+what has the lowest cost for executing the query.
+
+12:28.120 --> 12:33.120
+So you don't have any ETL or anything like that in between.
+
+12:33.120 --> 12:34.560
+It's very easy to just add.
+
+12:34.560 --> 12:39.400
+You're doing all the tables and set the TIE flash replica equals one or two,
+
+12:39.400 --> 12:41.800
+or if you add more than one,
+
+12:41.800 --> 12:48.360
+then you also get the MPPs or massive parallel processing part of it.
+
+12:48.360 --> 12:54.920
+We do have, you can run Spark on it as well.
+
+12:54.920 --> 13:01.560
+Let's just go down slightly deeper on how we actually store the data.
+
+13:01.560 --> 13:09.840
+So we take all this data and split it into ranges about 100 megabytes,
+
+13:09.840 --> 13:14.080
+and each such range is stored in three,
+
+13:14.080 --> 13:19.800
+or it's configurable, let's say three copies in the TIE KV storage nodes.
+
+13:19.800 --> 13:23.840
+Each such region is forming a raft group.
+
+13:23.840 --> 13:29.640
+So that's how it keeps the HA and high availability.
+
+13:30.240 --> 13:35.560
+TIE KV is using RoxDB as a lower level storage.
+
+13:35.560 --> 13:38.040
+So it's an LSM tree.
+
+13:38.040 --> 13:43.720
+It's similar as MyRox in Percona or MariaDB.
+
+13:43.720 --> 13:47.240
+So it's not B-tree based.
+
+13:47.520 --> 13:51.560
+Through this raft protocol,
+
+13:51.560 --> 13:55.040
+that's how we also can connect the column store.
+
+13:55.040 --> 13:58.440
+So that's how we also have it.
+
+13:58.440 --> 14:01.200
+So you can run it in the same transaction.
+
+14:01.200 --> 14:02.760
+Even if you have a join,
+
+14:02.760 --> 14:10.520
+maybe it's faster to execute parts of it through an index in the row store,
+
+14:10.520 --> 14:19.040
+and then do some of the table scans and aggregation in TIE flash in the column store.
+
+14:22.320 --> 14:26.480
+This is optional, but this is not, this is the base.
+
+14:26.480 --> 14:31.200
+You always need to have the row store and you can have this as an option.
+
+14:35.160 --> 14:38.240
+There's a lot of tooling that works.
+
+14:38.240 --> 14:42.000
+So first of all, I would say that the data migration.
+
+14:42.000 --> 14:48.920
+So it's easy to have a TIE DB cluster to read the binary logs,
+
+14:48.920 --> 14:53.560
+or you have to set it up for dumping an upstream MySQL instance,
+
+14:53.560 --> 14:57.320
+or even several instances into the same cluster.
+
+14:57.320 --> 15:00.480
+So you can combine all the data back.
+
+15:00.800 --> 15:06.920
+We have the backup and restore very good dump story.
+
+15:06.920 --> 15:09.400
+I think that even works with MySQL, right?
+
+15:09.400 --> 15:10.400
+Yes.
+
+15:10.400 --> 15:17.280
+You have a tool for us to do a diff between the different instances,
+
+15:17.280 --> 15:22.520
+the change data capture that can go to either another TIE DB cluster,
+
+15:22.520 --> 15:27.840
+or MySQL instance go through Kafka as well if you want.
+
+15:29.840 --> 15:36.160
+TIE up, that's a way for managing and deploying TIE DB,
+
+15:36.160 --> 15:38.480
+and all components you want.
+
+15:38.480 --> 15:42.080
+You can even use it as a playground to start it in your laptop.
+
+15:42.080 --> 15:44.040
+It will download the binaries and start everything,
+
+15:44.040 --> 15:45.440
+including monitoring everything.
+
+15:45.440 --> 15:48.160
+So it's very easy to just try out.
+
+15:50.160 --> 15:56.000
+We have an operator if you want to run it in Kubernetes as well in the cloud.
+
+15:56.000 --> 15:59.680
+So we even have it as a cloud service.
+
+15:59.680 --> 16:05.640
+You can do anything from on-prem up to cloud service in many different ways.
+
+16:05.640 --> 16:10.840
+And we also have Lightning, which is an optimized import tool.
+
+16:10.840 --> 16:14.640
+And that's what I will actually use in the next slide soon.
+
+16:17.600 --> 16:23.000
+A year ago, we started a project because we heard and compared
+
+16:23.000 --> 16:28.240
+the add index performance in TIE DB cluster versus, for example,
+
+16:28.240 --> 16:30.600
+Cassandra or Aurora.
+
+16:30.600 --> 16:36.680
+And at that time, we were basically three times slower because we hadn't
+
+16:36.680 --> 16:43.680
+optimized that it was just stable, proven, and it worked, but it was not fast.
+
+16:43.680 --> 16:49.320
+And that's especially when you're doing proof of concept or loading the data.
+
+16:49.320 --> 16:52.320
+That's where it's really beneficial to speed it up.
+
+16:52.320 --> 16:57.320
+And the way it worked, it would just do a data copying through small transaction
+
+16:57.320 --> 16:58.960
+batches, more or less.
+
+16:58.960 --> 17:03.680
+So that also creates a lot of overhead with transaction handling, etc.
+
+17:03.680 --> 17:09.040
+That's not actually needed when you're doing a backfill,
+
+17:09.040 --> 17:14.120
+because during backfill process, copying the data,
+
+17:14.120 --> 17:17.920
+it doesn't actually need to be transactional.
+
+17:17.920 --> 17:23.920
+And it's only a single node that does this, a single TIE DB node that orchestrates it.
+
+17:23.920 --> 17:26.360
+I'm not going to go deep into this.
+
+17:26.360 --> 17:31.920
+It basically just shows how you're creating a command in one TIE DB node.
+
+17:31.920 --> 17:33.360
+And it goes into a table.
+
+17:33.360 --> 17:36.560
+A TIE DB owner will do it, go through the different steps,
+
+17:36.560 --> 17:40.720
+and do the data migrations and data copying.
+
+17:40.720 --> 17:47.720
+So what we did first was create a feature with this feature flag.
+
+17:47.720 --> 17:51.520
+It uses this lightning, the import tool technology.
+
+17:51.520 --> 17:55.920
+It's completely built in in TIE DB cluster, so it's not the external tool.
+
+17:55.920 --> 18:01.920
+But it reads the data, and then it creates these SSD files for ingestion in Rokslib.
+
+18:01.920 --> 18:03.920
+So it's not a single node.
+
+18:03.920 --> 18:05.320
+It's a single node.
+
+18:05.320 --> 18:06.720
+And it's a single node.
+
+18:06.720 --> 18:10.720
+It creates these SSD files for ingestion in Rokslib.
+
+18:10.720 --> 18:17.720
+So it's very efficient load, and it has very low impact on the storage side.
+
+18:17.720 --> 18:25.720
+It just moves these files into the storage and takes them into the Rokslib levels.
+
+18:25.720 --> 18:28.720
+The result was around three times speed up,
+
+18:28.720 --> 18:33.720
+and of course, a lot less impact on normal load in the cluster.
+
+18:33.720 --> 18:40.720
+Even if you have a highly loaded cluster, you can do this almost without impacting it.
+
+18:43.720 --> 18:50.720
+And then we did a bit of analysis of where we could improve even more.
+
+18:50.720 --> 18:56.720
+And there was things like the scheduling could be improved just to shorten the time.
+
+18:56.720 --> 19:01.720
+Instead of reading directly from the key value store,
+
+19:01.720 --> 19:10.720
+we could use these co-processors for removing columns that's not needed, for example,
+
+19:10.720 --> 19:15.720
+for doing optimized scans, etc.
+
+19:17.720 --> 19:21.720
+We disconnected the read and write dependencies
+
+19:21.720 --> 19:27.720
+so they could run in parallel in synchronous, and a lot of other small optimization.
+
+19:27.720 --> 19:32.720
+And that created yet another three to five times speed up.
+
+19:32.720 --> 19:39.720
+So all in all, during the last year, we had done 10 times improvement in speed.
+
+19:39.720 --> 19:43.720
+While we're still only using a single TIDB node,
+
+19:43.720 --> 19:50.720
+and now we're three times faster than the baseline of the other implementations
+
+19:50.720 --> 19:57.720
+in Cockroach and Aurora that we have compared with.
+
+19:57.720 --> 20:02.720
+And there's a bit more to do, so we're currently looking into how we even can distribute this
+
+20:02.720 --> 20:06.720
+instead of running it on a single TIDB node,
+
+20:06.720 --> 20:10.720
+and also being able to autotune the priority.
+
+20:10.720 --> 20:17.720
+So if you have load that goes a bit up and a bit down, so the DDL work can adjust to that.
+
+20:17.720 --> 20:20.720
+And that is if you depend on a single time, if that breaks for any reason,
+
+20:20.720 --> 20:23.720
+then you basically just go back to the previous stages.
+
+20:23.720 --> 20:29.720
+Yeah, so we have a state state, so we go back a little bit,
+
+20:29.720 --> 20:35.720
+but you don't need to redo the whole feeling of the index or anything like that.
+
+20:36.720 --> 20:40.720
+And yeah, it's all on GitHub.
+
+20:40.720 --> 20:43.720
+If you're interested a bit in how it actually works,
+
+20:43.720 --> 20:46.720
+I would recommend go to OSS Insights.
+
+20:46.720 --> 20:48.720
+I would say it's a demo site.
+
+20:48.720 --> 20:54.720
+It runs TIDB in the background, and it's a simple web UI,
+
+20:54.720 --> 20:59.720
+well, quite nice UI on top, but it has all of the events from GitHub.
+
+20:59.720 --> 21:04.720
+Currently, it's 5.5 billion records, and we store it in a single table.
+
+21:04.720 --> 21:07.720
+It's a bit other things there as well.
+
+21:07.720 --> 21:12.720
+And you can compare for your own GitHub ID or your own project,
+
+21:12.720 --> 21:18.720
+your own repository, compare it and so on, and check some different frameworks, etc.
+
+21:18.720 --> 21:21.720
+It's quite cool, actually.
+
+21:21.720 --> 21:27.720
+Tie-up is very useful if you want to try it on your own laptop or in your own data center.
+
+21:27.720 --> 21:30.720
+Of course, you can go to TIDB Cloud as well,
+
+21:30.720 --> 21:35.720
+but I didn't mention that here because that's our commercial offer.
+
+21:37.720 --> 21:41.720
+Something else that we have that is not directly connected, it's Chaos Mesh.
+
+21:41.720 --> 21:48.720
+So if you have a system on Kubernetes and you want to see how it handles different errors,
+
+21:48.720 --> 21:50.720
+you can use that for injecting errors.
+
+21:50.720 --> 21:55.720
+That's something that we used for stabilizing and testing out the TIDB cluster.
+
+21:58.720 --> 22:01.720
+Then I think I'm out of time.
+
+22:01.720 --> 22:05.720
+Perfect timing, so you have time to answer questions.
+
+22:05.720 --> 22:08.720
+Yeah?
+
+22:08.720 --> 22:09.720
+Yeah?
+
+22:09.720 --> 22:10.720
+I have a bunch.
+
+22:10.720 --> 22:18.720
+First of all, I'm very interested in how do you organize the H step transitioning.
+
+22:18.720 --> 22:26.720
+I mean, you have both storages, and I missed the way you move the data from row into column of format.
+
+22:26.720 --> 22:29.720
+I believe you do a double copy.
+
+22:29.720 --> 22:32.720
+You have double copies of the data itself.
+
+22:32.720 --> 22:38.720
+So we always have the copy here,
+
+22:38.720 --> 22:43.720
+and the Raft leader of the group is always here.
+
+22:43.720 --> 22:48.720
+So you do have Raft leader and Raft follower in the TIDB,
+
+22:48.720 --> 22:53.720
+and then we extended the Raft protocol so we have learner states here,
+
+22:53.720 --> 22:55.720
+so they can never become leaders.
+
+22:55.720 --> 22:59.720
+So this is a must, and this is optional.
+
+22:59.720 --> 23:04.720
+Yeah?
+
+23:04.720 --> 23:11.720
+What about the optimizer model?
+
+23:11.720 --> 23:15.720
+How do you calculate the cost?
+
+23:15.720 --> 23:16.720
+Yes.
+
+23:16.720 --> 23:21.720
+To understand which storage format we use.
+
+23:21.720 --> 23:25.720
+Yeah, and it's also the influence of the volcano optimizer model,
+
+23:25.720 --> 23:36.720
+so that's how you more or less pipeline the different things and can move parts of the pipeline into an MPP framework that handles the column store.
+
+23:36.720 --> 23:49.720
+I wonder if this model and the optimizer are at least dispersed across the multiple portions of the TIDB or it's in a single.
+
+23:49.720 --> 23:56.720
+So the optimizer that's in the TIDB project, in the TIDB repository, so the SQL node.
+
+23:56.720 --> 24:15.720
+And when it executes, it's a push down this co-processor request and also through the MPP framework for pushing down query fragments or the co-processor request into either TIDB or a TICB or to TIFlash.
+
+24:15.720 --> 24:26.720
+So, for example, if you're doing a join where one part of the table can be resolved the fast by an index lookup, then it will go here for that part of the table.
+
+24:26.720 --> 24:32.720
+And for another table, it might be a big table scan or aggregation that will be faster here.
+
+24:32.720 --> 24:44.720
+So then it actually can combine that.
+
+24:44.720 --> 25:02.720
+I'm not sure I don't know the details deep enough for answer that.
+
+25:02.720 --> 25:08.720
+Yeah. So we are only we don't have on any own connectors or anything like that.
+
+25:08.720 --> 25:17.720
+We asked relying on MySQL connectors or MariaDB connectors and that's what we're using when we're testing.
+
+25:17.720 --> 25:27.720
+So you basically have the students that tries different kinds of queries and after the passes you understand that they are somehow equal.
+
+25:27.720 --> 25:30.720
+Yeah. And of course there are differences.
+
+25:30.720 --> 25:35.720
+But I would say the compatibility with the MySQL dialect.
+
+25:35.720 --> 25:43.720
+It's very, very high. But of course, like management commands for replication doesn't work because we don't do replication.
+
+25:43.720 --> 25:51.720
+We have internal replication or we use change data capture for transfer to another cluster.
+
+25:51.720 --> 25:53.720
+Thank you.
+
+25:53.720 --> 25:55.720
+Last question.
+
+25:55.720 --> 26:04.720
+What TIFlash does when there is high rate of single cell updates like how it handles this like the writing the whole file.
+
+26:04.720 --> 26:09.720
+So it's a it's a derivative of Clickhouse.
+
+26:09.720 --> 26:20.720
+So it's the caches the changes and then it updates it partially or rewrites the whole.
+
+26:20.720 --> 26:27.720
+It can. But if it's behind then it will more or less fall back here.
+
+26:27.720 --> 26:39.720
+You have some tweaking options. You can even do it as optimizer hints that you want to use either end in for example, etc.
+
+26:39.720 --> 26:41.720
+If there are more questions, I'm sure Mattias.
+
+26:41.720 --> 26:45.720
+Yeah, I'm here. Even Daniel is here as well.
+
+26:45.720 --> 27:03.720
+Thank you.

@@ -1,0 +1,852 @@
+1
+0:00:00.000 --> 0:00:14.080
+I'm Marco Makkala. I've been working on E-NODB code for 20 years almost and today I will
+
+2
+0:00:14.080 --> 0:00:20.960
+talk about one of my pet heads in E-NODB, this change buffer, which I long time suspected
+
+3
+0:00:20.960 --> 0:00:26.540
+that it's causing bugs but I couldn't prove all of them. So I took a car analogies because
+
+4
+0:00:26.540 --> 0:00:33.040
+some software people like car analogies are unsafe at any speed. It's from the 1960s.
+
+5
+0:00:33.040 --> 0:00:42.080
+I'm a bicycle person myself. So what was the change buffer good for? It was something developed
+
+6
+0:00:42.080 --> 0:00:48.460
+in the times of the spinning raster, hard disks. The idea was that when you are doing
+
+7
+0:00:48.460 --> 0:00:54.600
+sequential I-O, like page reads or page writes, sequentially then the read-write head will
+
+8
+0:00:54.600 --> 0:01:02.880
+move less on the hard disk. If you are doing random CX it could take a long time to position
+
+9
+0:01:02.880 --> 0:01:10.080
+the head to the correct track and then wait for the sector to come under the track when
+
+10
+0:01:10.080 --> 0:01:17.280
+it's rotating. So the idea of the change buffer was that instead of reading something
+
+11
+0:01:17.280 --> 0:01:22.160
+from a page and then applying a change to that page, you would write a buffer change
+
+12
+0:01:22.160 --> 0:01:30.440
+to somewhere else. So if a B3 secondary in a sleeve page is not in the memory, in that
+
+13
+0:01:30.440 --> 0:01:36.840
+case we could, instead of reading the page to perform an insert, originally it was only
+
+14
+0:01:36.840 --> 0:01:42.920
+insert buffering, we would write that insert operation into a separate insert buffer tree
+
+15
+0:01:42.920 --> 0:01:49.040
+and then later when some other operation needs to read the page it would merge the changes
+
+16
+0:01:49.040 --> 0:01:54.960
+in that buffer to the page. And these structures are persistent, so even the insert buffering
+
+17
+0:01:54.960 --> 0:02:00.600
+could happen years ago and then at some point years later somebody wants to access that
+
+18
+0:02:00.600 --> 0:02:10.100
+page and then you get the trouble. This was extended in MySQL 5.5 to cover delete operations
+
+19
+0:02:10.100 --> 0:02:16.600
+and purge operations. Deleting in InnoDB only marks the record for deletion, same for update
+
+20
+0:02:16.600 --> 0:02:23.680
+of a key in a secondary index, it will do delete marking and insert. So the purge is
+
+21
+0:02:23.680 --> 0:02:28.440
+what is actually removing the record. Those operations could be buffered but not rollback
+
+22
+0:02:28.440 --> 0:02:36.400
+of an insert, that was never buffered. And this leads to lots of problems like the change
+
+23
+0:02:36.400 --> 0:02:42.840
+buffer is located in the InnoDB system tablespace and up to this time there is no mechanism
+
+24
+0:02:42.840 --> 0:02:47.840
+to shrink the system tablespace. If you at some point use the change buffer a lot, the
+
+25
+0:02:47.840 --> 0:02:52.720
+system tablespace will grow by some hundreds of gigabytes, there is no way to reclaim that
+
+26
+0:02:52.720 --> 0:03:01.320
+space. In MariaDB we are working on something to help with that but it's not done yet. And
+
+27
+0:03:01.320 --> 0:03:07.560
+then this obvious right amplification, if you are doing an insert, that's rather fine.
+
+28
+0:03:07.560 --> 0:03:13.680
+Instead of doing just one insert, you are doing two inserts, you are doubling the write,
+
+29
+0:03:13.680 --> 0:03:19.520
+plus you have to write some metadata, some index information so that the contents of
+
+30
+0:03:19.520 --> 0:03:23.960
+the page can be interpreted correctly because the change buffer doesn't have access to the
+
+31
+0:03:23.960 --> 0:03:31.400
+data dictionary. But for delete or delete marking, if you apply the change directly
+
+32
+0:03:31.400 --> 0:03:35.600
+to the page, you would write one byte or a couple of bytes, now you have to copy the
+
+33
+0:03:35.600 --> 0:03:40.080
+entire record which you are going to delete or delete mark to the change buffer and the
+
+34
+0:03:40.080 --> 0:03:46.200
+metadata and then at some point it will be merged. And then there is some overhead, even
+
+35
+0:03:46.200 --> 0:03:51.280
+if you are disabling the change buffer you still have some overhead, you have to maintain
+
+36
+0:03:51.280 --> 0:03:57.240
+some metadata saying how full your pages are. If somebody is going to enable the change
+
+37
+0:03:57.240 --> 0:04:02.360
+buffering or insert buffering later, this data has to be accurate otherwise you would
+
+38
+0:04:02.360 --> 0:04:07.400
+get a page overflow. The insert buffering must know that the page will not get too full
+
+39
+0:04:07.400 --> 0:04:14.600
+when you are buffering the insert and merging later. And then we got lots of nice corruptions
+
+40
+0:04:14.600 --> 0:04:19.640
+where the secondary index gets out of sync with the primary key index. And these are
+
+41
+0:04:19.640 --> 0:04:25.520
+very hard to reproduce. So why is it hard to reproduce? Well, the first part is the
+
+42
+0:04:25.520 --> 0:04:33.880
+same as on the previous slide. It is exactly this that you cannot easily control when the
+
+43
+0:04:33.880 --> 0:04:40.520
+change buffer merge happens. It's like the Spanish Inquisition in the month is Python
+
+44
+0:04:40.520 --> 0:04:49.520
+Sketch. Nobody expects a change buffer merge. And to reproduce something, either as a user
+
+45
+0:04:49.520 --> 0:04:55.040
+you are unlucky and as a tester you are lucky if you can reproduce this and you need lots
+
+46
+0:04:55.040 --> 0:05:01.120
+of luck to get that because especially this purging of the history which is deleting records
+
+47
+0:05:01.120 --> 0:05:08.200
+from the index, it can be blocked by reviews. If you have long-running transactions which
+
+48
+0:05:08.200 --> 0:05:13.840
+are holding a review open, that will prevent purge from running. And then at some point
+
+49
+0:05:13.840 --> 0:05:17.920
+that review will be closed and purge can start running. And then there is also this buffer
+
+50
+0:05:17.920 --> 0:05:23.520
+pool. If a page is locked by something, it can't be written out and it can be evicted
+
+51
+0:05:23.520 --> 0:05:28.540
+from the buffer pool. So the change buffer can't be used. And we have a debug setting
+
+52
+0:05:28.540 --> 0:05:33.760
+that forces that, okay, user is asking for operation that could use the change buffer
+
+53
+0:05:33.760 --> 0:05:37.800
+and we see the page is in the buffer pool. We are going to the evil and we evict the
+
+54
+0:05:37.800 --> 0:05:43.440
+page. But we cannot do that because somebody could be holding a latch on that page or the
+
+55
+0:05:43.440 --> 0:05:47.880
+current thread is holding a latch and the page was modified. And we cannot wait for
+
+56
+0:05:47.880 --> 0:05:55.840
+page writes to happen because this latch is blocking the page write. So this is really
+
+57
+0:05:55.840 --> 0:06:03.040
+difficult to test. And there was a recent fix to some hangs which were introduced in
+
+58
+0:06:03.040 --> 0:06:10.400
+MySQL 5.7. We have that fix in the release that is coming up out next week. That one
+
+59
+0:06:10.400 --> 0:06:19.600
+will make it even more tricky, this debug option. So in order for this to be effective, they
+
+60
+0:06:19.600 --> 0:06:25.720
+have to do some smart tricks like abandon some tables for a while and let them cool
+
+61
+0:06:25.720 --> 0:06:30.520
+down, use some other tables meanwhile and then come back.
+
+62
+0:06:30.520 --> 0:06:40.520
+Well, we got some nice magic tools as well. We have this random query generator. It's
+
+63
+0:06:40.520 --> 0:06:48.560
+also used at MySQL. And a grammar simplifier. We could start with the huge grammar of all
+
+64
+0:06:48.560 --> 0:06:55.360
+of the SQL covering all the features and let it run. If the crash was frequent enough,
+
+65
+0:06:55.360 --> 0:07:02.760
+then we could use this grammar simplifier. But in this case, this is very hard to reproduce
+
+66
+0:07:02.760 --> 0:07:07.600
+back. We cannot use the simplifier. We cannot get any simpler grammar. We just have to run
+
+67
+0:07:07.600 --> 0:07:16.560
+it all and hope for the best. But then we got this debugger, rr, record and replay.
+
+68
+0:07:16.560 --> 0:07:24.880
+That one is really a huge productivity boost. We started using it maybe two or three years
+
+69
+0:07:24.880 --> 0:07:32.840
+ago. So when you are able to reproduce a problem while running it under rr, what you would
+
+70
+0:07:32.840 --> 0:07:42.320
+do is that you will save a trace, a deterministic trace of an execution that is interleaving
+
+71
+0:07:42.320 --> 0:07:50.320
+processes or threads that are being monitored by it. It saves the system calls and the results
+
+72
+0:07:50.320 --> 0:07:56.720
+and so on. And these threads can be debugged as many times as you want. You just need the
+
+73
+0:07:56.720 --> 0:08:02.440
+same binaries, same libraries and compatible processor. Then you can run it. And you can
+
+74
+0:08:02.440 --> 0:08:08.320
+set break points. You can set data watch points. And you can execute in forward and backward
+
+75
+0:08:08.320 --> 0:08:14.760
+direction. You can see what happened before the bad thing was observed. And this can also
+
+76
+0:08:14.760 --> 0:08:23.640
+be used for optimized code. You are debugging an optimized executable, then the debugger
+
+77
+0:08:23.640 --> 0:08:28.280
+complains that some variable has been optimized out. Well, then you can just single step some
+
+78
+0:08:28.280 --> 0:08:34.520
+instructions and get it from the registers because you can go backwards in time.
+
+79
+0:08:34.520 --> 0:08:41.200
+So now I'm coming to describe one bug that we found last year. And actually there was
+
+80
+0:08:41.200 --> 0:08:47.960
+a support customer last week who hit this bug or a consequence of this bug. So we had
+
+81
+0:08:47.960 --> 0:08:55.120
+a bug that was doing this change buffer merge. It would hang because the change buffer got
+
+82
+0:08:55.120 --> 0:09:00.480
+corrupted and we were testing some fixes in a branch for that. And then we got this assertion
+
+83
+0:09:00.480 --> 0:09:06.920
+failure. This assertion failure essentially means that when it tried to insert a record
+
+84
+0:09:06.920 --> 0:09:13.760
+that was insert buffered, it ran out of space in the page. And what was the reason? Well,
+
+85
+0:09:13.760 --> 0:09:21.000
+there were some extra records in the page. And it turned out that, well, this is partly
+
+86
+0:09:21.000 --> 0:09:28.920
+by design. Heik Kitori, the creator of InnoDB, he was a friend of lazy deletion or lazy operations.
+
+87
+0:09:28.920 --> 0:09:33.880
+So drop index wouldn't clear anything from the change buffer. It would leave the garbage
+
+88
+0:09:33.880 --> 0:09:39.280
+behind. And later on, if the same page is allocated for something else, then we would
+
+89
+0:09:39.280 --> 0:09:47.000
+pay the price and free the space from the change buffer, delete the records. And in
+
+90
+0:09:47.000 --> 0:09:55.120
+MySQL 5.7, there was a new feature, bulk insert creation or building indexes faster.
+
+91
+0:09:55.120 --> 0:10:02.280
+And that codebase didn't do this adjustment correctly. It only cleared some bit, but it
+
+92
+0:10:02.280 --> 0:10:08.360
+didn't remove the records. And there was a mandatory Oracle security thing I took several
+
+93
+0:10:08.360 --> 0:10:13.080
+years ago before switching to MariaDB. It said something like, complexity is the friend
+
+94
+0:10:13.080 --> 0:10:20.160
+of security bugs. I found it somehow fitting here. So the immediate root cause of this
+
+95
+0:10:20.160 --> 0:10:27.960
+failure was that this new code cleared a bit that says that there are buffer changes for
+
+96
+0:10:27.960 --> 0:10:33.920
+this page. So when somebody is going to use that page, he will see that, okay, there's
+
+97
+0:10:33.920 --> 0:10:39.200
+nothing to do. I don't have to care about the change buffer. And then later on, something
+
+98
+0:10:39.200 --> 0:10:45.640
+adds records to the page. And then these old records from the change buffer will come to
+
+99
+0:10:45.640 --> 0:10:51.960
+the page as part of a merge. And how can we prove this using this RR tool? By the way,
+
+100
+0:10:51.960 --> 0:10:57.040
+you can download the slides from the first in page. And you can also download an attachment
+
+101
+0:10:57.040 --> 0:11:04.160
+that has a script replay recording of the RR session. So I'm only showing some high
+
+102
+0:11:04.160 --> 0:11:09.440
+level view here, but you can download a debugger session that shows the exact commands and
+
+103
+0:11:09.440 --> 0:11:16.160
+the output, which I'm going to present in the next slides. So the short version, how
+
+104
+0:11:16.160 --> 0:11:24.400
+we can prove these claims in the debugger, we let it continue from the start to the crash
+
+105
+0:11:24.400 --> 0:11:30.360
+or the assertion failure. Then we set the break point on a function that was the last
+
+106
+0:11:30.360 --> 0:11:35.800
+one to access the change buffer bitmap bits. And from that function, we get the address
+
+107
+0:11:35.800 --> 0:11:42.440
+of the bitmap bits for this page. And we can set the data watch point on that. And I found
+
+108
+0:11:42.440 --> 0:11:47.640
+this hardware watch points are very powerful tool. It's really much easier for some things
+
+109
+0:11:47.640 --> 0:11:54.080
+when you don't have an idea which code is going to modify or read something. And then
+
+110
+0:11:54.080 --> 0:11:58.720
+based on this watch point, we get some call stacks where this change buffer bits were
+
+111
+0:11:58.720 --> 0:12:04.040
+last changed. And then we set the break points on functions that insert records into the
+
+112
+0:12:04.040 --> 0:12:07.720
+change buffer and delete records from there. And then we observe that, okay, there was
+
+113
+0:12:07.720 --> 0:12:14.440
+nothing to delete records from the, for this page and basically proving this claim. So
+
+114
+0:12:14.440 --> 0:12:22.000
+we are printing the index ID and index name to get some more detail to this proof.
+
+115
+0:12:22.000 --> 0:12:31.480
+Oh, sorry. Okay, so we were unable to reproduce this with a small grammar. We just took something
+
+116
+0:12:31.480 --> 0:12:41.360
+and we got lucky and got the trace and debugged it. A possible consequences of this bug are
+
+117
+0:12:41.360 --> 0:12:46.680
+the wrong results. And that's of course, very difficult to prove. We don't have any testing
+
+118
+0:12:46.680 --> 0:12:53.400
+tools to prove that really, or not many tools, or you could get the crash on change buffer
+
+119
+0:12:53.400 --> 0:12:58.320
+merge. Like here we got, and that change buffer merge could happen anytime, even if you are
+
+120
+0:12:58.320 --> 0:13:03.080
+running check table or check if your table is okay, then before my skull, my, my, maybe
+
+121
+0:13:03.080 --> 0:13:10.400
+10.6, your server would crash because of this change buffer corruption. So in our case,
+
+122
+0:13:10.400 --> 0:13:15.080
+it's what was a page overflow when applying an insert and change buffer doesn't allow
+
+123
+0:13:15.080 --> 0:13:21.680
+any pages splitting. It must fit in the page. In the support case I mentioned one week ago,
+
+124
+0:13:21.680 --> 0:13:27.280
+the case was that the page split failed. It ran out of space. You are taking one page,
+
+125
+0:13:27.280 --> 0:13:32.040
+you are trying to copy part of the records to a new page and it ran out of space. How
+
+126
+0:13:32.040 --> 0:13:40.480
+can that be? It turned out that the page content records for some other index, which apparently
+
+127
+0:13:40.480 --> 0:13:49.640
+had been dropped earlier and that index apparently had not null columns. So the length of a variable
+
+128
+0:13:49.640 --> 0:13:57.160
+length field was interpreted, was stored there for that index where this correct index would
+
+129
+0:13:57.160 --> 0:14:03.760
+have the null bitmap. And then we would read the length of the record from a previous byte
+
+130
+0:14:03.760 --> 0:14:08.880
+and that's how we would get this too long records being copied. Oh, five minutes left.
+
+131
+0:14:08.880 --> 0:14:17.360
+I have to hurry up. So this, the parking, how it goes in detail, we continue to the
+
+132
+0:14:17.360 --> 0:14:23.680
+end of the execution from the start, which, and then we reverse continue to go back from
+
+133
+0:14:23.680 --> 0:14:29.720
+the abort signal. Then we set the temporary break point to this bitmap page access. Then
+
+134
+0:14:29.720 --> 0:14:38.840
+we get, get to that break point and we get the, in a register we happen to have the byte
+
+135
+0:14:38.840 --> 0:14:44.840
+address of the bitmap byte, which we are interested in. And then we reverse continue the, to the
+
+136
+0:14:44.840 --> 0:14:52.840
+changes of that bit byte. So the last occurrence of that was for an insert that was buffered
+
+137
+0:14:52.840 --> 0:15:00.200
+after the add index. And we continue from that. We see that this, the previous occurrence
+
+138
+0:15:00.200 --> 0:15:06.760
+is the add index that is clearing the flag. And from that we can get the page number,
+
+139
+0:15:06.760 --> 0:15:13.440
+which is affected and we can get the index ID and index name and the SQL statement, which
+
+140
+0:15:13.440 --> 0:15:21.920
+is alter table. And then we set some more break points on this insert buffer delete
+
+141
+0:15:21.920 --> 0:15:26.480
+and insert operations, set the condition that we want it only for this page. And then we
+
+142
+0:15:26.480 --> 0:15:32.720
+reverse continue, we get the insert that was buffered before this add index. Apparently
+
+143
+0:15:32.720 --> 0:15:38.960
+there was a drop index in between, but I didn't add statements to get a break point there
+
+144
+0:15:38.960 --> 0:15:47.120
+this time. So the index name is different after the add index and index ID is different.
+
+145
+0:15:47.120 --> 0:15:52.320
+And there was no call to the change buffer deletion. When we continue from this point
+
+146
+0:15:52.320 --> 0:15:58.800
+to the end of the execution, we just reach the assertion failure again without any change
+
+147
+0:15:58.800 --> 0:16:08.760
+buffer record deletion in between. So I'm quoting this finished ski jumper, who apparently
+
+148
+0:16:08.760 --> 0:16:16.880
+was confusing to French phrases. He was wishing him a good trip when he is starting to do
+
+149
+0:16:16.880 --> 0:16:23.560
+the ski jumping. And I'm wishing good trip for anybody who is using the change buffer.
+
+150
+0:16:23.560 --> 0:16:28.640
+So, and the deja vu, yes, we have seen this shutdown hang actually earlier. There was
+
+151
+0:16:28.640 --> 0:16:37.160
+a 10.1, MariaDB 10.1 support customer case. They got this hang and we had to do something
+
+152
+0:16:37.160 --> 0:16:46.560
+to fix that. But in MariaDB 10.5, we made an other change, hopefully to reduce the chances
+
+153
+0:16:46.560 --> 0:16:55.920
+of getting like random change buffer merge bugs because basically after this change buffer
+
+154
+0:16:55.920 --> 0:17:01.680
+merge only happens when SQL statement needs that change buffer merge to happen. No background
+
+155
+0:17:01.680 --> 0:17:07.560
+operation. So we had to adjust that previous fix for the 10.5 code base, but that was not
+
+156
+0:17:07.560 --> 0:17:15.360
+adjusted correctly. And we were not able to reproduce this corruption or this hang earlier.
+
+157
+0:17:15.360 --> 0:17:26.680
+So only quite lately we were able to reproduce it and then we were able to debug it properly.
+
+158
+0:17:26.680 --> 0:17:32.680
+There are some other corruption caused by the change buffer. And one thing I want to
+
+159
+0:17:32.680 --> 0:17:40.640
+notice that in MariaDB 10.6 recently there was a fix that we should not crash on any
+
+160
+0:17:40.640 --> 0:17:45.240
+page corruption. If there are any cases where we are still crashing, I would be interested
+
+161
+0:17:45.240 --> 0:17:52.120
+in details. And this includes a check table when there is a crash, when there is a failure
+
+162
+0:17:52.120 --> 0:17:57.360
+during change buffer merge, it will not cause a crash. There was a mystery bug filed like
+
+163
+0:17:57.360 --> 0:18:06.080
+12 years ago, MySQL bug. The customer got a crash during change buffer merge because
+
+164
+0:18:06.080 --> 0:18:13.360
+the page got empty as a result of applying a purge operation. I can think of several
+
+165
+0:18:13.360 --> 0:18:19.200
+bugs that have been fixed in MariaDB that could be the explanation. The last one, this
+
+166
+0:18:19.200 --> 0:18:27.280
+one from the previous example, that cannot apply because that only was introduced in
+
+167
+0:18:27.280 --> 0:18:39.640
+MySQL 5.7 which they didn't use. And of this list, the 30422, it's a clone of MySQL fix
+
+168
+0:18:39.640 --> 0:18:47.880
+which is applicable to MariaDB 10.3 and 10.4. Others I don't think have been fixed in MySQL
+
+169
+0:18:47.880 --> 0:18:55.440
+yet. So this teaches us that it really pays off to analyze any obscure failure you get
+
+170
+0:18:55.440 --> 0:19:03.680
+from running with RR because there are games in there. And I think that assertions are
+
+171
+0:19:03.680 --> 0:19:08.280
+like lottery tickets. If you don't write assertions in your code, then you can't win
+
+172
+0:19:08.280 --> 0:19:15.600
+these kind of bug findings. And if you sometimes you can lose, you can write a bogus assertion,
+
+173
+0:19:15.600 --> 0:19:19.720
+okay, you make mistake, you correct it and improve the assertion and then hopefully you
+
+174
+0:19:19.720 --> 0:19:29.640
+will get something better later. Yeah, we have some mitigation for this in MariaDB.
+
+175
+0:19:29.640 --> 0:19:41.080
+We don't access the data file when executing drop table. So in that case, we are avoiding
+
+176
+0:19:41.080 --> 0:19:47.840
+maybe more crashes on drop table. And there was a bug in Unity with slow shutdown that
+
+177
+0:19:47.840 --> 0:19:53.840
+the change buffer merge wouldn't check for log file overflow. So if the user got impatient
+
+178
+0:19:53.840 --> 0:19:59.520
+and killed the server because it's taken too long time, then they could end up with unrecoverable
+
+179
+0:19:59.520 --> 0:20:07.240
+database. And some more mitigation that we did, we disabled this change buffer by default,
+
+180
+0:20:07.240 --> 0:20:12.800
+we deprecated the parameter and we removed the change buffer in the 11.0 release. The
+
+181
+0:20:12.800 --> 0:20:20.240
+upgrade code for handling it, it was tested and I hope that if there is some corruption
+
+182
+0:20:20.240 --> 0:20:26.400
+notice during the upgrade, it should still be possible to go back to the earlier version
+
+183
+0:20:26.400 --> 0:20:38.200
+and then do something to correct. Yes, if there are any records in the change buffer,
+
+184
+0:20:38.200 --> 0:20:44.320
+we ignore, we don't trust these bitmap bits. We go through the change buffer records and
+
+185
+0:20:44.320 --> 0:20:54.200
+if there are any, we will apply them. Yeah, so that was basically what I wanted to say.
+
+186
+0:20:54.200 --> 0:21:03.560
+And maybe this last slide, it's a good thing to have a nice layer design. If you optimize
+
+187
+0:21:03.560 --> 0:21:09.040
+things by breaking this layer boundaries, then you're asking for trouble. That's basically
+
+188
+0:21:09.040 --> 0:21:18.280
+what we can learn from this. Question. You said that you fixed a few things in MariaDB
+
+189
+0:21:18.280 --> 0:21:26.920
+and they're not yet fixed in upstream. Are there bugs open upstream for fixing these
+
+190
+0:21:26.920 --> 0:21:34.720
+things? I haven't filed any. I lost my skull bug account when I resigned Oracle. Okay,
+
+191
+0:21:34.720 --> 0:21:42.040
+well, I'll velocity that with you so we can get this fixed in upstream file. Yeah, you
+
+192
+0:21:42.040 --> 0:21:49.040
+are welcome to file bugs and maybe they will be fixed. Especially if it's a crashing bug.
+
+193
+0:21:49.040 --> 0:21:55.520
+Yeah, but you can't repeat them so you have a hard time proving that. Well, there are
+
+194
+0:21:55.520 --> 0:22:02.640
+tools obviously now to do that which weren't obvious before. I'm very persistent. Like
+
+195
+0:22:02.640 --> 0:22:07.240
+once we know it exists in MariaDB and it has been fixed, somebody that is persistent enough
+
+196
+0:22:07.240 --> 0:22:13.240
+should be able to. Yeah, but Oracle is not allowed to look at Oracle. Yes, I know. So
+
+197
+0:22:13.240 --> 0:22:19.240
+how can they know how we can do it? I am so I can open the bug and I can't. You can't
+
+198
+0:22:19.240 --> 0:22:28.240
+copy the code because then they're not allowed to see it. I'll find a bug report. Yes. How
+
+199
+0:22:28.240 --> 0:22:35.800
+bad is the RR over 10? It is very bad. I mean, it's running, if you have multiple threats
+
+200
+0:22:35.800 --> 0:22:40.880
+or processes, it's running them in a single on a single CPU core at the time. So that's
+
+201
+0:22:40.880 --> 0:22:46.840
+why we are running hundreds of servers in parallel on a single server for several hours
+
+202
+0:22:46.840 --> 0:22:54.720
+to get these traces. For normal debugging, maybe twice as slow as that. Actually also
+
+203
+0:22:54.720 --> 0:22:59.600
+for normal debugging, there have been cases like if you have lots of conditional branches
+
+204
+0:22:59.600 --> 0:23:07.560
+in your code, like this debug library or performance schema, that's causing those branches are
+
+205
+0:23:07.560 --> 0:23:12.480
+never taken, but because RR is interested in conditional branches, I have seen a case
+
+206
+0:23:12.480 --> 0:23:21.080
+where if I compile without these things, I get a crash or problem in, let's say like
+
+207
+0:23:21.080 --> 0:23:25.680
+three seconds. And then I was curious, how long does it take if I use this stupid compilation
+
+208
+0:23:25.680 --> 0:23:32.080
+options with this extra conditions for that particular thing, I interrupted it after two
+
+209
+0:23:32.080 --> 0:23:39.800
+hours. So it was 7,000 seconds versus three seconds. So don't use conditional branches
+
+210
+0:23:39.800 --> 0:23:46.160
+or unnecessary like debugging. Turn off all the code that you don't need. The conditional
+
+211
+0:23:46.160 --> 0:23:53.080
+branches are evil for RR. But I have only four ways to debug code. There are no problems.
+
+212
+0:23:53.080 --> 0:24:01.920
+But maybe you are not using it on like multi-threaded with context, switches and so on. Yeah, for
+
+213
+0:24:01.920 --> 0:24:24.840
+single thread, there is basically no overhead.
+

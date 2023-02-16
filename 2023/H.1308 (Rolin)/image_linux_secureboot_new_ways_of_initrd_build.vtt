@@ -1,0 +1,745 @@
+WEBVTT
+
+00:00.000 --> 00:11.800
+Please sit down if you can.
+
+00:11.800 --> 00:21.400
+So the next speaker is speaking of Yandere Smek and he will talk about MK OSI INIT ADI,
+
+00:21.400 --> 00:27.640
+a new project to build INIT ADIs from system packages.
+
+00:27.640 --> 00:33.480
+Yeah, so my talk builds on previous talks.
+
+00:33.480 --> 00:42.040
+So my name is Bishak, I work in Red Hat in the Plumbers group and I work on System B and
+
+00:42.040 --> 00:51.920
+Fedora, Rust2RPM, RPM, Autospec, build tools and stuff like that.
+
+00:51.920 --> 01:04.920
+And so we heard today about a new approach to delivering the kernel and the user space,
+
+01:04.920 --> 01:09.040
+the root file system to computers.
+
+01:09.040 --> 01:19.240
+And I mean all the stuff that was mentioned today, so secure boot to trust your code,
+
+01:19.240 --> 01:28.560
+PCR measurements, boot phases, locking secrets to the PCR state.
+
+01:28.560 --> 01:37.960
+This creates a situation where we should think how we put, how we build INIT ADIs and I think
+
+01:37.960 --> 01:49.120
+it's a good opportunity to kind of throw away a lot of old approaches and use a new approach.
+
+01:49.120 --> 01:58.640
+And doing the things the way that I'm talking about today would have been very hard a few
+
+01:58.640 --> 02:06.160
+years ago because we didn't have those mechanisms that we have right now, like credentials and
+
+02:06.160 --> 02:08.360
+system extensions.
+
+02:08.360 --> 02:21.960
+So right, Luca talked about system extensions, so the compact disk images that carry a file
+
+02:21.960 --> 02:30.760
+system and one partition, the inverted data in another partition and a signature for the
+
+02:30.760 --> 02:39.320
+root hash of the de-inverted data in a third partition and this is squished into an image
+
+02:39.320 --> 02:48.520
+with minimal padding, so actually it sounds kind of awful but it's basically just a file
+
+02:48.520 --> 02:53.840
+system image with some metadata that can be trusted.
+
+02:53.840 --> 03:03.320
+And those tools allow us to do things in a completely different fashion than we used
+
+03:03.320 --> 03:05.720
+to do them in the past.
+
+03:05.720 --> 03:07.240
+So what do we do now?
+
+03:07.240 --> 03:12.680
+I mean, there's various different distributions but the approach is generally that on a general
+
+03:12.680 --> 03:20.040
+purpose distribution like Fedora, the user wants to have an INIT AD so they scrape some
+
+03:20.040 --> 03:25.600
+files of the file system, whatever is installed, sometimes with some local modifications, sometimes
+
+03:25.600 --> 03:33.040
+not, you use LDD to figure out what libraries should be loaded and whenever there are extra
+
+03:33.040 --> 03:38.320
+files that need to be put in the INIT ID, somebody has to remember to do that.
+
+03:38.320 --> 03:43.600
+So essentially we duplicate the packaging layer.
+
+03:43.600 --> 03:50.480
+And we do it on every user machine so this costs time during upgrades, it's actually
+
+03:50.480 --> 03:55.560
+quite noticeable because of compression.
+
+03:55.560 --> 04:03.280
+And so this was before we booted and after we have booted into the INIT ID, generally,
+
+04:03.280 --> 04:08.120
+for example, the Fedora INIT ID, they have system D but they also have lots of extra
+
+04:08.120 --> 04:12.920
+functionality added that came before system D was there.
+
+04:12.920 --> 04:19.960
+And over time, this functionality has been moving into system D. And now we are at the
+
+04:19.960 --> 04:21.520
+point where it's completely useless.
+
+04:21.520 --> 04:27.680
+I mean, the part that is apart from system D is not useful because we could just get
+
+04:27.680 --> 04:35.920
+rid of it and because it is implemented by system D in a better way in general.
+
+04:35.920 --> 04:45.600
+And people here, okay, now we should do something, access a file system in the INIT ID, let's
+
+04:45.600 --> 04:47.640
+like some patch to do it.
+
+04:47.640 --> 04:48.640
+And why?
+
+04:48.640 --> 04:53.400
+I mean, we should just do the same thing we do in the host file system and use proper
+
+04:53.400 --> 04:54.440
+tools.
+
+04:54.440 --> 04:59.440
+And if those tools are not good enough, then we should fix them so that it's nice to use
+
+04:59.440 --> 05:05.560
+them in the host file system and they're also nicer to use in the INIT ID.
+
+05:05.560 --> 05:13.080
+And it's like a legacy that this INIT ID environment used to be much different.
+
+05:13.080 --> 05:17.800
+But we use system D and system D does the setup where it sets up slash proc and slash
+
+05:17.800 --> 05:23.320
+dev and mounts everything that needs to be mounted.
+
+05:23.320 --> 05:29.680
+And the INIT ID doesn't have to be.
+
+05:29.680 --> 05:35.440
+The fact that it's different from a real system is just something that we should get rid of.
+
+05:35.440 --> 05:41.240
+And so we have this duplication where we have the system D way to do things and the non-system
+
+05:41.240 --> 05:43.680
+D way to do things in parallel.
+
+05:43.680 --> 05:48.680
+It just adds complexity and it's not beneficial.
+
+05:48.680 --> 05:57.680
+And everybody does the INIT ID in a very, very different way, every distribution.
+
+05:57.680 --> 06:02.360
+And even some distributions have multiple ways.
+
+06:02.360 --> 06:08.000
+I know that one of the goals of Trapwood was to unify the approach between distributions
+
+06:08.000 --> 06:10.000
+that didn't really work.
+
+06:10.000 --> 06:15.680
+So this is another approach we'll see in 10 years.
+
+06:15.680 --> 06:18.080
+So we sign stuff.
+
+06:18.080 --> 06:23.080
+If we sign the kernel but not the INIT ID, then we are just pretending.
+
+06:23.080 --> 06:24.880
+It's a waste of time.
+
+06:24.880 --> 06:27.040
+We need to sign both.
+
+06:27.040 --> 06:35.320
+But in general, users want to have the thing, users don't want to play with local key management.
+
+06:35.320 --> 06:36.600
+It should be signed by the distro.
+
+06:36.600 --> 06:41.560
+If it's signed by the distro, then the INIT ID must be also built by the distro.
+
+06:41.560 --> 06:47.480
+So all this functionality that we have to inject things into the ID based on local configuration,
+
+06:47.480 --> 06:50.840
+well we cannot use it.
+
+06:50.840 --> 06:56.160
+So essentially the idea is that, OK, if we are going to move the whole build of the INIT
+
+06:56.160 --> 07:01.520
+ID into the distro infrastructure and build it like a package, then let's do it in a clean
+
+07:01.520 --> 07:04.360
+way.
+
+07:04.360 --> 07:11.320
+And for me, this means taking a declarative set of distribution package names, letting
+
+07:11.320 --> 07:17.200
+the distribution package manager figure out all the dependencies, and then using the distribution
+
+07:17.200 --> 07:26.000
+package manager to put the files in a directory, and then just zipping it up into any INIT
+
+07:26.000 --> 07:29.480
+ID.
+
+07:29.480 --> 07:40.960
+So before I talk about the specifics of how to do this, let's talk about some problems
+
+07:40.960 --> 07:45.000
+that immediately appear.
+
+07:45.000 --> 07:50.400
+If we try to build one INIT ID for, let's say, whole Fedora, then we will end up with
+
+07:50.400 --> 07:58.960
+this gigantic blob that will take 60 seconds to load whenever the kernel boots.
+
+07:58.960 --> 08:00.760
+This is not nice.
+
+08:00.760 --> 08:07.000
+So we need different INIT IDs for different people.
+
+08:07.000 --> 08:13.640
+And one option is to just build multiple variants, and we definitely plan to do this.
+
+08:13.640 --> 08:19.720
+For example, a simplified INIT ID that works for VMs that only has some basic stuff that
+
+08:19.720 --> 08:27.840
+you need in the VM and no other drivers and no other tools, and I know one for laptops
+
+08:27.840 --> 08:28.840
+and so on.
+
+08:28.840 --> 08:30.320
+But this only scales so far.
+
+08:30.320 --> 08:35.560
+We can have maybe five variants, but anything more than that would be annoying.
+
+08:35.560 --> 08:41.400
+And the other approach is to use systemd extensions.
+
+08:41.400 --> 08:49.320
+So the idea would be that you have the basic INIT ID, and let's say you want, I don't know,
+
+08:49.320 --> 08:55.880
+it's in your INIT ID, and you install this additional extension.
+
+08:55.880 --> 09:00.120
+And I should mention what happens with trust here.
+
+09:00.120 --> 09:10.040
+So the bootloader verifies the kernel and the INIT ID before loading it.
+
+09:10.040 --> 09:19.000
+And then after the INIT ID has been loaded, and we want to use the INIT ID code loads
+
+09:19.000 --> 09:24.480
+the extension, so it checks the signature of the extension before loading it.
+
+09:24.480 --> 09:31.480
+So systemd extensions are a mechanism to add code in a way that it is trusted before, I
+
+09:31.480 --> 09:36.800
+mean the trust is checked before it is used.
+
+09:36.800 --> 09:46.920
+And if we use UKIs, we need some way to inject configuration into the...
+
+09:46.920 --> 09:53.560
+Well, I mean we build an image that's supposed to work everywhere, so it cannot have local
+
+09:53.560 --> 09:58.080
+configuration, and we need to deal with this issue somehow.
+
+09:58.080 --> 10:03.600
+And one approach is to use the just auto discovery of partitions and not have any local configuration,
+
+10:03.600 --> 10:07.480
+which is nice if we can make it work.
+
+10:07.480 --> 10:17.280
+But a more general approach is to use credentials and to inject a configuration that has been
+
+10:17.280 --> 10:22.640
+signed and bound somehow to the local system using systemd credentials.
+
+10:22.640 --> 10:27.520
+And I would say that this is an area of active research, because I don't think that anybody
+
+10:27.520 --> 10:33.240
+really knows how this is supposed to work in details.
+
+10:33.240 --> 10:44.400
+And I wanted to mention that if we build INIT IDs from packages, we have builder reproducibility,
+
+10:44.400 --> 10:49.520
+because we have an exact list of packages that was used, and we can download them again
+
+10:49.520 --> 11:01.160
+and unpack them again in the same way, and we should have bit for bit identical result,
+
+11:01.160 --> 11:06.440
+which is good for checking that the EID was put together correctly, but it's also very
+
+11:06.440 --> 11:11.480
+useful if you want to build some system extension afterwards, because you build the extension
+
+11:11.480 --> 11:18.480
+by adding additional stuff and then taking the difference between the old image and the
+
+11:18.480 --> 11:20.800
+new image.
+
+11:20.800 --> 11:25.160
+And the tool that we are using for this is...
+
+11:25.160 --> 11:34.480
+Well, the project is called mqsi-interd, because it takes mqsi, which is a very simple tool
+
+11:34.480 --> 11:45.280
+that takes a list of packages and calls the package manager to download the packages and
+
+11:45.280 --> 11:47.240
+put them into an image.
+
+11:47.240 --> 11:58.840
+And it does all the things that we happen to need, so it supports GPT tables and the
+
+11:58.840 --> 12:04.200
+mvarity and signatures, so we can do system extensions, and it can also do archives, and
+
+12:04.200 --> 12:08.840
+this is what you need for INIT RAMFS format.
+
+12:08.840 --> 12:19.720
+And mqsi itself is just a set of configuration scripts for configuration files for mqsi,
+
+12:19.720 --> 12:25.440
+right now only for Fedora, but the concept carries very cleanly into other distributions,
+
+12:25.440 --> 12:30.760
+so I think that if it works in Fedora, maybe other people will pick it up too.
+
+12:30.760 --> 12:35.080
+So just a list of packages and some local...
+
+12:35.080 --> 12:46.080
+Some tweaks to turn the installed packages into an INITRD, and the same for system extensions.
+
+12:46.080 --> 12:51.600
+And well, in general, the plan is to do it on the distro side, but right now this hasn't
+
+12:51.600 --> 12:56.320
+happened yet, so we have a kernel install plugin, and you update the kernel and you
+
+12:56.320 --> 13:00.120
+very slowly build the INITRD from packages on the local system.
+
+13:00.120 --> 13:06.480
+It's not very efficient, but it works surprisingly stably.
+
+13:06.480 --> 13:14.440
+And for Fedora 39, we want to propose changes to the build system to allow INITRD to be
+
+13:14.440 --> 13:19.400
+built in this way in the build system and deliver those packages for people who want
+
+13:19.400 --> 13:20.400
+to try it out.
+
+13:20.400 --> 13:26.520
+I think it's years from being the default, if ever.
+
+13:26.520 --> 13:30.480
+So, this works.
+
+13:30.480 --> 13:34.680
+It works without too much issue.
+
+13:34.680 --> 13:42.520
+The INITRDs are bigger, but they're not infinitely bigger, they're maybe just twice as big.
+
+13:42.520 --> 13:49.640
+And the biggest difference surprisingly comes from kernel modules, because what Drakut and
+
+13:49.640 --> 13:56.000
+other INITRD builders do, they select a specific list of kernel modules that are needed for
+
+13:56.000 --> 13:59.720
+the local system.
+
+13:59.720 --> 14:05.000
+I wanted to avoid this, I wanted to take all the modules from a kernel package and just
+
+14:05.000 --> 14:11.080
+put them in without knowledge about specific modules.
+
+14:11.080 --> 14:17.920
+I think that this is not feasible, we'll have to do some kind of filtering too.
+
+14:17.920 --> 14:28.880
+But the code itself, there's very little difference in the size of executables and libraries
+
+14:28.880 --> 14:30.720
+installed into the INITRD.
+
+14:30.720 --> 14:38.000
+And this is because the code that we use in the INITRD is the same code from the host
+
+14:38.000 --> 14:44.560
+file system, so it has the same library dependencies and you need to put the same set of libraries,
+
+14:44.560 --> 14:48.960
+and actually most of the space is taken by libraries, because the functionality has been
+
+14:48.960 --> 14:55.960
+moving more and more into shared libraries because we build more complicated stacks.
+
+14:55.960 --> 15:04.680
+So this means that in principle the size overhead is not too big and can be reduced.
+
+15:04.680 --> 15:11.760
+And this works in some cases, but for simple cases, for laptops and for some types of storage,
+
+15:11.760 --> 15:16.080
+not certainly not for everything.
+
+15:16.080 --> 15:18.120
+And what do we get?
+
+15:18.120 --> 15:23.880
+We have less things, we use the package dependency resolution mechanism so we don't duplicate
+
+15:23.880 --> 15:31.240
+packaging, we don't need to care about installation because we have RPM to do it for us or whatever.
+
+15:31.240 --> 15:37.560
+We have replaceable builds because we don't take files from the host and everybody has
+
+15:37.560 --> 15:44.840
+the same image which is important for people trying to debug errors reported by users.
+
+15:44.840 --> 15:50.920
+And if we build things centrally, we can assign them, and we use system D and just get rid
+
+15:50.920 --> 15:55.000
+of the extra stuff so our life is simpler.
+
+15:55.000 --> 16:02.040
+And there's a common set of things that people complain about, like arrays when this is discussed.
+
+16:02.040 --> 16:06.820
+So I wanted to underline that system D is already used in the INITRD so we're just removing
+
+16:06.820 --> 16:08.800
+things, not adding new things.
+
+16:08.800 --> 16:16.800
+And system D sets up the environment so things are already like they should be.
+
+16:16.800 --> 16:22.160
+So all the extra work that people have put into having scripts that work without slash
+
+16:22.160 --> 16:26.440
+prop mounted, it's not useful.
+
+16:26.440 --> 16:34.280
+And we remove stuff and we would be moving from scripts to demands anyway, right?
+
+16:34.280 --> 16:45.320
+And shared libraries because if somebody tells you to provide to authentication, for the
+
+16:45.320 --> 16:48.720
+root disk, you're not going to script it, you're going to use some compiled code to
+
+16:48.720 --> 16:50.720
+do it anyway.
+
+16:50.720 --> 16:59.840
+And I don't know, netling, timeout, retries, localization, D bus, all this stuff is just
+
+16:59.840 --> 17:01.960
+semi incompatible with scripting.
+
+17:01.960 --> 17:08.160
+And we would be moving in the direction of normal compiled code anyway.
+
+17:08.160 --> 17:21.360
+And so in case the ID itself is kind of, it's implemented and mostly works.
+
+17:21.360 --> 17:24.080
+The stuff that is happening is in the surrounding areas.
+
+17:24.080 --> 17:32.200
+So in particular, this development in system D related to credentials is very important
+
+17:32.200 --> 17:36.640
+because we want to make use of this.
+
+17:36.640 --> 17:40.000
+And support for unified kernel images is growing.
+
+17:40.000 --> 17:52.300
+There are patches, there's a link here, patches for grab two to load unified kernel images.
+
+17:52.300 --> 17:58.880
+And I mentioned that we want to build MKSI interior images in Fedora, so this will require
+
+17:58.880 --> 18:02.640
+changes in the code you build system.
+
+18:02.640 --> 18:05.560
+And that's what I have.
+
+18:05.560 --> 18:09.920
+I have to have time for questions.
+
+18:09.920 --> 18:12.000
+One minute, three minutes.
+
+18:12.000 --> 18:13.000
+Okay.
+
+18:13.000 --> 18:20.520
+When I was thinking about systems that boot from network and for instance, where the root
+
+18:20.520 --> 18:27.960
+system is on ISKASE or NVM over fiber, you need some information that is really device
+
+18:27.960 --> 18:28.960
+specific.
+
+18:28.960 --> 18:31.760
+How can we separate that from the init ID?
+
+18:31.760 --> 18:37.840
+Because you want a single init ID for all the systems.
+
+18:37.840 --> 18:38.840
+Yes.
+
+18:38.840 --> 18:44.800
+So one option is to put it on the kernel command line if this is an option.
+
+18:44.800 --> 18:53.600
+And the second option is to provide a credential that is unpacked and becomes part of the configuration
+
+18:53.600 --> 18:57.760
+in the init ID.
+
+18:57.760 --> 19:03.880
+So essentially, yes, you just inject this configuration, but it wouldn't be part of
+
+19:03.880 --> 19:04.880
+the init ID itself.
+
+19:04.880 --> 19:09.600
+It would be delivered in a different way.
+
+19:09.600 --> 19:10.600
+Same questions.
+
+19:10.600 --> 19:15.480
+What would you do if you want to have files from the local file system?
+
+19:15.480 --> 19:20.680
+For example, you need a custom mount command that does more than a feature mount.
+
+19:20.680 --> 19:24.640
+Well, I would say ask why do you need that?
+
+19:24.640 --> 19:28.360
+But if you need that, then just do the build locally.
+
+19:28.360 --> 19:36.440
+And the difference is, I think it was kind of the same question as before about unified
+
+19:36.440 --> 19:37.440
+kernel images.
+
+19:37.440 --> 19:38.440
+You can do the build locally.
+
+19:38.440 --> 19:49.760
+You just don't have the distro signatures.
+
+19:49.760 --> 19:50.760
+Thank you.
+
+19:50.760 --> 19:55.160
+It might be a bit similar to the previous question, but thinking from a distribution
+
+19:55.160 --> 20:00.840
+standpoint, there is a lot of hardware out there which is incompatible with default configurations
+
+20:00.840 --> 20:02.720
+or default init urges.
+
+20:02.720 --> 20:04.960
+And you need to add patches to kernels.
+
+20:04.960 --> 20:09.400
+You need to add special kernel modules which are not enabled by default.
+
+20:09.400 --> 20:17.160
+What is going to be the flow to support this hardware to use it on distribution by default?
+
+20:17.160 --> 20:22.920
+So I think that this is much less common than people think, right?
+
+20:22.920 --> 20:28.520
+Because I mean, how many people build their kernels nowadays?
+
+20:28.520 --> 20:29.880
+Small minority.
+
+20:29.880 --> 20:36.520
+And from the distro point of view, this is already outside of scope, right?
+
+20:36.520 --> 20:41.920
+If you report a bug that your custom compiled kernel does not work, then nobody is going
+
+20:41.920 --> 20:50.480
+to help you because people have too much bugs reported for the standard distribution.
+
+20:50.480 --> 20:56.000
+The existing ways of building things locally, they will always be there, right?
+
+20:56.000 --> 20:57.360
+I mean, they are not going away.
+
+20:57.360 --> 21:02.440
+So basically the answer is, well, I mean, if you are doing something specific, then
+
+21:02.440 --> 21:03.920
+you keep doing this specific thing.
+
+21:03.920 --> 21:11.240
+And this is the way to make the life for the distro easier, but it's not going to cover
+
+21:11.240 --> 21:16.560
+all cases, maybe like 90%.
+
+21:16.560 --> 21:27.160
+Any more questions?
+
+21:27.160 --> 21:31.240
+You mentioned kernel model making the entire bigger.
+
+21:31.240 --> 21:35.640
+Could this be shipped in a standard extension somehow?
+
+21:35.640 --> 21:36.720
+Can you repeat?
+
+21:36.720 --> 21:43.320
+Could you ship the kernel models which are in the internet in system extension instead?
+
+21:43.320 --> 21:51.400
+So the kernel and the initial internet, the kernel must have enough stuff built into to
+
+21:51.400 --> 21:58.400
+understand the int rd and the int rd must have enough modules to be able to load system
+
+21:58.400 --> 21:59.640
+extensions.
+
+21:59.640 --> 22:08.120
+But once you do that, like you can have an extension with kernel modules and whatever.
+
+22:08.120 --> 22:10.680
+Yes.
+
+22:10.680 --> 22:17.240
+So last question.
+
+22:17.240 --> 22:24.680
+Is there a path to getting your int ramfs core from somewhere and running a different
+
+22:24.680 --> 22:25.680
+distro?
+
+22:25.680 --> 22:32.280
+Like essentially to your project or some project providing the core int ramfs with the system
+
+22:32.280 --> 22:35.400
+D inside it and everything inside of it.
+
+22:35.400 --> 22:36.680
+Get the modules from elsewhere.
+
+22:36.680 --> 22:40.680
+And then when you pivot, is that a hard line that you can live?
+
+22:40.680 --> 22:49.240
+I think that technically it's doable because system D is kind of used everywhere and there's
+
+22:49.240 --> 22:51.280
+really no reason why it wouldn't work.
+
+22:51.280 --> 23:01.400
+I assume that distro would want their own code in the int rd, but technically it's not
+
+23:01.400 --> 23:02.400
+required.
+
+23:02.400 --> 23:04.120
+Okay, thank you.
+
+23:04.120 --> 23:10.560
+I mean, if there's this general requirement that because there's a switch route where
+
+23:10.560 --> 23:16.800
+the state is passed from the int rd to the host and you don't want to pass the state
+
+23:16.800 --> 23:24.200
+from a newer system D to an older system D. So the int rd would have to be just older,
+
+23:24.200 --> 23:30.520
+old enough.
+
+23:30.520 --> 23:37.520
+Thank you very much.
