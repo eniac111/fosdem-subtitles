@@ -1,0 +1,1156 @@
+1
+0:00:00.000 --> 0:00:07.000
+Hello, thanks everybody for coming. I will be talking today about what we know about
+
+2
+0:00:09.760 --> 0:00:16.480
+how Firefox uses power, what we can know about it, what we can do about it. First, what we
+
+3
+0:00:16.480 --> 0:00:21.480
+will cover today. So first, why do we care about this topic? Then how can we understand
+
+4
+0:00:21.480 --> 0:00:25.920
+power used locally, which means like if Firefox is using too much power on your own computer,
+
+5
+0:00:25.920 --> 0:00:30.360
+what can you do about it? And then how can we understand it about all users in general
+
+6
+0:00:30.360 --> 0:00:34.920
+in the world, so the entire race populations? And I will finish by explaining what we have
+
+7
+0:00:34.920 --> 0:00:40.800
+done, what we have improved and what we are still doing. So first, why do we care? There
+
+8
+0:00:40.800 --> 0:00:45.840
+are really two different sets of reasons. The first one is user experience. We very
+
+9
+0:00:45.840 --> 0:00:50.280
+frequently see users complaining that, okay, Firefox is using too much resources, too much
+
+10
+0:00:50.280 --> 0:00:55.320
+CPU. My computer is noisy, like the fans are making noise, they are going at full speed.
+
+11
+0:00:55.320 --> 0:01:01.040
+Or laptop is hot, if people are using a laptop. Or maybe the battery life is too short. So
+
+12
+0:01:01.040 --> 0:01:06.160
+all of those are reasons for an individual to want to use less power. There is another
+
+13
+0:01:06.160 --> 0:01:11.720
+set of reasons, which is sustainability. Mozilla cares about sustainability, made climate
+
+14
+0:01:11.720 --> 0:01:18.720
+commitments about being carbon neutral, about producing your greenhouse gas footprint. And
+
+15
+0:01:18.760 --> 0:01:23.200
+because we are Mozilla, we do things in the open. We want to lead on this and do it openly.
+
+16
+0:01:23.200 --> 0:01:28.480
+We want to share our tools, any material we have on this, methodologies. And also we want
+
+17
+0:01:28.480 --> 0:01:34.320
+to improve our products so that they are more sustainable. And the reason why we care so
+
+18
+0:01:34.320 --> 0:01:39.800
+much about our product is because when estimating our carbon footprint, because we have many
+
+19
+0:01:39.800 --> 0:01:46.480
+users, the use of our product is actually 98% of our footprint. So playing less, having
+
+20
+0:01:46.480 --> 0:01:50.840
+more efficient offices, this is all very great, but if we want to save a lot of power, that's
+
+21
+0:01:50.840 --> 0:01:56.120
+really looking at the product that we should look at.
+
+22
+0:01:56.120 --> 0:02:00.320
+So I said we will look locally first because I think there are some people in the room
+
+23
+0:02:00.320 --> 0:02:03.760
+who likely think, Firefox uses too much power on my computer, I want the battery to last
+
+24
+0:02:03.760 --> 0:02:08.040
+longer, and that's a very valued use case. And if we want to optimize for everybody,
+
+25
+0:02:08.040 --> 0:02:12.400
+we want first to be able to optimize to have it running correctly on one specific machine
+
+26
+0:02:12.400 --> 0:02:16.520
+in front of us before trying to go at scale. So I will present a few tools that we have
+
+27
+0:02:16.520 --> 0:02:22.720
+for this. But first I will explain how Firefox uses power. It's desktop applications, so
+
+28
+0:02:22.720 --> 0:02:28.800
+like any other computer application, it's using CPU time, using GPU time, waking up
+
+29
+0:02:28.800 --> 0:02:33.160
+CPUs, and actually CPUs are pretty good at saving power when we ask them to do nothing.
+
+30
+0:02:33.160 --> 0:02:37.440
+They go into deep sleep mode, they use almost no power. The problem is if we keep waking
+
+31
+0:02:37.440 --> 0:02:41.680
+them up, they can't really sleep, and that wastes a lot of power. And then there's a
+
+32
+0:02:41.680 --> 0:02:46.480
+few more things that we can do that use a little bit of power but not as much, like
+
+33
+0:02:46.480 --> 0:02:50.680
+transmitting network packets, for example, or writing to disks. And they are not where
+
+34
+0:02:50.680 --> 0:02:56.120
+we should focus our time if we really want to have a big impact. So this is how we use
+
+35
+0:02:56.120 --> 0:03:00.440
+power. And next, how we waste power. It's almost the same thing, the only difference
+
+36
+0:03:00.440 --> 0:03:06.120
+is when we do it for no user benefit. If we use CPU time and the user doesn't see a benefit
+
+37
+0:03:06.120 --> 0:03:10.360
+in what we are doing with the CPU, it's a waste. And same for all the other ways we
+
+38
+0:03:10.360 --> 0:03:17.480
+could use resources. And some typical ways to waste power is waking up threads too often,
+
+39
+0:03:17.480 --> 0:03:22.240
+playing animations even though they are completely invisible, or more generally doing things
+
+40
+0:03:22.240 --> 0:03:32.560
+in the background, things that have no visible effects. So typically when someone wants to
+
+41
+0:03:32.560 --> 0:03:37.560
+understand local power use, there's two reasons. Either Firefox is supposed to be guilty of
+
+42
+0:03:37.560 --> 0:03:42.200
+using too much power, there's like one core used at 100%, sometimes even more than one
+
+43
+0:03:42.200 --> 0:03:47.720
+core. Or sometimes the user is looking at the operating system task manager for a completely
+
+44
+0:03:47.720 --> 0:03:54.400
+different reason and notices that, okay, there are some Firefox processes that should be
+
+45
+0:03:54.400 --> 0:03:57.400
+idle because Firefox is supposed to be doing nothing, it's in the background, but it's
+
+46
+0:03:57.400 --> 0:04:05.240
+using 1% of the CPU or 0. something. Why? It used to be difficult to figure out answers
+
+47
+0:04:05.240 --> 0:04:09.120
+to those questions, we now have good tooling for it. So the first tool I wanted to share
+
+48
+0:04:09.120 --> 0:04:14.840
+is the Firefox task manager. You can open it by typing about processes in the address
+
+49
+0:04:14.840 --> 0:04:21.240
+bar. You can also use the shift escape keyboard shortcut that will open it directly. And it's
+
+50
+0:04:21.240 --> 0:04:25.520
+very similar to a task manager you would see in an operating system. It's showing you a
+
+51
+0:04:25.520 --> 0:04:33.760
+list of processes, how much memory is used by each, how much memory and CPU. But unlike
+
+52
+0:04:33.760 --> 0:04:37.800
+the operating system, it knows exactly which tab we are loading in which process. So if
+
+53
+0:04:37.800 --> 0:04:42.040
+you see that there's one process that's using a lot of CPU, and you see that it's a tab
+
+54
+0:04:42.040 --> 0:04:45.760
+that you actually don't really care about, you can just close that tab and this is done.
+
+55
+0:04:45.760 --> 0:04:49.520
+Because very often we have people who say, oh, Firefox is a lot of CPU, but you know
+
+56
+0:04:49.520 --> 0:04:54.600
+I have 50 tabs, so maybe it's because we've made it have Firefox is a lot. Naturally,
+
+57
+0:04:54.600 --> 0:04:58.000
+very often it's just there's one tab that's misbehaving, and finding quickly the right
+
+58
+0:04:58.000 --> 0:05:03.040
+one and closing it is the most efficient way to fix it. Something else I want to show on
+
+59
+0:05:03.040 --> 0:05:09.080
+this is that the numbers, the percentage of CPU's are very precious here. A lot more than
+
+60
+0:05:09.080 --> 0:05:14.920
+on the operating system task managers. For example, on the third process here you see
+
+61
+0:05:14.920 --> 0:05:21.080
+0.0, 11 percent. On the operating system you just see 0 in this case. And the reason why
+
+62
+0:05:21.080 --> 0:05:25.200
+we want to show it when it's almost nothing is because almost nothing means we are still
+
+63
+0:05:25.200 --> 0:05:30.480
+waking up the CPU to do a little bit of something. And we want to be able to catch this. Because
+
+64
+0:05:30.480 --> 0:05:35.280
+we use this kind of tooling to find real bugs. This is a screenshot captured on Nike. If
+
+65
+0:05:35.280 --> 0:05:38.920
+you are on a release build you won't see the thread names unless you enable it in about
+
+66
+0:05:38.920 --> 0:05:46.640
+config. Okay, so let's assume you have found that there's a real problem there and it's
+
+67
+0:05:46.640 --> 0:05:50.960
+not a tab you can easily close. The next step, which is more in the tooling, is using the
+
+68
+0:05:50.960 --> 0:05:55.440
+Firefox profiler. I won't go into details on the Firefox profiler because the next presentation
+
+69
+0:05:55.440 --> 0:06:00.640
+is also about the profiler. But I will say that we recently added a preset for power
+
+70
+0:06:00.640 --> 0:06:06.480
+profiling which configures the profiler in a way that causes very little overhead. And
+
+71
+0:06:06.480 --> 0:06:12.240
+we also have a power profiling mode that was added recently that will be able to say how
+
+72
+0:06:12.240 --> 0:06:20.560
+many watts we used, not just how much CPU. So you can enable it quickly with this preset.
+
+73
+0:06:20.560 --> 0:06:26.160
+I just wanted to show an example of how precise the measurement can be. This is a profile
+
+74
+0:06:26.160 --> 0:06:31.800
+showing Firefox doing nothing. There was just one thing that was left. It was the cursor
+
+75
+0:06:31.800 --> 0:06:37.440
+in the address bar. It was blinking. On all the spikes that you can see in here, they
+
+76
+0:06:37.440 --> 0:06:42.240
+are whenever the cursor appears or disappears. And here we could select this area and see
+
+77
+0:06:42.240 --> 0:06:46.880
+in the tool tip exactly how much power we used to do this tiny thing. So anything we
+
+78
+0:06:46.880 --> 0:06:53.560
+do, we can see it in the profiler, see how much power we used and correlate. Honestly,
+
+79
+0:06:53.560 --> 0:06:57.720
+I never thought we could see things like this. I thought we could see bigger things like
+
+80
+0:06:57.720 --> 0:07:03.200
+loading a page but blinking the cursor, that was a surprise. And a good one. Another thing
+
+81
+0:07:03.200 --> 0:07:07.200
+in the profiler that I wanted to share, and it's the last one because the next talk will
+
+82
+0:07:07.200 --> 0:07:11.520
+be all about the profiler, is the profiler records many markers. And especially I wanted
+
+83
+0:07:11.520 --> 0:07:16.000
+to show the awake and vulnerable markers that make it easy to see why we were waking up
+
+84
+0:07:16.000 --> 0:07:21.680
+of thread. Whenever the thread wakes up, there's an awake marker. It often says which priority
+
+85
+0:07:21.680 --> 0:07:26.920
+the thread was in from the operating system point of view and which core of a thing run.
+
+86
+0:07:26.920 --> 0:07:31.600
+And runnable markers only exist on nightly but they say exactly what we run at that time,
+
+87
+0:07:31.600 --> 0:07:36.600
+which is very convenient to then fail a bug if it's something we should not be running.
+
+88
+0:07:36.600 --> 0:07:43.840
+One last thing there, task manager. If you hover with a mouse next to the PID, there's
+
+89
+0:07:43.840 --> 0:07:47.760
+a profiler icon that appears. If you click it, it will profile for five seconds the entire
+
+90
+0:07:47.760 --> 0:07:51.200
+process. A few seconds later, you will see a tab opening that shows everything happening
+
+91
+0:07:51.200 --> 0:07:58.560
+in that process. That's all I will say about troubleshooting local excessive power use.
+
+92
+0:07:58.560 --> 0:08:02.840
+I hope you will make good use of the tools I was just showing. And I will talk about
+
+93
+0:08:02.840 --> 0:08:07.800
+what's happening in the wild. So that's for all our users. And whenever we care about
+
+94
+0:08:07.800 --> 0:08:12.640
+what's happening for all users, we think telemetry because that's a great way to know about what's
+
+95
+0:08:12.640 --> 0:08:17.960
+happening in computers that are not in front of us. I added data collection for a few things
+
+96
+0:08:17.960 --> 0:08:24.480
+that I will use over the last couple months. Most notably CPU time used, GPU time used,
+
+97
+0:08:24.480 --> 0:08:30.200
+the number of wake-ups that we caused. And also we can break down this data by process
+
+98
+0:08:30.200 --> 0:08:34.760
+type. And here by process type, I mean is it the parent process that's showing the Firefox
+
+99
+0:08:34.760 --> 0:08:39.560
+user interface? Is it a content process that's showing the tab in the foreground? A content
+
+100
+0:08:39.560 --> 0:08:46.360
+process that's for background tab. On the native channel, we can even break it down
+
+101
+0:08:46.360 --> 0:08:51.600
+by thread name, which is a lot more detailed. And I will show the use we are making of this
+
+102
+0:08:51.600 --> 0:08:58.040
+data. So I said we care about sustainability and we have climate commitments. And one obvious
+
+103
+0:08:58.040 --> 0:09:03.440
+use case for having this kind of data is estimating our carbon footprint. So thanks to the telemetry,
+
+104
+0:09:03.440 --> 0:09:09.520
+we know that on average every day we use between 60 and 80 million hours of CPU time. And I
+
+105
+0:09:09.520 --> 0:09:14.240
+mean about 15 million hours of GPU time. Those are big numbers. It's hard to think about
+
+106
+0:09:14.240 --> 0:09:20.160
+what they mean. But we can try to use those numbers to convert to CO2 equivalent by using
+
+107
+0:09:20.160 --> 0:09:25.080
+the CPU specifications from CPU manufacturers, information about which CPU model is being
+
+108
+0:09:25.080 --> 0:09:30.880
+used, and electricity, carbon intensity by country. So we will be publishing our carbon
+
+109
+0:09:30.880 --> 0:09:36.560
+footprint in a couple months for last year. And it's based on this kind of data. And I
+
+110
+0:09:36.560 --> 0:09:40.880
+just wanted to give a sense of scale because millions of hours, that means nothing to me.
+
+111
+0:09:40.880 --> 0:09:45.240
+The amount of power that could be needed to power Firefox for all of our users, which
+
+112
+0:09:45.240 --> 0:09:50.400
+is hundreds of millions of users, would be equivalent of a small thermal power station.
+
+113
+0:09:50.400 --> 0:09:54.680
+Or if you're thinking more renewable energy, we would need to cover about the roofs of
+
+114
+0:09:54.680 --> 0:10:02.080
+50,000 houses with photovoltaic panels. So even if we save just 1% of the power, that
+
+115
+0:10:02.080 --> 0:10:08.760
+still means a lot compared to other things we could do in our personal lives as engineers.
+
+116
+0:10:08.760 --> 0:10:13.600
+Another example of using telemetry data is verifying that the fix we landed actually
+
+117
+0:10:13.600 --> 0:10:18.000
+had the impact we expected. And this is a case where we fixed something related to how
+
+118
+0:10:18.000 --> 0:10:25.560
+timers were implemented, timers for web pages. And this chart shows how many times we wake
+
+119
+0:10:25.560 --> 0:10:32.320
+up various threads. So it's from native users. And you see that there's a change happening
+
+120
+0:10:32.320 --> 0:10:37.000
+here, something trending down. Before, it was about 7% of the wake-ups for the time
+
+121
+0:10:37.000 --> 0:10:41.880
+of thread. And after, it was about 5%. So we already had an impact with this fix. And
+
+122
+0:10:41.880 --> 0:10:47.760
+before we collected this kind of telemetry, it would have been impossible to know. And
+
+123
+0:10:47.760 --> 0:10:51.760
+last but not least, we used this telemetry to verify our ideas about how we can reduce
+
+124
+0:10:51.760 --> 0:10:57.080
+power use. And when I started working on this project, I had the assumption, and other people
+
+125
+0:10:57.080 --> 0:11:02.040
+too, that we use a lot of power in background tabs. And that's probably because as someone
+
+126
+0:11:02.040 --> 0:11:08.000
+who uses Firefox and the internet a lot, I have many background tabs. And we just collected
+
+127
+0:11:08.000 --> 0:11:13.600
+data. So this is a breakdown per process type. We see that the biggest slice here is the
+
+128
+0:11:13.600 --> 0:11:18.840
+foreground tab, not background. Second biggest is the GPU, so showing things on screen. Then
+
+129
+0:11:18.840 --> 0:11:23.920
+we've got the parent process, which is the UI, when the user is interacting or not interacting.
+
+130
+0:11:23.920 --> 0:11:30.160
+And only then, we have background tabs. So it's between 7% and 8%. Still worth optimizing,
+
+131
+0:11:30.160 --> 0:11:34.840
+but if we spent all of our efforts optimizing this, we would be missing the biggest part
+
+132
+0:11:34.840 --> 0:11:41.480
+of the thing, which is foreground tabs. Another idea that we tested is, maybe it's all those
+
+133
+0:11:41.480 --> 0:11:45.320
+ads that are on web pages. They use a lot of power. We should do something about them.
+
+134
+0:11:45.320 --> 0:11:49.400
+We also collected data, it turns out to be less than 2% of the total. Maybe it's still
+
+135
+0:11:49.400 --> 0:11:53.680
+worth doing something about it, but again, it's not where we have the biggest wins. And
+
+136
+0:11:53.680 --> 0:11:56.720
+maybe it also means that tracking protection works very well in Firefox, and we are already
+
+137
+0:11:56.720 --> 0:12:04.720
+blocking many things. And the last section of this presentation will be about improvements,
+
+138
+0:12:04.720 --> 0:12:11.840
+what we have done to reduce power use, and what we can still do. We fixed many bugs.
+
+139
+0:12:11.840 --> 0:12:16.120
+When I wrote this slide, it was 26 bugs that we fixed, only with the intent of reducing
+
+140
+0:12:16.120 --> 0:12:22.600
+power use. But if I wrote this slide today, it would be 27, because one was fixed overnight.
+
+141
+0:12:22.600 --> 0:12:27.800
+The bugs go in various categories. It's almost always the same kind of things that we find.
+
+142
+0:12:27.800 --> 0:12:30.800
+Sometimes we have timers that really should have been stopped, but keep repeating, but
+
+143
+0:12:30.800 --> 0:12:35.560
+they are not really useful. It's one of those bugs that we fixed this night, something that
+
+144
+0:12:35.560 --> 0:12:39.400
+was waking up every 10 seconds, even when you do nothing with Firefox. I'm happy this
+
+145
+0:12:39.400 --> 0:12:46.280
+bug is finally fixed. Sometimes it's animations that are animating, but they are animating
+
+146
+0:12:46.280 --> 0:12:50.240
+stuff that's not even on screen. Maybe because it's a background window, background tab,
+
+147
+0:12:50.240 --> 0:12:55.280
+or something hidden for some other reason. When we can stop those animations, it's much
+
+148
+0:12:55.280 --> 0:12:59.000
+better. And when I said bogus animation, it's sometimes we have animations that kept running
+
+149
+0:12:59.000 --> 0:13:03.360
+even though the window was closed. I think we fixed all of those cases, but we might
+
+150
+0:13:03.360 --> 0:13:08.120
+still find more. And I wrote in pointless thread backups. That's what I was showing
+
+151
+0:13:08.120 --> 0:13:14.440
+before with a chart about timer threads and HKZs where we have always massive CPUs. Thanks
+
+152
+0:13:14.440 --> 0:13:18.440
+to all the contributors who helped with this, it's the work of many people mostly on the
+
+153
+0:13:18.440 --> 0:13:24.400
+platform team. And I will just showcase a few examples of bug fixes we did that had
+
+154
+0:13:24.400 --> 0:13:29.720
+a big impact. So this one is specifically about Windows 11. Windows 11 has an efficiency
+
+155
+0:13:29.720 --> 0:13:33.960
+mode for processes. It's not completely clear what it does, but when reading the documentation,
+
+156
+0:13:33.960 --> 0:13:38.200
+it's mostly letting the operating system know that this process is doing nothing that's
+
+157
+0:13:38.200 --> 0:13:44.600
+user visible. So we could execute the CPU at the lowest possible frequency. And for
+
+158
+0:13:44.600 --> 0:13:50.640
+CPUs with efficiency or performance scores, always select efficiency scores. And thanks
+
+159
+0:13:50.640 --> 0:13:54.040
+to poor profiling that I mentioned before, we could actually verify the impact that we
+
+160
+0:13:54.040 --> 0:14:00.600
+had when deciding that we set content processes for background tabs in efficiency mode. If
+
+161
+0:14:00.600 --> 0:14:04.840
+you look at the slides later on, click the link, you can see it in the profile. But on
+
+162
+0:14:04.840 --> 0:14:09.960
+my computer when I tested it divided by five, the power use of a tab using the CPU in the
+
+163
+0:14:09.960 --> 0:14:15.680
+background continuously. Another thing I said, we have many bugs that are the same category
+
+164
+0:14:15.680 --> 0:14:21.400
+of bug. And when we can, it's nice to eliminate the entire category of bugs at once. And for
+
+165
+0:14:21.400 --> 0:14:26.000
+animation that are broken in HKZs, it's almost impossible to write tests for all the possible
+
+166
+0:14:26.000 --> 0:14:31.800
+HKZs. But we have a very extensive test suite. So one idea I had was, what if at the end
+
+167
+0:14:31.800 --> 0:14:36.680
+of every automated test we run, we verify that nothing is animating anymore? Sounds
+
+168
+0:14:36.680 --> 0:14:43.040
+very easy. We did it. The part that was not easy was fixing all the HKZs we uncovered.
+
+169
+0:14:43.040 --> 0:14:49.200
+But that's why I'm confident it won't regress as much as it used to. Next things we can
+
+170
+0:14:49.200 --> 0:14:54.880
+do, because we still have many ideas of how we could do better. I mentioned background
+
+171
+0:14:54.880 --> 0:14:58.680
+tabs. We still have lots of ideas about how background tabs could be more efficient, how
+
+172
+0:14:58.680 --> 0:15:02.920
+we could be more aggressive about reducing the frequency of timers for hearing there,
+
+173
+0:15:02.920 --> 0:15:09.200
+how we could limit CPU use there. I keep talking about timers, but there's a lot we can do
+
+174
+0:15:09.200 --> 0:15:12.760
+about timers. And there's actually currently one engineer working full time and improving
+
+175
+0:15:12.760 --> 0:15:19.160
+on timer APIs. The main idea there is to group timers. The most expensive part about timers
+
+176
+0:15:19.160 --> 0:15:23.240
+is they wake up the CPU. So if when we do wake up the CPU, we decide to run many timers
+
+177
+0:15:23.240 --> 0:15:27.440
+at once, it would be much cheaper in terms of power. And we are working on those kind
+
+178
+0:15:27.440 --> 0:15:33.320
+of improvements. We still have cases where we have videos that are being decoded, but
+
+179
+0:15:33.320 --> 0:15:37.280
+not played in a place where they are visible for users, like background tabs and things
+
+180
+0:15:37.280 --> 0:15:43.240
+like that. We try to stop those, but there are cases that we are still working on. Hidden
+
+181
+0:15:43.240 --> 0:15:46.640
+animations. So animations that keep running when something has been completely closed,
+
+182
+0:15:46.640 --> 0:15:50.720
+I'm confident we fixed most of those. Animations that keep running even though they are covered
+
+183
+0:15:50.720 --> 0:15:56.000
+by something else. We still have many cases. And the biggest one is fully occluded window,
+
+184
+0:15:56.000 --> 0:16:02.320
+which is you have a window that's entirely above a browser window where we have animation.
+
+185
+0:16:02.320 --> 0:16:07.360
+We try to detect that we have got to detect it at least on Mac and on Windows. It's not
+
+186
+0:16:07.360 --> 0:16:12.040
+working as well as it should be. And I think we can do much better. So there's probably
+
+187
+0:16:12.040 --> 0:16:17.640
+there will probably be we're going in that direction. And another thing that I like to
+
+188
+0:16:17.640 --> 0:16:22.120
+do is to test the profile. Also because testing the capabilities of a profiler is what happens
+
+189
+0:16:22.120 --> 0:16:27.280
+if Firefox is started and there's nothing. You open Firefox, you load about blank, literally
+
+190
+0:16:27.280 --> 0:16:31.360
+nothing. And then you go to a meeting or go for a walk or do something else. And then
+
+191
+0:16:31.360 --> 0:16:35.600
+you come back a few hours later, you capture the profile and you see what happens. I would
+
+192
+0:16:35.600 --> 0:16:40.640
+like what happened to be almost nothing. It's currently still more than I would like. And
+
+193
+0:16:40.640 --> 0:16:44.600
+we can still improve things there. And I think it would typically help for sustainability
+
+194
+0:16:44.600 --> 0:16:49.280
+there for people who are not using laptops that tend to go into sleep mode, but more desktop
+
+195
+0:16:49.280 --> 0:16:53.400
+computers that might turn on things on their computer. And then they go home for the night
+
+196
+0:16:53.400 --> 0:16:57.840
+or for the weekend and the computer keeps running the entire weekend. I think it might
+
+197
+0:16:57.840 --> 0:17:04.760
+have an impact for those cases. And some more ideas that are not ready to do something about
+
+198
+0:17:04.760 --> 0:17:09.800
+for everybody, but that could be experimented with. Experiments you could run individually
+
+199
+0:17:09.800 --> 0:17:14.040
+like if you want to test it for yourself. Or experiments we could run on a few thousand
+
+200
+0:17:14.040 --> 0:17:20.440
+users to see what's the impact. So the preferences there that I'm giving is when showing the
+
+201
+0:17:20.440 --> 0:17:24.880
+chart, I said that displaying the foreground tab is what's using almost half of the entire
+
+202
+0:17:24.880 --> 0:17:29.520
+program that we use for Firefox. By default, we display stuff, especially animation 60
+
+203
+0:17:29.520 --> 0:17:35.080
+times per second or more if you have a screen with a first stop refresh rate. Do you really
+
+204
+0:17:35.080 --> 0:17:40.520
+need that? I think most people don't. And we have a pref to limit the refresh rate.
+
+205
+0:17:40.520 --> 0:17:46.200
+So if you want to have only half the frames, just set it to 30 and you will see what happens.
+
+206
+0:17:46.200 --> 0:17:51.160
+I think for most use cases, except maybe first video games, it should be fine. Another thing
+
+207
+0:17:51.160 --> 0:17:56.000
+we'd like to explore is the cost of video autoplay. We already block videos that could
+
+208
+0:17:56.000 --> 0:18:00.200
+make sound because it's noisy and that's annoying. But videos that are just there in a corner,
+
+209
+0:18:00.200 --> 0:18:03.880
+typically news articles with someone waving hands and talking, but you can't hear them
+
+210
+0:18:03.880 --> 0:18:07.720
+because you're reading the article and you don't care. They use a lot of power. We could
+
+211
+0:18:07.720 --> 0:18:13.000
+probably stop that. And there's a price that you can set that will block both on the audio
+
+212
+0:18:13.000 --> 0:18:19.560
+and there's video. Even if there's just video, it will block it. And that's all I wanted
+
+213
+0:18:19.560 --> 0:18:23.200
+to share for today. And I'm happy to take questions if you have, but first, thanks for
+
+214
+0:18:23.200 --> 0:18:26.200
+your attention.
+
+215
+0:18:26.200 --> 0:18:49.960
+So who has any questions? In the case that you have a lot of background
+
+216
+0:18:49.960 --> 0:18:57.240
+apps, does Firefox suspend those processes? And if so, does the memory gets freed and
+
+217
+0:18:57.240 --> 0:19:04.040
+does with the process manager show that or not? Sorry, a lot of question.
+
+218
+0:19:04.040 --> 0:19:08.520
+So the question is, if you have lots of background tabs, is Firefox suspending those processes?
+
+219
+0:19:08.520 --> 0:19:13.640
+Is the memory getting freed? There are multiple answers to that question because there are
+
+220
+0:19:13.640 --> 0:19:18.120
+different cases. By default, the answer is mostly no, we don't suspend them. One thing
+
+221
+0:19:18.120 --> 0:19:23.360
+we do is we throttle any activity there. So if a tab is trying to do things every 10 milliseconds,
+
+222
+0:19:23.360 --> 0:19:27.720
+we will not allow that. And we will limit to once per second, which saves a lot of power
+
+223
+0:19:27.720 --> 0:19:32.360
+already. I think we can do better. I would like if it was only once per minute and then
+
+224
+0:19:32.360 --> 0:19:37.480
+maybe after a few minutes or a few hours, suspend completely. There are cases where
+
+225
+0:19:37.480 --> 0:19:42.560
+the tabs are completely unloaded. One of the cases when we are using way too much memory
+
+226
+0:19:42.560 --> 0:19:46.840
+and we are about to crash out of memory, then we will, as a priority, unload the tab that's
+
+227
+0:19:46.840 --> 0:19:51.800
+abusing the memory. There's another case, which is when you session restore, we don't
+
+228
+0:19:51.800 --> 0:19:55.440
+reload the tab until you click them, except for the foreground tabs. So then you will
+
+229
+0:19:55.440 --> 0:20:00.080
+have many tabs, but they don't actually use memory or power. And one more case is Firefox
+
+230
+0:20:00.080 --> 0:20:04.760
+on Android. By the way, everything I said in this slide show was about Firefox desktop,
+
+231
+0:20:04.760 --> 0:20:08.720
+but we are also looking at the power use of Firefox on Android. And on Android, when you
+
+232
+0:20:08.720 --> 0:20:11.520
+put a tab in the background, it's completely suspended. Nothing runs anymore.
+
+233
+0:20:11.520 --> 0:20:23.560
+Any other question? Okay. Can you just say it? So, okay.
+
+234
+0:20:23.560 --> 0:20:33.560
+So I just tried to see what my Firefox is doing about processes that I just learned about.
+
+235
+0:20:33.560 --> 0:20:43.920
+And the first line is the Firefox main process itself, which is my use of between 20 and
+
+236
+0:20:43.920 --> 0:20:48.440
+50% of CPU. So that's not any of that. So do you have any idea what that is doing?
+
+237
+0:20:48.440 --> 0:20:52.360
+So the question is, I just learned about about processes and quickly wanted to see what my
+
+238
+0:20:52.360 --> 0:20:57.760
+Firefox was doing. And the process that's using the most CPU there is the parent process,
+
+239
+0:20:57.760 --> 0:21:04.120
+which is using about 20% of the core. Do we have any idea of what it is doing? So the
+
+240
+0:21:04.120 --> 0:21:08.120
+way I would figure this out is to click the profile icon and look at the profile. And
+
+241
+0:21:08.120 --> 0:21:11.600
+if you want to send me that profile, I can tell you exactly. But otherwise I will just
+
+242
+0:21:11.600 --> 0:21:15.680
+say a quick guess, which is what happens most of the time, is unless you are running on
+
+243
+0:21:15.680 --> 0:21:21.840
+Windows, but I guess you're probably on Linux or something else, we run... So I said GPU
+
+244
+0:21:21.840 --> 0:21:26.640
+process is a large part. We actually only have a GPU process on Windows to prevent graphics
+
+245
+0:21:26.640 --> 0:21:31.160
+driver from crashing from crashing into your browser. So the graphics part happens on the
+
+246
+0:21:31.160 --> 0:21:36.320
+parent process outside of Windows. And it's very likely that you have animations that
+
+247
+0:21:36.320 --> 0:21:40.280
+are running and causing things to be displayed. And with a profile I could tell you which
+
+248
+0:21:40.280 --> 0:21:45.120
+animations are running and why.
+
+249
+0:21:45.120 --> 0:21:51.240
+We have questions here in the matrix room. Have somebody ever compared worldwide power
+
+250
+0:21:51.240 --> 0:21:57.000
+usage of Firefox versus other proprietary browser webs?
+
+251
+0:21:57.000 --> 0:22:05.440
+I missed a few ones. So worldwide power of Firefox compared to other browsers? Have we
+
+252
+0:22:05.440 --> 0:22:12.720
+ever compared? I would say no, because I think the other browsers don't publish worldwide
+
+253
+0:22:12.720 --> 0:22:18.800
+power use. And I'm hoping we'll be publishing this as part of our greenhouse gas footprint
+
+254
+0:22:18.800 --> 0:22:24.360
+report. I don't think computing browsers publish any of that. And we were actually thinking
+
+255
+0:22:24.360 --> 0:22:27.400
+that if we start publishing that maybe we will push the competition to also publish
+
+256
+0:22:27.400 --> 0:22:31.080
+this kind of information.
+
+257
+0:22:31.080 --> 0:22:38.120
+Great. Any other?
+
+258
+0:22:38.120 --> 0:22:45.600
+So this is kind of an extension to the configuration options that you showed. But are there other
+
+259
+0:22:45.600 --> 0:22:52.000
+tweakables that we could apply to Firefox on mobile devices? Like by and from Librem
+
+260
+0:22:52.000 --> 0:22:58.560
+and so on where we definitely don't need 60 frames a second.
+
+261
+0:22:58.560 --> 0:23:02.680
+I'm not sure I understand entirely, but I think you were asking other things that we
+
+262
+0:23:02.680 --> 0:23:04.880
+could do on mobile to reduce power usage?
+
+263
+0:23:04.880 --> 0:23:13.960
+Yes, but it is a mobile platform running on it. So it's the desktop version of Firefox.
+
+264
+0:23:13.960 --> 0:23:17.560
+So you have a mobile device running the desktop version of Firefox. And you are wondering if
+
+265
+0:23:17.560 --> 0:23:23.760
+there are things you could do to reduce power usage.
+
+266
+0:23:23.760 --> 0:23:27.320
+If you are showing anyone try to eliminate entirely background apps and try to suspend
+
+267
+0:23:27.320 --> 0:23:33.960
+them. Otherwise, the answer is almost always the same. Capture a profile, see what's in
+
+268
+0:23:33.960 --> 0:23:38.840
+there. Because whenever we try to optimize by just guessing, almost all the time we are
+
+269
+0:23:38.840 --> 0:23:43.880
+like I said, background apps, it's not that bad. And it's not that bad. And profiling is
+
+270
+0:23:43.880 --> 0:23:48.040
+always the way to know exactly where you should be spending your time when you want to optimize.
+
+271
+0:23:48.040 --> 0:23:52.160
+And if you want help with profiling, the next talk will be about the profiler. And we are
+
+272
+0:23:52.160 --> 0:23:56.120
+very happy to help about understanding profiles.
+
+273
+0:23:56.120 --> 0:24:06.760
+Hi. My question is regarding hardware encoding. For example, in HTML and depending on the
+
+274
+0:24:06.760 --> 0:24:13.840
+user, you can give a list of different content types or formats. Has there been any exploration
+
+275
+0:24:13.840 --> 0:24:20.160
+into changing maybe the preferred format loaded to optimize for less power consumption as
+
+276
+0:24:20.160 --> 0:24:26.520
+opposed to faster or higher resolution?
+
+277
+0:24:26.520 --> 0:24:30.920
+So what I understood of the question is, has there been any exploration to changing the
+
+278
+0:24:30.920 --> 0:24:37.320
+kind of content types we accept, for example, for images or media, to reduce power use?
+
+279
+0:24:37.320 --> 0:24:41.080
+I think the answer is no. But I know there's currently exploration in terms of what we
+
+280
+0:24:41.080 --> 0:24:45.760
+can do to reduce bandwidth use. And bandwidth also uses power in some ways. And we were
+
+281
+0:24:45.760 --> 0:24:51.160
+thinking about this mostly in the case of estimating the cost of VPNs for users. And
+
+282
+0:24:51.160 --> 0:24:55.440
+for users who really care about privacy and really want privacy on a VPN, could we do
+
+283
+0:24:55.440 --> 0:25:02.040
+things to reduce the cost for them to pay for that VPN that charges for bandwidth?
+
+284
+0:25:02.040 --> 0:25:08.560
+So I'm afraid that all the time we have, however, if you can see Florian put his email there
+
+285
+0:25:08.560 --> 0:25:13.600
+for questions and also share it in the matrix room. And we also have that matrix room. Please
+
+286
+0:25:13.600 --> 0:25:18.960
+also add questions there. And there will be member stuff there and also other volunteer
+
+287
+0:25:18.960 --> 0:25:25.440
+resilient ones. Thank you very much. We need to change up for the next. Thank you very
+
+288
+0:25:25.440 --> 0:25:26.440
+much, Florian.
+
+289
+0:25:26.440 --> 0:25:56.420
+Sure.
+

@@ -1,0 +1,1024 @@
+WEBVTT
+
+00:00.000 --> 00:12.920
+Hi, everyone, and welcome to our talk about operator monitoring and how to do it correctly.
+
+00:12.920 --> 00:14.000
+My name is Shirley.
+
+00:14.000 --> 00:17.400
+I work at Red Hat.
+
+00:17.400 --> 00:18.400
+I'm Jean Villassa.
+
+00:18.400 --> 00:25.160
+I also work at Red Hat for about one year and a half.
+
+00:25.160 --> 00:30.160
+So today we're going to talk about operators' observability.
+
+00:30.160 --> 00:32.960
+Kubernetes operators.
+
+00:32.960 --> 00:42.720
+And we're going to talk about when to start, the maturity levels of metrics, why we want
+
+00:42.720 --> 00:50.480
+to monitor, what we want to monitor, and the best practices and code examples that we created
+
+00:50.480 --> 00:54.320
+for it.
+
+00:54.320 --> 01:03.440
+So when we want to talk about when should we start to think about the observability
+
+01:03.440 --> 01:05.640
+for operators?
+
+01:05.640 --> 01:13.740
+You can see here in the chart the life cycle of creating an operator, which is starting
+
+01:13.740 --> 01:20.640
+in basic installation, and the most mature step is autopilot.
+
+01:20.640 --> 01:27.360
+So when do you think we should start thinking about observability for a new operator?
+
+01:27.360 --> 01:28.360
+Anyone?
+
+01:28.360 --> 01:29.360
+When?
+
+01:29.360 --> 01:33.560
+From the start.
+
+01:33.560 --> 01:34.560
+From the start.
+
+01:34.560 --> 01:37.640
+That's correct.
+
+01:37.640 --> 01:51.320
+Really Deep Insights talks about metrics alerts, which is being able to monitor your operator
+
+01:51.320 --> 01:52.320
+fully.
+
+01:52.320 --> 01:57.320
+And people think maybe we should start thinking about it in full life cycle.
+
+01:57.320 --> 01:58.320
+Maybe that's the case.
+
+01:58.320 --> 02:06.520
+But you should pretty much start at the beginning, because the metrics that you are adding first
+
+02:06.520 --> 02:11.400
+are usually not the metrics that are for your users.
+
+02:11.400 --> 02:12.400
+They are internal.
+
+02:12.400 --> 02:16.760
+There are a few steps for the maturity of metrics.
+
+02:16.760 --> 02:18.280
+The first step is initial.
+
+02:18.280 --> 02:19.560
+You start with your operator.
+
+02:19.560 --> 02:23.880
+You want to understand how it works, if it works correctly.
+
+02:23.880 --> 02:31.440
+So the developers start to add hot metrics.
+
+02:31.440 --> 02:37.760
+I've been working for a few years on an operator in Red Hat called Qvert.
+
+02:37.760 --> 02:47.160
+And when I joined the project, it was already in the life cycle phase, full life cycle.
+
+02:47.160 --> 02:52.120
+And when I joined, already a lot of metrics were implemented in this operator.
+
+02:52.120 --> 02:58.440
+The problem was that there was no good.
+
+02:58.440 --> 03:02.640
+The developers that added the metrics didn't follow best practices.
+
+03:02.640 --> 03:09.200
+And a lot of the metrics, it was hard to understand which metrics were ours.
+
+03:09.200 --> 03:15.840
+It's important to understand that your operator is not the only one inside of the Kubernetes
+
+03:15.840 --> 03:17.080
+system.
+
+03:17.080 --> 03:22.880
+So when someone, when a user, or even other developers want to understand which metrics
+
+03:22.880 --> 03:30.200
+your operator is exposing, it should be easy for them to identify your metrics.
+
+03:30.200 --> 03:33.880
+So the first step, as I said, is initial.
+
+03:33.880 --> 03:36.920
+The second step is basic monitoring.
+
+03:36.920 --> 03:38.760
+You start adding your monitoring.
+
+03:38.760 --> 03:45.840
+And you're starting to think about your users, what they want to understand about your operator.
+
+03:45.840 --> 03:53.200
+And the third step is you have a process for implementing metrics and new metrics.
+
+03:53.200 --> 03:57.120
+And you are focused about health and performance for your operator.
+
+03:57.120 --> 04:04.080
+And the last step is actually autopilot, taking those metrics and doing smart actions with
+
+04:04.080 --> 04:10.800
+them in order to do stuff like auto healing and auto scaling for your operator.
+
+04:10.800 --> 04:19.800
+And this is the part that we are actually on in our operator.
+
+04:19.800 --> 04:26.520
+So as Shirley said, when we first start, we look very much at the internal metrics for
+
+04:26.520 --> 04:28.000
+the operators themselves.
+
+04:28.000 --> 04:32.800
+So at this point, we might start, for example, looking at the health of the operator.
+
+04:32.800 --> 04:36.320
+For example, can it connect to the Kubernetes API?
+
+04:36.320 --> 04:42.280
+Or if it's using external resources, can it connect to those providers API?
+
+04:42.280 --> 04:44.760
+Is it experiencing any errors?
+
+04:44.760 --> 04:49.800
+So we can also start by looking at, for example, its behavior.
+
+04:49.800 --> 04:52.320
+How often is the operator reconciling?
+
+04:52.320 --> 04:54.480
+What actions is the operator performing?
+
+04:54.480 --> 04:58.880
+So this is the kind of stuff that as we are developing, we are very interested in.
+
+04:58.880 --> 05:07.360
+But we should start, as Shirley said, thinking more in the future about having these good
+
+05:07.360 --> 05:12.040
+standards because later we will not be only tracking these.
+
+05:12.040 --> 05:17.520
+And could also be resource metrics.
+
+05:17.520 --> 05:25.400
+And then why should, then why operator observability and what are the steps that we will be taking?
+
+05:25.400 --> 05:31.040
+So starting from the performance and health, here we want to detect the issues that come
+
+05:31.040 --> 05:39.280
+up early, try to obviously reduce both operator and application downtime, and try to detect
+
+05:39.280 --> 05:42.240
+some regressions that might happen.
+
+05:42.240 --> 05:49.640
+Also we can start looking at, for example, planning and billing to improve quantification,
+
+05:49.640 --> 05:54.400
+to also improve profitability or then bill users.
+
+05:54.400 --> 05:59.720
+At this point, we start looking more at the infrastructure metrics also.
+
+05:59.720 --> 06:02.800
+For example, we want to track resource utilization.
+
+06:02.800 --> 06:09.360
+This might be like CPU, memory, disk, and we can also start looking at the health of
+
+06:09.360 --> 06:14.800
+the infrastructure itself, maybe hardware failures or trying to detect some network
+
+06:14.800 --> 06:16.160
+issues.
+
+06:16.160 --> 06:23.960
+Then we also start looking at, use these metrics to create alerts, to send notifications about
+
+06:23.960 --> 06:27.000
+the problems that come up as early as possible.
+
+06:27.000 --> 06:32.080
+So we obviously want to take appropriate actions to not let them go around.
+
+06:32.080 --> 06:37.000
+And after this at this point, we go into more detail about metrics.
+
+06:37.000 --> 06:39.340
+Maybe we start looking at application metrics.
+
+06:39.340 --> 06:42.160
+So what's the availability of our application?
+
+06:42.160 --> 06:43.160
+What's the uptime?
+
+06:43.160 --> 06:44.720
+What's the error rates?
+
+06:44.720 --> 06:46.800
+And also its behavior.
+
+06:46.800 --> 06:49.960
+What type of request is the application receiving?
+
+06:49.960 --> 06:51.760
+What types of responses is sending?
+
+06:51.760 --> 06:55.080
+And it's important to monitor all of these things.
+
+06:55.080 --> 07:01.640
+And when we start building up all this information, then at a certain point in time, as Shirley
+
+07:01.640 --> 07:13.200
+said, we'll be able to give this new life to the operator by having the autopilot capabilities,
+
+07:13.200 --> 07:16.600
+such as auto scaling, auto-willing capabilities.
+
+07:16.600 --> 07:21.680
+Because at this point, if we did everything correctly, you'll be able to know the almost
+
+07:21.680 --> 07:24.040
+all the states that we are in.
+
+07:24.040 --> 07:27.800
+And we also start looking at metrics, functionality metrics.
+
+07:27.800 --> 07:32.800
+We can provide the expected, are we providing the expected functionality to users?
+
+07:32.800 --> 07:36.880
+For example, checking that the application features are working correctly.
+
+07:36.880 --> 07:42.160
+We want to see if there are any performance or reliability issues by checking service
+
+07:42.160 --> 07:49.600
+levels, and that everything is working in the expected way by checking response efforts
+
+07:49.600 --> 07:53.360
+and the data that is responded.
+
+07:53.360 --> 07:55.920
+Thank you.
+
+07:55.920 --> 07:56.920
+OK.
+
+07:56.920 --> 08:00.400
+So I hope you are convinced that observability is important.
+
+08:00.400 --> 08:04.200
+If you are in this room, I guess you are.
+
+08:04.200 --> 08:09.840
+And for the past three years, we've been working on observability on our operator.
+
+08:09.840 --> 08:14.200
+What's important to understand is that our operator is considered complex.
+
+08:14.200 --> 08:23.080
+It has a few sub-operators that it's managing, and each sub-operator has its own team, dedicated
+
+08:23.080 --> 08:28.000
+team, that is maintaining it.
+
+08:28.000 --> 08:36.200
+And having the insight of looking at those teams working on implementing observability,
+
+08:36.200 --> 08:44.320
+each team separately gave us a higher level of the possibility of understanding the pitfalls
+
+08:44.320 --> 08:49.640
+that they all share when implementing monitoring.
+
+08:49.640 --> 08:56.640
+So we decided to contribute from our knowledge of how to do this correctly in order for others
+
+08:56.640 --> 09:02.960
+not to do the same, to fall to the same pitfalls as us.
+
+09:02.960 --> 09:10.040
+So we decided to create best practices and to share with the community our findings.
+
+09:10.040 --> 09:17.720
+We hope to shorten the onboarding time for others and to create better documentation
+
+09:17.720 --> 09:26.120
+and to create reusable code for others to be able to use and save time and money, of
+
+09:26.120 --> 09:28.600
+course.
+
+09:28.600 --> 09:37.400
+So we reached out to the operator framework SDK team to collaborate with them and to publish
+
+09:37.400 --> 09:40.080
+their best practices.
+
+09:40.080 --> 09:47.400
+As you can see here, this is the operator observability best practices.
+
+09:47.400 --> 09:53.320
+The operator SDK itself is the first step when someone wants to create a new operator.
+
+09:53.320 --> 10:00.360
+It gives them tools how to create it easily, how to build tests, the packages, and provides
+
+10:00.360 --> 10:05.180
+best practices for all steps of the operator lifecycle.
+
+10:05.180 --> 10:13.280
+So we found that this was the best place for others to also go for monitoring.
+
+10:13.280 --> 10:17.200
+And in these best practices, I will now share with you a few examples.
+
+10:17.200 --> 10:25.000
+It may sound simple, but simple things have a big impact both on the users that are using
+
+10:25.000 --> 10:30.760
+the system and both of the developers that are trying to work with the metrics.
+
+10:30.760 --> 10:37.080
+So for example, a naming convention for metrics.
+
+10:37.080 --> 10:42.000
+One of the things that is mentioned in the document is having a name prefix for your
+
+10:42.000 --> 10:43.000
+metrics.
+
+10:43.000 --> 10:50.000
+This is very simple action that will help you identify the developers, the users to identify
+
+10:50.000 --> 10:55.000
+that the metrics are coming from the specific operator or a company.
+
+10:55.000 --> 10:59.920
+In this case, you can see that all of the metrics here have a qubit prefix.
+
+10:59.920 --> 11:04.640
+A qubit, as I said, has suboperators.
+
+11:04.640 --> 11:11.840
+So under this prefix, we also have a sub prefix for each individual operator, CDI, network,
+
+11:11.840 --> 11:18.560
+and so on.
+
+11:18.560 --> 11:24.800
+And this is another example which does not have this prefix.
+
+11:24.800 --> 11:29.880
+We can see here a container CPU, for example, prefix, but we can't understand where it's
+
+11:29.880 --> 11:30.880
+coming from.
+
+11:30.880 --> 11:32.820
+In this case, it's the advisor.
+
+11:32.820 --> 11:36.840
+But if you're a user and you're trying to understand where this metric came from, it's
+
+11:36.840 --> 11:37.960
+very hard.
+
+11:37.960 --> 11:44.440
+And also, you cannot search in Grafana, for example, for all of the C advisor metrics
+
+11:44.440 --> 11:45.440
+together.
+
+11:45.440 --> 11:49.920
+So that's a problem.
+
+11:49.920 --> 11:55.320
+Another thing that is mentioned in the best practices is about help text.
+
+11:55.320 --> 12:04.120
+Each metric has a dedicated place to add the summary, the help for this metric.
+
+12:04.120 --> 12:10.720
+And as you can see in Grafana and other visualization tools, the user will be able to see when hovering
+
+12:10.720 --> 12:14.000
+on the metrics the description of it.
+
+12:14.000 --> 12:20.280
+It's very important because if not, you need to go somewhere else to search for it.
+
+12:20.280 --> 12:25.680
+Also this gives you the ability to create auto-generated documentation for all of your
+
+12:25.680 --> 12:31.760
+metrics in your site.
+
+12:31.760 --> 12:34.080
+Another example is the base units.
+
+12:34.080 --> 12:39.160
+So Prometheus recommends using base units for metrics.
+
+12:39.160 --> 12:47.440
+For example, you can see here for time to use seconds, not milliseconds.
+
+12:47.440 --> 12:49.120
+Temperature is not Fahrenheit.
+
+12:49.120 --> 12:55.160
+This gives the users fluent experience when they are using the metrics.
+
+12:55.160 --> 13:02.060
+They don't need to do conversions, deviations of the data.
+
+13:02.060 --> 13:07.960
+And they are saying if you want to use milliseconds, use a floating point number.
+
+13:07.960 --> 13:14.680
+This removes the concern of magnitude of the number and Grafana can handle it and it will
+
+13:14.680 --> 13:18.040
+still show you with the same precision.
+
+13:18.040 --> 13:25.800
+But the consistency in the UI and how to use the metrics will stay the same.
+
+13:25.800 --> 13:32.000
+Here you can see an example for metrics that are using seconds.
+
+13:32.000 --> 13:35.960
+And here we see that each city are not using it.
+
+13:35.960 --> 13:40.880
+So this is not as recommended.
+
+13:40.880 --> 13:43.320
+And we would actually recommend to switch it.
+
+13:43.320 --> 13:45.800
+But they started with milliseconds.
+
+13:45.800 --> 13:52.080
+Now doing the change will cause issues with the UI that is based on it and everything.
+
+13:52.080 --> 13:58.600
+So it's a problem to change the names of the metrics once they are created.
+
+13:58.600 --> 14:03.680
+So when I joined the operator, we didn't have name prefixes.
+
+14:03.680 --> 14:07.360
+I tried to understand which metrics are ours and which are not.
+
+14:07.360 --> 14:08.720
+It was very hard.
+
+14:08.720 --> 14:14.160
+So we needed to go and do breaking changes for the metrics and add those prefixes, change
+
+14:14.160 --> 14:15.480
+the units.
+
+14:15.480 --> 14:24.320
+And this is what we want others to be able to avoid, this duplicative work.
+
+14:24.320 --> 14:28.400
+Additional information in the best practices is about alerts.
+
+14:28.400 --> 14:31.040
+This is an example of an alert.
+
+14:31.040 --> 14:34.640
+You can see here that we have the alert name.
+
+14:34.640 --> 14:38.440
+We have an expression which is based on a metric.
+
+14:38.440 --> 14:46.640
+And once the expression is met, the alert either starts firing or is in pending state
+
+14:46.640 --> 14:49.720
+until the evaluation time.
+
+14:49.720 --> 14:50.720
+There is a description.
+
+14:50.720 --> 14:53.880
+There is also a possibility to add a summary.
+
+14:53.880 --> 14:55.680
+This is the evaluation time.
+
+14:55.680 --> 15:00.760
+It has a severity and a link to a runbook URL.
+
+15:00.760 --> 15:10.400
+There could be other information that you can add to it, but this is the basic.
+
+15:10.400 --> 15:14.360
+And what we're saying in the best practices is that there's supposed to be, for example,
+
+15:14.360 --> 15:21.000
+for the labels of severity, there should only be three valid options, a critical warning
+
+15:21.000 --> 15:23.000
+and info alerts.
+
+15:23.000 --> 15:27.240
+If you're using something else, it would be problematic.
+
+15:27.240 --> 15:32.720
+You can see here in this example, I don't know if you're seeing it, but we see that
+
+15:32.720 --> 15:35.400
+this is our example in the cluster.
+
+15:35.400 --> 15:37.280
+We have info, warning and critical.
+
+15:37.280 --> 15:41.800
+And we have one non-severity, which is the watchdog.
+
+15:41.800 --> 15:43.880
+It's part of Prometheus alerts.
+
+15:43.880 --> 15:47.240
+It's just making sure that the alerts are working as expected.
+
+15:47.240 --> 15:49.040
+It should always stay one.
+
+15:49.040 --> 15:55.800
+There should never be alerts that don't have severity.
+
+15:55.800 --> 15:59.080
+And this is a bad example of using a severity label.
+
+15:59.080 --> 16:03.000
+In this case, they are using major instead of critical.
+
+16:03.000 --> 16:11.000
+The impact of that is that if someone is setting up alert manager to notify the support team
+
+16:11.000 --> 16:16.520
+that something critical happened to the system and they were to get notified by Slack or
+
+16:16.520 --> 16:23.080
+by a pager, they will miss out on this alert because it doesn't meet with the convention
+
+16:23.080 --> 16:29.680
+of the severities, values for severities.
+
+16:29.680 --> 16:37.640
+So what we have at the moment for best practices, we have for a matrix naming convention, we
+
+16:37.640 --> 16:46.320
+have how to create documentation for metrics, alerts, information about alert labels, runbooks.
+
+16:46.320 --> 16:52.040
+By the way, runbooks are a way to provide more information about the alert.
+
+16:52.040 --> 16:58.920
+You have a link in the alert where you can send the user to go and find more details.
+
+16:58.920 --> 17:00.440
+What's it about?
+
+17:00.440 --> 17:01.440
+What's the impact?
+
+17:01.440 --> 17:02.440
+How to diagnose it?
+
+17:02.440 --> 17:05.640
+And how to mitigate the issue?
+
+17:05.640 --> 17:11.560
+And then additional information about how to test metrics and how to test alerts.
+
+17:11.560 --> 17:19.320
+We plan to enrich this information, add information about dashboards, logging, events, tracing
+
+17:19.320 --> 17:22.040
+in the future.
+
+17:22.040 --> 17:28.200
+So Shirley gave an overview about an eye level situation about metrics and alerts.
+
+17:28.200 --> 17:33.160
+But how do we translate some of these best practices into code?
+
+17:33.160 --> 17:38.320
+So one of the problems that we faced was that logic code and monitoring code were becoming
+
+17:38.320 --> 17:41.080
+very intertwined.
+
+17:41.080 --> 17:44.480
+Code like this becomes harder to maintain.
+
+17:44.480 --> 17:51.040
+Obviously it becomes more difficult in understanding what the code does and to modify it.
+
+17:51.040 --> 17:56.400
+This leads obviously to longer development times, potential bugs, and it's also more
+
+17:56.400 --> 18:03.160
+challenging to onboard the new team members or to contributing to one of these projects.
+
+18:03.160 --> 18:11.040
+In this specific snippet, there was like 16.4% of monitoring code intertwined with the migration
+
+18:11.040 --> 18:12.480
+logic code.
+
+18:12.480 --> 18:20.520
+So what we did was try to refactor this code to try to separate these concerns, one from
+
+18:20.520 --> 18:21.520
+the other.
+
+18:21.520 --> 18:29.920
+To in this specific case, we used a Prometheus collector that's just iterating the existing
+
+18:29.920 --> 18:31.880
+virtual machines migrations.
+
+18:31.880 --> 18:39.400
+And then it's just pushing the metrics according to the status of the virtual machines, whether
+
+18:39.400 --> 18:45.480
+they are successful or not, or the counts of the pending scheduling and the migrations.
+
+18:45.480 --> 18:50.840
+And obviously this snippet is much easier to understand how the monitoring is being
+
+18:50.840 --> 18:56.640
+done and we take all of these out of the migration logic code.
+
+18:56.640 --> 19:05.120
+And to help other developers that are starting to avoid the same mistakes as we had to solve,
+
+19:05.120 --> 19:10.480
+we are creating a monitoring example with a memcached operator.
+
+19:10.480 --> 19:18.960
+We already have an initial example that is already thinking about all these concerns
+
+19:18.960 --> 19:24.720
+separation between logic code and monitoring code.
+
+19:24.720 --> 19:32.160
+Our idea with this example is to make it as clear as possible, especially, this is especially
+
+19:32.160 --> 19:39.880
+important when we are working with large and complex code bases, also make it more modular.
+
+19:39.880 --> 19:44.920
+It's easier to understand both the logic code and the monitoring code without affecting
+
+19:44.920 --> 19:49.320
+each other's functionality in the application in general.
+
+19:49.320 --> 19:51.680
+Also make it more usable.
+
+19:51.680 --> 19:57.800
+Since, like, for example, the way we are doing monitoring in different operators will always
+
+19:57.800 --> 19:59.560
+be more or less the same.
+
+19:59.560 --> 20:07.280
+So if we find a more or less common way to do this, it will make it easier to use this
+
+20:07.280 --> 20:13.520
+code in other applications and projects which will save them time and effort.
+
+20:13.520 --> 20:18.240
+And also it will become more performant.
+
+20:18.240 --> 20:26.040
+If we mix all the monitoring concerns with the migration code, it's trivial that the
+
+20:26.040 --> 20:31.840
+time it will take to make a migration will take longer because we are calculating metric
+
+20:31.840 --> 20:38.520
+values and doing some Prometheus operations while we are trying to calculate the state
+
+20:38.520 --> 20:39.640
+of a migration.
+
+20:39.640 --> 20:46.280
+So having this separation will also help these questions.
+
+20:46.280 --> 20:53.760
+Our idea for the structure of the code will be by creating a package.
+
+20:53.760 --> 21:00.200
+And for example, here we can see a migration's example, a central place where we will be
+
+21:00.200 --> 21:09.280
+registering all migrations and all metrics, obviously, and then we will have files that
+
+21:09.280 --> 21:14.280
+will separate these metrics by their types.
+
+21:14.280 --> 21:19.440
+For example, in this example, we can see one operator metrics file which will have all
+
+21:19.440 --> 21:27.560
+the operator metrics as we talked in the beginning and then we could have one specific file only
+
+21:27.560 --> 21:34.480
+for the migration metrics and then register them in one place.
+
+21:34.480 --> 21:41.400
+And why do we think about this structure and what benefits could this bring us?
+
+21:41.400 --> 21:47.000
+The first one is to automate the metric and the alert code generation.
+
+21:47.000 --> 21:55.600
+As we saw, much of the work that the developer need to do that, it's like creating a file
+
+21:55.600 --> 22:02.520
+with a specific name, then go to the metrics.go file and register that file there.
+
+22:02.520 --> 22:07.960
+So this is very structured and always the same.
+
+22:07.960 --> 22:12.800
+It will be easier to automate and then allow developers to have a command line tool to
+
+22:12.800 --> 22:17.800
+generate new metrics and generate new alerts easier.
+
+22:17.800 --> 22:23.080
+We are also looking forward to create a linter for the metrics name.
+
+22:23.080 --> 22:29.600
+As Shirley said, a lot of the concerns that happen when the operators are becoming more
+
+22:29.600 --> 22:35.700
+advanced is looking back at the metrics and see everything we did wrong with their naming
+
+22:35.700 --> 22:41.240
+and even as she said, it's a simple change but can have a lot of impact.
+
+22:41.240 --> 22:47.560
+So a linter that follows all these conventions will also be important.
+
+22:47.560 --> 22:49.680
+Also automated metrics documentations.
+
+22:49.680 --> 22:55.360
+We are already doing this and one thing that we faced was that a lot of metrics were very
+
+22:55.360 --> 22:58.400
+scattered in the code.
+
+22:58.400 --> 23:05.480
+So it was easy to automate and find all of them and with a structure like the previous
+
+23:05.480 --> 23:12.200
+one it would be even more easier to create a full list of metrics and that description
+
+23:12.200 --> 23:18.280
+that would help both developers, newcomers and users.
+
+23:18.280 --> 23:24.920
+And lastly, have an easier structure for both unit and end-to-end testing because if we
+
+23:24.920 --> 23:33.600
+have like this clear structure for where the metrics are, we can add tests there and test
+
+23:33.600 --> 23:43.360
+exactly those functions and not code intertwined in logic code.
+
+23:43.360 --> 23:48.600
+Just to conclude, if you are starting to create an operator or if you already have an operator,
+
+23:48.600 --> 23:53.840
+we invite you to go and look at the operator SDK, to look at the best practices, to try
+
+23:53.840 --> 24:00.440
+to avoid the pitfalls that we had and I really hope it will help you and you should really
+
+24:00.440 --> 24:06.280
+just consider that when you are creating an operator, it starts small but it can become
+
+24:06.280 --> 24:09.800
+really robust and you cannot tell that in the beginning.
+
+24:09.800 --> 24:13.960
+So think ahead and try to build it correctly from the beginning.
+
+24:13.960 --> 24:16.960
+I hope it will be helpful for you and thank you.
+
+24:16.960 --> 24:17.960
+Thank you.
+
+24:17.960 --> 24:34.800
+Thank you for your talk.
+
+24:34.800 --> 24:40.320
+Do you have any recommendations on how you would log out the decision points within your
+
+24:40.320 --> 24:41.320
+operator?
+
+24:41.320 --> 24:49.720
+So if you wanted to retrospectively see why it has done certain things?
+
+24:49.720 --> 24:51.360
+Recommendations on?
+
+24:51.360 --> 25:00.400
+Like the decision points, how it has decided which Kubernetes API calls to make.
+
+25:00.400 --> 25:06.720
+If your operator did something crazy and you wanted to look back and see why it did that,
+
+25:06.720 --> 25:13.400
+is there anything you would do in advance to the logging?
+
+25:13.400 --> 25:19.400
+I think this is the summary of what we have learned is in these documents because, as
+
+25:19.400 --> 25:26.000
+I said, for example, the developers that started this project, they didn't have where to go
+
+25:26.000 --> 25:29.240
+and the best practices of how to name a metric.
+
+25:29.240 --> 25:32.280
+So they just named it how they felt.
+
+25:32.280 --> 25:41.800
+They did follow the recommendations, but having a prefix of the operator has a big impact
+
+25:41.800 --> 25:43.760
+for the users.
+
+25:43.760 --> 25:44.760
+Not even the users.
+
+25:44.760 --> 25:51.120
+When we are trying to understand how to use internal metrics for our uses, we also are
+
+25:51.120 --> 25:55.400
+struggling to understand where a metric came from, where is the code for it.
+
+25:55.400 --> 26:01.400
+So all of the summary of what we have learned is in those documents and we plan to enrich
+
+26:01.400 --> 26:04.240
+it even further.
+
+26:04.240 --> 26:05.640
+Yeah.
+
+26:05.640 --> 26:10.680
+Thank you for your talk.
+
+26:10.680 --> 26:12.720
+It was very interesting.
+
+26:12.720 --> 26:17.840
+You mentioned code generation for the metrics package.
+
+26:17.840 --> 26:24.920
+My question is, do you plan on adding that to kubebuilder and the operator SDK?
+
+26:24.920 --> 26:25.920
+Yeah.
+
+26:25.920 --> 26:33.880
+Basically, we are working on operator SDK right now because we want to build all these
+
+26:33.880 --> 26:38.240
+tools and we are thinking about them, but obviously this needs a lot of help of the
+
+26:38.240 --> 26:39.240
+community.
+
+26:39.240 --> 26:47.080
+And I am saying this because I will enter a personal note here and an idea, right?
+
+26:47.080 --> 26:53.880
+Because the way I see it is like on kubebuilder and on operator SDK, being able to just go
+
+26:53.880 --> 26:58.280
+there and you say that you want to generate a project with monitoring and it creates the
+
+26:58.280 --> 26:59.840
+monitoring package.
+
+26:59.840 --> 27:05.760
+Or if the operator already exists, you have a command to generate the monitoring package
+
+27:05.760 --> 27:12.280
+and then on kubebuilder, like you use it to create an API or a controller, you will have
+
+27:12.280 --> 27:17.480
+a similar command, but to create a new metric and you pass the type of the metric, the help,
+
+27:17.480 --> 27:18.920
+and the same for alerts.
+
+27:18.920 --> 27:23.560
+At least that is the way I see it and for me, it makes sense.
+
+27:23.560 --> 27:24.560
+I agree.
+
+27:24.560 --> 27:25.560
+Thank you.
+
+27:25.560 --> 27:36.840
+Thank you for the talk.
+
+27:36.840 --> 27:41.640
+How much of the conventions that you talked about align with open telemetry, semantic
+
+27:41.640 --> 27:42.640
+conventions?
+
+27:42.640 --> 27:47.000
+How much are what?
+
+27:47.000 --> 27:50.920
+Most of them are aligned with open telemetry, actually.
+
+27:50.920 --> 27:53.560
+But these are specific for operators.
+
+27:53.560 --> 27:54.560
+That's the idea.
+
+27:54.560 --> 27:58.120
+The idea is that you have a central place where you can get the information.
+
+27:58.120 --> 28:03.600
+And by the way, if someone is creating a new operator and has an insight, we encourage
+
+28:03.600 --> 28:09.640
+others to contribute to the documentation and teach others and share the information.
+
+28:09.640 --> 28:10.640
+So yeah.
+
+28:10.640 --> 28:20.520
+Basically, I think we align with open telemetry conventions, but we have more ideas to operate.
+
+28:20.520 --> 28:30.920
+I think that's it.
+
+28:30.920 --> 28:31.920
+Thank you.
+
+28:31.920 --> 28:32.920
+Thank you.
+
+28:32.920 --> 28:51.040
+Thank you.

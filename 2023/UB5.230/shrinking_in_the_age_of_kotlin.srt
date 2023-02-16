@@ -1,0 +1,1296 @@
+1
+0:00:00.000 --> 0:00:09.360
+So, let's get started with the next session.
+
+2
+0:00:09.360 --> 0:00:16.120
+It seems like we're going to talk about making smaller apps with James Hamilton and the talk
+
+3
+0:00:16.120 --> 0:00:18.720
+Shrinking in the Age of Kotlin.
+
+4
+0:00:18.720 --> 0:00:20.720
+Please welcome.
+
+5
+0:00:20.720 --> 0:00:23.040
+Thank you.
+
+6
+0:00:23.040 --> 0:00:30.560
+So, we're going to talk today not just about Kotlin, but about Shrinkers as well.
+
+7
+0:00:30.560 --> 0:00:34.280
+So, first off, who am I?
+
+8
+0:00:34.280 --> 0:00:35.760
+My name is James.
+
+9
+0:00:35.760 --> 0:00:38.260
+I'm a software engineer at Guard Square.
+
+10
+0:00:38.260 --> 0:00:42.000
+You might know products such as ProGuard and DexGuard.
+
+11
+0:00:42.000 --> 0:00:44.040
+So we build these products.
+
+12
+0:00:44.040 --> 0:00:52.320
+So mostly I work on things like mobile security, Java bytecode, dialogue bytecode, code analysis,
+
+13
+0:00:52.320 --> 0:00:57.880
+and these kind of things, mostly on ProGuard and DexGuard.
+
+14
+0:00:57.880 --> 0:01:04.160
+Previously, I worked for a few years on something completely different on control systems at
+
+15
+0:01:04.160 --> 0:01:05.160
+CERN.
+
+16
+0:01:05.160 --> 0:01:11.840
+And before that, I did a Ph.D. in code analysis and metrics.
+
+17
+0:01:11.840 --> 0:01:17.380
+So first, let's talk about what is Shrinking.
+
+18
+0:01:17.380 --> 0:01:23.580
+So if you're an Android developer, you might produce APKs.
+
+19
+0:01:23.580 --> 0:01:29.560
+If you're a non-mobile developer, you might produce jars.
+
+20
+0:01:29.560 --> 0:01:34.080
+And you would probably want to keep these as small as possible, especially in mobile
+
+21
+0:01:34.080 --> 0:01:41.600
+because of the limitations on resources, the small amount of storage on the devices, or
+
+22
+0:01:41.600 --> 0:01:44.800
+maybe the users are paying per megabytes, something like that.
+
+23
+0:01:44.800 --> 0:01:49.360
+So you want to keep these things as small as possible.
+
+24
+0:01:49.360 --> 0:01:52.000
+And so to do that, we want something that can shrink these.
+
+25
+0:01:52.000 --> 0:01:59.440
+So if you are already an Android developer, you might know, then, ProGuard, for example,
+
+26
+0:01:59.440 --> 0:02:03.200
+R8, Redex, YGuard is another one.
+
+27
+0:02:03.200 --> 0:02:09.900
+So these are all Java bytecode and Dalvik bytecode shrinkers.
+
+28
+0:02:09.900 --> 0:02:12.680
+Just a small disclaimer that this is not a shrinker tutorial.
+
+29
+0:02:12.680 --> 0:02:16.040
+I'm not going to teach you how to configure ProGuard.
+
+30
+0:02:16.040 --> 0:02:20.880
+I'm not going to fix your key crawls today.
+
+31
+0:02:20.880 --> 0:02:23.320
+And it's also not a sales pitch for a shrinker.
+
+32
+0:02:23.320 --> 0:02:26.400
+I'm not going to sell you ProGuard.
+
+33
+0:02:26.400 --> 0:02:31.480
+I'm not going to tell you that you should use ProGuard over R8 or something like that.
+
+34
+0:02:31.480 --> 0:02:37.080
+So if it's not a sales pitch and it's not a tutorial, what am I going to talk about
+
+35
+0:02:37.080 --> 0:02:39.760
+today?
+
+36
+0:02:39.760 --> 0:02:43.680
+So I want to basically answer a few questions.
+
+37
+0:02:43.680 --> 0:02:47.280
+How does a shrinker process to Kotlin-generated code?
+
+38
+0:02:47.280 --> 0:02:50.720
+And to help answer that one, we need to know something about the differences between the
+
+39
+0:02:50.720 --> 0:02:54.800
+Java classes and the Kotlin classes.
+
+40
+0:02:54.800 --> 0:02:58.480
+And then I want to show you a bit about how you can build tools to analyze and modify
+
+41
+0:02:58.480 --> 0:03:00.960
+Kotlin classes.
+
+42
+0:03:00.960 --> 0:03:04.680
+So first off, let's just talk a little bit about a very high level about how does a shrinker
+
+43
+0:03:04.680 --> 0:03:06.880
+work.
+
+44
+0:03:06.880 --> 0:03:12.120
+So there are normally three broad categories of shrinking.
+
+45
+0:03:12.120 --> 0:03:18.160
+First one is tree shaking, code optimization, and name obfuscation.
+
+46
+0:03:18.160 --> 0:03:24.480
+So tree shaking, if you think of your app as a tree of all the reachable codes, so you
+
+47
+0:03:24.480 --> 0:03:25.920
+start at the root of the app.
+
+48
+0:03:25.920 --> 0:03:30.840
+For example, in Java or Kotlin, you start at the main method and you follow all the
+
+49
+0:03:30.840 --> 0:03:33.360
+references that you can find.
+
+50
+0:03:33.360 --> 0:03:38.200
+You build a graph from that and then you shake this tree and all of the non-use stuff falls
+
+51
+0:03:38.200 --> 0:03:39.200
+away.
+
+52
+0:03:39.200 --> 0:03:43.000
+So just like if you shake an apple tree, the apples are going to fall out, all of your
+
+53
+0:03:43.000 --> 0:03:47.400
+unused code is going to fall away.
+
+54
+0:03:47.400 --> 0:03:51.680
+So this is especially useful, for example, with libraries.
+
+55
+0:03:51.680 --> 0:03:55.680
+So as an app developer, you might use a bunch of different libraries.
+
+56
+0:03:55.680 --> 0:04:00.440
+Those libraries might use libraries and those libraries might use libraries.
+
+57
+0:04:00.440 --> 0:04:07.160
+And you might just want a few features, but all of that code gets pulled into your app.
+
+58
+0:04:07.160 --> 0:04:15.560
+So you can use a shrinker to do tree shaking on that and remove unused classes, methods,
+
+59
+0:04:15.560 --> 0:04:18.680
+fields, for example.
+
+60
+0:04:18.680 --> 0:04:21.760
+And then another shrinking technique is code optimization.
+
+61
+0:04:21.760 --> 0:04:27.680
+So tree shaking was all about removing the bigger entities, the classes, the methods,
+
+62
+0:04:27.680 --> 0:04:31.880
+and code optimization is really about the bytecode.
+
+63
+0:04:31.880 --> 0:04:38.600
+So for example, if an optimizer can tell that some path is always going to be taken, then
+
+64
+0:04:38.600 --> 0:04:43.640
+we can remove some of the code.
+
+65
+0:04:43.640 --> 0:04:47.680
+And the last one I want to talk about is name obfuscation.
+
+66
+0:04:47.680 --> 0:04:52.020
+So this is about making the strings smaller.
+
+67
+0:04:52.020 --> 0:04:59.240
+So if you're an enterprise Java developer, you might have some class names like this.
+
+68
+0:04:59.240 --> 0:05:02.480
+More characters means more bytes.
+
+69
+0:05:02.480 --> 0:05:08.380
+So if we just rename this to a single character, it's going to take up less space.
+
+70
+0:05:08.380 --> 0:05:13.240
+Just a small side note here which could make up a whole presentation on its own.
+
+71
+0:05:13.240 --> 0:05:16.800
+Name obfuscation on its own is not security.
+
+72
+0:05:16.800 --> 0:05:20.360
+But I won't talk about that more today if you want to discuss that more later.
+
+73
+0:05:20.360 --> 0:05:23.320
+I'd be happy to.
+
+74
+0:05:23.320 --> 0:05:27.400
+But today I want to focus on shrinking.
+
+75
+0:05:27.400 --> 0:05:33.400
+So why am I talking about shrinkers in the Kotlin dev room?
+
+76
+0:05:33.400 --> 0:05:37.620
+Why is the presentation called in the age of Kotlin?
+
+77
+0:05:37.620 --> 0:05:42.040
+So the Kotlin compiler generates Java classes just like the Java compiler.
+
+78
+0:05:42.040 --> 0:05:44.040
+So isn't it all just Java bytecode?
+
+79
+0:05:44.040 --> 0:05:47.200
+Why is there a difference?
+
+80
+0:05:47.200 --> 0:05:49.960
+So let's take a look at a very simple example.
+
+81
+0:05:49.960 --> 0:05:55.320
+So let's look at the Hello World in Java, Hello World in Kotlin.
+
+82
+0:05:55.320 --> 0:06:02.040
+We will use the Java P-tool to print out a disassembly of the class file.
+
+83
+0:06:02.040 --> 0:06:05.480
+And let's see what the difference is.
+
+84
+0:06:05.480 --> 0:06:10.240
+So it doesn't matter the exact content here, but right away you can see that on the right
+
+85
+0:06:10.240 --> 0:06:14.880
+side, the Kotlin side is longer.
+
+86
+0:06:14.880 --> 0:06:15.880
+So what do we have here?
+
+87
+0:06:15.880 --> 0:06:20.480
+We have some header which is basically the same, so that's not very interesting.
+
+88
+0:06:20.480 --> 0:06:21.920
+We have a constant pull.
+
+89
+0:06:21.920 --> 0:06:27.660
+We already see here that there are more constants used in the Kotlin class.
+
+90
+0:06:27.660 --> 0:06:32.760
+On the Java side we have an extra constructor which doesn't appear in the Kotlin side.
+
+91
+0:06:32.760 --> 0:06:36.360
+And that's because actually in this example there is no class here.
+
+92
+0:06:36.360 --> 0:06:38.960
+So this main is in the top level of the file.
+
+93
+0:06:38.960 --> 0:06:40.120
+There's no classes.
+
+94
+0:06:40.120 --> 0:06:48.000
+So from the Kotlin point of view you cannot instantiate this generated Java class file.
+
+95
+0:06:48.000 --> 0:06:49.200
+And then we have a main method.
+
+96
+0:06:49.200 --> 0:06:56.280
+And actually on the Kotlin side we have two methods because I declared the methods without
+
+97
+0:06:56.280 --> 0:06:57.760
+the args parameters.
+
+98
+0:06:57.760 --> 0:07:02.760
+So actually the Kotlin compiler generates two and one will call the other one.
+
+99
+0:07:02.760 --> 0:07:07.240
+And then at the bottom here, which is going to be most of the focus of this talk, is Kotlin
+
+100
+0:07:07.240 --> 0:07:11.120
+metadata.
+
+101
+0:07:11.120 --> 0:07:17.240
+And why do we need this extra metadata that we saw in the class file here?
+
+102
+0:07:17.240 --> 0:07:19.060
+So let's look at a very simple example.
+
+103
+0:07:19.060 --> 0:07:24.900
+If you have a data class in Kotlin, data classes don't exist in Java.
+
+104
+0:07:24.900 --> 0:07:29.080
+So when you compile this to a Java class file, you get a Java class.
+
+105
+0:07:29.080 --> 0:07:35.080
+There's no indication here that it was a data class.
+
+106
+0:07:35.080 --> 0:07:39.640
+Another example with context receivers.
+
+107
+0:07:39.640 --> 0:07:47.640
+So if you have context receivers in Kotlin, when you compile this to Java bytecode, you
+
+108
+0:07:47.640 --> 0:07:50.440
+will have Java function which looks something like this.
+
+109
+0:07:50.440 --> 0:07:58.200
+All your context receivers will end up as the first parameters of your method.
+
+110
+0:07:58.200 --> 0:08:04.080
+So if you're just looking at this from a Java class file point of view, how do you know
+
+111
+0:08:04.080 --> 0:08:10.600
+that the first parameters are context receivers and not just any other normal context receivers
+
+112
+0:08:10.600 --> 0:08:15.160
+and not any other parameters?
+
+113
+0:08:15.160 --> 0:08:19.600
+And then there are many other things encoded in the metadata, for example nullability,
+
+114
+0:08:19.600 --> 0:08:23.440
+type aliases and a lot more.
+
+115
+0:08:23.440 --> 0:08:27.280
+And so this is a big problem for codes that inspects the Kotlin code.
+
+116
+0:08:27.280 --> 0:08:34.680
+So for example, using reflection, for example the compiler, for example IDE, all of these
+
+117
+0:08:34.680 --> 0:08:42.120
+tools need to know that a class is a data class, for example.
+
+118
+0:08:42.120 --> 0:08:43.840
+And how is this metadata encoded?
+
+119
+0:08:43.840 --> 0:08:51.980
+Let's have a look again at the Java P outputs and let's zoom in on the metadata.
+
+120
+0:08:51.980 --> 0:08:58.840
+So if we zoom in a bit, we see that it's actually just Java annotation.
+
+121
+0:08:58.840 --> 0:09:06.160
+I say just in quotes because inside that annotation is a bit more complicated, has to be decoded,
+
+122
+0:09:06.160 --> 0:09:11.260
+but it is a Java annotation.
+
+123
+0:09:11.260 --> 0:09:15.480
+So since it's just an annotation, we can actually see the source code.
+
+124
+0:09:15.480 --> 0:09:18.240
+So you can find the source code on GitHub.
+
+125
+0:09:18.240 --> 0:09:23.320
+There are a bunch of different fields in the annotation.
+
+126
+0:09:23.320 --> 0:09:25.480
+One of them, the first one is the kind.
+
+127
+0:09:25.480 --> 0:09:30.360
+So we saw already that the main function, the small example that I gave with the main
+
+128
+0:09:30.360 --> 0:09:32.480
+function at the beginning, there was no class.
+
+129
+0:09:32.480 --> 0:09:37.280
+So actually this is a file kind, not a class kind.
+
+130
+0:09:37.280 --> 0:09:39.980
+There was also a version here.
+
+131
+0:09:39.980 --> 0:09:45.520
+And there are some two fields where the actual metadata is stored in a binary format and
+
+132
+0:09:45.520 --> 0:09:49.280
+strings that are referenced by the metadata are stored.
+
+133
+0:09:49.280 --> 0:09:55.480
+And then there are some other fields here with some strings and some bit flags.
+
+134
+0:09:55.480 --> 0:09:57.920
+Okay.
+
+135
+0:09:57.920 --> 0:10:02.800
+So that's what metadata is, why we need metadata.
+
+136
+0:10:02.800 --> 0:10:05.760
+But why am I talking about shrinking?
+
+137
+0:10:05.760 --> 0:10:10.240
+What then is the problem with shrinking Kotlin code?
+
+138
+0:10:10.240 --> 0:10:16.360
+So one of the most basic problems here is that there is an annotation.
+
+139
+0:10:16.360 --> 0:10:25.040
+So if your shrinker or the user who is configuring the shrinker does not tell the shrinker that
+
+140
+0:10:25.040 --> 0:10:30.360
+it needs this annotation, typically this annotation is not used directly by the program.
+
+141
+0:10:30.360 --> 0:10:36.320
+So when you do your tree shaking, you won't see that it's used.
+
+142
+0:10:36.320 --> 0:10:39.440
+And then it can just be removed.
+
+143
+0:10:39.440 --> 0:10:44.480
+But then it's just going to be a normal Java class again.
+
+144
+0:10:44.480 --> 0:10:48.760
+So either your shrinker needs to know about Kotlin or you need to configure it to keep
+
+145
+0:10:48.760 --> 0:10:52.580
+the annotation.
+
+146
+0:10:52.580 --> 0:10:58.440
+Another simple example is if you start renaming stuff in the Java classes.
+
+147
+0:10:58.440 --> 0:11:04.560
+So if you rename the class, if you rename the methods, then you see in this example
+
+148
+0:11:04.560 --> 0:11:11.760
+here that actually in the metadata still refers to all of the old names.
+
+149
+0:11:11.760 --> 0:11:19.040
+And then if you are removing methods because they're unused, well, there's also information
+
+150
+0:11:19.040 --> 0:11:22.720
+about these functions from the Kotlin point of view in the metadata.
+
+151
+0:11:22.720 --> 0:11:29.840
+So if you remove it from the Java part, it's still going to be in the Kotlin metadata unless
+
+152
+0:11:29.840 --> 0:11:35.160
+your shrinker knows about Kotlin metadata.
+
+153
+0:11:35.160 --> 0:11:43.720
+So as I mentioned, I work on ProGuard, I work on DexGuard, and both of these process Kotlin
+
+154
+0:11:43.720 --> 0:11:46.680
+metadata in the same way.
+
+155
+0:11:46.680 --> 0:11:51.080
+And so let's have a look at how that actually works.
+
+156
+0:11:51.080 --> 0:11:58.060
+So as a very high level, we have a texture representation of the metadata here.
+
+157
+0:11:58.060 --> 0:12:07.160
+So for example, there's a Java class, it has some metadata attached, there is a function
+
+158
+0:12:07.160 --> 0:12:14.180
+there, and you'll see in the metadata part there is a link.
+
+159
+0:12:14.180 --> 0:12:19.080
+So for the class, there's attached metadata.
+
+160
+0:12:19.080 --> 0:12:28.680
+And then you'll see also that the function in the Kotlin metadata points to an actual
+
+161
+0:12:28.680 --> 0:12:32.760
+Java bytecode, a Java method.
+
+162
+0:12:32.760 --> 0:12:36.400
+And then the metadata doesn't contain any of the actual bytecode, the bytecode is in
+
+163
+0:12:36.400 --> 0:12:41.280
+the Java method.
+
+164
+0:12:41.280 --> 0:12:53.120
+So ProGuard core, sorry, so there are two basic rules here.
+
+165
+0:12:53.120 --> 0:12:58.720
+If the Java part is renamed, rename the Kotlin part.
+
+166
+0:12:58.720 --> 0:13:02.120
+And if the Java part is unused, remove the Kotlin part.
+
+167
+0:13:02.120 --> 0:13:08.040
+So for example, if you rename the method sum here, you should also rename the function
+
+168
+0:13:08.040 --> 0:13:09.320
+in the metadata.
+
+169
+0:13:09.320 --> 0:13:13.080
+If you remove the method, you should also remove the function in the metadata.
+
+170
+0:13:13.080 --> 0:13:18.040
+And at a high level, that's two of the basic rules that ProGuard follows when processing
+
+171
+0:13:18.040 --> 0:13:19.040
+the metadata.
+
+172
+0:13:19.040 --> 0:13:26.520
+There are a lot of details around that, but at a high level, that's what's happening.
+
+173
+0:13:26.520 --> 0:13:29.680
+So how is this implemented?
+
+174
+0:13:29.680 --> 0:13:36.120
+So we have an open source project which is separate from ProGuard called ProGuard core.
+
+175
+0:13:36.120 --> 0:13:38.960
+But it was born out of the ProGuard project.
+
+176
+0:13:38.960 --> 0:13:43.720
+So basically it's extracted from the ProGuard project.
+
+177
+0:13:43.720 --> 0:13:48.160
+A lot of the bytecode manipulation and analysis.
+
+178
+0:13:48.160 --> 0:13:55.560
+So for example, you can read and write Java class files and Kotlin files.
+
+179
+0:13:55.560 --> 0:14:00.280
+And you can modify, generate and analyze code.
+
+180
+0:14:00.280 --> 0:14:04.880
+And importantly for this talk, you can inspect and modify Kotlin metadata.
+
+181
+0:14:04.880 --> 0:14:11.400
+And this actually is powered by the Kotlin next metadata library, which is developed
+
+182
+0:14:11.400 --> 0:14:12.680
+by JetBrains.
+
+183
+0:14:12.680 --> 0:14:23.040
+So we don't actually need to dive deep into the actual parsing of what's in this annotation.
+
+184
+0:14:23.040 --> 0:14:24.920
+So JetBrains does that for us.
+
+185
+0:14:24.920 --> 0:14:30.000
+We take advantage of the library to be able to load the data from the annotation, manipulate
+
+186
+0:14:30.000 --> 0:14:32.560
+it and then write it back again.
+
+187
+0:14:32.560 --> 0:14:38.880
+And it also has a big advantage in that, for example, with versioning from the ProGuard
+
+188
+0:14:38.880 --> 0:14:43.320
+core point of view, we don't really care about the version of the metadata that we need to
+
+189
+0:14:43.320 --> 0:14:47.600
+parse different versions in different ways.
+
+190
+0:14:47.600 --> 0:14:53.360
+That is delegated to the JetBrains library.
+
+191
+0:14:53.360 --> 0:14:59.040
+So how can we use ProGuard core to read and modify Kotlin metadata?
+
+192
+0:14:59.040 --> 0:15:04.080
+So let's have a look at an example.
+
+193
+0:15:04.080 --> 0:15:09.720
+So I was thinking about doing a live demo here, but I practiced yesterday and there
+
+194
+0:15:09.720 --> 0:15:11.680
+was intelligent problems and stuff.
+
+195
+0:15:11.680 --> 0:15:14.920
+So I decided to make some slides instead.
+
+196
+0:15:14.920 --> 0:15:21.840
+So basically what you can do is you can create, for example, a new Gradle project, add a dependency
+
+197
+0:15:21.840 --> 0:15:28.520
+on ProGuard core, and then you will be able to use the features to modify the metadata.
+
+198
+0:15:28.520 --> 0:15:32.000
+So let's have a look at an example of what kind of code you can write.
+
+199
+0:15:32.000 --> 0:15:38.200
+So let's say we've created a new project in IntelliJ, we added a dependency on ProGuard
+
+200
+0:15:38.200 --> 0:15:42.400
+core, and we have just a main function.
+
+201
+0:15:42.400 --> 0:15:47.440
+We have a file called main, we have the main function.
+
+202
+0:15:47.440 --> 0:15:54.480
+And we want to read some Java class file that was generated by the Kotlin compiler and look
+
+203
+0:15:54.480 --> 0:15:56.920
+at the metadata.
+
+204
+0:15:56.920 --> 0:16:02.400
+So let's try reading the metadata from this class that we're writing.
+
+205
+0:16:02.400 --> 0:16:06.640
+So once it's compiled, it's going to end up somewhere here in the build folder.
+
+206
+0:16:06.640 --> 0:16:12.520
+Let's read it back in and then see what metadata is there.
+
+207
+0:16:12.520 --> 0:16:18.600
+So we can use a small utility function to be able to read in class files.
+
+208
+0:16:18.600 --> 0:16:23.200
+It will read in the class file and it will initialize the Kotlin metadata.
+
+209
+0:16:23.200 --> 0:16:30.560
+It will put that class file into a container called a program class pool.
+
+210
+0:16:30.560 --> 0:16:33.160
+Once we've done that, we should initialize all the class references.
+
+211
+0:16:33.160 --> 0:16:35.760
+This is quite an important concept in ProGuard core.
+
+212
+0:16:35.760 --> 0:16:38.880
+For example, the references to the super classes.
+
+213
+0:16:38.880 --> 0:16:45.520
+So you have the whole hierarchy, references between classes with the method calls.
+
+214
+0:16:45.520 --> 0:16:52.760
+So that's the important step after you've loaded in the class initializer references.
+
+215
+0:16:52.760 --> 0:16:57.200
+And once you've done that, you now have access to the Kotlin metadata.
+
+216
+0:16:57.200 --> 0:17:04.440
+So what we can do is we can visit all of the classes that are loaded into the class pool.
+
+217
+0:17:04.440 --> 0:17:07.280
+We can visit all of their metadata.
+
+218
+0:17:07.280 --> 0:17:10.960
+And within that metadata, we can visit all of the functions.
+
+219
+0:17:10.960 --> 0:17:15.120
+And then we can, for example, print out the function name.
+
+220
+0:17:15.120 --> 0:17:21.640
+And this is not printing out the method name of the Java method.
+
+221
+0:17:21.640 --> 0:17:27.160
+This is printing out the function name that is in the metadata.
+
+222
+0:17:27.160 --> 0:17:30.680
+So if we run this, we will see some output here.
+
+223
+0:17:30.680 --> 0:17:35.360
+So we've run the input to this program, is this program itself.
+
+224
+0:17:35.360 --> 0:17:38.360
+So there is one function.
+
+225
+0:17:38.360 --> 0:17:42.000
+And so it prints out main.
+
+226
+0:17:42.000 --> 0:17:45.320
+If we add another function, we run it again.
+
+227
+0:17:45.320 --> 0:17:51.620
+It will print through and main.
+
+228
+0:17:51.620 --> 0:17:58.800
+But we can't only just read metadata.
+
+229
+0:17:58.800 --> 0:18:07.480
+We can also modify the Java parts of the class file.
+
+230
+0:18:07.480 --> 0:18:15.060
+So let's say that our shrinker wants to rename a method to some other name.
+
+231
+0:18:15.060 --> 0:18:19.640
+So let's visit all of the methods in the class.
+
+232
+0:18:19.640 --> 0:18:21.760
+Let's rename it.
+
+233
+0:18:21.760 --> 0:18:25.200
+If it's called foo already, let's rename it to new foo.
+
+234
+0:18:25.200 --> 0:18:30.360
+Otherwise we just keep the original name.
+
+235
+0:18:30.360 --> 0:18:36.220
+And note that now that we've renamed the Java component.
+
+236
+0:18:36.220 --> 0:18:40.760
+And now the metadata is out of sync.
+
+237
+0:18:40.760 --> 0:18:42.840
+So how do we fix that?
+
+238
+0:18:42.840 --> 0:18:45.240
+What we can do is we can visit the metadata.
+
+239
+0:18:45.240 --> 0:18:53.520
+We can then look at the reference where the metadata points to the Java method.
+
+240
+0:18:53.520 --> 0:18:56.720
+And then we can set the name.
+
+241
+0:18:56.720 --> 0:18:59.520
+But actually there is a utility in ProgoCore which can do that for you.
+
+242
+0:18:59.520 --> 0:19:05.520
+The class reference fixer that will fix up all the names after you've renamed stuff.
+
+243
+0:19:05.520 --> 0:19:10.880
+Once we've done that, we need to write the metadata back into the annotation.
+
+244
+0:19:10.880 --> 0:19:14.000
+So we use a Kotlin metadata writer for that.
+
+245
+0:19:14.000 --> 0:19:19.280
+And once we've done that, we can write out the class to overwrite the original file.
+
+246
+0:19:19.280 --> 0:19:26.640
+So if we open the file now in the IntelliJ decompiler, we see that the function is now
+
+247
+0:19:26.640 --> 0:19:29.260
+called new foo.
+
+248
+0:19:29.260 --> 0:19:34.800
+So what's important here is that we've renamed the Java component, the method where the bytecode
+
+249
+0:19:34.800 --> 0:19:40.400
+actually lives, and also the Kotlin metadata.
+
+250
+0:19:40.400 --> 0:19:46.480
+If you want to learn more about ProgoCore, if you want to start modifying Kotlin metadata
+
+251
+0:19:46.480 --> 0:19:51.760
+yourself or if you want to build tools to modify Kotlin metadata, a good place to start
+
+252
+0:19:51.760 --> 0:19:52.760
+is the manual.
+
+253
+0:19:52.760 --> 0:19:57.680
+If you just want to look at metadata, you can check out our Kotlin metadata printer
+
+254
+0:19:57.680 --> 0:19:58.680
+project.
+
+255
+0:19:58.680 --> 0:20:06.280
+It will take in APK or JAR file or class file as input and show you all the metadata.
+
+256
+0:20:06.280 --> 0:20:10.160
+This is actually built into the program playground web service as well.
+
+257
+0:20:10.160 --> 0:20:15.480
+So you can upload a JAR file there and it will just show you the Kotlin metadata.
+
+258
+0:20:15.480 --> 0:20:20.760
+And as I mentioned before, the ProgoCore metadata support is built on top of the Kotlin metadata
+
+259
+0:20:20.760 --> 0:20:22.840
+library from JetBrains.
+
+260
+0:20:22.840 --> 0:20:24.920
+So you don't need to use ProgoCore to use that library.
+
+261
+0:20:24.920 --> 0:20:28.900
+So you can also check that out as well.
+
+262
+0:20:28.900 --> 0:20:31.840
+If you have any questions, I'll be happy to answer.
+
+263
+0:20:31.840 --> 0:20:35.240
+You can also contact me via Twitter.
+
+264
+0:20:35.240 --> 0:20:41.440
+I'm also on LinkedIn as well if you have any questions later.
+
+265
+0:20:41.440 --> 0:20:42.440
+Thank you.
+
+266
+0:20:42.440 --> 0:20:43.440
+Awesome.
+
+267
+0:20:43.440 --> 0:20:50.640
+We do have five minutes for questions from the audience.
+
+268
+0:20:50.640 --> 0:20:54.920
+So yeah, please just shout it.
+
+269
+0:20:54.920 --> 0:21:11.680
+So the question is, can you throw away metadata if you're developing an app?
+
+270
+0:21:11.680 --> 0:21:14.000
+So not a library.
+
+271
+0:21:14.000 --> 0:21:18.720
+In a lot of cases, yes, unless you're using reflection.
+
+272
+0:21:18.720 --> 0:21:21.260
+And reflection is quite popular.
+
+273
+0:21:21.260 --> 0:21:26.540
+So if you don't use reflection, you're not making a library.
+
+274
+0:21:26.540 --> 0:21:30.860
+You can probably get rid of a lot of metadata.
+
+275
+0:21:30.860 --> 0:21:34.000
+But then reflection is a big problem now.
+
+276
+0:21:34.000 --> 0:21:42.360
+Do you have an idea of the size of the metadata in a typical question jar?
+
+277
+0:21:42.360 --> 0:21:47.960
+Like how much bigger is it compared to the same results?
+
+278
+0:21:47.960 --> 0:21:52.360
+I don't have any numbers here.
+
+279
+0:21:52.360 --> 0:22:00.880
+But basically all of the header information for all of the functions accepts the actual
+
+280
+0:22:00.880 --> 0:22:05.000
+bytecode is encoded in the metadata.
+
+281
+0:22:05.000 --> 0:22:07.040
+So it can be quite big.
+
+282
+0:22:07.040 --> 0:22:12.280
+There is some sharing because there is a user in the metadata annotation.
+
+283
+0:22:12.280 --> 0:22:13.560
+There's a strings array.
+
+284
+0:22:13.560 --> 0:22:20.120
+So those strings are shared with other strings because they're part of the constant pool.
+
+285
+0:22:20.120 --> 0:22:21.160
+So that saves space.
+
+286
+0:22:21.160 --> 0:22:22.840
+But it can be a lot.
+
+287
+0:22:22.840 --> 0:22:27.640
+And if you're developing an app which doesn't use reflection, then maybe you can just remove
+
+288
+0:22:27.640 --> 0:22:28.640
+all of it.
+
+289
+0:22:28.640 --> 0:22:29.640
+Yes?
+
+290
+0:22:29.640 --> 0:22:30.640
+With tree shaking, can you also remove the methods?
+
+291
+0:22:30.640 --> 0:22:39.640
+Not only the classes, just from the libraries, but the intradi part of the classes?
+
+292
+0:22:39.640 --> 0:22:40.640
+Yeah, yeah.
+
+293
+0:22:40.640 --> 0:22:41.640
+So classes.
+
+294
+0:22:41.640 --> 0:22:47.200
+So the question was, with tree shaking, can you remove methods, not just classes?
+
+295
+0:22:47.200 --> 0:22:55.440
+Yeah, so the tree shaking normally will remove entities in the app, for example classes,
+
+296
+0:22:55.440 --> 0:22:58.960
+but also methods can be removed, fields can be removed.
+
+297
+0:22:58.960 --> 0:22:59.960
+Sorry?
+
+298
+0:22:59.960 --> 0:23:01.960
+Inlining as well?
+
+299
+0:23:01.960 --> 0:23:02.960
+Yes.
+
+300
+0:23:02.960 --> 0:23:08.520
+So sometimes, so this is more, at least in ProGuard, the inline is more of the optimizer's
+
+301
+0:23:08.520 --> 0:23:09.520
+job.
+
+302
+0:23:09.520 --> 0:23:14.520
+But, yeah, so some things can be inlined and then the methods, the original method can
+
+303
+0:23:14.520 --> 0:23:16.560
+then be removed.
+
+304
+0:23:16.560 --> 0:23:21.760
+Also for Java class files, attributes can be removed if they're not used.
+
+305
+0:23:21.760 --> 0:23:29.080
+And for ProGuard, the code is part of the optimizer's job.
+
+306
+0:23:29.080 --> 0:23:34.220
+And then once you remove that code, you can also run the tree shaking step again and then
+
+307
+0:23:34.220 --> 0:23:41.600
+start removing unused methods, fields, and classes that just became unused because you
+
+308
+0:23:41.600 --> 0:23:42.600
+optimized.
+
+309
+0:23:42.600 --> 0:23:43.600
+Yes?
+
+310
+0:23:43.600 --> 0:23:50.760
+How does this affect the debugging?
+
+311
+0:23:50.760 --> 0:23:53.320
+So the question is, how does it affect the debugging?
+
+312
+0:23:53.320 --> 0:23:54.320
+But what's exactly that?
+
+313
+0:23:54.320 --> 0:24:07.280
+So we've been able to make the greenness version so it doesn't really make any difference.
+
+314
+0:24:07.280 --> 0:24:08.280
+Do you mean, sorry?
+
+315
+0:24:08.280 --> 0:24:14.280
+So we manipulate the bytecode and rename and rename the original function for others.
+
+316
+0:24:14.280 --> 0:24:17.880
+And our source file remains in the original kind of...
+
+317
+0:24:17.880 --> 0:24:21.960
+Okay, yeah, so when you rename everything, then how does this affect debugging?
+
+318
+0:24:21.960 --> 0:24:26.920
+For example, if you get a stack trace from some crash or something, yeah.
+
+319
+0:24:26.920 --> 0:24:36.280
+So ProGuard will generate a mapping file which maps from the original names to the new names.
+
+320
+0:24:36.280 --> 0:24:38.560
+And this mapping file is also used by R8 as well.
+
+321
+0:24:38.560 --> 0:24:41.560
+It's the same mapping file.
+
+322
+0:24:41.560 --> 0:24:45.720
+And this is also supported by services like Crashlytics.
+
+323
+0:24:45.720 --> 0:24:48.360
+So the mapping file will be uploaded to Crashlytics, for example.
+
+324
+0:24:48.360 --> 0:24:52.080
+If you see crashes from customers, it will be automatically uploaded.
+

@@ -1,0 +1,868 @@
+1
+0:00:00.000 --> 0:00:09.640
+Let's move on everyone.
+
+2
+0:00:09.640 --> 0:00:15.280
+We have to keep the schedule and keep the pace for all our viewers online and the rest
+
+3
+0:00:15.280 --> 0:00:16.280
+of them.
+
+4
+0:00:16.280 --> 0:00:24.240
+For this next talk, we are welcoming Romain, who is going to talk about dependency on jurisdictions.
+
+5
+0:00:24.240 --> 0:00:29.280
+Please give Romain a warm welcome.
+
+6
+0:00:29.280 --> 0:00:33.480
+Thank you for having me.
+
+7
+0:00:33.480 --> 0:00:36.680
+I'm really glad to be here with you.
+
+8
+0:00:36.680 --> 0:00:42.400
+I'm Romain Brousel, and today I will guide you through our journey of improving the use
+
+9
+0:00:42.400 --> 0:00:47.560
+of CODAIN, a dependency injection library using KSP.
+
+10
+0:00:47.560 --> 0:00:51.760
+So you already seen that commercial art, so I'll make it quick.
+
+11
+0:00:51.760 --> 0:00:57.120
+I'm really happy to work with Solomon on advocating as well as providing services and trainings
+
+12
+0:00:57.120 --> 0:01:06.160
+on CODAIN, and I'm really grateful that JetBrains is rewarding us years after years.
+
+13
+0:01:06.160 --> 0:01:10.920
+So let's talk about the real subject here, open source.
+
+14
+0:01:10.920 --> 0:01:20.120
+So we are maintaining a set of CODAIN multi-partform independent tools that are compatible on every
+
+15
+0:01:20.120 --> 0:01:23.920
+target on which we can combine CODAIN.
+
+16
+0:01:23.920 --> 0:01:29.280
+And obviously today we're going to talk about dependency injection with CODAIN.
+
+17
+0:01:29.280 --> 0:01:35.320
+So let's team up and see what are our problems today and how we are trying to solve them
+
+18
+0:01:35.320 --> 0:01:37.280
+with KSP.
+
+19
+0:01:37.280 --> 0:01:46.280
+First, a little bit of context on why we are using dependency injection in our applications.
+
+20
+0:01:46.280 --> 0:01:52.600
+So let's assume that I have a view model that needs multiple instances of use cases.
+
+21
+0:01:52.600 --> 0:01:59.040
+So I will need to initialize every one of those use cases and their dependencies and
+
+22
+0:01:59.040 --> 0:02:00.080
+so on.
+
+23
+0:02:00.080 --> 0:02:09.440
+So to avoid managing those initializations, we often use the dependency injection pattern.
+
+24
+0:02:09.440 --> 0:02:17.320
+In dependency injection, the DI container has the responsibility to initialize every
+
+25
+0:02:17.320 --> 0:02:27.000
+instances we need to make our objects work, and so we can lazily retrieve them with a
+
+26
+0:02:27.000 --> 0:02:30.360
+simple function code.
+
+27
+0:02:30.360 --> 0:02:39.000
+So here we see that we used a generic function that is called instance, or we often see get
+
+28
+0:02:39.000 --> 0:02:41.560
+inject or whatever.
+
+29
+0:02:41.560 --> 0:02:49.240
+In some other libraries of frameworks, we often see a huge amount of annotations.
+
+30
+0:02:49.240 --> 0:02:54.600
+So it sounds like magic to a lot of people.
+
+31
+0:02:54.600 --> 0:02:59.120
+Another problem with the generic instance function is that I don't really know what
+
+32
+0:02:59.120 --> 0:03:01.120
+is behind it.
+
+33
+0:03:01.120 --> 0:03:05.800
+Is it a singleton, a factory, do I need to pass an argument?
+
+34
+0:03:05.800 --> 0:03:08.680
+I don't really know.
+
+35
+0:03:08.680 --> 0:03:15.800
+Another problem comes with the DI binding declaration.
+
+36
+0:03:15.800 --> 0:03:21.600
+As a maintainer, I know what's behind all that, but it can be confusing for newcomers.
+
+37
+0:03:21.600 --> 0:03:25.420
+And on top of that, there is no compilation checks.
+
+38
+0:03:25.420 --> 0:03:34.480
+So this means that if you forgot some bindings, you will probably know it when your application
+
+39
+0:03:34.480 --> 0:03:40.720
+crashes, or in worst cases, in your crash-lytics dashboard.
+
+40
+0:03:40.720 --> 0:03:45.400
+So did we just create a monster?
+
+41
+0:03:45.400 --> 0:03:46.960
+Not quite.
+
+42
+0:03:46.960 --> 0:03:49.200
+But there is still room for improvement.
+
+43
+0:03:49.200 --> 0:03:56.400
+So let's do what we do best and refactor everything to get a better API and improve the use of
+
+44
+0:03:56.400 --> 0:03:58.200
+code in.
+
+45
+0:03:58.200 --> 0:03:59.960
+So let's welcome KSP.
+
+46
+0:03:59.960 --> 0:04:02.360
+It stands for Kotlin Symbol Processor.
+
+47
+0:04:02.360 --> 0:04:08.080
+A Kotlin Symbol Processor is a meta-programming tool that allows us to generate code, generally
+
+48
+0:04:08.080 --> 0:04:13.680
+based on some existing code base.
+
+49
+0:04:13.680 --> 0:04:20.800
+Symbol processors are generally used with annotations that are used to mark our code
+
+50
+0:04:20.800 --> 0:04:23.800
+that needs a special treatment by the processor.
+
+51
+0:04:23.800 --> 0:04:32.640
+In short terms, it's a lightweight compiler plugin because it can just generate code and
+
+52
+0:04:32.640 --> 0:04:35.560
+not modify some.
+
+53
+0:04:35.560 --> 0:04:37.200
+A quick example here.
+
+54
+0:04:37.200 --> 0:04:41.280
+I have a foo interface that is annotated to be processed.
+
+55
+0:04:41.280 --> 0:04:47.480
+So a compiler plugin, sorry, a Kotlin Symbol Processor should be able to generate a concrete
+
+56
+0:04:47.480 --> 0:04:53.720
+class of this foo interface overriding the check function.
+
+57
+0:04:53.720 --> 0:04:56.560
+So back to our initial problem.
+
+58
+0:04:56.560 --> 0:05:00.520
+What do we need to improve the code in's API?
+
+59
+0:05:00.520 --> 0:05:10.400
+First, we need a readable and typed API to be able to avoid the use of this generic function
+
+60
+0:05:10.400 --> 0:05:14.200
+instance everywhere.
+
+61
+0:05:14.200 --> 0:05:26.120
+Because we cannot easily have compile checks, at least we want an easy way to check the
+
+62
+0:05:26.120 --> 0:05:33.120
+dependency container consistency with a few lines of unit tests.
+
+63
+0:05:33.120 --> 0:05:39.320
+Note that the API you'll see today are still work in progress, so they may change a little
+
+64
+0:05:39.320 --> 0:05:43.360
+before landing on the release.
+
+65
+0:05:43.360 --> 0:05:50.960
+The main idea is that you should be able to declare one or more interfaces that represent
+
+66
+0:05:50.960 --> 0:05:54.760
+the dependencies you need in your applications.
+
+67
+0:05:54.760 --> 0:06:02.320
+That's the one that you need to retrieve, at least.
+
+68
+0:06:02.320 --> 0:06:08.520
+After that, we need to annotate our interface so that the coding's Symbol Processor should
+
+69
+0:06:08.520 --> 0:06:16.240
+be able to generate some code to interact with a DI container to retrieve your dependencies
+
+70
+0:06:16.240 --> 0:06:21.360
+in a typed way.
+
+71
+0:06:21.360 --> 0:06:26.400
+Let's introduce the result annotation for that.
+
+72
+0:06:26.400 --> 0:06:34.480
+Once we have annotated our interface, the coding's Symbol Processor should be able to
+
+73
+0:06:34.480 --> 0:06:39.400
+detect and generate code for us.
+
+74
+0:06:39.400 --> 0:06:45.680
+In that case, you will see that we need a parameter to create a brewery service, so
+
+75
+0:06:45.680 --> 0:06:54.360
+it will know that we need to interact with a factory that needs a string as parameters
+
+76
+0:06:54.360 --> 0:06:58.600
+to get a brewery service instance.
+
+77
+0:06:58.600 --> 0:07:08.600
+As well as the controller functions needs to return a simple instance depending on the
+
+78
+0:07:08.600 --> 0:07:10.520
+context.
+
+79
+0:07:10.520 --> 0:07:17.880
+Here is what the coding's Symbol Processor will generate for us.
+
+80
+0:07:17.880 --> 0:07:25.960
+A concrete class implementing our app dependencies interface, and that needs a DI container as
+
+81
+0:07:25.960 --> 0:07:26.960
+input.
+
+82
+0:07:26.960 --> 0:07:37.200
+The DI container will be used to retrieve the proper instances, either a factory, because
+
+83
+0:07:37.200 --> 0:07:43.920
+it can detect that we need a parameter, or a simple instance for the controller.
+
+84
+0:07:43.920 --> 0:07:51.520
+Now, let's see how we can use it in our application code.
+
+85
+0:07:51.520 --> 0:07:58.520
+First, we need to declare our DI bindings so our implementation should be able to interact
+
+86
+0:07:58.520 --> 0:07:59.520
+with.
+
+87
+0:07:59.520 --> 0:08:07.360
+For that, we still use our current API of coding's DSL, or we'll improve it a little
+
+88
+0:08:07.360 --> 0:08:13.800
+bit, but we will keep it as well as it is.
+
+89
+0:08:13.800 --> 0:08:15.280
+Why?
+
+90
+0:08:15.280 --> 0:08:24.480
+Suppose we have history with solutions like daggers that have gone wild with annotations.
+
+91
+0:08:24.480 --> 0:08:32.760
+Even so, it's where coding was created in the first place to avoid that forest of annotations.
+
+92
+0:08:32.760 --> 0:08:41.920
+We didn't want to introduce tons of annotations again and go full circle.
+
+93
+0:08:41.920 --> 0:08:50.000
+Finally, we think our binding declaration API is good enough to explicit our dependencies.
+
+94
+0:08:50.000 --> 0:08:56.680
+Here are the dependencies we need to meet the app dependencies interface contract.
+
+95
+0:08:56.680 --> 0:09:04.280
+We need a factory that takes a string and returns a service, and a singleton that returns
+
+96
+0:09:04.280 --> 0:09:10.720
+an instance of a controller that itself needs an instance of a service.
+
+97
+0:09:10.720 --> 0:09:13.080
+Welcome to that later.
+
+98
+0:09:13.080 --> 0:09:21.520
+Now we can instantiate the generated class with our DI container and retrieve our dependencies
+
+99
+0:09:21.520 --> 0:09:25.200
+with a truly typed API.
+
+100
+0:09:25.200 --> 0:09:33.760
+As we don't want our user to know how we are generating our function, or class implementation,
+
+101
+0:09:33.760 --> 0:09:42.400
+we also introduced an extension function that helps us instantiate the app dependencies
+
+102
+0:09:42.400 --> 0:09:46.200
+for us.
+
+103
+0:09:46.200 --> 0:09:55.400
+Now that we are able to retrieve our dependencies with a truly typed API, let's see how we can
+
+104
+0:09:55.400 --> 0:09:57.480
+check their consistency.
+
+105
+0:09:57.480 --> 0:10:08.600
+For that, we introduced a DI resolver interface that only needs to respect the contract of
+
+106
+0:10:08.600 --> 0:10:12.240
+a check function.
+
+107
+0:10:12.240 --> 0:10:18.680
+Now we can combine the DI resolver interface with an at resolve annotation.
+
+108
+0:10:18.680 --> 0:10:24.200
+In an ideal world, the at resolve annotation should be able to add that DI resolver type
+
+109
+0:10:24.200 --> 0:10:26.600
+to our interface itself.
+
+110
+0:10:26.600 --> 0:10:32.120
+As we are using Kotlin symbol processor, we can just generate some code and not modify
+
+111
+0:10:32.120 --> 0:10:36.360
+existing one.
+
+112
+0:10:36.360 --> 0:10:44.040
+So now that we are fully packed with our annotation and our DI resolver interface, the Kotlin
+
+113
+0:10:44.040 --> 0:10:50.860
+symbol processor will be able to generate the overridden function check and create a
+
+114
+0:10:50.860 --> 0:10:56.480
+requirement for every one of the functions or accessor we have defined in our app dependency
+
+115
+0:10:56.480 --> 0:11:02.880
+interface.
+
+116
+0:11:02.880 --> 0:11:07.640
+Before with that code, you will have taken the risk to go in production without easily
+
+117
+0:11:07.640 --> 0:11:12.080
+knowing if you forgot some bindings.
+
+118
+0:11:12.080 --> 0:11:13.840
+No more.
+
+119
+0:11:13.840 --> 0:11:23.120
+Now we just add a test and as we saw before, we instantiate our app dependencies interface
+
+120
+0:11:23.120 --> 0:11:28.360
+with a concrete class and just call the check functions.
+
+121
+0:11:28.360 --> 0:11:38.600
+That way, if you missed a binding, your test suite will warn you instantly with a proper
+
+122
+0:11:38.600 --> 0:11:39.640
+message.
+
+123
+0:11:39.640 --> 0:11:46.640
+So here we saw that we missed a factory binding that returned a service and takes a string
+
+124
+0:11:46.640 --> 0:11:51.200
+argument as input.
+
+125
+0:11:51.200 --> 0:11:52.200
+One more thing.
+
+126
+0:11:52.200 --> 0:12:00.160
+Earlier, we saw that the Kotlin binding DSL was impacted with the use of those instance
+
+127
+0:12:00.160 --> 0:12:01.160
+functions.
+
+128
+0:12:01.160 --> 0:12:05.760
+So let's see how we can improve this user as well.
+
+129
+0:12:05.760 --> 0:12:13.400
+Let's take this example when I need a controller that needs itself a use case and that also
+
+130
+0:12:13.400 --> 0:12:16.040
+needs a service.
+
+131
+0:12:16.040 --> 0:12:22.180
+Here is the binding we will have defined to meet our architecture expectation.
+
+132
+0:12:22.180 --> 0:12:26.640
+So you probably have seen me coming with those instance functions.
+
+133
+0:12:26.640 --> 0:12:31.720
+In the explicit world, we will have written those functions with their targeted type so
+
+134
+0:12:31.720 --> 0:12:36.600
+we saw that we need a service and a use case.
+
+135
+0:12:36.600 --> 0:12:44.560
+So why not using a typed API and get this instance directly?
+
+136
+0:12:44.560 --> 0:12:54.520
+This is not that simple because in Kotlin's DSL, this is a typed DI builder so it doesn't
+
+137
+0:12:54.520 --> 0:12:59.280
+know anything about the app dependencies API.
+
+138
+0:12:59.280 --> 0:13:07.160
+Thus, the Kotlin's symbol processor will also generate a new function for us that is called
+
+139
+0:13:07.160 --> 0:13:13.080
+off with the name of the app dependencies contract we have.
+
+140
+0:13:13.080 --> 0:13:24.200
+Thus, it creates a new DI builder that is aware of the DI building API and the app dependencies,
+
+141
+0:13:24.200 --> 0:13:30.480
+allowing us to call straight functions to get our instances as long as they are part
+
+142
+0:13:30.480 --> 0:13:34.400
+of the app dependencies API, obviously.
+
+143
+0:13:34.400 --> 0:13:40.120
+So as a result of the type dependencies, I can now easily check the consistency of my
+
+144
+0:13:40.120 --> 0:13:46.960
+DI container or retrieve dependencies in my application.
+
+145
+0:13:46.960 --> 0:13:51.480
+So I feel the tension and excitement in the room, right?
+
+146
+0:13:51.480 --> 0:13:52.560
+No?
+
+147
+0:13:52.560 --> 0:13:55.480
+One question on everybody's mind.
+
+148
+0:13:55.480 --> 0:13:57.560
+Is this live?
+
+149
+0:13:57.560 --> 0:14:00.440
+So I can spoil it earlier.
+
+150
+0:14:00.440 --> 0:14:06.760
+It's still a work in progress and we still have some corner cases to crack, like how
+
+151
+0:14:06.760 --> 0:14:13.680
+to use tags, how to manage modules, how to declare and the end-all scopes and context
+
+152
+0:14:13.680 --> 0:14:17.240
+is a few more.
+
+153
+0:14:17.240 --> 0:14:24.000
+Here is a sneak peek of some ideas we have to solve those problems.
+
+154
+0:14:24.000 --> 0:14:35.120
+An easy one is the tag API when we can retrieve a dependencies by passing a tag parameters.
+
+155
+0:14:35.120 --> 0:14:43.320
+We could add an annotation with that tag and easily retrieve our dependencies without having
+
+156
+0:14:43.320 --> 0:14:50.600
+to pass or no the tag that is needed behind.
+
+157
+0:14:50.600 --> 0:15:01.720
+For the module management, we could just provide two ways to interact with dependencies, either
+
+158
+0:15:01.720 --> 0:15:11.080
+with a fully packed DI container or a DI module, or add some parameters to our annotations,
+
+159
+0:15:11.080 --> 0:15:15.240
+or either create a new annotations again.
+
+160
+0:15:15.240 --> 0:15:19.080
+We'll see.
+
+161
+0:15:19.080 --> 0:15:20.080
+Maybe not.
+
+162
+0:15:20.080 --> 0:15:29.080
+A more complicated use case is how to handle scopes.
+
+163
+0:15:29.080 --> 0:15:37.080
+With code-ins, we can define some bindings that are with some life cycle depending on
+
+164
+0:15:37.080 --> 0:15:49.600
+the scope or context and retrieve them with the on function.
+
+165
+0:15:49.600 --> 0:16:03.240
+To define the scope with KSP, we could define that a contract is scoped entirely and then
+
+166
+0:16:03.240 --> 0:16:08.920
+be able to retrieve our dependencies with the right context.
+
+167
+0:16:08.920 --> 0:16:10.600
+Maybe this rings a bell.
+
+168
+0:16:10.600 --> 0:16:14.240
+It sounds like context receivers, right?
+
+169
+0:16:14.240 --> 0:16:20.400
+Unfortunately, context receivers are not available in Kotlin Multi Platform yet, so we'll have
+
+170
+0:16:20.400 --> 0:16:23.280
+to find another way.
+
+171
+0:16:23.280 --> 0:16:29.960
+Also, we have plenty of ideas to make this work.
+
+172
+0:16:29.960 --> 0:16:39.520
+This is an open source project, so obviously, if you want to contribute, you're welcome.
+
+173
+0:16:39.520 --> 0:16:40.520
+That's it for me.
+
+174
+0:16:40.520 --> 0:16:42.040
+Thank you for hearing me.
+
+175
+0:16:42.040 --> 0:16:47.160
+If you have some questions, I think we have time for it.
+
+176
+0:16:47.160 --> 0:16:53.920
+Thank you very much again.
+
+177
+0:16:53.920 --> 0:16:59.760
+We do have quite a lot of time for questions now, so please raise your hand if you have
+
+178
+0:16:59.760 --> 0:17:02.760
+any.
+
+179
+0:17:02.760 --> 0:17:05.960
+Just shout it and you will have to repeat it.
+
+180
+0:17:05.960 --> 0:17:13.960
+Can I find a strategy from the idea support in all these and the previous projects, working
+
+181
+0:17:13.960 --> 0:17:14.960
+with libraries?
+
+182
+0:17:14.960 --> 0:17:19.960
+Is it a fact that the idea doesn't pick up?
+
+183
+0:17:19.960 --> 0:17:28.360
+Some of this is called a blocker with an option.
+
+184
+0:17:28.360 --> 0:17:33.560
+The question is, is there some support in the IDE?
+
+185
+0:17:33.560 --> 0:17:39.560
+How do you mitigate the luck?
+
+186
+0:17:39.560 --> 0:17:46.440
+As for the Mocking library, you will need to build your code the first time to be able
+
+187
+0:17:46.440 --> 0:17:51.880
+to have the right APIs.
+
+188
+0:17:51.880 --> 0:17:58.880
+Like the new function and the off dependencies function, for example.
+
+189
+0:17:58.880 --> 0:18:13.880
+For the dependency injection framework, you're not affected much like IDE limitations.
+
+190
+0:18:13.880 --> 0:18:15.880
+Nope.
+
+191
+0:18:15.880 --> 0:18:22.880
+All right, I think it's clear.
+
+192
+0:18:22.880 --> 0:18:29.880
+One question.
+
+193
+0:18:29.880 --> 0:18:36.880
+With this dependency injection framework, are all the dependencies compiled statically,
+
+194
+0:18:36.880 --> 0:18:43.880
+like the dependency injection part, or is that still dynamic runtime?
+
+195
+0:18:43.880 --> 0:18:56.800
+Is the dependencies injection resolved statically or at runtime?
+
+196
+0:18:56.800 --> 0:18:59.160
+Is this your question?
+
+197
+0:18:59.160 --> 0:19:03.760
+They are resolved at runtime.
+
+198
+0:19:03.760 --> 0:19:12.060
+As we saw, we provide tools to check that all your bindings are well defined with your
+
+199
+0:19:12.060 --> 0:19:13.060
+test suite.
+
+200
+0:19:13.060 --> 0:19:19.040
+But they are resolved at runtime.
+
+201
+0:19:19.040 --> 0:19:26.280
+There is no reflection like Solomon showed you earlier.
+
+202
+0:19:26.280 --> 0:19:28.320
+That's how Dagger works, for example.
+
+203
+0:19:28.320 --> 0:19:37.320
+So it's basically the best of both worlds between Spring and Dagger.
+
+204
+0:19:37.320 --> 0:19:38.320
+We hope so.
+
+205
+0:19:38.320 --> 0:19:45.320
+There was another unrest on that side of the room.
+
+206
+0:19:45.320 --> 0:19:52.320
+I think it's a bit of an obvious question.
+
+207
+0:19:52.320 --> 0:20:01.400
+How does it compare to the coin then?
+
+208
+0:20:01.400 --> 0:20:06.320
+The question is, how does it compete with coin?
+
+209
+0:20:06.320 --> 0:20:17.520
+I think we have taken different routes with coin.
+
+210
+0:20:17.520 --> 0:20:23.760
+I think Arno will present you this afternoon.
+
+211
+0:20:23.760 --> 0:20:30.160
+It provides an API using annotation, more that we are doing.
+
+212
+0:20:30.160 --> 0:20:44.080
+We prefer keeping the binding declaration as much explicit as possible.
+
+213
+0:20:44.080 --> 0:20:56.480
+After that, I think it's more some internal implementation that does not really compete,
+
+214
+0:20:56.480 --> 0:20:58.480
+I think.
+
+215
+0:20:58.480 --> 0:21:01.640
+There we go.
+
+216
+0:21:01.640 --> 0:21:03.440
+No problem.
+
+217
+0:21:03.440 --> 0:21:05.440
+Thank you.
+

@@ -1,0 +1,1332 @@
+1
+0:00:00.000 --> 0:00:06.240
+I'll introduce you.
+
+2
+0:00:06.240 --> 0:00:10.000
+Kiran, are you ready?
+
+3
+0:00:10.000 --> 0:00:11.000
+Okay.
+
+4
+0:00:11.000 --> 0:00:16.600
+So we continue with our next talk.
+
+5
+0:00:16.600 --> 0:00:19.520
+Sorry for all the technical problems we have today.
+
+6
+0:00:19.520 --> 0:00:24.080
+Our next talk is by Michael Dobrich about modern camera handling in Chromium.
+
+7
+0:00:24.080 --> 0:00:26.120
+We need to move a bit.
+
+8
+0:00:26.120 --> 0:00:27.120
+Okay.
+
+9
+0:00:27.120 --> 0:00:28.120
+Okay.
+
+10
+0:00:28.120 --> 0:00:29.120
+Thank you.
+
+11
+0:00:29.120 --> 0:00:30.120
+Thank you.
+
+12
+0:00:30.120 --> 0:00:39.600
+So I'll talk a bit about camera handling in Chromium.
+
+13
+0:00:39.600 --> 0:00:43.440
+I think Wim already teeshared some of the things at the end of his talk.
+
+14
+0:00:43.440 --> 0:00:49.160
+So you'll notice similarities or reoccurring things that you already mentioned.
+
+15
+0:00:49.160 --> 0:00:53.320
+But I'm going to dive deeper into how this actually works and the implementation, how
+
+16
+0:00:53.320 --> 0:00:56.680
+we got to where we are now, and what's still missing.
+
+17
+0:00:56.680 --> 0:00:57.680
+Okay.
+
+18
+0:00:57.680 --> 0:00:59.680
+So let's start a short bit above me.
+
+19
+0:00:59.680 --> 0:01:03.040
+I'm Michael Dobrich and I work for Pangotronics.
+
+20
+0:01:03.040 --> 0:01:06.280
+I'm an embedded developer, Linux embedded developer.
+
+21
+0:01:06.280 --> 0:01:11.120
+They're mostly doing graphics kind of things and these stuff.
+
+22
+0:01:11.120 --> 0:01:12.520
+Okay.
+
+23
+0:01:12.520 --> 0:01:19.040
+So what's right now in Chromium is basically video for Linux.
+
+24
+0:01:19.040 --> 0:01:22.680
+Anyone who doesn't know what video for Linux is here in the room?
+
+25
+0:01:22.680 --> 0:01:23.680
+A few people.
+
+26
+0:01:23.680 --> 0:01:24.680
+Okay.
+
+27
+0:01:24.680 --> 0:01:25.680
+Just a few words.
+
+28
+0:01:25.680 --> 0:01:30.760
+So I'm going to use the kernel API to talk to cameras or add our devices too, but in
+
+29
+0:01:30.760 --> 0:01:35.240
+this interesting here is camera.
+
+30
+0:01:35.240 --> 0:01:40.920
+It's relatively simple API, just watch the format and give me a frame.
+
+31
+0:01:40.920 --> 0:01:47.000
+And if you look at the Chromium code, it's, I'd say, well, there's little development,
+
+32
+0:01:47.000 --> 0:01:48.000
+but it's basically done.
+
+33
+0:01:48.000 --> 0:01:52.560
+We'll get to that information a bit later because that's why I'm mentioning it.
+
+34
+0:01:52.560 --> 0:01:58.120
+I mean, the camera, the API is stable, it hasn't changed a lot, then the camera is working
+
+35
+0:01:58.120 --> 0:02:05.560
+in the browser, so there's not much to do to change that.
+
+36
+0:02:05.560 --> 0:02:10.960
+And then I started with a project where I wanted to do a bit more with cameras on a
+
+37
+0:02:10.960 --> 0:02:11.960
+Linux system.
+
+38
+0:02:11.960 --> 0:02:17.440
+It was a more less embedded device and the first thing was we want to choose if an application
+
+39
+0:02:17.440 --> 0:02:22.080
+can use a camera and which camera it's supposed to use or allowed to use.
+
+40
+0:02:22.080 --> 0:02:26.200
+And that's currently not possible because Chromium directly talks with the kernel and
+
+41
+0:02:26.200 --> 0:02:28.960
+just picks the camera, right?
+
+42
+0:02:28.960 --> 0:02:38.960
+And then there were web pages that didn't have the new API to do screen sharing.
+
+43
+0:02:38.960 --> 0:02:41.000
+They didn't use that.
+
+44
+0:02:41.000 --> 0:02:46.600
+So we wanted to basically pipe in the screen as a camera into this web page.
+
+45
+0:02:46.600 --> 0:02:53.800
+That was mostly in the early days of the video conferencing kind of things and more the commercial
+
+46
+0:02:53.800 --> 0:02:57.760
+applications that they had their products ready and done and didn't want to implement
+
+47
+0:02:57.760 --> 0:02:59.400
+new kind of things.
+
+48
+0:02:59.400 --> 0:03:03.000
+It's getting less, but it's still some of the muscle out there.
+
+49
+0:03:03.000 --> 0:03:08.800
+And then there were some cameras that were only H.264 and that's not supported by, I
+
+50
+0:03:08.800 --> 0:03:16.320
+don't think any browser on Linux actually can handle H.264 only cameras in the browser.
+
+51
+0:03:16.320 --> 0:03:18.900
+And then I wanted to attach IP cameras.
+
+52
+0:03:18.900 --> 0:03:25.760
+So I have the camera maybe back there in the room and I want to use that for a camera in
+
+53
+0:03:25.760 --> 0:03:26.760
+a video conference call.
+
+54
+0:03:26.760 --> 0:03:31.760
+If you have a bigger room and they don't want to use a long USB cable, their network would
+
+55
+0:03:31.760 --> 0:03:37.760
+be ideal, but I can't attach an IP camera to video for Linux, right?
+
+56
+0:03:37.760 --> 0:03:41.200
+So that's why we're shading.
+
+57
+0:03:41.200 --> 0:03:44.320
+These are not exactly common use cases.
+
+58
+0:03:44.320 --> 0:03:50.640
+I was looking for something I could argue, what can I do to bring this to Chromium mainline?
+
+59
+0:03:50.640 --> 0:04:00.160
+So if I want to implement something there, I need something what's more, yeah, an excuse
+
+60
+0:04:00.160 --> 0:04:04.880
+exactly to say this is useful for other people too.
+
+61
+0:04:04.880 --> 0:04:11.120
+So I started looking and the first thing that I came across then was because I was also
+
+62
+0:04:11.120 --> 0:04:18.480
+looking at or had used the screen sharing part which works with the portal kind of things
+
+63
+0:04:18.480 --> 0:04:19.920
+and in containers.
+
+64
+0:04:19.920 --> 0:04:23.800
+That's what my first use case, what I said, hey, these kind of people and that's what
+
+65
+0:04:23.800 --> 0:04:30.060
+them mentioned earlier as well is we want to say who's allowed to use the camera.
+
+66
+0:04:30.060 --> 0:04:35.400
+And that was one use case I had in mind to say, hey, we need a new high level API, we
+
+67
+0:04:35.400 --> 0:04:41.080
+need an API where we can say outside of the browser if the browser is allowed to use the
+
+68
+0:04:41.080 --> 0:04:42.720
+camera.
+
+69
+0:04:42.720 --> 0:04:47.400
+And then while I was already implementing these kind of things, actually the camera stuff
+
+70
+0:04:47.400 --> 0:04:48.400
+came up.
+
+71
+0:04:48.400 --> 0:04:53.680
+Then also mentioned that in this talk that we have new ways to talk to cameras and there
+
+72
+0:04:53.680 --> 0:05:01.520
+was no backend in Chromium there and so the idea was to promote and say, hey, let's use
+
+73
+0:05:01.520 --> 0:05:08.160
+this shared high level API for the browsers and just plug in the camera at the backend
+
+74
+0:05:08.160 --> 0:05:15.400
+which by the way is already implemented because, yeah, I'll get to that in a second.
+
+75
+0:05:15.400 --> 0:05:21.880
+So we want to do the authorization kind of thing and we want to do high level API so
+
+76
+0:05:21.880 --> 0:05:25.200
+we can put something else in behind.
+
+77
+0:05:25.200 --> 0:05:27.440
+And the solution was already there.
+
+78
+0:05:27.440 --> 0:05:32.560
+As soon as I really started looking it was obvious because the XG desktop portal kind
+
+79
+0:05:32.560 --> 0:05:37.160
+of thing that's the portal stuff that Wim mentioned, it already had an API for camera.
+
+80
+0:05:37.160 --> 0:05:40.320
+It was basically not used I think.
+
+81
+0:05:40.320 --> 0:05:47.680
+I didn't find any real life implementations that used it in the common case but it was
+
+82
+0:05:47.680 --> 0:05:49.360
+already there.
+
+83
+0:05:49.360 --> 0:05:52.520
+And so I said, okay, let's do that.
+
+84
+0:05:52.520 --> 0:05:57.000
+And I already was involved with pipewire and used it for the screen sharing kind of thing.
+
+85
+0:05:57.000 --> 0:05:59.560
+So nothing new to me.
+
+86
+0:05:59.560 --> 0:06:03.200
+I said, okay, let's implement that.
+
+87
+0:06:03.200 --> 0:06:06.360
+And I started to implement.
+
+88
+0:06:06.360 --> 0:06:12.120
+But before that I want to say a bit about how it works.
+
+89
+0:06:12.120 --> 0:06:18.120
+So the browser needs to talk to the portal and say, hey, I access camera.
+
+90
+0:06:18.120 --> 0:06:23.200
+That's basically the API call to the portal and say, hey, I want to access the camera.
+
+91
+0:06:23.200 --> 0:06:24.920
+Am I allowed to do that?
+
+92
+0:06:24.920 --> 0:06:25.920
+Okay.
+
+93
+0:06:25.920 --> 0:06:28.360
+Yeah, you're allowed to do that.
+
+94
+0:06:28.360 --> 0:06:29.360
+Okay.
+
+95
+0:06:29.360 --> 0:06:30.360
+Great.
+
+96
+0:06:30.360 --> 0:06:34.960
+Then, well, yeah, I need this pipewire remote to basically create the connection to the
+
+97
+0:06:34.960 --> 0:06:37.560
+pipewire and say, okay.
+
+98
+0:06:37.560 --> 0:06:41.360
+And then the portal says, okay, pipewire connect.
+
+99
+0:06:41.360 --> 0:06:43.800
+We want to talk to you.
+
+100
+0:06:43.800 --> 0:06:49.880
+And what the portal is doing then is restricting access.
+
+101
+0:06:49.880 --> 0:06:57.000
+So the browser won't have access to everything that's available on pipewire, but actually
+
+102
+0:06:57.000 --> 0:07:02.400
+only the cameras because we're only allowed access to the cameras.
+
+103
+0:07:02.400 --> 0:07:08.840
+There's a lot more details there in the background, but for the Chromium side for the implementation,
+
+104
+0:07:08.840 --> 0:07:10.920
+we don't need to care about that.
+
+105
+0:07:10.920 --> 0:07:15.680
+And then the portal hands over the file descriptor to Chromium and Chromium can talk to pipewire
+
+106
+0:07:15.680 --> 0:07:19.280
+directly and access cameras.
+
+107
+0:07:19.280 --> 0:07:26.480
+And then Chromium starts sending messages basically to pipewire and says, hey, we'll
+
+108
+0:07:26.480 --> 0:07:30.280
+need the objects and then the objects show up and I need your properties for all the
+
+109
+0:07:30.280 --> 0:07:33.360
+objects and basically builds up a list of cameras.
+
+110
+0:07:33.360 --> 0:07:38.640
+But it takes several round trips between Chromium and pipewire to get to that list.
+
+111
+0:07:38.640 --> 0:07:43.680
+That will be important again later as well because we're talking multiple processes here
+
+112
+0:07:43.680 --> 0:07:47.160
+and so it can take a bit of time.
+
+113
+0:07:47.160 --> 0:07:52.120
+And once we're there, the user selects a camera and says, okay, we want to start streaming,
+
+114
+0:07:52.120 --> 0:07:58.880
+then we'll start streaming and pipewire sends video frames over to Chromium.
+
+115
+0:07:58.880 --> 0:08:02.920
+That's basically the easy part at the end, although there is some format handling there
+
+116
+0:08:02.920 --> 0:08:04.840
+involved as well.
+
+117
+0:08:04.840 --> 0:08:06.920
+So okay, first try.
+
+118
+0:08:06.920 --> 0:08:10.080
+I was a bit naive actually at that point.
+
+119
+0:08:10.080 --> 0:08:14.960
+I started implementing this kind of thing that was basically two years ago and I had
+
+120
+0:08:14.960 --> 0:08:20.840
+more or less pull requests and it's changed set, I think.
+
+121
+0:08:20.840 --> 0:08:25.120
+It's changed list, CL, whatever.
+
+122
+0:08:25.120 --> 0:08:32.360
+And well, I posted it, I had it ready for review and there was not a lot of review going
+
+123
+0:08:32.360 --> 0:08:33.360
+on.
+
+124
+0:08:33.360 --> 0:08:38.960
+But I'm not trying to blame anyone here, but as I said at the beginning, the camera
+
+125
+0:08:38.960 --> 0:08:40.840
+stuff in Chromium was basically done.
+
+126
+0:08:40.840 --> 0:08:44.600
+So there were not a lot of people working on that.
+
+127
+0:08:44.600 --> 0:08:51.680
+So then you may be the Chromium camera API and video for Linux, but I had this new pipewire
+
+128
+0:08:51.680 --> 0:08:56.840
+portal de-burst code in there and none of the developers were actually familiar with
+
+129
+0:08:56.840 --> 0:08:58.240
+that kind of code.
+
+130
+0:08:58.240 --> 0:09:02.960
+So it was slow going, there was mostly some high level review for how the integration
+
+131
+0:09:02.960 --> 0:09:03.960
+worked.
+
+132
+0:09:03.960 --> 0:09:10.920
+And then there were some issues with, okay, this is not just Chromium, this is also Google
+
+133
+0:09:10.920 --> 0:09:12.000
+Chrome.
+
+134
+0:09:12.000 --> 0:09:18.040
+And that's a binary build that's deployed on multiple platforms, so we cannot just link
+
+135
+0:09:18.040 --> 0:09:24.200
+to the pipewire because it may not be there, so we need to load it dynamically.
+
+136
+0:09:24.200 --> 0:09:29.840
+But WebRTC, and when I talk about WebRTC in this talk, I'm talking about the implementation
+
+137
+0:09:29.840 --> 0:09:37.760
+used by the browsers, not the specification kind of things.
+
+138
+0:09:37.760 --> 0:09:43.920
+So in WebRTC, the pipewire is also loaded dynamically for the screen sharing.
+
+139
+0:09:43.920 --> 0:09:48.240
+That should have been the right flag for me, but I didn't notice at the time.
+
+140
+0:09:48.240 --> 0:09:51.400
+So basically, WebRTC tried to load the pipewire.
+
+141
+0:09:51.400 --> 0:09:54.760
+I tried to load the pipewire in Chromium and that clashed.
+
+142
+0:09:54.760 --> 0:09:58.720
+There were just architectural problems to do both at the same time.
+
+143
+0:09:58.720 --> 0:10:04.520
+And that's when we're stuck a bit and thinking about how to work around that issue and the
+
+144
+0:10:04.520 --> 0:10:10.440
+merge request basically dissolved a bit, and then someone came on the platform, Yang Ruli,
+
+145
+0:10:10.440 --> 0:10:15.960
+for example, and he was actually someone who knew about the pipewire stuff, about the portal
+
+146
+0:10:15.960 --> 0:10:22.000
+stuff, and said, hey, well, we shouldn't do that in Chromium, we should do that in WebRTC.
+
+147
+0:10:22.000 --> 0:10:24.040
+I said, okay, right.
+
+148
+0:10:24.040 --> 0:10:31.520
+I was actually sitting down with them and with Jan and Mark Foltz and a video conference
+
+149
+0:10:31.520 --> 0:10:36.120
+and we talked a bit about the architecture side and said, okay, WebRTC is the right place
+
+150
+0:10:36.120 --> 0:10:40.200
+because if I put it in WebRTC, WebRTC is also used by Firefox.
+
+151
+0:10:40.200 --> 0:10:46.500
+So Firefox can also use my implementation to do cameras.
+
+152
+0:10:46.500 --> 0:10:50.320
+So second try, do it in WebRTC.
+
+153
+0:10:50.320 --> 0:10:56.460
+There is already a camera API that's used by Firefox actually, and on Linux it just
+
+154
+0:10:56.460 --> 0:10:59.860
+implements Visual Linux.
+
+155
+0:10:59.860 --> 0:11:07.720
+So the idea was I put a back-end for pipewire in WebRTC and I put a back-end for WebRTC
+
+156
+0:11:07.720 --> 0:11:12.360
+in Chromium, basically just an indirection.
+
+157
+0:11:12.360 --> 0:11:18.360
+Yeah, there was an API, but there were some issues.
+
+158
+0:11:18.360 --> 0:11:28.040
+I mean, it was an API designed for APIs like Visual for Linux, and if you enumerate devices
+
+159
+0:11:28.040 --> 0:11:31.360
+in Visual for Linux, you can do that basically instantaneously.
+
+160
+0:11:31.360 --> 0:11:38.040
+Just open a few file descriptors, send a few Iocals and you're done.
+
+161
+0:11:38.040 --> 0:11:43.280
+So there was a synchronous call to give me all the cameras.
+
+162
+0:11:43.280 --> 0:11:50.080
+And well, as I showed before, we need to talk to the portal.
+
+163
+0:11:50.080 --> 0:11:57.300
+The portal may actually ask the user if the application is allowed to access the camera.
+
+164
+0:11:57.300 --> 0:12:04.400
+And then we need to iterate over the devices found or the cameras found in pipewires.
+
+165
+0:12:04.400 --> 0:12:08.640
+That's not something we can do in a synchronous function call in a browser.
+
+166
+0:12:08.640 --> 0:12:15.040
+So I needed a new asynchronous API to do actually this enumeration.
+
+167
+0:12:15.040 --> 0:12:21.400
+And then for the API was also here's the static function, give it a string as an argument
+
+168
+0:12:21.400 --> 0:12:26.120
+to select the camera and open this camera for me.
+
+169
+0:12:26.120 --> 0:12:33.720
+Same issue here, I need or similar issue related, I have this open connection to pipewire that
+
+170
+0:12:33.720 --> 0:12:37.480
+I need to keep open to access the camera.
+
+171
+0:12:37.480 --> 0:12:42.060
+Otherwise we would need to talk to the portal again, which doesn't make sense.
+
+172
+0:12:42.060 --> 0:12:46.840
+So basically need some state from the carried over from the enumeration of the cameras to
+
+173
+0:12:46.840 --> 0:12:48.760
+actually accessing the cameras.
+
+174
+0:12:48.760 --> 0:12:49.880
+Wasn't there either?
+
+175
+0:12:49.880 --> 0:12:51.720
+So needed new API.
+
+176
+0:12:51.720 --> 0:13:02.240
+And on the other end of the API, the frames that came out of the stack were already converted
+
+177
+0:13:02.240 --> 0:13:09.760
+to I for 20 some pixel format.
+
+178
+0:13:09.760 --> 0:13:11.720
+And this included a copy.
+
+179
+0:13:11.720 --> 0:13:17.440
+Basically WebRTC took the raw frame from the camera, converted or copied it to the new
+
+180
+0:13:17.440 --> 0:13:20.240
+format and then handed the R to the browser.
+
+181
+0:13:20.240 --> 0:13:26.240
+But gromium basically assumed that the camera would give it the raw frame from the camera,
+
+182
+0:13:26.240 --> 0:13:28.280
+converted itself or copied it.
+
+183
+0:13:28.280 --> 0:13:32.360
+So if I would use that API, which is basically have two copies.
+
+184
+0:13:32.360 --> 0:13:33.360
+Wanted to avoid that.
+
+185
+0:13:33.360 --> 0:13:38.560
+So I need a new API to access the raw frame from the browser.
+
+186
+0:13:38.560 --> 0:13:46.720
+So suddenly my single merge request to just add the camera support to chromium grew a
+
+187
+0:13:46.720 --> 0:13:47.720
+bit.
+
+188
+0:13:47.720 --> 0:13:50.720
+So I'm going to add a little bit more than that.
+
+189
+0:13:50.720 --> 0:13:53.520
+So right.
+
+190
+0:13:53.520 --> 0:13:59.720
+And at the end of the day, I wanted to do this without causing any regressions.
+
+191
+0:13:59.720 --> 0:14:03.880
+So the first step is we add a feature flag actually in chromium.
+
+192
+0:14:03.880 --> 0:14:09.920
+So if you want to use that once it's merged, it will be disabled by default at first.
+
+193
+0:14:09.920 --> 0:14:14.600
+So if you want to try it, you need to enable this feature flag and says we want to use
+
+194
+0:14:14.600 --> 0:14:16.600
+pipe wire for cameras.
+
+195
+0:14:16.600 --> 0:14:22.720
+Okay, if we look at that, then we go to the web RTC and ask the web RTC, hey, there is
+
+196
+0:14:22.720 --> 0:14:28.160
+a software search basically built what's used by the implementation in chromium and says,
+
+197
+0:14:28.160 --> 0:14:29.360
+okay, we want to use pipe wire.
+
+198
+0:14:29.360 --> 0:14:31.400
+So that's why we're going here.
+
+199
+0:14:31.400 --> 0:14:34.360
+There's also a video for Linux implementation.
+
+200
+0:14:34.360 --> 0:14:38.600
+That's not used by chromium because chromium has its own video for Linux implementation.
+
+201
+0:14:38.600 --> 0:14:50.320
+So this way, if we say pipe wire is not enabled, this is actually implemented for Firefox because
+
+202
+0:14:50.320 --> 0:14:58.320
+we may want to disable the pipe wire stuff in the web RTC from the Firefox side of things
+
+203
+0:14:58.320 --> 0:15:04.680
+if it's disabled there and then just go this route to the video for Linux implementation
+
+204
+0:15:04.680 --> 0:15:05.680
+in web RTC.
+
+205
+0:15:05.680 --> 0:15:08.480
+But that's not used in chromium.
+
+206
+0:15:08.480 --> 0:15:11.760
+So we say, okay, pipe wire is enabled, so we go here.
+
+207
+0:15:11.760 --> 0:15:14.000
+That port is the portal actually available.
+
+208
+0:15:14.000 --> 0:15:20.480
+So we have a build from chromium and at some point enable it maybe always, but still the
+
+209
+0:15:20.480 --> 0:15:25.280
+Linux system underneath may not have a portal implementation running.
+
+210
+0:15:25.280 --> 0:15:30.480
+So if that fails, we need to go back, okay, video for Linux is disabled and then we fall
+
+211
+0:15:30.480 --> 0:15:35.400
+back to the video for Linux implementation in chromium.
+
+212
+0:15:35.400 --> 0:15:40.920
+And if it works, then we ask the user that may be cached or is often cached.
+
+213
+0:15:40.920 --> 0:15:44.680
+So you won't see that more than once typically.
+
+214
+0:15:44.680 --> 0:15:49.560
+But if the user says, yes, this chromium is allowed to use the camera, then we actually
+
+215
+0:15:49.560 --> 0:15:57.000
+get access to the camera and here is where the pipe wire stuff actually starts.
+
+216
+0:15:57.000 --> 0:16:03.680
+So you need to set the switch and then hopefully have a working portal set up and then you
+
+217
+0:16:03.680 --> 0:16:07.200
+can use the camera this way.
+
+218
+0:16:07.200 --> 0:16:10.120
+Okay, where are we?
+
+219
+0:16:10.120 --> 0:16:15.960
+I mean, part of this talk is to raise a bit of awareness, maybe someone who can review
+
+220
+0:16:15.960 --> 0:16:19.920
+more things or maybe add stuff later on.
+
+221
+0:16:19.920 --> 0:16:22.240
+So let's talk about what's there.
+
+222
+0:16:22.240 --> 0:16:26.240
+First commit was split-out generic portal pipe wire code.
+
+223
+0:16:26.240 --> 0:16:38.040
+That was code used in the screen sharing for the portal that could also be used for camera
+
+224
+0:16:38.040 --> 0:16:40.260
+sharing with the portal.
+
+225
+0:16:40.260 --> 0:16:43.760
+So we put that in a place where it can be shared.
+
+226
+0:16:43.760 --> 0:16:45.520
+Then the next part was the rawframe.
+
+227
+0:16:45.520 --> 0:16:48.520
+I mentioned that earlier we don't want to do the double copy.
+
+228
+0:16:48.520 --> 0:16:51.600
+That was basically adding a bit of new API.
+
+229
+0:16:51.600 --> 0:16:59.280
+Then merged I think just two days ago is the actual pipe wire portal capture support within
+
+230
+0:16:59.280 --> 0:17:01.960
+WebRTC.
+
+231
+0:17:01.960 --> 0:17:08.160
+That was merged just a few days ago.
+
+232
+0:17:08.160 --> 0:17:13.760
+So the WebRTC is mostly done.
+
+233
+0:17:13.760 --> 0:17:16.920
+I'm not sure what Firefox will do.
+
+234
+0:17:16.920 --> 0:17:20.080
+Basically it's ready for Firefox people to implement things in Firefox.
+
+235
+0:17:20.080 --> 0:17:22.440
+So I don't know if someone was working on it.
+
+236
+0:17:22.440 --> 0:17:29.120
+If not, maybe someone here is interested in that so they can do that part.
+
+237
+0:17:29.120 --> 0:17:36.640
+There is basically just a small merge request left because all this camera kind of things
+
+238
+0:17:36.640 --> 0:17:41.080
+in WebRTC is not actually built right now if we're building WebRTC for Chromium.
+
+239
+0:17:41.080 --> 0:17:46.360
+So we need just to do an infrastructure a bit, build these files as well.
+
+240
+0:17:46.360 --> 0:17:48.980
+That's all the WebRTC is designed.
+
+241
+0:17:48.980 --> 0:17:53.960
+When we come to Chromium, and in Chromium there are two commits pending.
+
+242
+0:17:53.960 --> 0:17:55.360
+None of them have been merged yet.
+
+243
+0:17:55.360 --> 0:18:01.600
+The first is basically, well there is this Linux camera back end right now in Chromium,
+
+244
+0:18:01.600 --> 0:18:03.440
+which is Vigifilinux back end.
+
+245
+0:18:03.440 --> 0:18:10.400
+So basically rename it from Linux to Vigifilinux, place a switch in front of it.
+
+246
+0:18:10.400 --> 0:18:16.320
+That's where this feature flag comes in where I say, okay, can we do a portal or not?
+
+247
+0:18:16.320 --> 0:18:21.440
+We make space to put a separate back end there next to it.
+
+248
+0:18:21.440 --> 0:18:26.320
+The second commit is the actual implementation.
+
+249
+0:18:26.320 --> 0:18:30.360
+Once that's merged, then we actually have the full support.
+
+250
+0:18:30.360 --> 0:18:33.480
+Hopefully that happens in the next few.
+
+251
+0:18:33.480 --> 0:18:39.280
+Well, weeks is probably a bit optimistic, but months.
+
+252
+0:18:39.280 --> 0:18:41.320
+Okay.
+
+253
+0:18:41.320 --> 0:18:42.480
+What's next?
+
+254
+0:18:42.480 --> 0:18:48.840
+So for me, I probably won't work on these things in the near future because this was
+
+255
+0:18:48.840 --> 0:18:53.760
+done for a customer project and it's taken a long time and they're getting, well, they've
+
+256
+0:18:53.760 --> 0:18:55.000
+been good support about this.
+
+257
+0:18:55.000 --> 0:18:59.680
+So it's really, there was no complaining, but I do need to get on with other things.
+
+258
+0:18:59.680 --> 0:19:01.280
+I haven't done this full time.
+
+259
+0:19:01.280 --> 0:19:06.280
+This was always, I do a bit, then wait for revenue, then get some revenue.
+
+260
+0:19:06.280 --> 0:19:07.480
+So these kind of things.
+
+261
+0:19:07.480 --> 0:19:12.920
+But I need to get this finished up, but there are more features to come.
+
+262
+0:19:12.920 --> 0:19:16.360
+There is some new XG Desktop portal device API.
+
+263
+0:19:16.360 --> 0:19:21.600
+It was mentioned on one of my merge requests that there's some API stuff coming that's
+
+264
+0:19:21.600 --> 0:19:22.600
+still not merged.
+
+265
+0:19:22.600 --> 0:19:28.640
+There's some requests, but once that's in, the idea would be to support that to access
+
+266
+0:19:28.640 --> 0:19:30.480
+cameras.
+
+267
+0:19:30.480 --> 0:19:39.920
+And then there are some more features that Chromium supports for cameras like rotation
+
+268
+0:19:39.920 --> 0:19:43.400
+that are not yet supported by the new backend.
+
+269
+0:19:43.400 --> 0:19:47.520
+I'm not sure if the whole stack below that already supports all of it.
+
+270
+0:19:47.520 --> 0:19:50.920
+I'm pretty sure that Pipewire does.
+
+271
+0:19:50.920 --> 0:19:53.420
+I'm not quite certain, but I think so.
+
+272
+0:19:53.420 --> 0:19:59.880
+There is API in WebRTC for rotation.
+
+273
+0:19:59.880 --> 0:20:03.240
+So I think it mostly needs to be hooked up.
+
+274
+0:20:03.240 --> 0:20:10.040
+So we can rotate the camera image from 90, 180 or 270 degrees.
+
+275
+0:20:10.040 --> 0:20:13.760
+And then there are also features, basically if you know, with your for Linux, they have
+
+276
+0:20:13.760 --> 0:20:18.520
+the controls to do panning, tilting, zooming, focus handling, whatever.
+
+277
+0:20:18.520 --> 0:20:26.160
+And a few of those things are integrated in Chromium as basically image properties, I
+
+278
+0:20:26.160 --> 0:20:27.560
+think.
+
+279
+0:20:27.560 --> 0:20:31.120
+And they are hooked up in the for Linux backend.
+
+280
+0:20:31.120 --> 0:20:35.040
+But I don't think there is an API in Pipewire to access that.
+
+281
+0:20:35.040 --> 0:20:36.120
+I'm not quite sure.
+
+282
+0:20:36.120 --> 0:20:39.640
+So maybe we need to add it to the whole stack.
+
+283
+0:20:39.640 --> 0:20:43.560
+So there's some work to be done there as well.
+
+284
+0:20:43.560 --> 0:20:49.160
+But my hope is that at some point that gets added and then we can really switch the Pipewire
+
+285
+0:20:49.160 --> 0:20:52.640
+camera on as default in Chromium.
+
+286
+0:20:52.640 --> 0:20:56.520
+Because I don't think it will be accepted as a default unless we have a more or less
+
+287
+0:20:56.520 --> 0:20:59.040
+basic feature parity there.
+
+288
+0:20:59.040 --> 0:21:00.720
+So still work to be done.
+
+289
+0:21:00.720 --> 0:21:06.280
+So hopefully maybe someone got interested and will help out there.
+
+290
+0:21:06.280 --> 0:21:08.080
+Okay.
+
+291
+0:21:08.080 --> 0:21:09.080
+A few thanks.
+
+292
+0:21:09.080 --> 0:21:12.360
+That's my customer who sponsored this work.
+
+293
+0:21:12.360 --> 0:21:15.080
+So I'll put them here there.
+
+294
+0:21:15.080 --> 0:21:21.160
+Jan Grulich and Mark Fols, they actually got the revenue started because once they got
+
+295
+0:21:21.160 --> 0:21:28.240
+involved and noticed my patches, they found people that actually could press the necessary
+
+296
+0:21:28.240 --> 0:21:31.360
+buttons on the review and say, okay, this is accepted.
+
+297
+0:21:31.360 --> 0:21:33.440
+And they did a lot of review there.
+
+298
+0:21:33.440 --> 0:21:35.400
+Talked to me about the architecture.
+
+299
+0:21:35.400 --> 0:21:39.360
+So they helped me get on with it.
+
+300
+0:21:39.360 --> 0:21:45.240
+And Ilya Adonkalani and Alex Cooper, they did a lot of review as well.
+
+301
+0:21:45.240 --> 0:21:48.720
+And Kirian Bingham, he's doing a lot of the camera work.
+
+302
+0:21:48.720 --> 0:21:52.560
+And my work actually last year on the ELC.
+
+303
+0:21:52.560 --> 0:21:59.080
+But he's done a lot of testing because he's trying out his camera stuff in combination
+
+304
+0:21:59.080 --> 0:22:01.480
+with the Chromium patches.
+
+305
+0:22:01.480 --> 0:22:03.920
+So a lot of testing and review there as well.
+
+306
+0:22:03.920 --> 0:22:06.560
+And probably a few more reviewers that I missed.
+
+307
+0:22:06.560 --> 0:22:09.000
+I just went over the list.
+
+308
+0:22:09.000 --> 0:22:14.760
+People that said something on the request went to the longest.
+
+309
+0:22:14.760 --> 0:22:18.840
+Those seemed to be the most common here.
+
+310
+0:22:18.840 --> 0:22:19.840
+Okay.
+
+311
+0:22:19.840 --> 0:22:23.480
+I'm almost done, so I'll come to a question in a second.
+
+312
+0:22:23.480 --> 0:22:28.920
+So yeah, like everybody we're hiring, all of our companies need good people.
+
+313
+0:22:28.920 --> 0:22:29.920
+Okay.
+
+314
+0:22:29.920 --> 0:22:33.080
+So thanks and questions.
+
+315
+0:22:33.080 --> 0:22:34.080
+So I'll start with you.
+
+316
+0:22:34.080 --> 0:22:39.080
+Yeah, just a comment that Kirian is going to give a talk on LibCamera in one hour in
+
+317
+0:22:39.080 --> 0:22:40.080
+the 7-hour room.
+
+318
+0:22:40.080 --> 0:22:41.080
+Yeah, okay.
+
+319
+0:22:41.080 --> 0:22:47.880
+So we're giving a talk about LibCamera in which that embedded an automotive room.
+
+320
+0:22:47.880 --> 0:22:50.240
+So maybe I'll be there.
+
+321
+0:22:50.240 --> 0:22:51.240
+Exactly.
+
+322
+0:22:51.240 --> 0:22:53.520
+So any other questions?
+
+323
+0:22:53.520 --> 0:22:54.520
+Okay, here.
+
+324
+0:22:54.520 --> 0:22:58.520
+I just want to comment on the discussion for all the bits.
+
+325
+0:22:58.520 --> 0:22:42.940
+How do we need to keep an eye on the questions from the
+
+326
+0:22:42.940 --> 0:23:03.520
+director of the webinar?
+
+327
+0:23:03.520 --> 0:23:06.680
+I don't, if there's a page for all the bits.
+
+328
+0:23:06.680 --> 0:23:12.480
+I don't have any web page or anything for that, but if you basically subscribe to the
+
+329
+0:23:12.480 --> 0:23:18.200
+last one, that's the one where it gets interesting, right?
+
+330
+0:23:18.200 --> 0:23:20.200
+Okay.
+
+331
+0:23:20.200 --> 0:23:23.200
+Any other questions?
+
+332
+0:23:23.200 --> 0:23:25.200
+Okay.
+
+333
+0:23:25.200 --> 0:23:39.640
+And we're done.
+

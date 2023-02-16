@@ -1,0 +1,484 @@
+1
+0:00:00.000 --> 0:00:12.280
+We will start, so I guess, yeah, we can start.
+
+2
+0:00:12.280 --> 0:00:17.120
+Hello, my name is Radovan Sorka.
+
+3
+0:00:17.120 --> 0:00:26.480
+I'll be presenting how to harden the system with the File Access Policy daemon.
+
+4
+0:00:26.480 --> 0:00:31.080
+So I'll start with the brief introduction of the framework.
+
+5
+0:00:31.080 --> 0:00:34.960
+Can you hear me?
+
+6
+0:00:34.960 --> 0:00:39.760
+Is it better?
+
+7
+0:00:39.760 --> 0:00:46.680
+Is it better?
+
+8
+0:00:46.680 --> 0:01:04.560
+So, FPCD is an acronym for File Access Policy daemon, and it's in a lightweight implementation
+
+9
+0:01:04.560 --> 0:01:07.920
+of application whitelisting.
+
+10
+0:01:07.920 --> 0:01:18.000
+It has many features, I will just highlight that it has integration with RPM, and it
+
+11
+0:01:18.000 --> 0:01:28.120
+can load some data from RPM database, and it can log events to audit or syslog, and
+
+12
+0:01:28.120 --> 0:01:34.780
+it heavily relies on FA notify API from kernel.
+
+13
+0:01:34.780 --> 0:01:44.320
+So when we look at this framework architecture, we can see several components there.
+
+14
+0:01:44.320 --> 0:01:50.280
+The main component of the framework is the daemon.
+
+15
+0:01:50.280 --> 0:01:57.880
+This daemon usually listens to this FA notify event from kernel.
+
+16
+0:01:57.880 --> 0:02:06.800
+When it loads up, it reads all the data from the backends, and it creates its own database,
+
+17
+0:02:06.800 --> 0:02:09.000
+which is called trustDB.
+
+18
+0:02:09.000 --> 0:02:17.600
+The first backend is RPMDB, which handles data from RPM database, or metadata, better
+
+19
+0:02:17.600 --> 0:02:18.600
+term.
+
+20
+0:02:18.600 --> 0:02:28.360
+And the second one is File backend, which loads all the trust information from user-defined
+
+21
+0:02:28.360 --> 0:02:30.240
+trust lists.
+
+22
+0:02:30.240 --> 0:02:41.040
+And there is also CLI component, which can manage trust, and also the daemon's properties.
+
+23
+0:02:41.040 --> 0:02:43.480
+So how does it work?
+
+24
+0:02:43.480 --> 0:02:50.560
+When we look closer, we can see that, at least on this image, there are two processes on
+
+25
+0:02:50.560 --> 0:02:51.960
+the system.
+
+26
+0:02:51.960 --> 0:03:00.080
+The first on the left side is Bash, and the second on the right side is FAP policy daemon.
+
+27
+0:03:00.080 --> 0:03:08.720
+FAP policy daemon in this situation listens for these events, and it's just waiting.
+
+28
+0:03:08.720 --> 0:03:18.640
+And Bash is trying to execute PS command, and it calls exactly system call.
+
+29
+0:03:18.640 --> 0:03:25.080
+And this execution of the system call is on hold, so it's like post.
+
+30
+0:03:25.080 --> 0:03:26.840
+And it's also waiting.
+
+31
+0:03:26.840 --> 0:03:34.240
+Meanwhile, on the other side, kernel sends an event to the daemon that something is happening
+
+32
+0:03:34.240 --> 0:03:35.800
+on the system.
+
+33
+0:03:35.800 --> 0:03:41.680
+And daemon can read from this event that there is some process called Bash, and it wants
+
+34
+0:03:41.680 --> 0:03:49.120
+to execute this PS command, and it has PID 500.
+
+35
+0:03:49.120 --> 0:04:00.680
+So it does a rules evaluation, and when the decision is allowed, it sends an effective
+
+36
+0:04:00.680 --> 0:04:10.760
+response to the kernel, and kernel will let this execv eventually finish with success.
+
+37
+0:04:10.760 --> 0:04:23.440
+If the decision was denied, then this execv will return error code.
+
+38
+0:04:23.440 --> 0:04:32.680
+So the daemon is the main part of the project, and it works with the rules.
+
+39
+0:04:32.680 --> 0:04:41.440
+There are rules and trust, and both have power over what to do with the files and their execution
+
+40
+0:04:41.440 --> 0:04:42.800
+of the system.
+
+41
+0:04:42.800 --> 0:04:49.120
+So these rules, they are pretty similar to SELinux.
+
+42
+0:04:49.120 --> 0:04:57.280
+They have also subject object notation, and they start with the decision part.
+
+43
+0:04:57.280 --> 0:05:04.320
+Decision part is it can be allow or deny, or it can be combined with syslog or audit
+
+44
+0:05:04.320 --> 0:05:06.840
+attribute.
+
+45
+0:05:06.840 --> 0:05:14.160
+The second part of the rule is permission, which can be open or exec, but that refers
+
+46
+0:05:14.160 --> 0:05:21.360
+to the original system call from which that event comes from, and any is placed on the
+
+47
+0:05:21.360 --> 0:05:23.560
+room, match both of them.
+
+48
+0:05:23.560 --> 0:05:33.480
+They also support this tool, because this is because FA notified us that our subject
+
+49
+0:05:33.480 --> 0:05:42.320
+is what is executing, and object is what is being executed.
+
+50
+0:05:42.320 --> 0:05:56.960
+So this trust is a very important concept here in FA policy date can be defined by user,
+
+51
+0:05:56.960 --> 0:06:08.280
+and it's usually done by CLI, and that there is also, or we don't have to add system binaries
+
+52
+0:06:08.280 --> 0:06:16.720
+or files to the trust, because they are trusted by default, they are loaded by this backend,
+
+53
+0:06:16.720 --> 0:06:21.120
+RPM backend.
+
+54
+0:06:21.120 --> 0:06:23.000
+So this is done automatically.
+
+55
+0:06:23.000 --> 0:06:28.480
+So when we run FA policy by default, it somehow works.
+
+56
+0:06:28.480 --> 0:06:30.480
+So these are some rules example.
+
+57
+0:06:30.480 --> 0:06:40.960
+I don't know if you see them, but the first one allows loading of trusted shared libraries
+
+58
+0:06:40.960 --> 0:06:50.880
+on the system, and the second one, it opposed to that, like denies untrusted libraries.
+
+59
+0:06:50.880 --> 0:07:04.640
+Third one will allow execution of trusted files on the system, and fourth one allows
+
+60
+0:07:04.640 --> 0:07:12.440
+using of scripts, which are trusted on the system, and fifth is deny this untrusted file
+
+61
+0:07:12.440 --> 0:07:14.560
+of scripts.
+
+62
+0:07:14.560 --> 0:07:24.720
+And there are two casual rules, first one is for execution of all files, and the second
+
+63
+0:07:24.720 --> 0:07:28.040
+is open for everything.
+
+64
+0:07:28.040 --> 0:07:36.520
+So they are also described here.
+
+65
+0:07:36.520 --> 0:07:44.200
+So when we want to install FA policy, it's very simple, we can just use normal federal
+
+66
+0:07:44.200 --> 0:07:49.080
+program for installation, which is called DNF, this is one liner.
+
+67
+0:07:49.080 --> 0:07:57.320
+When we install it, the installation consists of, it installs three packages to the system.
+
+68
+0:07:57.320 --> 0:08:03.920
+The first one is FA policy, which is main package, which contains daemon and CLI.
+
+69
+0:08:03.920 --> 0:08:16.080
+The second one is RPM plugin for FA policy, which during the RPM transactions, it sends
+
+70
+0:08:16.080 --> 0:08:24.520
+the new metadata that are needed for correct behavior, so it sends it to the daemon, and
+
+71
+0:08:24.520 --> 0:08:30.040
+then daemon can work with them, and they are up to date.
+
+72
+0:08:30.040 --> 0:08:39.800
+And it also notifies the daemon when the transaction ends, so the daemon can behave accordingly.
+
+73
+0:08:39.800 --> 0:08:47.480
+And the third one is the service package for FA policy, the service policy.
+
+74
+0:08:47.480 --> 0:08:54.120
+So when the installation is complete, we can start FA policy.
+
+75
+0:08:54.120 --> 0:08:56.200
+There are several ways how to do that.
+
+76
+0:08:56.200 --> 0:09:02.680
+In our examples, we will use debug deny because we are interested in the deny events, or debugging
+
+77
+0:09:02.680 --> 0:09:08.360
+of the deny events, and we don't need anything more.
+
+78
+0:09:08.360 --> 0:09:17.600
+If we would like to see also allowed events or something else, some other debug information,
+
+79
+0:09:17.600 --> 0:09:20.440
+it can be done via the bug option.
+
+80
+0:09:20.440 --> 0:09:28.880
+And when we want to run it on something more like production environment, we can use system
+
+81
+0:09:28.880 --> 0:09:32.440
+still.
+
+82
+0:09:32.440 --> 0:09:39.520
+So when we run it, FA policy will tell us that it's listening for these events, so it's
+
+83
+0:09:39.520 --> 0:09:44.600
+okay, and we can start playing with this.
+
+84
+0:09:44.600 --> 0:09:50.000
+So there are a few scenarios to demonstrate how it works.
+
+85
+0:09:50.000 --> 0:09:57.520
+So the first scenario is called execution of untrusted software.
+
+86
+0:09:57.520 --> 0:10:05.440
+So I downloaded this file, this is Python script, it's called exploit.py, and I want
+
+87
+0:10:05.440 --> 0:10:08.640
+to try to run it.
+
+88
+0:10:08.640 --> 0:10:15.280
+I make it executable, and when I run it, I can see that it's blocked, and we can see
+
+89
+0:10:15.280 --> 0:10:24.520
+down there that there is a deny event from FA policy that says that this exploit.py is
+
+90
+0:10:24.520 --> 0:10:27.600
+not trusted, so it cannot be run.
+
+91
+0:10:27.600 --> 0:10:48.280
+So it blocked this unknown program.
+
+92
+0:10:48.280 --> 0:11:00.440
+So that is it for the events.
+
+93
+0:11:00.440 --> 0:11:02.500
+you
+
+94
+0:11:30.440 --> 0:11:32.500
+you
+
+95
+0:12:00.440 --> 0:12:02.500
+you
+
+96
+0:12:30.440 --> 0:12:32.500
+you
+
+97
+0:13:00.440 --> 0:13:02.500
+you
+
+98
+0:13:30.440 --> 0:13:32.500
+you
+
+99
+0:14:00.440 --> 0:14:02.500
+you
+
+100
+0:14:30.440 --> 0:14:32.500
+you
+
+101
+0:15:00.440 --> 0:15:02.500
+you
+
+102
+0:15:30.440 --> 0:15:32.500
+you
+
+103
+0:16:00.440 --> 0:16:02.500
+you
+
+104
+0:16:30.440 --> 0:16:32.500
+you
+
+105
+0:17:00.440 --> 0:17:02.500
+you
+
+106
+0:17:30.440 --> 0:17:32.500
+you
+
+107
+0:18:00.440 --> 0:18:02.500
+you
+
+108
+0:18:30.440 --> 0:18:32.500
+you
+
+109
+0:19:00.440 --> 0:19:02.540
+you
+
+110
+0:19:30.440 --> 0:19:32.500
+you
+
+111
+0:20:00.440 --> 0:20:02.540
+you
+
+112
+0:20:30.440 --> 0:20:32.540
+you
+
+113
+0:21:00.440 --> 0:21:02.540
+you
+
+114
+0:21:30.440 --> 0:21:32.540
+you
+
+115
+0:22:00.440 --> 0:22:02.540
+you
+
+116
+0:22:30.440 --> 0:22:32.540
+you
+
+117
+0:23:00.440 --> 0:23:02.540
+you
+
+118
+0:23:30.440 --> 0:23:32.540
+you
+
+119
+0:24:00.440 --> 0:24:02.540
+you
+
+120
+0:24:30.440 --> 0:24:32.540
+you
+
+121
+0:25:00.440 --> 0:25:02.540
+you
+

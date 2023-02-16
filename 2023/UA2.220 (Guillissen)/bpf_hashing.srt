@@ -1,0 +1,688 @@
+1
+0:00:00.000 --> 0:00:14.560
+All right.
+
+2
+0:00:14.560 --> 0:00:16.200
+So let's get started again.
+
+3
+0:00:16.200 --> 0:00:21.520
+The next talk is by Anton about optimizing BPF hash map in France.
+
+4
+0:00:21.520 --> 0:00:22.520
+Hello.
+
+5
+0:00:22.520 --> 0:00:29.040
+I'm Anton, working at DataPod team at Isovalent.
+
+6
+0:00:29.040 --> 0:00:35.920
+And yeah, this is talk about how simple it is to optimize BPF hash map.
+
+7
+0:00:35.920 --> 0:00:44.720
+So about a year ago, like a little less, Andrej Nachryk proposed, suggested to try new hash
+
+8
+0:00:44.720 --> 0:00:51.920
+functions for BPF hash map and BPF text trace map.
+
+9
+0:00:51.920 --> 0:00:57.920
+And in Xilu, we use, and in TatraGone, we use hashes extensively.
+
+10
+0:00:57.920 --> 0:01:04.120
+So for us, it's a big deal, and I decided to give it a try.
+
+11
+0:01:04.120 --> 0:01:12.720
+So I will briefly provide some benchmarking how-to 101, and then we'll take a look at
+
+12
+0:01:12.720 --> 0:01:15.760
+different hash functions.
+
+13
+0:01:15.760 --> 0:01:24.360
+And then we'll see benchmarks for hash maps, which utilize old hash functions and new hash
+
+14
+0:01:24.360 --> 0:01:25.360
+functions.
+
+15
+0:01:25.360 --> 0:01:34.200
+So first thing to do when you benchmark is to try to reduce noise, because modern CPUs
+
+16
+0:01:34.200 --> 0:01:36.440
+do everything to ruin your benchmarking.
+
+17
+0:01:36.440 --> 0:01:40.160
+They will run on different frequency.
+
+18
+0:01:40.160 --> 0:01:47.040
+Hyperthreading will get in, and in the best case, you benchmark inside kernel, because
+
+19
+0:01:47.040 --> 0:01:50.180
+you can disable preemption and interrupts.
+
+20
+0:01:50.180 --> 0:01:58.500
+So benchmark, we take, if we want to benchmark some function, we first measure some kind
+
+21
+0:01:58.500 --> 0:02:03.620
+of time source or clock source, and then we execute our function, maybe in a loop, and
+
+22
+0:02:03.620 --> 0:02:11.920
+then we measure time once again, and then we divide the number of observations by the
+
+23
+0:02:11.920 --> 0:02:15.200
+number of loops and get our result.
+
+24
+0:02:15.200 --> 0:02:19.280
+So in some cases, we can't execute our function in a loop.
+
+25
+0:02:19.280 --> 0:02:24.960
+For example, if it's not like an abstract hash function, if it's just part of kernel,
+
+26
+0:02:24.960 --> 0:02:30.640
+then n is obviously equal to one, and we need to take into account the time it takes to
+
+27
+0:02:30.640 --> 0:02:33.200
+get time.
+
+28
+0:02:33.200 --> 0:02:42.240
+And one obvious way to do this is to benchmark an empty loop, and this gives us roughly how
+
+29
+0:02:42.240 --> 0:02:45.900
+long the get time function works.
+
+30
+0:02:45.900 --> 0:02:52.760
+And typically, people benchmark with something like RDSC instruction, and if you don't reduce
+
+31
+0:02:52.760 --> 0:02:56.400
+noise, then RDSC instruction is pretty unstable.
+
+32
+0:02:56.400 --> 0:03:03.880
+So here, my CPU obviously runs on two different frequencies, and if my function, which I want
+
+33
+0:03:03.880 --> 0:03:18.200
+to benchmark, runs 30, 40 cycles, then deviation in this case is bigger than the function itself,
+
+34
+0:03:18.200 --> 0:03:19.200
+so I control-line it.
+
+35
+0:03:19.200 --> 0:03:26.480
+So if we disable, like, reduce noise, as I said, then results become way more stable.
+
+36
+0:03:26.480 --> 0:03:32.420
+So here, it's like, maybe it looks scary, but it's actually like 37 plus minus one cycle.
+
+37
+0:03:32.420 --> 0:03:38.560
+So even for very small functions, this makes benchmarking more reliable.
+
+38
+0:03:38.560 --> 0:03:44.200
+But in this form, RDSC doesn't work because it's not a serializing instruction, which
+
+39
+0:03:44.200 --> 0:03:51.720
+means that if you insert your code here, then it can be executed in the middle of code and
+
+40
+0:03:51.720 --> 0:03:59.120
+even after your code, so, and it can differ from execution to execution, and so we need
+
+41
+0:03:59.120 --> 0:04:02.880
+some way to serialize it.
+
+42
+0:04:02.880 --> 0:04:07.400
+Luckily, there are known ways to do this, so we just serialize it.
+
+43
+0:04:07.400 --> 0:04:14.240
+And there is a white paper written maybe 10 years ago about Itanium, and it's still valid
+
+44
+0:04:14.240 --> 0:04:19.840
+with some changes from architecture to architecture, but yeah, we can do this.
+
+45
+0:04:19.840 --> 0:04:27.440
+In this case, benchmarking, like the offset, takes a little bit more, like it's not 37
+
+46
+0:04:27.440 --> 0:04:32.720
+cycles anymore, it's 70 cycles, but again, it's pretty stable, and we can use this number
+
+47
+0:04:32.720 --> 0:04:35.720
+to offset our measurements.
+
+48
+0:04:35.720 --> 0:04:40.120
+And in fact, I did such benchmarking when I don't run in a loop.
+
+49
+0:04:40.120 --> 0:04:46.920
+It's then switched to, like, more dumb benchmarks when you do loops over BPF maps because it's
+
+50
+0:04:46.920 --> 0:04:54.200
+harder to port things, and if you want someone else to try these benchmarks, they will have
+
+51
+0:04:54.200 --> 0:04:58.000
+to patch their kernel, and this is not simple.
+
+52
+0:04:58.000 --> 0:05:02.880
+So let's take a look at several hash functions of interest.
+
+53
+0:05:02.880 --> 0:05:10.240
+So JHash is currently used hash function in the BPF.
+
+54
+0:05:10.240 --> 0:05:16.160
+It's Bob Jenkins hash, and it probably was developed some 30 years ago.
+
+55
+0:05:16.160 --> 0:05:22.280
+So SpookyHash is another, it's a newer version, it's not a newer version, it's a newer hash
+
+56
+0:05:22.280 --> 0:05:32.760
+from Bob Jenkins, and then there goes XXH hashes, XXH32.964 is the previous generation
+
+57
+0:05:32.760 --> 0:05:33.760
+of these functions.
+
+58
+0:05:33.760 --> 0:05:42.360
+They are available in kernel, and we can try them as well, and XXH3 is like the state of
+
+59
+0:05:42.360 --> 0:05:45.160
+art hash function.
+
+60
+0:05:45.160 --> 0:05:53.480
+So if we just take a look at this plot, the orange line which goes there is JHash, which
+
+61
+0:05:53.480 --> 0:05:55.400
+is currently used.
+
+62
+0:05:55.400 --> 0:06:04.120
+The green line, which looks to be green in here, is like the previous generation XXH64.
+
+63
+0:06:04.120 --> 0:06:13.040
+The blue line, this is the newest generation XXH3, and while it looks here that it doesn't
+
+64
+0:06:13.040 --> 0:06:23.280
+perform as well as XXH64, for small keys it does outperform it, and for BPF hash maps we
+
+65
+0:06:23.280 --> 0:06:27.720
+are primarily interested in using it for small keys.
+
+66
+0:06:27.720 --> 0:06:39.680
+I don't know, actually I never use it for huge keys, and in any case this XXH3 works
+
+67
+0:06:39.680 --> 0:06:45.760
+faster than Jenkins hash, and later I will show that it can actually run even more faster.
+
+68
+0:06:45.760 --> 0:06:51.960
+But one interesting thing is that this spooky hash, it actually performs pretty bad for
+
+69
+0:06:51.960 --> 0:06:57.900
+small keys, because it has a lot of setup which it does in any case, but later it starts
+
+70
+0:06:57.900 --> 0:07:03.360
+outperform every hash function, I was interested when it does it, so it does it at about key
+
+71
+0:07:03.360 --> 0:07:07.280
+size of 9000.
+
+72
+0:07:07.280 --> 0:07:13.440
+It's cool but it's not the key size of interest for us.
+
+73
+0:07:13.440 --> 0:07:23.120
+If we take a look at XXH3 and JHash, we can see that the blue line XXH3, it actually outperforms
+
+74
+0:07:23.120 --> 0:07:33.680
+like JHash for all key sizes, and there is also this green line, it's JHash2, it's an
+
+75
+0:07:33.680 --> 0:07:40.400
+optimized version of JHash which can be used if your key size is multiple of four, and
+
+76
+0:07:40.400 --> 0:07:45.360
+it's actually used in Blom filters but for some reason not in hash maps.
+
+77
+0:07:45.360 --> 0:07:55.920
+So if we take a closer look at small key sizes, we see that yes, XXH3 outperforms JHash, so
+
+78
+0:07:55.920 --> 0:08:01.480
+for me it's enough reason to try to benchmark maps with it.
+
+79
+0:08:01.480 --> 0:08:12.080
+And let's take a look now at BPF maps which use hash functions, so first one is tech trace
+
+80
+0:08:12.080 --> 0:08:16.000
+map and then hash map in Blom filters.
+
+81
+0:08:16.000 --> 0:08:25.280
+So stick trace was actually the main reason for Andre to propose XXH3, because what it
+
+82
+0:08:25.280 --> 0:08:33.520
+does is it takes a stack trace and then it hashes it and creates a map of IDs which refers
+
+83
+0:08:33.520 --> 0:08:42.080
+to the traces, and if there are hash collisions then old stack traces are lost and we get
+
+84
+0:08:42.080 --> 0:08:45.080
+incorrect picture about the system.
+
+85
+0:08:45.080 --> 0:08:54.760
+And stack traces is not too random, so if your hash function is not very good, if it
+
+86
+0:08:54.760 --> 0:09:01.540
+doesn't have very good avalanche properties, then it will create more collisions for less
+
+87
+0:09:01.540 --> 0:09:03.200
+random data.
+
+88
+0:09:03.200 --> 0:09:14.040
+And XXH3 behaves way better than JHash for avalanche properties and this is one of reasons
+
+89
+0:09:14.040 --> 0:09:17.840
+and the main reason to use it for stack trace.
+
+90
+0:09:17.840 --> 0:09:23.200
+The other reason as a benchmark, it's also like for stack trace, it also runs about twice
+
+91
+0:09:23.200 --> 0:09:30.640
+faster for typical key sizes because typical key size is like 8 bytes per stack depth and
+
+92
+0:09:30.640 --> 0:09:35.240
+this is typically like 60, 80, 100 bytes.
+
+93
+0:09:35.240 --> 0:09:44.860
+So XXH3 is a very good candidate here.
+
+94
+0:09:44.860 --> 0:09:50.680
+So for hash benchmarks I was primarily focused on lookups because this is what we do the
+
+95
+0:09:50.680 --> 0:10:00.680
+most and this is the thing which is easy to measure compared to more complex pictures.
+
+96
+0:10:00.680 --> 0:10:05.200
+So there are some links to benchmarks I used and scripts to actually execute benchmark
+
+97
+0:10:05.200 --> 0:10:13.760
+and plot it because for every change I had to draw some like 100 or 150 pictures for
+
+98
+0:10:13.760 --> 0:10:20.360
+different key sizes, for different fullness of hash maps, so it's impossible to do otherwise.
+
+99
+0:10:20.360 --> 0:10:22.200
+And I had a few pictures here.
+
+100
+0:10:22.200 --> 0:10:31.760
+So if we just use XXH3 then it looks like the new map which is orange, it outperforms
+
+101
+0:10:31.760 --> 0:10:33.920
+the original map which is blue.
+
+102
+0:10:33.920 --> 0:10:45.360
+And here is lookup speed in cycles, vertical and horizontal axis is key size.
+
+103
+0:10:45.360 --> 0:10:53.080
+So the bigger the key the better the more gain from using the new hash function.
+
+104
+0:10:53.080 --> 0:11:01.600
+But if we take like a bigger map I see that XXH3 as it is degrades for key size 4 and
+
+105
+0:11:01.600 --> 0:11:07.480
+this is already like for me as a blocker I can't like propose a change which degrades
+
+106
+0:11:07.480 --> 0:11:10.600
+existing applications.
+
+107
+0:11:10.600 --> 0:11:19.160
+So then I went to a different architecture, micro architecture and here I saw that it
+
+108
+0:11:19.160 --> 0:11:26.400
+degrades for different key size like here it degrades for key size 12 and if we take
+
+109
+0:11:26.400 --> 0:11:31.360
+like a bigger map it also degrades for key size 24.
+
+110
+0:11:31.360 --> 0:11:40.040
+And then I thought how to fix this because if it works for bigger keys then maybe I can
+
+111
+0:11:40.040 --> 0:11:41.040
+utilize this.
+
+112
+0:11:41.040 --> 0:11:45.440
+And I did the same thing as bloom filter currently does.
+
+113
+0:11:45.440 --> 0:11:53.440
+So bloom filter executes JHash2 for key sizes divisible by 4 and it uses JHash in other cases.
+
+114
+0:11:53.440 --> 0:11:56.040
+So I did the same.
+
+115
+0:11:56.040 --> 0:12:02.720
+Utilize JHash2 for key sizes of which are divisible by 4 but for small ones like it's
+
+116
+0:12:02.720 --> 0:12:10.960
+plus key length divided by 4, key length 32 it's actually computed.
+
+117
+0:12:10.960 --> 0:12:16.920
+It's just key length divided by 4 but it's computed during hash initialization and we
+
+118
+0:12:16.920 --> 0:12:20.880
+can decide for which key sizes we do this.
+
+119
+0:12:20.880 --> 0:12:24.960
+And with this hash function I finally see that it doesn't degrade anywhere.
+
+120
+0:12:24.960 --> 0:12:33.440
+So this is like 10K, 100K and 100% full which is like the worst case.
+
+121
+0:12:33.440 --> 0:12:43.320
+And if we take another slice this is 100K map with key size 8 and on the left side it's
+
+122
+0:12:43.320 --> 0:12:44.560
+almost empty.
+
+123
+0:12:44.560 --> 0:12:47.760
+On the right side it's 100% full.
+
+124
+0:12:47.760 --> 0:12:53.080
+And the bigger key size the bigger gain for particular key size.
+
+125
+0:12:53.080 --> 0:13:01.400
+So for key size 64 map with new hash function runs about 50% faster and for key size 128
+
+126
+0:13:01.400 --> 0:13:04.560
+it runs almost twice faster.
+
+127
+0:13:04.560 --> 0:13:13.840
+And bloom filters as I mentioned they use the JHash2 for keys divisible by 4.
+
+128
+0:13:13.840 --> 0:13:19.560
+So I don't expect any gain for keys divisible by 4 at least for small keys.
+
+129
+0:13:19.560 --> 0:13:20.560
+And it looks like this.
+
+130
+0:13:20.560 --> 0:13:25.960
+So this is like an extreme case of bloom filter with 9 hashes.
+
+131
+0:13:25.960 --> 0:13:33.000
+But I just did it so it reproduces the plot of hash function here.
+
+132
+0:13:33.000 --> 0:13:35.880
+And yes for small keys it is the same.
+
+133
+0:13:35.880 --> 0:13:39.200
+And for bigger keys we have a gain.
+
+134
+0:13:39.200 --> 0:13:50.040
+And here is the key size 240 where XH3 function originally utilizes vector instructions and
+
+135
+0:13:50.040 --> 0:13:54.320
+we can't use obviously vector instructions in BPF maps.
+
+136
+0:13:54.320 --> 0:14:00.760
+And for key size 240 it is expected to start using vector instructions.
+
+137
+0:14:00.760 --> 0:14:05.560
+But there is also scalar implementation which works faster than JHash but it degrades at
+
+138
+0:14:05.560 --> 0:14:07.240
+this point.
+
+139
+0:14:07.240 --> 0:14:19.920
+So and another thing to mention that old hash functions JHash XXH64 they were...
+
+140
+0:14:19.920 --> 0:14:25.040
+They were designed and optimized with O2 option in mind.
+
+141
+0:14:25.040 --> 0:14:31.720
+So if we switch to O3 then they will behave the same.
+
+142
+0:14:31.720 --> 0:14:37.240
+But XXH3 actually runs like 50, 60% faster.
+
+143
+0:14:37.240 --> 0:14:41.240
+So it actually performs way better with O3.
+
+144
+0:14:41.240 --> 0:14:43.760
+So I just jump like here.
+
+145
+0:14:43.760 --> 0:14:51.480
+So and I know that like O3 is no go for kernel.
+
+146
+0:14:51.480 --> 0:14:54.680
+Like there were several attempts to introduce it.
+
+147
+0:14:54.680 --> 0:15:01.440
+And the reason was that there are no candidates which benefit from this O3.
+
+148
+0:15:01.440 --> 0:15:07.120
+But this one is a particular candidate like hash.
+
+149
+0:15:07.120 --> 0:15:18.040
+If we could use O3 for hash map because not only for XXH3 because it should be inlined.
+
+150
+0:15:18.040 --> 0:15:27.200
+Then in this case we would be able to get rid of this composite hash which mixes hashes
+
+151
+0:15:27.200 --> 0:15:30.240
+and just use it as is.
+
+152
+0:15:30.240 --> 0:15:39.000
+So yeah as I said for stuck trace map it definitely makes sense to use it.
+
+153
+0:15:39.000 --> 0:15:44.440
+So there is both benefiting in speed.
+
+154
+0:15:44.440 --> 0:15:52.320
+Small one because stuck trace map the bottleneck for speed is not the hash.
+
+155
+0:15:52.320 --> 0:15:55.920
+But the bottleneck for hash collisions is the hash.
+
+156
+0:15:55.920 --> 0:16:04.680
+And for hash map it's a question maybe someone would advise me on what to do with O3.
+
+157
+0:16:04.680 --> 0:16:14.720
+And after I run like benchmarks on slightly bigger number of architectures then I think
+
+158
+0:16:14.720 --> 0:16:19.480
+there's also like a good candidate to use in the hash map.
+
+159
+0:16:19.480 --> 0:16:25.320
+So here are some links for benchmarks and paper which I use it for those who will be
+
+160
+0:16:25.320 --> 0:16:28.640
+reading this and thank you.
+
+161
+0:16:28.640 --> 0:16:39.560
+All right thanks a lot any questions you.
+
+162
+0:16:39.560 --> 0:16:47.240
+For the O3 thing can you only compile maybe the like the hash map file with O3.
+
+163
+0:16:47.240 --> 0:16:54.480
+Yeah yeah if it is like currently it is disabled like for every file in kernel.
+
+164
+0:16:54.480 --> 0:17:00.200
+For custom build we can enable it but like generally we just pass O2 everywhere.
+
+165
+0:17:00.200 --> 0:17:05.120
+If it's possible just to compile BPF maps with O3 this will solve the thing.
+
+166
+0:17:05.120 --> 0:17:07.120
+It's not such a big change.
+
+167
+0:17:07.120 --> 0:17:09.160
+So you don't have to compile the whole kernel with O3?
+
+168
+0:17:09.160 --> 0:17:10.160
+Yeah yeah yeah.
+
+169
+0:17:10.160 --> 0:17:13.560
+So only it's local code.
+
+170
+0:17:13.560 --> 0:17:15.520
+Okay.
+
+171
+0:17:15.520 --> 0:17:23.560
+Any other questions?
+
+172
+0:17:23.560 --> 0:17:25.800
+No then thanks a lot.
+

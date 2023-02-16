@@ -1,0 +1,1381 @@
+WEBVTT
+
+00:00.000 --> 00:07.000
+All right.
+
+00:07.000 --> 00:14.000
+All right.
+
+00:14.000 --> 00:18.000
+All right.
+
+00:18.000 --> 00:21.000
+Yeah. So it's time for the.
+
+00:21.000 --> 00:24.000
+Yeah, exactly. Thank you.
+
+00:24.000 --> 00:28.000
+Good morning, everyone. Thank you for being here.
+
+00:28.000 --> 00:30.000
+My name is Gabriel Samo.
+
+00:30.000 --> 00:33.000
+I'm going to try to get the introductions over with quickly.
+
+00:33.000 --> 00:35.000
+I work for Carnegie Mellon's cert,
+
+00:35.000 --> 00:39.000
+which is the sort of OG cert the US government started back in the 80s after the Morris worm,
+
+00:39.000 --> 00:45.000
+because they suddenly realized computers were going to be a thing they were going to have to care about.
+
+00:45.000 --> 00:50.000
+The cool thing about that is I get to indulge in my paranoia and OCD in a professional capacity,
+
+00:50.000 --> 00:54.000
+which is much, much better than it sounds, probably the way I make it sound.
+
+00:54.000 --> 00:57.000
+I'm going to probably sit down during this presentation every once in a while when I need to,
+
+00:57.000 --> 01:02.000
+you know, work the demo a little bit. So don't don't think that's weird.
+
+01:02.000 --> 01:06.000
+So with all of that out of the way,
+
+01:06.000 --> 01:18.000
+we're going to talk about self hosting and why that's important and how it impacts things like hardware and the ability to trust it.
+
+01:18.000 --> 01:26.000
+And then further into that sort of distinctions between ASICs, application specific integrated circuits,
+
+01:26.000 --> 01:34.000
+dedicated silicon versus programmable FPGAs and what the threat models are in the trade offs and how much you can trust each one of those
+
+01:34.000 --> 01:38.000
+and what you're gaining and losing when you're switching between them.
+
+01:38.000 --> 01:44.000
+And then next will be a demo of what probably is the slowest,
+
+01:44.000 --> 01:52.000
+most memory constrained computer that's capable of running Fedora Linux that you've seen recently.
+
+01:52.000 --> 01:59.000
+It will be on a 50 megahertz rocket chip CPU, soft core CPU running on an FPGA.
+
+01:59.000 --> 02:03.000
+It's going to have 512 megs of RAM in this particular incarnation.
+
+02:03.000 --> 02:14.000
+It is using, like I said, rocket chip and light X on an FPGA with free open tool chains, YOSys, Trellis, and XPNR
+
+02:14.000 --> 02:17.000
+being used to build a bit stream for the FPGA.
+
+02:17.000 --> 02:26.000
+And then this computer, when it runs Fedora, you can install YOSys, Trellis, and XPNR on the computer that was built using those tools
+
+02:26.000 --> 02:30.000
+and run those tools on the computer to rebuild bit stream for its own motherboard.
+
+02:30.000 --> 02:37.000
+So it's basically like a self-contained, self-hosting thing, which is really exciting.
+
+02:37.000 --> 02:42.000
+So let's start with this whole idea of self-hosting.
+
+02:42.000 --> 02:45.000
+Most of you are probably familiar with what that means.
+
+02:45.000 --> 02:52.000
+The joke is, well, no, it's not me hosting my own content on Google Drive or somewhere in the cloud,
+
+02:52.000 --> 02:56.000
+but rather it's a term of art in the field of compiler design,
+
+02:56.000 --> 03:02.000
+and it means a compiler is written in its own language, and it can compile its own sources.
+
+03:02.000 --> 03:06.000
+And then there's a related concept of bootstrapping, which is basically kind of, well,
+
+03:06.000 --> 03:11.000
+you have a self-hosting compiler that built its own sources, both chicken and egg, which one was there first.
+
+03:11.000 --> 03:18.000
+Well, there had to be a third-party trusted compiler that was originally used to build the first binary of our own compiler
+
+03:18.000 --> 03:20.000
+before we could rebuild it.
+
+03:20.000 --> 03:26.000
+And at some point, we reached stability where the next iteration of the binary we build out of the sources
+
+03:26.000 --> 03:29.000
+isn't significantly different from the one we already used,
+
+03:29.000 --> 03:32.000
+and that basically means we've achieved self-hosting.
+
+03:32.000 --> 03:35.000
+And the process for that is called bootstrapping.
+
+03:35.000 --> 03:43.000
+And one interesting thing about self-hosting compilers is that they suffer from this attack that Ken Thompson pointed out,
+
+03:43.000 --> 03:48.000
+Ken Thompson being one of the designers of the Unix operating system among many other glorious achievements.
+
+03:48.000 --> 03:58.000
+He pointed out that a compromised binary of a self-hosting compiler could be created that attacks clean,
+
+03:58.000 --> 04:03.000
+otherwise sort of benign trustworthy source code and builds malicious binaries,
+
+04:03.000 --> 04:09.000
+one being of the scenario he described was the attack against the login program,
+
+04:09.000 --> 04:15.000
+which if you build a login program, it'll have a backdoor root password that'll allow somebody to log in
+
+04:15.000 --> 04:17.000
+without knowing the actual system root password.
+
+04:17.000 --> 04:25.000
+The other thing this malicious behavior does is it inserts itself into any subsequent iterations
+
+04:25.000 --> 04:29.000
+when it detects that the compiler's own sources are being built using it.
+
+04:29.000 --> 04:34.000
+So it's a self-perpetuating attack that isn't actually present in the source code.
+
+04:34.000 --> 04:38.000
+And the only way to get rid of that would be to reboot strap the entire compiler
+
+04:38.000 --> 04:42.000
+because presumably we do trust the sources and the sources are clean
+
+04:42.000 --> 04:46.000
+and there's no malicious behavior specified in the code itself.
+
+04:46.000 --> 04:52.000
+And one way to not necessarily get rid of the problem but to point out
+
+04:52.000 --> 04:56.000
+or to test whether we have been subjected to one of these attacks
+
+04:56.000 --> 05:01.000
+is David A. Wheeler's PhD dissertation called Diverse Double Compilation.
+
+05:01.000 --> 05:06.000
+And in the example here, we'll be using CC as our suspect compiler
+
+05:06.000 --> 05:13.000
+and TC as the third-party compiler, and it's not necessarily T for trusted, it's T for third-party.
+
+05:13.000 --> 05:17.000
+And the heuristic here is that we pick the third-party compiler
+
+05:17.000 --> 05:23.000
+in a way that gives us a high degree of confidence that it is not in collusion with the suspect compiler.
+
+05:23.000 --> 05:26.000
+So the people who put it out aren't the same group thing,
+
+05:26.000 --> 05:32.000
+maybe GCC on one hand and MSVC Microsoft on the other or something like very diverse.
+
+05:32.000 --> 05:36.000
+That's where the word diversity comes from.
+
+05:36.000 --> 05:44.000
+The way this works is that if we compile the sources of CC
+
+05:44.000 --> 05:53.000
+with both our own sort of suspect binary and with the third-party binary,
+
+05:53.000 --> 05:56.000
+if everyone's innocent and no one's trying to screw us over,
+
+05:56.000 --> 06:03.000
+what should happen is we should be obtaining binaries reflecting the sources of CC
+
+06:03.000 --> 06:07.000
+that are functionally identical because these are diverse different compilers.
+
+06:07.000 --> 06:10.000
+They would produce different code, like the code generation would be different.
+
+06:10.000 --> 06:13.000
+So the binaries aren't bit by bit identical,
+
+06:13.000 --> 06:17.000
+but they should be doing the same thing because they're implementing the same source code.
+
+06:17.000 --> 06:22.000
+And then if that is true, then the next move would be to take the sources to CC again
+
+06:22.000 --> 06:27.000
+and rebuild them with our two intermediate compilers that we obtained.
+
+06:27.000 --> 06:30.000
+And if you control for the initial conditions,
+
+06:30.000 --> 06:34.000
+if you have the same initial condition, same random number generator seed and everything,
+
+06:34.000 --> 06:39.000
+and identical input pumped into functionally identical binaries,
+
+06:39.000 --> 06:41.000
+the result should be bit by bit identical.
+
+06:41.000 --> 06:44.000
+And if that's true, then we can breathe a sigh of relief and say,
+
+06:44.000 --> 06:51.000
+okay, we are very unlikely to be subject to a trusting trust attack.
+
+06:51.000 --> 06:56.000
+And that degree of confidence is sort of equivalent to our heuristic ability
+
+06:56.000 --> 07:02.000
+to pick a third party compiler that isn't in collusion with our suspect compiler.
+
+07:02.000 --> 07:07.000
+And by the way, the highlighted box on the bottom here is basically the process
+
+07:07.000 --> 07:14.000
+of bootstrapping CC using the third party TC compiler.
+
+07:14.000 --> 07:16.000
+So back to self-hosting.
+
+07:16.000 --> 07:21.000
+If you have a self-hosting compiler and source code to everything,
+
+07:21.000 --> 07:25.000
+the binary of the compiler, when it operates, when it runs,
+
+07:25.000 --> 07:29.000
+it runs on top of, I don't know, a C library and the kernel
+
+07:29.000 --> 07:32.000
+and basically a software stack.
+
+07:32.000 --> 07:34.000
+It's an application on top of that,
+
+07:34.000 --> 07:39.000
+but it's an application that can compile all of the things it needs to run itself.
+
+07:39.000 --> 07:44.000
+And if you have source to everything and you've compiled everything from sources
+
+07:44.000 --> 07:49.000
+that you otherwise trust, then you have a self-hosting software stack
+
+07:49.000 --> 07:50.000
+built around your compiler.
+
+07:50.000 --> 07:52.000
+And sort of the applications are bonus,
+
+07:52.000 --> 07:55.000
+all the stuff you actually want to use the computer for.
+
+07:55.000 --> 07:59.000
+If you build that from source, but the stack of software
+
+07:59.000 --> 08:02.000
+with the C compiler at the top, systems, libraries, kernel,
+
+08:02.000 --> 08:06.000
+and whatever you have underneath that for the software
+
+08:06.000 --> 08:08.000
+is a self-hosting software stack.
+
+08:08.000 --> 08:12.000
+And examples of that, we have in the wild, there's the Linux ecosystem,
+
+08:12.000 --> 08:14.000
+there's the BSD ecosystem.
+
+08:14.000 --> 08:20.000
+Those are all sort of compliant to this with this idea.
+
+08:20.000 --> 08:28.000
+Now, there's kind of a holy war going on with whether hardware
+
+08:28.000 --> 08:31.000
+will respect your freedom or not.
+
+08:31.000 --> 08:37.000
+And some people are claiming that hardware should be completely immutable
+
+08:37.000 --> 08:40.000
+and never upgradable with firmware or anything like that
+
+08:40.000 --> 08:43.000
+in order for it to be completely respecting of your freedom
+
+08:43.000 --> 08:45.000
+and no binary blobs.
+
+08:45.000 --> 08:48.000
+And different people say, well, I mean, you may actually be able to
+
+08:48.000 --> 08:52.000
+put free firmware blobs on your proprietary
+
+08:52.000 --> 08:55.000
+firmware blob-enabled hardware of today
+
+08:55.000 --> 08:57.000
+if you just reverse-engineer it and so on.
+
+08:57.000 --> 09:03.000
+But anyway, the idea is in order to trust the computer,
+
+09:03.000 --> 09:06.000
+it's not enough to just have a self-hosting software stack.
+
+09:06.000 --> 09:08.000
+We need to understand what hardware does.
+
+09:08.000 --> 09:13.000
+And hardware, as we've learned in recent years, isn't really hard at all.
+
+09:13.000 --> 09:16.000
+It's very, very mushy, very complicated.
+
+09:16.000 --> 09:18.000
+It does all sorts of things that scare us,
+
+09:18.000 --> 09:22.000
+and we need to kind of take a closer look at it.
+
+09:22.000 --> 09:28.000
+And so, software talks to an instruction set architecture
+
+09:28.000 --> 09:31.000
+and a bunch of registers that are mapped somehow.
+
+09:31.000 --> 09:34.000
+And that's basically where software talks to the hardware.
+
+09:34.000 --> 09:35.000
+That's the demark here.
+
+09:35.000 --> 09:40.000
+And then there's all sorts of layers underneath, microarchitecture,
+
+09:40.000 --> 09:44.000
+whatever, it all ends up with this register transfer level,
+
+09:44.000 --> 09:47.000
+which is combinational and sequential logic,
+
+09:47.000 --> 09:51.000
+basically a bunch of gates, a bunch of flip-flops, a clock, and so on.
+
+09:51.000 --> 09:54.000
+And it's not my word for it.
+
+09:54.000 --> 09:57.000
+It's just a word I picked up from the wild.
+
+09:57.000 --> 09:59.000
+I don't know exactly who to attribute this to,
+
+09:59.000 --> 10:05.000
+but these layers of the hardware stack are typically referred to as gateware.
+
+10:05.000 --> 10:09.000
+And it's the stuff you write in something like Verilog or VHDL
+
+10:09.000 --> 10:13.000
+or MiGen or Chisel and so on.
+
+10:13.000 --> 10:18.000
+And then obviously all of this has to run on actual physical hardware
+
+10:18.000 --> 10:23.000
+which could be dedicated circuits, application-specific,
+
+10:23.000 --> 10:30.000
+integrated circuits or optimized silicon or programmable FPGAs.
+
+10:30.000 --> 10:39.000
+And so, if we have free software tool chains for HDL compilers,
+
+10:39.000 --> 10:44.000
+for making gateware out of sources, which we do thanks to the group
+
+10:44.000 --> 10:50.000
+who put out YOSIS, Claire Wolf, and the gate cat who made the trellis
+
+10:50.000 --> 10:53.000
+and the next PNR, place and route software.
+
+10:53.000 --> 10:59.000
+So anyway, if we have those things, those are software that can be built
+
+10:59.000 --> 11:04.000
+by the self-hosting C compiler, which can compile the software stack.
+
+11:04.000 --> 11:09.000
+Now, this thing can take source code, HDL sources, and build all the layers
+
+11:09.000 --> 11:13.000
+of gateware which then support all the operation of the software stack.
+
+11:13.000 --> 11:18.000
+So you have a self-hosting software plus gateware stack.
+
+11:18.000 --> 11:24.000
+Unfortunately, that leaves for now out the actual physical layer,
+
+11:24.000 --> 11:26.000
+the silicon versus the FPGA.
+
+11:26.000 --> 11:32.000
+So this is as far down the layers of abstraction we can go with self-hosting
+
+11:32.000 --> 11:35.000
+that I'm personally currently aware of.
+
+11:35.000 --> 11:40.000
+And so, being a relative late comer to developing hardware,
+
+11:40.000 --> 11:44.000
+I'm a software person, have been my entire career,
+
+11:44.000 --> 11:47.000
+took a couple classes at the university where I work,
+
+11:47.000 --> 11:50.000
+learned Verilog, learned a bit of digital design,
+
+11:50.000 --> 11:55.000
+and it surprised me to realize that essentially designing gateware
+
+11:55.000 --> 12:00.000
+is sitting down in front of a development environment and writing a program
+
+12:00.000 --> 12:06.000
+in some kind of functional slash declarative syntax like Verilog and VHDL.
+
+12:06.000 --> 12:10.000
+You basically write a program and then hit the compile button
+
+12:10.000 --> 12:18.000
+and it compiles your code into ever more elaborate basically graph net list
+
+12:18.000 --> 12:22.000
+of building blocks and eventually gates and then you have a choice
+
+12:22.000 --> 12:27.000
+of building a binary blob which is bitstream for the FPGA
+
+12:27.000 --> 12:30.000
+and it's basically a binary blob just like a binary blob comes out
+
+12:30.000 --> 12:32.000
+of an actual program you write for software.
+
+12:32.000 --> 12:37.000
+The difference being software will tell some CPU a sequence of steps
+
+12:37.000 --> 12:43.000
+of what to do whereas bitstream will tell an FPGA what to be.
+
+12:43.000 --> 12:47.000
+It sits there and it acts out the configuration that is being compiled
+
+12:47.000 --> 12:49.000
+into a binary blob.
+
+12:49.000 --> 12:53.000
+But other than that, it kind of looks like software development to me
+
+12:53.000 --> 12:58.000
+because I probably am pissing off a bunch of people for saying that.
+
+12:58.000 --> 13:02.000
+Now, the interesting thing is if you don't want the FPGA bitstream
+
+13:02.000 --> 13:06.000
+but rather would like optimized silicon then you're compiling,
+
+13:06.000 --> 13:10.000
+further elaborating your gates and your RTL into a bunch of graph,
+
+13:10.000 --> 13:13.000
+a very complicated graph of transistors which then get laid out
+
+13:13.000 --> 13:17.000
+and made into masks and there is an entire very, very expensive,
+
+13:17.000 --> 13:21.000
+very, very involved process of actually etching this into,
+
+13:21.000 --> 13:24.000
+carving it into stone so to speak.
+
+13:24.000 --> 13:28.000
+We have the saying of, well, is it the dog that wags the tail or is it
+
+13:28.000 --> 13:30.000
+the tail that wags the dog?
+
+13:30.000 --> 13:35.000
+Well, in terms of that, making actual silicon is one stage in a compilation
+
+13:35.000 --> 13:40.000
+pipeline like a software development compilation pipeline just like
+
+13:40.000 --> 13:44.000
+a five megaton tail is wagging a tiny little chihuahua dog basically.
+
+13:44.000 --> 13:46.000
+But if you look at it from a software guy's perspective,
+
+13:46.000 --> 13:50.000
+it's just one stage of the compilation pipeline.
+
+13:50.000 --> 13:54.000
+Just kind of figure it out. I'll share that with you.
+
+13:54.000 --> 14:01.000
+So now, we have the option of doing a CPU and this slide is specifically
+
+14:01.000 --> 14:05.000
+from the perspective of we're going to make a CPU and the choices are
+
+14:05.000 --> 14:11.000
+putting a CPU in dedicated silicon versus putting a CPU in an FPGA.
+
+14:11.000 --> 14:16.000
+With the dedicated silicon obviously you have high performance,
+
+14:16.000 --> 14:20.000
+low lower area, high clock speeds.
+
+14:20.000 --> 14:24.000
+The problem with that is there is, from the perspective of the hardware
+
+14:24.000 --> 14:27.000
+attack surface, one thing we don't control is the foundry,
+
+14:27.000 --> 14:31.000
+the chip foundry where we're sending those masks to be made.
+
+14:31.000 --> 14:36.000
+And documented attacks that have been done, so the University of Michigan
+
+14:36.000 --> 14:40.000
+group had this A2 Trojan at the IEEE security and privacy like three,
+
+14:40.000 --> 14:47.000
+four years ago. And what they did was if you have access to these masks,
+
+14:47.000 --> 14:52.000
+then you can tell where things are and you can add maybe these things have
+
+14:52.000 --> 14:56.000
+billions of transistors, but if you carefully understand how this whole
+
+14:56.000 --> 15:00.000
+thing works, you can put in 20 transistors in the capacitor.
+
+15:00.000 --> 15:05.000
+And the transistors are wired such that when the CPU, because this is a CPU
+
+15:05.000 --> 15:10.000
+remember, is executing a sequence of unprivileged instructions depending on
+
+15:10.000 --> 15:13.000
+how you wired those transistors in, they incrementally charge the capacitor
+
+15:13.000 --> 15:18.000
+a little bit at a time until at the end of the sequence the charge capacitor
+
+15:18.000 --> 15:22.000
+will flip a bit in the register. And if that register is your CPU
+
+15:22.000 --> 15:26.000
+privilege flag as in ring or whatever, your kernel mode versus user mode,
+
+15:26.000 --> 15:30.000
+then you have a baked into silicon privilege escalation vulnerability that
+
+15:30.000 --> 15:34.000
+relies not at all on any vulnerabilities in software. So if you theoretically
+
+15:34.000 --> 15:38.000
+had perfect software, you'd still be able to basically do a buffer,
+
+15:38.000 --> 15:42.000
+I mean not a buffer overflow, a privilege escalation attack on a CPU that's
+
+15:42.000 --> 15:49.000
+been compromised like that. As opposed to FPGAs, which you're asking
+
+15:49.000 --> 15:55.000
+the foundry, the manufacturing facility to make you a regular grid of basic
+
+15:55.000 --> 15:59.000
+configurable blocks. It kind of looks like snap circuits for grown-up
+
+15:59.000 --> 16:05.000
+engineers, you know. And most importantly, the foundry has absolutely
+
+16:05.000 --> 16:10.000
+no idea what this FPGA will be used for. And if it's ever going to be used
+
+16:10.000 --> 16:17.000
+for a CPU where on this regular grid of identical blocks will the register
+
+16:17.000 --> 16:21.000
+be that holds the crown jewels to the privilege ring flags or anything like
+
+16:21.000 --> 16:28.000
+that. So pre-gaming an attack in this scenario is qualitatively harder for
+
+16:28.000 --> 16:31.000
+the hardware manufacturing facility because they don't know what you're
+
+16:31.000 --> 16:35.000
+going to be using it for and where your things are going to be put on it by the
+
+16:35.000 --> 16:40.000
+place and route software. So the price you pay for not letting them know where
+
+16:40.000 --> 16:45.000
+your privilege flag is going to be by using soft core CPUs is basically
+
+16:45.000 --> 16:50.000
+performance, a huge performance loss. But that's essentially the trade-off.
+
+16:50.000 --> 16:56.000
+So if we've decided to use FPGAs because we're paranoid and we're trying to
+
+16:56.000 --> 17:03.000
+deny the silicon foundry knowledge of what we're going to be doing, the rest
+
+17:03.000 --> 17:07.000
+of the attack surface is, you know, if we don't trust our HDL toolchain, but we
+
+17:07.000 --> 17:11.000
+do because it's, you know, part of the self-hosting stack and we have source
+
+17:11.000 --> 17:16.000
+code do it. And then there could be design defects like bugs in the sources
+
+17:16.000 --> 17:22.000
+to the CPU. Kind of like, I don't know, Spectre and Meltdown. And you'll
+
+17:22.000 --> 17:25.000
+never know whether those are intentional or just somebody getting away with like
+
+17:25.000 --> 17:32.000
+trying to optimize things, plausible deniability all the way down. But if you
+
+17:32.000 --> 17:35.000
+have source code do everything, you can always just edit the source code and
+
+17:35.000 --> 17:39.000
+rebuild things and you have a self-hosting environment which will allow you
+
+17:39.000 --> 17:46.000
+to rebuild every part of it as necessary. Which is what brings me to this slide,
+
+17:46.000 --> 17:51.000
+you know, freedom and independence from any sort of black box closed non-free
+
+17:51.000 --> 17:58.000
+dependencies. And you can trust the computer that runs as a self-hosting
+
+17:58.000 --> 18:03.000
+gateway plus software stack to the same extent you can trust the cumulative set
+
+18:03.000 --> 18:07.000
+of source code. Now, a lot of people are going to say, well, no one ever reads
+
+18:07.000 --> 18:11.000
+that much source code and it's impossible to understand. I agree. I don't
+
+18:11.000 --> 18:16.000
+want to read any of those sources myself, but the cool thing about it is if I ever,
+
+18:16.000 --> 18:20.000
+down the road, have a question about, hey, this computer did something weird,
+
+18:20.000 --> 18:25.000
+I could do a vertical dive into the software layers, the RTL, the source codes
+
+18:25.000 --> 18:29.000
+to the gateway, the source code to the whatever it does weird, I can actually
+
+18:29.000 --> 18:34.000
+have enough brain power to do one sort of debugging session through it. But in
+
+18:34.000 --> 18:37.000
+order for me to be able to do that, I need to have source code to everything
+
+18:37.000 --> 18:42.000
+and with the knowledge that I'm not going to read most of it. So that's kind of
+
+18:42.000 --> 18:49.000
+my perspective on this, my ability to trust my own computer. I hope I'm doing
+
+18:49.000 --> 18:52.000
+okay with time. Are we talking about 15 minutes here?
+
+18:52.000 --> 18:59.000
+Twenty minutes in. Perfect. All right. So I am going to now show you a Fedora
+
+18:59.000 --> 19:03.000
+capable computer built on this Lambda concept board. So if you download the
+
+19:03.000 --> 19:09.000
+PDF from the conference site, the links are clickable. So it'll take you to the
+
+19:09.000 --> 19:13.000
+place where I ordered it from. It's a commercially available board. Hopefully
+
+19:13.000 --> 19:17.000
+they'll make more because it was solved out the last time I checked. It uses
+
+19:17.000 --> 19:23.000
+Litex and the rocket chip CPU. It uses YOSys, Charleston, and XPNR for the
+
+19:23.000 --> 19:29.000
+tool chain, OpenSBI for the firmware. And then I downloaded the latest
+
+19:29.000 --> 19:37.000
+incarnation based on Rawhide 37 of Fedora's RISC-5 64-bit port. Thank you,
+
+19:37.000 --> 19:42.000
+David. He's the guy, you know, like the one-man show behind building most of
+
+19:42.000 --> 19:49.000
+this stuff and it's really, really appreciated. If you have Bitstream, well,
+
+19:49.000 --> 19:54.000
+if you have Litex and all its dependency installed, and there's going to be a link
+
+19:54.000 --> 20:02.000
+in the slide deck to more detailed build instructions for this. But it's pretty
+
+20:02.000 --> 20:07.000
+much a stock Litex build. You install Litex according to all the recipes that
+
+20:07.000 --> 20:11.000
+are available online and then you run this command line which says, we're going
+
+20:11.000 --> 20:19.000
+to build it with the rocket chip, can't highlight, with the rocket chip CPU, 50
+
+20:19.000 --> 20:24.000
+megahertz, I want Ethernet, I want SD card support, I want to use Flow 3
+
+20:24.000 --> 20:31.000
+optimization to the YOSys component of the tool chain, I want strict timing, and
+
+20:31.000 --> 20:37.000
+I want the register map saved to a CSV file. Now, this is all a little bit
+
+20:37.000 --> 20:41.000
+clunky still at this point because you're going to have to kind of manually build
+
+20:41.000 --> 20:47.000
+the device tree table for it. Litex doesn't build a device tree table for
+
+20:47.000 --> 20:53.000
+rocket chip-based designs automatically and it's one of the things on my to-do
+
+20:53.000 --> 21:01.000
+list to teach you how to do that. But once you have the generic sort of
+
+21:01.000 --> 21:06.000
+register map and you know what the addresses are for all the devices,
+
+21:06.000 --> 21:12.000
+we have to add like a chosen boot args line which contains the kernel command
+
+21:12.000 --> 21:20.000
+line for the booting Fedora. And the black font is sort of the standard cut
+
+21:20.000 --> 21:25.000
+and paste from what Fedora already uses, modulo this root which is going to be
+
+21:25.000 --> 21:30.000
+on the SD card. The other thing we need to do is set enforcing to zero because
+
+21:30.000 --> 21:35.000
+once we've R-synced stuff from one image to the SD card, the labels are all wrong
+
+21:35.000 --> 21:42.000
+and you know, SELinux is going to scream at us. So we set enforcing to zero and
+
+21:42.000 --> 21:47.000
+then the default is to boot into graphical mode. So we have to tell it to
+
+21:47.000 --> 21:52.000
+use like run level three equivalent which is the multi-user target in system D.
+
+21:52.000 --> 21:56.000
+And then last but not least, system D is really, really impatient because it's
+
+21:56.000 --> 22:02.000
+used to running on, I don't know, five gigahertz, you know, 20 core systems.
+
+22:02.000 --> 22:06.000
+This thing is 50 megahertz so system D will give up on starting services way
+
+22:06.000 --> 22:09.000
+before the thing actually has a chance to actually start all that stuff. So we
+
+22:09.000 --> 22:14.000
+need to increase the system D timeout. Now enforcing we can get rid of like it
+
+22:14.000 --> 22:19.000
+takes about a day to relabel the whole SD card on the 50 megahertz system but then
+
+22:19.000 --> 22:23.000
+you can get rid of this part of the command line because it'll actually work
+
+22:23.000 --> 22:29.000
+properly with SELinux. And you can set this as the default so then you can get
+
+22:29.000 --> 22:36.000
+multi-user target but this should stay because it affects both the init R D
+
+22:36.000 --> 22:40.000
+version of system D and the one that actually boots from the real root. Now
+
+22:40.000 --> 22:45.000
+once we have a device tree blob ready to go we make a binary out of it and then
+
+22:45.000 --> 22:50.000
+we build open SBI, that's another source stock, you get open SBI to just build
+
+22:50.000 --> 22:57.000
+itself using a built-in DTB right now. So the other thing that Litex should
+
+22:57.000 --> 23:02.000
+eventually be made to do is to build a DTB into the actual bit stream and then
+
+23:02.000 --> 23:08.000
+have open SBI just kind of take that like it does for most normal computers.
+
+23:08.000 --> 23:13.000
+For now we just kind of have to build a binary bit stream thing into the open
+
+23:13.000 --> 23:19.000
+SBI blob. And then we put that on the first, you know, the first partition of
+
+23:19.000 --> 23:24.000
+the SD card has to be VFAT and there has to be a boot.json file which lists the
+
+23:24.000 --> 23:30.000
+open SBI blob and its load address which is the very first address in memory and
+
+23:30.000 --> 23:34.000
+then the Linux kernel image and the init R D image. And the Linux kernel image
+
+23:34.000 --> 23:41.000
+and the init R D image just come from Fedora or would normally but I had to do
+
+23:41.000 --> 23:47.000
+some customizations. The stock Fedora kernel has two problems that I'm dealing
+
+23:47.000 --> 23:55.000
+with right now. One of them is it lacks UART IRQ support for the Litex UART.
+
+23:55.000 --> 24:01.000
+And so that stuff is kind of making its way right now. It's somewhere in Greg
+
+24:01.000 --> 24:07.000
+Age's TTYNext tree and it's been accepted for upstream but hasn't made it
+
+24:07.000 --> 24:15.000
+into mainline yet. The other thing is between the port, the RISC-V Fedora port
+
+24:15.000 --> 24:22.000
+based on Fedora 33 which was the previous kind of major release of the
+
+24:22.000 --> 24:28.000
+RISC-V port of Fedora and the current one, a bunch of config flags have been
+
+24:28.000 --> 24:35.000
+turned on additionally in the stock Fedora kernel configuration. And I found
+
+24:35.000 --> 24:40.000
+two but I'm working on finding a third one which if enabled will cause the
+
+24:40.000 --> 24:45.000
+kernel to crash when it boots on this machine, on this computer. And either
+
+24:45.000 --> 24:49.000
+David will tell me well we can get rid of not actually enabling this one because
+
+24:49.000 --> 24:54.000
+it was enabled by mistake or if it has to be enabled then I either have to find a
+
+24:54.000 --> 24:59.000
+percolating patch for some kernel bug that's already been found or I have to
+
+24:59.000 --> 25:03.000
+find it and submit a patch myself. But anyway that's kind of work in progress.
+
+25:03.000 --> 25:08.000
+Right now I've been building a custom kernel and I'm doing that on RISC-V
+
+25:08.000 --> 25:14.000
+Fedora machine running on QMU for reasons of speed and you know I need
+
+25:14.000 --> 25:18.000
+something to actually build the kernel before I can boot this machine for the
+
+25:18.000 --> 25:23.000
+first time. And then down here at the bottom there's a URL clickable link
+
+25:23.000 --> 25:27.000
+with all of this but in much more detail that you can actually reproduce.
+
+25:27.000 --> 25:31.000
+Alright well perfect because now I'm going to sit down and actually try to
+
+25:31.000 --> 25:38.000
+work this demo for you guys. I recorded an ASCIIcast of my terminal.
+
+25:42.000 --> 25:45.000
+Let me try to maximize this.
+
+25:45.000 --> 26:01.000
+I'm splitting my screen and I'm sending the bit stream with open OCD so this is
+
+26:01.000 --> 26:08.000
+the ECP5 bit stream that I built. I'm sending it to the ECPIX5 Lambda concept
+
+26:08.000 --> 26:20.000
+board. This is Litex. This is basically where I type SD card boot.
+
+26:20.000 --> 26:24.000
+I'm going to try to zoom in so you can actually read the screen and see what
+
+26:24.000 --> 26:30.000
+it's doing. So it's starting to boot.
+
+26:30.000 --> 26:38.000
+Loaded boot JSON is loading the RAM disk and if I fast forward it's going to
+
+26:38.000 --> 26:43.000
+load the actual kernel image and then it's going to start booting and this is
+
+26:43.000 --> 26:49.000
+what it looks like. It takes a very long time this whole video if you have time
+
+26:49.000 --> 26:53.000
+to watch it at normal speed this four hours long.
+
+26:53.000 --> 27:03.000
+Well it's a 50 megahertz computer what do you want? So anyway let's see.
+
+27:03.000 --> 27:08.000
+If I fast forward to this creatively you'll see system D actually booting
+
+27:08.000 --> 27:14.000
+here and a bunch of OK services being started.
+
+27:14.000 --> 27:27.000
+Let's see. At some point we failed to mount what? VAR, lib, NFS, whatever but we
+
+27:27.000 --> 27:33.000
+don't care about NFS on this computer. Oh it also failed to start firewall D.
+
+27:33.000 --> 27:39.000
+But other than that it seems to be pretty happy. And at some point it starts
+
+27:39.000 --> 27:49.000
+the console. And let me pause this again. Let's zoom in properly so you guys
+
+27:49.000 --> 27:55.000
+can see what it looks like. So this is a boot prompt for Fedora in text mode.
+
+27:55.000 --> 28:00.000
+If you don't have IRQ support in your UART it would trip over itself get TTY
+
+28:00.000 --> 28:04.000
+would basically just kind of interrupt itself before it's serviced its own soft
+
+28:04.000 --> 28:12.000
+interrupt so it needs actual IRQ support in order to not crash when it starts.
+
+28:12.000 --> 28:19.000
+The other cool thing about this is it actually does work on the network.
+
+28:19.000 --> 28:29.000
+If I nmap my you know from my normal machine for Fedora it'll actually find this.
+
+28:29.000 --> 28:37.000
+So 192.168.2.229 on my home network was where this Fedora machine actually grabbed
+
+28:37.000 --> 28:44.000
+the DHCP lease and talked to DNS mask and everything.
+
+28:44.000 --> 28:48.000
+My attempt to log into this machine took about 20-30 minutes because here's the
+
+28:48.000 --> 28:54.000
+cool thing right you type login and it starts you know the login program and
+
+28:54.000 --> 28:58.000
+then it starts bash right so in order for all of that to work it needs to be
+
+28:58.000 --> 29:03.000
+loaded into RAM and linked against GLibc and all that stuff and that takes a
+
+29:03.000 --> 29:07.000
+little longer than the timeout the first couple of times until it's actually
+
+29:07.000 --> 29:13.000
+managed to pull enough of it into RAM and actually let you log in.
+
+29:13.000 --> 29:23.000
+So there's a couple of attempts and I'm trying to log in both at the console
+
+29:23.000 --> 29:29.000
+in this window and over SSH and see here I actually just succeeded because it
+
+29:29.000 --> 29:35.000
+says hey last login something something that means I'm actually going to get a
+
+29:35.000 --> 29:45.000
+shell eventually and once I do get a shell I can start you know exploring cat
+
+29:45.000 --> 29:53.000
+proc CPU info looks like this proc interrupts looks like that I have the
+
+29:53.000 --> 30:01.000
+UART I have Ethernet zero I have my SD card and this is part of the CPU the
+
+30:01.000 --> 30:07.000
+slash boot dot JSON this is the file that told the Litex BIOS what to load
+
+30:07.000 --> 30:13.000
+into memory what else do I have here this is the actual source I mean I just
+
+30:13.000 --> 30:18.000
+copied it over to the SD card so this is the this is the source to the device
+
+30:18.000 --> 30:23.000
+tree file and there's my boot Args console all the stuff we talked about on
+
+30:23.000 --> 30:30.000
+the previous slides this is the CPU node okay let's see what else is going on
+
+30:30.000 --> 30:36.000
+here my devices but all of this I had to edit by hand and I'm going to I promise
+
+30:36.000 --> 30:41.000
+I'm going to teach Litex I'm going to submit a patch to make it build generate
+
+30:41.000 --> 30:45.000
+this programmatically so that I don't have to like modify the device tree file
+
+30:45.000 --> 30:53.700
+every time I rebuild my thing yeah so long story short I'm going to fast
+
+30:53.700 --> 31:00.640
+forward over a lot of this stuff once I'm able to log in from everywhere the
+
+31:00.640 --> 31:08.860
+next thing is system D network or resolve D is not enjoying itself on this
+
+31:08.860 --> 31:16.680
+machine so I had to disable it and stop it and add 8 8 8 8 and 8 8 4 4 to an
+
+31:16.680 --> 31:22.000
+actual hard coded at C resolve that conf at that point my DNS resolution
+
+31:22.000 --> 31:27.520
+started working crony also started working because it could resolve like
+
+31:27.520 --> 31:32.800
+Fedora NTP whatever the alias thing it has in its config file and once I have
+
+31:32.800 --> 31:42.800
+all of this ready to go I type DNF dash Y install Python 3 me gen YOSIS trellis
+
+31:42.800 --> 31:55.560
+next B and R and it's doing it really slowly but if you have patience or can
+
+31:55.560 --> 31:59.840
+fast forward which is really cool it's a cool feature of ASCII how do you
+
+31:59.840 --> 32:07.720
+pronounce that ASCII at ASCI I and EMA ASCII cinema I don't know but you guys
+
+32:07.720 --> 32:10.720
+know what I'm talking about right like you can record your anyway this is
+
+32:10.720 --> 32:17.640
+basically what I used here and so I don't know we're like 142 minutes into
+
+32:17.640 --> 32:29.720
+this entire thing and it's installing RPMs well we'll get to that we're
+
+32:29.720 --> 32:43.880
+we are going to address that elephant in this room definitely well so here's
+
+32:43.880 --> 32:47.640
+here's the thing right so basically it takes about an hour and plus to install
+
+32:47.640 --> 32:56.320
+all the RPMs but then let me pause this thing at some point what I did to
+
+32:56.320 --> 33:00.560
+demonstrate the fact that it can actually self host is I had a very simple
+
+33:00.560 --> 33:09.040
+Verilog blinky which just makes a counter out of the ECP 5 boards LEDs and
+
+33:09.040 --> 33:14.640
+and if you if I zoom in here essentially this is what it does it has a counter
+
+33:14.640 --> 33:20.880
+and the red the you know LED zero red LED one green LED to blue and LED 3 red
+
+33:20.880 --> 33:25.880
+that's basically bits 27 26 25 and 24 of the counter and it kind of goes at like
+
+33:25.880 --> 33:31.520
+you know a couple of seconds you can actually see it blink and that's the
+
+33:31.520 --> 33:38.640
+Verilog and I'm running actually here we go like the build of this here's the I
+
+33:38.640 --> 33:42.080
+have a shell script I'm running it manually so YOSIS is the first thing
+
+33:42.080 --> 33:47.720
+that creates a JSON file next BNR will do the placement route and then ECP pack
+
+33:47.720 --> 33:53.160
+will actually take what next BNR produces and spit out an SDF file which
+
+33:53.160 --> 33:59.520
+can shove at the actual board on which this computer currently runs and so I
+
+33:59.520 --> 34:06.920
+did that and so in this other window I have top running and so YOSIS is using
+
+34:06.920 --> 34:15.080
+oh I don't know let's see if I keep going percent CPU where is percent CPU
+
+34:15.080 --> 34:22.280
+right here so it uses about 80% of the CPU if I don't know man DB whatever
+
+34:22.280 --> 34:26.520
+cron start some process that drops down to 50% because now it's splitting it
+
+34:26.520 --> 34:30.120
+with like whatever you know thing so I had to kill those while this was running
+
+34:30.120 --> 34:38.800
+just to keep it you know on task and making progress yeah run YOSIS run next
+
+34:38.800 --> 34:44.720
+BNR this is pretty much if you've run next BNR ever before you'll recognize
+
+34:44.720 --> 34:52.360
+the output it succeeds then we do ECP pack to generate the SDF file and once
+
+34:52.360 --> 35:02.880
+that is over I did a MD 5 sum of the top SDF file so that when we run the
+
+35:02.880 --> 35:07.520
+following demo or when I show you pushing this thing to the actual board
+
+35:07.520 --> 35:12.000
+when it starts to blink here's the check some of the SDF file BAE 0 yada yada
+
+35:12.000 --> 35:18.520
+6 1 8 alright so at this point the job is done it took I don't know 50 minutes
+
+35:18.520 --> 35:29.880
+to build the bitstream and if I pause this perfect if I pause this creatively
+
+35:29.880 --> 35:42.080
+here I am doing an MD 5 sub sum of the top SDF file and you'll see BAE 0 D yada
+
+35:42.080 --> 35:49.040
+yada 6 1 8 that is actually the thing I built on fedora running on this board
+
+35:49.040 --> 35:57.880
+and if I let it run and it goes then you'll see right now it's like kind of
+
+35:57.880 --> 36:02.400
+okay so here it started blinking and it blinks exactly like the Verilog I showed
+
+36:02.400 --> 36:08.160
+you earlier says it should so I was capable of building bitstream for this
+
+36:08.160 --> 36:15.760
+board on fedora running on this board and with that we're going back to the
+
+36:15.760 --> 36:26.600
+tail end of the slide deck and we're talking about right so building the
+
+36:26.600 --> 36:36.920
+blinky on my Intel laptop takes what 10 seconds or less so 10 seconds dot dot
+
+36:36.920 --> 36:45.560
+dot 90 minutes building bitstream for actual risk five rocket chip light X
+
+36:45.560 --> 36:50.840
+takes half an hour dot dot dot whatever that translates into you'd be here a
+
+36:50.840 --> 36:55.640
+very very very long time if you waited for this thing to really self host itself
+
+36:55.640 --> 37:01.080
+and rebuild its own bitstream it can do it we've we've established that it's the
+
+37:01.080 --> 37:06.680
+qualitative leap has been done it's just a quantitative problem now we to make
+
+37:06.680 --> 37:10.960
+this thing faster right and so the immediate thing is to figure out the
+
+37:10.960 --> 37:18.840
+Linux config stuff teach light X how to be more you know civilized about
+
+37:18.840 --> 37:22.940
+booting and generating device trees and working maybe with u-boot or something
+
+37:22.940 --> 37:28.640
+and actually have a standardized boot process light SEDA is like they have a
+
+37:28.640 --> 37:37.480
+SEDA core which works on some FPGAs but currently not yet on the on the ECP on
+
+37:37.480 --> 37:44.680
+the CP5 in the medium term right in order to make this thing a little faster
+
+37:44.680 --> 37:52.040
+right on my VC 707 board I can get eight cores running at the hundred and a
+
+37:52.040 --> 37:56.240
+hundred fifty megahertz so basically twice or three times as fast and eight
+
+37:56.240 --> 38:02.360
+times as many cores as I can fit on a lattice chip a problem is if I do that
+
+38:02.360 --> 38:06.040
+it's not self hosting because I need Vivado to pull that off I need the
+
+38:06.040 --> 38:11.880
+Xilinx proprietary tools so whatever I can do to encourage or join or whatever
+
+38:11.880 --> 38:16.360
+in the future the effort to target the Xilinx large Xilinx not just any
+
+38:16.360 --> 38:21.600
+Xilinx chips large Xilinx chips with complete free tool chains count me in
+
+38:21.600 --> 38:26.560
+let me know tell me what I need to do you know I don't have a lot of money but
+
+38:26.560 --> 38:35.920
+I have a lot of determination I'm a very stubborn individual all right well thank
+
+38:35.920 --> 38:42.600
+you I'll think that as a compliment no for real I got that we could put in
+
+38:42.600 --> 38:46.200
+fancier IP blocks if it's a larger FPGA maybe we can get away with some kind of
+
+38:46.200 --> 38:51.560
+video card like thing or maybe be a PCI master so we can plug video cards or
+
+38:51.560 --> 38:58.240
+other cards into this computer and then in the long science fiction term I mean
+
+38:58.240 --> 39:02.400
+what I'm doing right now is I'm taking a class or a sequence of classes that
+
+39:02.400 --> 39:08.320
+that culminate in taping out an actual ASIC at Carnegie Mellon which I'm doing
+
+39:08.320 --> 39:12.400
+in my spare time I want to understand how ASIC fabrication works because I
+
+39:12.400 --> 39:15.440
+want to have something useful that I can say about it right now it's just all
+
+39:15.440 --> 39:18.840
+high-level oh yeah you know you can't trust the fab but I have no idea what
+
+39:18.840 --> 39:22.260
+goes on in one of those things and I want to know what goes on in one of
+
+39:22.260 --> 39:27.880
+those things and then there's been a kid who probably just graduated from their
+
+39:27.880 --> 39:32.520
+electrical computer engineering department Sam Zilouf was his name but
+
+39:32.520 --> 39:37.320
+he was famous before he joined CMU because he did some silicon transistor
+
+39:37.320 --> 39:41.480
+stuff on integrated circuits in his own garage probably would like 70s
+
+39:41.480 --> 39:47.600
+technology or whatnot but it's a start right and then maybe in the future it
+
+39:47.600 --> 39:51.160
+would be really cool if I lived long enough to see some kind of you know
+
+39:51.160 --> 39:55.840
+nano assembler kind of like a 3d printer in my house that maybe costs as much or
+
+39:55.840 --> 40:01.720
+less than then sort of like a the average American single family detached
+
+40:01.720 --> 40:05.920
+home you know or something because right now the way chip fabrication works
+
+40:05.920 --> 40:09.760
+they're like you can't you can count them on one hand how many actual places
+
+40:09.760 --> 40:13.960
+are that make these things right and then obviously they have the attention
+
+40:13.960 --> 40:17.640
+of important people and nation-state actors and all this stuff it would be
+
+40:17.640 --> 40:21.640
+nice if we could democratize that a little bit more so that's kind of you
+
+40:21.640 --> 40:25.320
+know if I live long enough to see that I've either lived a very long life or
+
+40:25.320 --> 40:29.680
+you know something cool happened in my lifetime either way I win and with that
+
+40:29.680 --> 40:49.400
+thank you time for questions or do we do that off okay awesome sweet thank you

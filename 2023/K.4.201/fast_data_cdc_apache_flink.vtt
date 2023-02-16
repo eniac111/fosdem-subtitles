@@ -1,0 +1,1456 @@
+WEBVTT
+
+00:00.000 --> 00:07.000
+So today I want to talk a little bit about Change Data Capture, CDC, street processing,
+
+00:07.000 --> 00:08.000
+with the magic plane.
+
+00:08.000 --> 00:09.000
+This talk is split into three parts.
+
+00:09.000 --> 00:10.000
+The first part is for people that have never heard of the plane before.
+
+00:10.000 --> 00:11.000
+The second part is maybe a little bit more deeper than the plane SBL, like SIPO.
+
+00:11.000 --> 00:12.000
+And then the third part, we could dive really, really deep into Under the Hood.
+
+00:12.000 --> 00:16.680
+So, we're going to go through a little bit of the
+
+00:16.680 --> 00:38.680
+introduction, but just to summarize it.
+
+00:38.680 --> 00:45.680
+So from the open source side, part of the plane before became part of the Apache Sofa Foundation,
+
+00:45.680 --> 00:49.680
+2014, I'm a member of the management committee of Apache Flink.
+
+00:49.680 --> 00:53.680
+Over the years I also made it to the top one contributors.
+
+00:53.680 --> 00:58.680
+According to the additions in top one, I don't know which refactoring I did to become a top
+
+00:58.680 --> 00:59.680
+one contributor.
+
+00:59.680 --> 01:06.680
+And among the core people that try to design SIPO every day and evolve SIPO.
+
+01:06.680 --> 01:07.680
+Can we revise?
+
+01:07.680 --> 01:08.680
+Yeah.
+
+01:08.680 --> 01:10.680
+I went through a couple of companies.
+
+01:10.680 --> 01:17.680
+The latest one was a co-founder, was in Meroc, and they were acquired by Confl and the beginning
+
+01:17.680 --> 01:18.680
+of this year.
+
+01:18.680 --> 01:22.680
+And now I'm a principal software engineer at Confl.
+
+01:22.680 --> 01:24.680
+So, let's talk about SIPO.
+
+01:24.680 --> 01:30.680
+Before I start with an introduction to Flink, I would actually like to talk about stream
+
+01:30.680 --> 01:31.680
+processing in general.
+
+01:31.680 --> 01:37.680
+Because when you do stream processing, you basically always can identify roughly four
+
+01:37.680 --> 01:38.680
+building blocks.
+
+01:38.680 --> 01:41.680
+So, let's talk about those building blocks first.
+
+01:41.680 --> 01:44.680
+So, first of all, you need streams, right?
+
+01:44.680 --> 01:46.680
+You want to handle data.
+
+01:46.680 --> 01:49.680
+You maybe want to create some pipeline from source to sink.
+
+01:49.680 --> 01:55.680
+You might want to distribute your streams because you have a lot of data.
+
+01:55.680 --> 01:59.680
+So, maybe it wants to be allowed, it's really independent of the load.
+
+01:59.680 --> 02:01.680
+You want to join streams together.
+
+02:01.680 --> 02:03.680
+You want to enrich streams.
+
+02:03.680 --> 02:06.680
+Maybe there is a control stream and the main stream.
+
+02:06.680 --> 02:11.680
+You want to dynamically modify the behavior of the application while the application is
+
+02:11.680 --> 02:12.680
+running.
+
+02:12.680 --> 02:17.680
+Sometimes there is a bug in your application or you just want to trace certain behavior
+
+02:17.680 --> 02:20.680
+then you also want to be in place.
+
+02:20.680 --> 02:28.680
+Time, working with time is also a very, very important concept because on one side you
+
+02:28.680 --> 02:31.680
+want to make progress in your pipeline.
+
+02:31.680 --> 02:34.680
+But at some points you also want to synchronize.
+
+02:34.680 --> 02:38.680
+So, if you have two streams, maybe you want to wait for the other stream.
+
+02:38.680 --> 02:43.680
+Maybe you want to log or you want to buffer some of the streams.
+
+02:43.680 --> 02:48.680
+Maybe if the second event doesn't come in, you want to time out after some time.
+
+02:48.680 --> 02:51.680
+Maybe you also want to replay historical data.
+
+02:51.680 --> 02:54.680
+So, you want to fast forward at the time.
+
+02:54.680 --> 02:57.680
+You don't want to wait another hour to find an hour window.
+
+02:57.680 --> 03:00.680
+No, this should be quicker.
+
+03:00.680 --> 03:07.680
+Then when we talk about offering, what I just said, or in general storing data, state is
+
+03:07.680 --> 03:10.680
+a very important component in stream processing.
+
+03:10.680 --> 03:15.680
+State can be, for example, a machine learning model that is updated from time to time to
+
+03:15.680 --> 03:18.680
+classify your incoming streams.
+
+03:18.680 --> 03:23.680
+It can be cached if you don't want to look up in the database for every record that comes
+
+03:23.680 --> 03:31.680
+in, in a general state, and it can be more and more terrified.
+
+03:31.680 --> 03:36.680
+And also at some point it needs to expire.
+
+03:36.680 --> 03:40.680
+If you have a state with a streaming application that is very useful and comfortable,
+
+03:40.680 --> 03:45.680
+I actually make sure that I can create this natural of money for streaming.
+
+03:45.680 --> 03:48.680
+So, I want to say thank you for this streaming application.
+
+03:48.680 --> 03:55.680
+I want to make it version it so every night I want to create a short version.
+
+03:55.680 --> 03:59.680
+Maybe I want to form my streaming application in a staging class, in general, in a cluster,
+
+03:59.680 --> 04:02.680
+and play around with data on the state.
+
+04:02.680 --> 04:12.680
+Maybe I want to do some testing or I want to put time to record this part in my application.
+
+04:12.680 --> 04:18.680
+So, let's talk a little bit about what makes a link unique compared to other competitors.
+
+04:18.680 --> 04:23.680
+First of all, what I just showed is that a link is one of the best stream processors
+
+04:23.680 --> 04:26.680
+for all of these use cases and building blocks.
+
+04:26.680 --> 04:33.680
+So, when you design a streaming application, you can start with a whiteboard and you just
+
+04:33.680 --> 04:34.680
+draw some circles.
+
+04:34.680 --> 04:35.680
+What do you actually want to do?
+
+04:35.680 --> 04:37.680
+Maybe you want to read from some sources.
+
+04:37.680 --> 04:39.680
+Maybe you want to normalize your data.
+
+04:39.680 --> 04:41.680
+You want to filter some data out.
+
+04:41.680 --> 04:45.680
+You want to join the data and in the end you want to sync it somewhere else.
+
+04:45.680 --> 04:47.680
+This is how it starts.
+
+04:47.680 --> 04:51.680
+This is also how you have to reason about when you're creating a pipeline.
+
+04:51.680 --> 04:57.680
+And what a link does under the hood is it has a parallelism and scalability built in.
+
+04:57.680 --> 05:02.680
+So, you don't have to think of threading or network transfers or anything like that.
+
+05:02.680 --> 05:07.680
+Under the hood there are sharks, there are petitions depending on the connectors.
+
+05:07.680 --> 05:13.680
+There are sub-tasks that in parallel execute operations.
+
+05:13.680 --> 05:19.680
+Each of these tasks, or some of these tasks, can stay cool and have some little storage
+
+05:19.680 --> 05:21.680
+local to the operator.
+
+05:21.680 --> 05:22.680
+Very important.
+
+05:22.680 --> 05:27.680
+So, the state basically scales out and scales in with the operator.
+
+05:27.680 --> 05:32.680
+You don't need to query to a database which would increase the status.
+
+05:32.680 --> 05:38.680
+And then, of course, you have troubles and then the whole pipeline runs.
+
+05:38.680 --> 05:42.680
+And now comes the important part.
+
+05:42.680 --> 05:49.680
+What we expect really unique is that this possibility of creating a consistent snapshot
+
+05:49.680 --> 05:52.680
+of your entire stream of topology.
+
+05:52.680 --> 05:57.680
+So, there are networking object points and barriers which are traveling through the topology
+
+05:57.680 --> 06:01.680
+and make a backup of each state of operator.
+
+06:01.680 --> 06:10.680
+And then this snapshot is then persisted on a long-term to storage like S3 or HVFS or
+
+06:10.680 --> 06:14.680
+some other industry devices.
+
+06:14.680 --> 06:19.680
+When we talk about use cases, there are plenty of use cases.
+
+06:19.680 --> 06:27.680
+We have process detections, logs, IOTs, any kind of events, user interactions,
+
+06:27.680 --> 06:33.680
+people using the filter of raw detection for machine learning, for event driven applications,
+
+06:33.680 --> 06:36.680
+for ETL, for data integration, for analytics.
+
+06:36.680 --> 06:42.680
+So, things has become over the last 10 years, it has become like a very large platform.
+
+06:42.680 --> 06:51.680
+You can connect various connectors from various systems and read and write files, databases,
+
+06:51.680 --> 06:57.680
+the key value source, and it's also like event driven applications where maybe you want to send out an email
+
+06:57.680 --> 06:59.680
+or don't connect to it.
+
+06:59.680 --> 07:09.680
+You can also implement something custom that talks to some rest API as well as this is seen.
+
+07:09.680 --> 07:13.680
+So, I also want to quickly talk about things, APIs.
+
+07:13.680 --> 07:17.680
+So, this is the API stack.
+
+07:17.680 --> 07:25.680
+The two main APIs are data stream API, table API, OTP, table API, and there's also stateful functions.
+
+07:25.680 --> 07:36.680
+Stateful functions is some project that tries to execute like an connector model on a patch of link
+
+07:36.680 --> 07:39.680
+but will not go to the detail here.
+
+07:39.680 --> 07:46.680
+So, first of all, all APIs are built on a dataflow runtime so there's no pin-in-matching
+
+07:46.680 --> 07:48.680
+or anything involved under the hood.
+
+07:48.680 --> 07:55.680
+It's really a dataflow runtime whenever the result is ready, it will be streamed to the next operator.
+
+07:55.680 --> 08:03.680
+On top of that, there is a low-level stream operator API which you can use but this is for Exoprocess, I would say.
+
+08:03.680 --> 08:06.680
+And then we have the mainstream APIs on top.
+
+08:06.680 --> 08:14.680
+And the specialty about table and SQL API is that there is an optimizer planning stage in between
+
+08:14.680 --> 08:20.680
+so this helps you in creating the most efficient pipelines.
+
+08:20.680 --> 08:26.680
+The optimizer will make sure that the streaming will be executed more efficiently.
+
+08:26.680 --> 08:29.680
+Let's also quickly look at the APIs.
+
+08:29.680 --> 08:34.680
+So, this is like a basic, kind of, example.
+
+08:34.680 --> 08:42.680
+So, you're creating a stream for just the elements and then you're executing this on a cluster
+
+08:42.680 --> 08:49.680
+or in your IDE, then you're retrieving the result back and you have an iterator locally
+
+08:49.680 --> 08:51.680
+and you can just print it locally.
+
+08:51.680 --> 09:00.680
+It's not very useful but this is a minimal example of the Java API in this case, we also have an API.
+
+09:00.680 --> 09:06.680
+The important thing is that the stream, the industry API, basically exposes all the building blocks
+
+09:06.680 --> 09:10.680
+that I mentioned on my previous slide.
+
+09:10.680 --> 09:19.680
+So, you can have very abstract operator topologies and you can use built-in functions like man, process,
+
+09:19.680 --> 09:26.680
+and which each of them take, user-defined functions and then you can really define your business logic
+
+09:26.680 --> 09:32.680
+and those user-defined functions and you can also use completely arbitrary Java records,
+
+09:32.680 --> 09:37.680
+for example, Python records that flow between the operators.
+
+09:37.680 --> 09:42.680
+And conceptually, that is interesting when we talk about change data capture,
+
+09:42.680 --> 09:49.680
+conceptually the data stream API does not know about changes, it only knows about records
+
+09:49.680 --> 09:52.680
+so there is no change flag or anything like that.
+
+09:52.680 --> 09:58.680
+So, conceptually the data stream API is the app that can only, or insert only a block
+
+09:58.680 --> 10:03.680
+and also when you look at the output, 1, 2, 3, it is in Java also.
+
+10:03.680 --> 10:09.680
+So, now let's take a look at table API and SQL API.
+
+10:09.680 --> 10:16.680
+So, like, usually you just say to this table API or SQL, because it is a unified API,
+
+10:16.680 --> 10:21.680
+you can decide whether you want to define your pipeline automatically
+
+10:21.680 --> 10:27.680
+or whether you want to use standard SQL for defining your topology.
+
+10:27.680 --> 10:34.680
+Then in the end, you also execute and you can also print locally in your IDP.
+
+10:34.680 --> 10:41.680
+Here, this API abstracts all building blocks, so you have no access to timers or state
+
+10:41.680 --> 10:44.680
+or anything like this, this will be done after the port.
+
+10:44.680 --> 10:49.680
+Also, the operator topology is determined by the planner, not by you.
+
+10:49.680 --> 10:53.680
+The nice thing here is you can focus on your business logic
+
+10:53.680 --> 11:00.680
+and you do this deliberately to optimize our process with these declarations
+
+11:00.680 --> 11:03.680
+and make something efficient out of it.
+
+11:03.680 --> 11:11.680
+Internally, it uses highly efficient records, also up to the engine, not to you.
+
+11:11.680 --> 11:16.680
+What you will see maybe is like a road type, if you really want to go out of table API,
+
+11:16.680 --> 11:21.680
+then you see a road type which can work as an impressive program.
+
+11:21.680 --> 11:27.680
+The interesting thing here is that essentially we are working with tables here,
+
+11:27.680 --> 11:33.680
+tables and views for databases, but under the hood there is actually a change loop.
+
+11:33.680 --> 11:37.680
+That's what I want to show in the following slides.
+
+11:37.680 --> 11:42.680
+You can also see that, like for example, if you execute this theory here,
+
+11:42.680 --> 11:47.680
+you will get this output when you run it in IDP.
+
+11:47.680 --> 11:54.680
+You already see that there is of course an F0 column with a 1.3 output,
+
+11:54.680 --> 11:58.680
+but there is an additional column first column which already shows
+
+11:58.680 --> 12:04.680
+that there is some change flag attached to every record.
+
+12:04.680 --> 12:08.680
+In this case, it's just inserted.
+
+12:08.680 --> 12:13.680
+The nice thing about the links API is that you can mix and match them.
+
+12:13.680 --> 12:18.680
+You can, for example, start with data stream API,
+
+12:18.680 --> 12:21.680
+then you go into table API, or by the way around,
+
+12:21.680 --> 12:24.680
+if you have SQL, you can do the table in SQL first.
+
+12:24.680 --> 12:27.680
+Then if you have some more complex logic,
+
+12:27.680 --> 12:31.680
+or any timer services, or like a very complex stage,
+
+12:31.680 --> 12:34.680
+then you can go to data stream API and do it there,
+
+12:34.680 --> 12:36.680
+and then you can switch back to SQL,
+
+12:36.680 --> 12:38.680
+or you can just use the SQL connectors,
+
+12:38.680 --> 12:41.680
+but you find the entire pipeline in data stream API.
+
+12:41.680 --> 12:45.680
+That is up to you, but yeah,
+
+12:45.680 --> 12:51.680
+the APIs for that are present to go back and forth with those two.
+
+12:54.680 --> 12:59.680
+Now let's really talk about change-loss for your processes.
+
+13:02.680 --> 13:05.680
+If you think about data processing,
+
+13:05.680 --> 13:08.680
+in most of the cases actually data processing
+
+13:08.680 --> 13:11.680
+is always consuming a stream of changes,
+
+13:11.680 --> 13:16.680
+because if this would not be like a continuous input stream,
+
+13:16.680 --> 13:20.680
+then your company, your project, whatever it would actually be,
+
+13:20.680 --> 13:26.680
+so it's actually very common that data flows in continuously.
+
+13:29.680 --> 13:32.680
+The link API is the link runtime,
+
+13:32.680 --> 13:35.680
+it sees everything basically as a stream.
+
+13:35.680 --> 13:40.680
+It just distinguishes between a bounded stream and unbounded stream.
+
+13:40.680 --> 13:45.680
+Bounded means you define a start and an end,
+
+13:45.680 --> 13:48.680
+and the end is coming there.
+
+13:48.680 --> 13:51.680
+Unbounded means you start somewhere,
+
+13:51.680 --> 13:54.680
+and now it can be somewhere in the past,
+
+13:54.680 --> 13:57.680
+and then you start processing the future.
+
+13:57.680 --> 13:59.680
+This is up to you.
+
+13:59.680 --> 14:04.680
+If you really think a bit about this,
+
+14:04.680 --> 14:09.680
+data processing is just a special case of stream processing.
+
+14:09.680 --> 14:12.680
+So, data processing means that,
+
+14:12.680 --> 14:15.680
+okay, through the bounded nature of the stream,
+
+14:15.680 --> 14:19.680
+I can maybe do some more specialized operators,
+
+14:19.680 --> 14:23.680
+like sorting for example, it's easier in such a thing.
+
+14:23.680 --> 14:26.680
+You can also use different algorithms if you have sorting,
+
+14:26.680 --> 14:27.680
+like Solar
+
+14:27.680 --> 14:29.680
+much join or something like this.
+
+14:29.680 --> 14:35.680
+So, the runtime has special operators and special handling of bounded streams,
+
+14:35.680 --> 14:40.680
+but in general, you can process everything for the stream.
+
+14:40.680 --> 14:43.680
+So, those bounded and unbounded data.
+
+14:46.680 --> 14:50.680
+So, how does actually things look like?
+
+14:50.680 --> 14:55.680
+So, how can I work with streams in the end-to-end sequence?
+
+14:55.680 --> 14:58.680
+So, the first answer to this, I already mentioned it before,
+
+14:58.680 --> 15:01.680
+is you actually don't block the streams.
+
+15:01.680 --> 15:04.680
+So, what you work with is dynamic tables.
+
+15:04.680 --> 15:07.680
+It's just a concept we call dynamic tables.
+
+15:07.680 --> 15:12.680
+It's a concept similar to materialized views and materialized view maintenance.
+
+15:12.680 --> 15:17.680
+So, what you do as a user is you define your tables.
+
+15:17.680 --> 15:19.680
+On the left side, we have transactions,
+
+15:19.680 --> 15:22.680
+and on the right side, we have revenue.
+
+15:22.680 --> 15:26.680
+And then in the middle, you define a standing, running,
+
+15:26.680 --> 15:29.680
+and then you define a sequence of three ones,
+
+15:29.680 --> 15:33.680
+which gets translated into a pipeline to
+
+15:33.680 --> 15:36.680
+which you execute the right and right.
+
+15:36.680 --> 15:39.680
+So, then the question is, okay, if we have this,
+
+15:39.680 --> 15:42.680
+like it's a big SQL kind of a database,
+
+15:42.680 --> 15:45.680
+and the answer to that is no, it's not a database,
+
+15:45.680 --> 15:48.680
+because we are not in charge of the data.
+
+15:48.680 --> 15:51.680
+So, you can bring your own data into your own systems.
+
+15:51.680 --> 15:55.680
+So, it reads, it's more like a process that leads from all different kinds of systems
+
+15:55.680 --> 15:57.680
+to different kinds of systems.
+
+15:57.680 --> 16:03.680
+So, if a table is not a stream,
+
+16:03.680 --> 16:05.680
+or if I don't work with streams,
+
+16:05.680 --> 16:08.680
+how does that actually relate with each other?
+
+16:08.680 --> 16:14.680
+And an interesting piece of, or like an interesting term,
+
+16:14.680 --> 16:17.680
+here is called stream table duality.
+
+16:17.680 --> 16:22.680
+So, you can basically see a stream as the change log
+
+16:22.680 --> 16:26.680
+of a continuously changing table.
+
+16:26.680 --> 16:29.680
+So, it is possible, and I will also show an example shortly,
+
+16:29.680 --> 16:32.680
+that you can convert from a table into a stream
+
+16:32.680 --> 16:34.680
+and from a stream into a table.
+
+16:34.680 --> 16:38.680
+You can do it back and forth, I think that is possible.
+
+16:38.680 --> 16:42.680
+Usually, you as a user, you don't see that.
+
+16:42.680 --> 16:45.680
+Under the hood, the runtime, all the sources,
+
+16:45.680 --> 16:47.680
+all the things, all the operators,
+
+16:47.680 --> 16:50.680
+they work with change logs under the hood.
+
+16:50.680 --> 16:56.680
+So, in Flink, we have four different kinds of change bags for each record.
+
+16:56.680 --> 17:00.680
+So, we have insertions.
+
+17:00.680 --> 17:06.680
+Insertions are also the default input and output for bounded dash queries.
+
+17:06.680 --> 17:12.680
+And then we have update for, which basically removes the previously included result.
+
+17:12.680 --> 17:17.680
+Then we have update after to update something.
+
+17:17.680 --> 17:25.680
+And then we have to use the last result in the data store.
+
+17:25.680 --> 17:30.680
+When we see only, insert only in a log,
+
+17:30.680 --> 17:34.680
+then we call this end only or insert only log.
+
+17:34.680 --> 17:39.680
+It contains some kind of deletion or update before we call this
+
+17:39.680 --> 17:42.680
+updating table or an updating stream.
+
+17:42.680 --> 17:51.680
+And if it never contains an update before but only update afters,
+
+17:51.680 --> 17:58.680
+then there is a primary key involved and then we call this absurdity.
+
+17:58.680 --> 18:01.680
+So, let me make a complete example.
+
+18:01.680 --> 18:04.680
+So, again, we have on the left side, the sections on the right,
+
+18:04.680 --> 18:10.680
+and in the middle, we have some in and some grouping by name of the transactions.
+
+18:10.680 --> 18:14.680
+So, what happens now is, like in the logical table,
+
+18:14.680 --> 18:19.680
+there is a new record coming in called Alice.
+
+18:19.680 --> 18:22.680
+This is how it will be represented in the change bag under the hood.
+
+18:22.680 --> 18:25.680
+And then this is what comes out.
+
+18:25.680 --> 18:27.680
+So, we are summing here.
+
+18:27.680 --> 18:32.680
+So, 56 is the first result that we are also using.
+
+18:32.680 --> 18:35.680
+So, now the next red row comes in, the bottom comes in.
+
+18:35.680 --> 18:37.680
+Again, it will be added.
+
+18:37.680 --> 18:41.680
+So, it will be done table.
+
+18:41.680 --> 18:43.680
+But now it comes in.
+
+18:43.680 --> 18:46.680
+There is another Alice and we want to do five Alice.
+
+18:46.680 --> 18:54.680
+So, that means the sum is not updating or to update the sum to the newest number.
+
+18:54.680 --> 18:59.680
+That means first we have to remove the old record.
+
+18:59.680 --> 19:03.680
+If we want to materialize our change log to the table,
+
+19:03.680 --> 19:06.680
+so we also have to remove the row in the table.
+
+19:06.680 --> 19:12.680
+And then we can finally add the updated row.
+
+19:12.680 --> 19:15.680
+And this is what the change log looks like.
+
+19:15.680 --> 19:21.680
+And if you would apply this change log to a sequel or some key values there,
+
+19:21.680 --> 19:29.680
+store like the search or so, then the result would be there.
+
+19:29.680 --> 19:35.680
+And if we were to find a primary key on the think table,
+
+19:35.680 --> 19:42.680
+actually we don't need this update before because then it would be now searching operation.
+
+19:37.100 --> 19:55.680
+in the rows in the sink.
+
+19:42.680 --> 19:55.680
+And here we can basically say 50% of traffic if we do not want to support W
+
+19:55.680 --> 20:00.680
+So, I already mentioned that each sink and each source,
+
+20:00.680 --> 20:00.680
+that they declare a change.modo which changes the
+
+20:06.680 --> 20:10.680
+And yeah, I give like a quick example of various connectors.
+
+20:10.680 --> 20:13.680
+So, when we, for example, read from a file system,
+
+20:13.680 --> 20:15.680
+this is usually a scan operation.
+
+20:15.680 --> 20:18.680
+So, it is very common that when you read from a file,
+
+20:18.680 --> 20:23.680
+that this is just in support, there are no updates coming through file system.
+
+20:23.680 --> 20:26.680
+Sometimes they do, but in the general case,
+
+20:26.680 --> 20:31.680
+you just scan through a file.
+
+20:31.680 --> 20:35.680
+So Kafka, in the early days Kafka was actually just a log.
+
+20:35.680 --> 20:42.680
+So, every record that came in through Kafka was also considered like an insert only record.
+
+20:42.680 --> 20:46.680
+Then later, Kafka also added some absurd functionality.
+
+20:46.680 --> 20:49.680
+So, we also have a connector called Kafka Absurd Forget.
+
+20:49.680 --> 20:55.680
+That means when a value in Kafka is null, it means an issue.
+
+20:55.680 --> 20:59.680
+So, the Kafka Absurd Connector, for example,
+
+20:59.680 --> 21:06.680
+would produce insertions and divisions.
+
+21:06.680 --> 21:12.680
+If you define the JPC connector, JPC also doesn't have this concept of updates.
+
+21:12.680 --> 21:15.680
+So, in the same case, we would scan the entire table
+
+21:15.680 --> 21:18.680
+and this scan only produces insertions.
+
+21:18.680 --> 21:22.680
+So, we have all the insertions for JPC.
+
+21:22.680 --> 21:24.680
+But that comes back to most complex case.
+
+21:24.680 --> 21:27.680
+What happens if you use, for example, a BCL,
+
+21:27.680 --> 21:33.680
+you connect it to the database to consume the change of this JPC log from the database.
+
+21:33.680 --> 21:38.680
+You put this into Kafka and then you consume from Kafka.
+
+21:38.680 --> 21:41.680
+In this case, for example, this could, for example,
+
+21:41.680 --> 21:48.680
+have all kinds of changes that can then be evaluated by the end.
+
+21:48.680 --> 21:53.680
+The optimizer basically tracks the changes through the entire topology
+
+21:53.680 --> 21:58.680
+and the thing appears what it can digest and the optimizer will react
+
+21:58.680 --> 22:04.680
+sometimes with an error message, but sometimes it will support a need.
+
+22:04.680 --> 22:09.680
+So, let's quickly also talk about these two different modes.
+
+22:09.680 --> 22:15.680
+I already said that sometimes you can do Absurds where there's no update before.
+
+22:15.680 --> 22:19.680
+Then sometimes you need all four kinds of changes.
+
+22:19.680 --> 22:23.680
+I've got to change things and this is called retracts versus Absurd.
+
+22:23.680 --> 22:29.680
+So, retract has this nice property that there is no primary key required.
+
+22:29.680 --> 22:34.680
+This works for almost all external systems, which is great.
+
+22:34.680 --> 22:39.680
+You can also support up-link-it-goes, which you cannot support in the Absurd.
+
+22:39.680 --> 22:43.680
+The table is only an Absurd table.
+
+22:43.680 --> 22:51.680
+Interestingly, it also retracts. So, this retracting of the previous omitted record
+
+22:51.680 --> 22:55.680
+is actually often required in distributed systems.
+
+22:55.680 --> 22:59.680
+I also have a little example on the right side, but I will show shortly.
+
+22:59.680 --> 23:03.680
+So, let me explain this first.
+
+23:03.680 --> 23:08.680
+So, this is a count of a count. So, we are creating a histogram.
+
+23:08.680 --> 23:11.680
+The single query itself is not so important.
+
+23:11.680 --> 23:18.680
+What is important, what is actually flowing in the cluster through the operators.
+
+23:18.680 --> 23:26.680
+So, whatever record comes in, the first count operator will identify this.
+
+23:26.680 --> 23:29.680
+Okay, this is the first time, so the count is one.
+
+23:29.680 --> 23:37.680
+And then since we want to do a count of a count, the next operator will also count this as one
+
+23:37.680 --> 23:46.680
+and it will keep some state. How many records have we seen for this particular count?
+
+23:46.680 --> 23:50.680
+So, now comes the second record.
+
+23:50.680 --> 23:55.680
+And we have to update our count. So, now the count is two, but one anymore.
+
+23:55.680 --> 23:59.680
+And interestingly, if we do like a hash partition for some characters,
+
+23:59.680 --> 24:04.680
+it might be that the count ends up in a completely different operator.
+
+24:04.680 --> 24:07.680
+But what happens with the old count?
+
+24:07.680 --> 24:11.680
+So, now you have two threads or two operators,
+
+24:11.680 --> 24:14.680
+for instance, it's not an operator, that have a count
+
+24:14.680 --> 24:20.680
+and that's where we need to remove the count in the other operator.
+
+24:20.680 --> 24:24.680
+This is why in this case, the rejection is required because the update before
+
+24:24.680 --> 24:30.680
+needs to go to the subclass one and remove the outdated record.
+
+24:30.680 --> 24:36.680
+But the general absurd is an optimization, it uses traffic, it uses computation
+
+24:36.680 --> 24:45.680
+and if it's possible, it's great, but usually there is a lot of distractions going on in the...
+
+24:45.680 --> 24:49.680
+And I also have some examples here.
+
+24:49.680 --> 24:56.680
+Like if you would do an explain on some SQL query in Google SQL,
+
+24:56.680 --> 25:00.680
+the bottom part is what you would see.
+
+25:00.680 --> 25:04.680
+So, let's assume we have a table transactions, a table payment,
+
+25:04.680 --> 25:08.680
+that's the result. The table result can consume all kinds of changes,
+
+25:08.680 --> 25:11.680
+just so if I see the table also.
+
+25:11.680 --> 25:15.680
+And you join transactions and payments.
+
+25:15.680 --> 25:19.680
+And you'll explain, you also see that there is,
+
+25:19.680 --> 25:23.680
+you can get information to explain about the change book mode.
+
+25:23.680 --> 25:29.680
+For example, if the input here is insert only, insert only,
+
+25:29.680 --> 25:35.680
+then also the join will produce insert only result.
+
+25:35.680 --> 25:41.680
+And for example, if we do an outer join, in this case, a left outer join,
+
+25:41.680 --> 25:43.680
+then things become a bit more complex.
+
+25:43.680 --> 25:46.680
+So here you have insert only, insert only,
+
+25:46.680 --> 25:50.680
+but since that outer join will emit another first,
+
+25:50.680 --> 25:54.680
+there is one thing, one record comes in, there is no matching record, not so hard.
+
+25:54.680 --> 25:57.680
+And you have to emit another first for the other side,
+
+25:57.680 --> 26:01.680
+and when the other side is coming in, then you have to remove the null again
+
+26:01.680 --> 26:04.680
+and emit the final result.
+
+26:04.680 --> 26:12.680
+And that's why for example here, we have all kinds of changes coming out of the join.
+
+26:12.680 --> 26:15.680
+And we can even make it more complicated.
+
+26:15.680 --> 26:22.680
+So if we define the primary key on transactions and payments,
+
+26:22.680 --> 26:26.680
+then the optimizer will recognize how okay the left input spec
+
+26:26.680 --> 26:29.680
+and the right input spec will contain our key.
+
+26:29.680 --> 26:30.680
+That is great.
+
+26:30.680 --> 26:34.680
+So I can remove the update for, so you can see that there is one,
+
+26:34.680 --> 26:36.680
+that the default is not necessary anymore,
+
+26:36.680 --> 26:43.680
+because we can do up-source on the result.
+
+26:43.680 --> 26:49.680
+So this query is obviously more efficient than the other one.
+
+26:49.680 --> 26:55.680
+And the other good optimizer can also range between those different modes.
+
+26:55.680 --> 26:59.680
+I don't want to get into details here, but if it's also necessary,
+
+26:59.680 --> 27:03.680
+you can go from updating to the direction that you want.
+
+27:03.680 --> 27:06.680
+But that's not also one of the other points.
+
+27:06.680 --> 27:18.680
+And depending on the operators, you also can switch between these modes.
+
+27:18.680 --> 27:22.680
+For example, if you have a regular join between the two append-only tables,
+
+27:22.680 --> 27:25.680
+then also the resulting table will be append-only.
+
+27:25.680 --> 27:29.680
+And I showed already that if there is one of the tables updating,
+
+27:29.680 --> 27:31.680
+the results will be updating.
+
+27:31.680 --> 27:36.680
+And if there is an outer join, then there is always updating.
+
+27:36.680 --> 27:39.680
+And now comes the interesting part.
+
+27:39.680 --> 27:45.680
+If you have an append-only table, and you join it to an updating table,
+
+27:45.680 --> 27:48.680
+there is a special kind of join, which we call temporal join.
+
+27:48.680 --> 27:54.680
+A temporal join will actually produce an append-only table,
+
+27:54.680 --> 27:59.680
+because it looks at the table at a point, a specific point in time.
+
+27:59.680 --> 28:01.680
+It's a very interesting operator.
+
+28:01.680 --> 28:03.680
+Unfortunately, we don't have enough time.
+
+28:03.680 --> 28:11.680
+But I just want to show you an example of this very, very useful join operator.
+
+28:11.680 --> 28:17.680
+So let's assume we have some ORRAs table, and ORRAs have currency,
+
+28:17.680 --> 28:20.680
+and there is a currency rates table.
+
+28:20.680 --> 28:23.680
+And obviously, you don't want to join those two tables
+
+28:23.680 --> 28:27.680
+with the latest currency rates, but you actually want to know
+
+28:27.680 --> 28:33.680
+what was the currency rate at the time when the order was created.
+
+28:33.680 --> 28:36.680
+And this syntax here with the for system turn S off
+
+28:36.680 --> 28:41.680
+actually allows you to consume all the changes from the rates table
+
+28:41.680 --> 28:46.680
+and join it with ORRAs at the point when the order is finished.
+
+28:46.680 --> 28:51.680
+This is just one example of a very sophisticated join operation.
+
+28:51.680 --> 28:53.680
+And by the way, for system turn S off,
+
+28:53.680 --> 28:59.680
+this system is there for the OEC.
+
+28:59.680 --> 29:01.680
+So I also have prepared a demo.
+
+29:01.680 --> 29:08.680
+I think we still have seven minutes left, so it should be good for the C.
+
+29:08.680 --> 29:12.680
+So I also want to show you some of the CVC capabilities.
+
+29:12.680 --> 29:15.680
+So I will run everything in my IDE.
+
+29:15.680 --> 29:18.680
+I will use Java for this example.
+
+29:18.680 --> 29:23.680
+I have a MySQL container that I'm running,
+
+29:23.680 --> 29:31.680
+so we'll start with a SQL container for this process.
+
+29:31.680 --> 29:38.680
+And this container will create a MySQL instance,
+
+29:38.680 --> 29:42.680
+and it will also be filled already with three or four rows.
+
+29:42.680 --> 29:45.680
+I have a big example here.
+
+29:45.680 --> 29:49.680
+I can simply run the examples in the main method of the IDE.
+
+29:49.680 --> 29:54.680
+So what I'm doing here is I'm creating different tables to connect to SQL.
+
+29:54.680 --> 29:58.680
+One is a JPC one, which fills against the table once.
+
+29:58.680 --> 30:00.680
+And the other one is a CVC one,
+
+30:00.680 --> 30:05.680
+which continuously monitors the tables and the X.
+
+30:05.680 --> 30:23.680
+So I'll just run this.
+
+30:23.680 --> 30:26.680
+So here we see the first few results.
+
+30:26.680 --> 30:29.680
+As you can see, the application has not stopped.
+
+30:29.680 --> 30:32.680
+So it is waiting for more records to come.
+
+30:32.680 --> 30:35.680
+And now I want to insert more values into MySQL.
+
+30:35.680 --> 30:39.680
+I could have used the MySQL CLI client for that,
+
+30:39.680 --> 31:00.280
+but I can also use F
+
+31:00.280 --> 31:08.280
+enough you can also use it for the best degree of just setting one record into the database.
+
+31:08.280 --> 31:12.280
+And as you can see, it will all immediately show up also in MySQL
+
+31:12.280 --> 31:20.280
+and from MySQL via CVC to the link and then to the next system.
+
+31:20.280 --> 31:24.280
+We have also more sophisticated examples here.
+
+31:24.280 --> 31:27.280
+I don't think that we have more time for that,
+
+31:27.280 --> 31:31.280
+but we can do a lot of things with Blink SQL.
+
+31:31.280 --> 31:40.280
+I think we could spend a day on the way to SQL.
+
+31:40.280 --> 31:43.280
+So too long to get rid of.
+
+31:43.280 --> 31:45.280
+Yeah, Blink SQL is very powerful.
+
+31:45.280 --> 31:53.280
+It has been crafted over years and years and years by many, many companies, many teams.
+
+31:53.280 --> 32:01.280
+It's very flexible for integrating various systems of different semantics.
+
+32:01.280 --> 32:03.280
+And there is way more.
+
+32:03.280 --> 32:10.280
+So I just showed some operators, but we have a large, large coverage of SQL standard.
+
+32:10.280 --> 32:15.280
+So over Windows support, for aggregating, for swimming,
+
+32:15.280 --> 32:21.280
+we support the recognized laws for pattern matching and complex pen processing.
+
+32:21.280 --> 32:27.280
+We have tons of obsessions, windows for cutting your swimming pieces.
+
+32:27.280 --> 32:32.280
+Then there is a huge CVC connector ecosystem, not part of Orphanage,
+
+32:32.280 --> 32:36.280
+but also quite useful as a little GitHub star already.
+
+32:36.280 --> 32:44.280
+Then something new, TableStore, which tries to be the first streaming data warehouse kind of thing.
+
+32:44.280 --> 32:48.280
+It's in a very, very early version, but it's very promising.
+
+32:48.280 --> 32:54.280
+So I would recommend to maybe look into one of these sub-projects as well.
+
+32:54.280 --> 33:02.280
+It's not only things that speak, but also the ecosystem around things that are close and close.
+
+33:02.280 --> 33:04.280
+I'm happy to take questions.
+
+33:04.280 --> 33:09.280
+I think we have three minutes left, but otherwise I will also speak outside for any questions.
+
+33:09.280 --> 33:22.280
+Thank you very much.
+
+33:22.280 --> 33:41.280
+Yeah, the question is, if you have a large transaction that's happening, or some others may know what the transaction is,
+
+33:41.280 --> 33:53.280
+but the question is, how does it handle transactions that also take a lot of time before the transaction has ended?
+
+33:53.280 --> 34:00.280
+In general, I think we are not very good at transaction handling in things,
+
+34:00.280 --> 34:10.280
+but you have a lot of possibilities to buffer all the data from this transaction and stay in the grid up to terabyte.
+
+34:10.280 --> 34:19.280
+And then just wait until the transaction closes, and then you're creating the execution of the transaction.
+
+34:12.100 --> 34:32.280
+application.
+
+34:19.280 --> 34:20.280
+And that is possible.
+
+34:20.280 --> 34:32.280
+So firstly, I would maybe do some stuff in the industry API first until the transaction ended, and then push the
+
+34:32.280 --> 35:01.280
+Thank you.
+
+35:01.280 --> 35:27.280
+I'm going to check.
+
+35:27.280 --> 35:48.280
+I was going to say, the question was how far does this yield?
+
+35:48.280 --> 35:57.280
+I think there is Apple that processes things, like all the big banks use it for credit card fraud detection and stuff like that.
+
+35:57.280 --> 36:06.280
+So I don't think that most companies in this room, they will not reach the scalability limits of link,
+
+36:06.280 --> 36:08.280
+because we are not at Apple.
+
+36:08.280 --> 36:13.280
+Unless here some Apple or Alibaba people are in this room, then maybe.
+
+36:13.280 --> 36:26.280
+I don't know.
+
+36:26.280 --> 36:29.280
+Yeah, this table store is a very, very interesting approach.
+
+36:29.280 --> 36:31.280
+It started last year or two years ago.
+
+36:31.280 --> 36:32.280
+It's rather new.
+
+36:32.280 --> 36:36.280
+I think it was last year, early last year.
+
+36:36.280 --> 36:40.280
+It doesn't really fit to Apache Flink, but it's still very useful.
+
+36:40.280 --> 36:43.280
+And yeah, we will see.
+
+36:43.280 --> 36:49.280
+Maybe it will leave the Apache Software Foundation soon, but yeah, not allowed to.
+
+36:49.280 --> 36:53.280
+And not the software foundation, but the Flink project itself.
+
+36:53.280 --> 36:55.280
+We will see.
+
+36:55.280 --> 36:57.280
+Because it doesn't fit really well.
+
+36:57.280 --> 37:02.280
+But it's in general, like we still have this vision of Flink as a database.
+
+37:02.280 --> 37:05.280
+We will see.
+
+37:05.280 --> 37:11.280
+Sorry, Christian. This is about big states, because you mentioned that you can have a terabyte of state.
+
+37:11.280 --> 37:19.280
+But when you create a checkpoint, and if this checkpoint will be very big, and storage of it can be long,
+
+37:19.280 --> 37:23.280
+is it like a huge DC post to write into the store?
+
+37:23.280 --> 37:28.280
+Yeah, so the question was, how can we actually snapshot large state in general?
+
+37:28.280 --> 37:34.280
+And this is exactly where Flink distinguishes, like where it differs from competitors.
+
+37:34.280 --> 37:38.280
+Because there is a lot of engineering involved to make this as efficient as possible.
+
+37:38.280 --> 37:40.280
+I'm sure there's even more to do.
+
+37:40.280 --> 37:42.280
+It's still not perfectly efficient.
+
+37:42.280 --> 37:45.280
+There's more optimizations that you can do.
+
+37:45.280 --> 37:50.280
+But for example, there is like differential snapshots involved.
+
+37:50.280 --> 37:53.280
+There is local recovery involved.
+
+37:53.280 --> 37:59.280
+There are many, many algorithms under the hood to make it as quickly as possible.
+
+37:59.280 --> 38:05.280
+But yeah, of course, if you have terabytes of state, and the machine has died completely,
+
+38:05.280 --> 38:13.280
+then you obviously need to restore these terabytes of state from S3 into your task manager again.
+
+38:13.280 --> 38:15.280
+And this can take time.
+
+38:15.280 --> 38:17.280
+So it tries its best.
+
+38:17.280 --> 38:23.280
+But of course, you need to do benchmarks for your use case.
+
+38:23.280 --> 38:29.280
+It's going to be longer than we set it outside.
+
+38:29.280 --> 38:31.280
+One last question.
+
+38:31.280 --> 38:39.280
+In case of out of memory issues or network outages, does it guarantee that everything is as you written in SQL or in data streams API?
+
+38:39.280 --> 38:46.280
+Yeah, so we guarantee exactly once end to end if the connectors source and sink support that.
+
+38:46.280 --> 38:54.280
+Especially for state, so there are no duplicates in state, we might need to reprocess data during a failure.
+
+38:54.280 --> 39:01.280
+But yeah, like end to end exactly once semantics are possible.
+
+39:01.280 --> 39:02.280
+Thank you very much.
+
+39:02.280 --> 39:30.280
+And I'm waiting outside.

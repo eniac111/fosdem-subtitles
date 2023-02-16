@@ -1,0 +1,1474 @@
+WEBVTT
+
+00:00.000 --> 00:06.500
+I'm looking at this from the angle,
+
+00:06.500 --> 00:09.300
+how can I manage such a large graph in any good way?
+
+00:09.300 --> 00:12.400
+I'm looking forward to that. So, Nikolai.
+
+00:12.400 --> 00:14.640
+Thanks. Thanks for the introduction.
+
+00:14.640 --> 00:17.160
+You have to speak up because the audience only for the-
+
+00:17.160 --> 00:20.560
+Okay. So, my name is Nikolai Kondashov.
+
+00:20.560 --> 00:22.920
+I work at Red Hat on the CKI project,
+
+00:22.920 --> 00:26.920
+which is building one of those Linux kernel testing systems
+
+00:26.920 --> 00:29.200
+for Red Hat and for Upstream.
+
+00:29.200 --> 00:32.040
+I also work in the kernel louder.
+
+00:32.040 --> 00:35.760
+Okay. I also work with
+
+00:35.760 --> 00:40.160
+the kernel CI Upstream community on the KCIDB project,
+
+00:40.160 --> 00:44.400
+which is the source of this presentation,
+
+00:44.400 --> 00:46.600
+and I do electronics and embedded as a hobby.
+
+00:46.600 --> 00:48.880
+Wow. Okay.
+
+00:48.880 --> 00:51.280
+So, I'm going to walk you quickly through
+
+00:51.280 --> 00:53.560
+the kernel contribution workflow,
+
+00:53.560 --> 00:56.760
+through the testing systems,
+
+00:56.760 --> 00:59.600
+and what we're trying to do with KCIDB at kernel CI,
+
+00:59.600 --> 01:03.200
+and then how we want to solve the problem,
+
+01:03.200 --> 01:08.480
+and what the actual problem is with the kernel CI process in general.
+
+01:08.480 --> 01:10.620
+Then I go briefly through the data model,
+
+01:10.620 --> 01:13.360
+and what kind of a few questions,
+
+01:13.360 --> 01:15.760
+what a few queries that we need,
+
+01:15.760 --> 01:19.040
+and how it went with Neo4j,
+
+01:19.040 --> 01:21.520
+and what we can do instead.
+
+01:21.520 --> 01:25.600
+So, the kernel contribution workflow,
+
+01:25.600 --> 01:28.240
+I don't know if everybody's familiar with that.
+
+01:28.240 --> 01:30.400
+I hope not because it's not very pleasant.
+
+01:30.400 --> 01:33.880
+But basically, you do your changes,
+
+01:33.880 --> 01:36.480
+you commit your changes, then you make an e-mail out of that,
+
+01:36.480 --> 01:37.840
+and send it to a mail list,
+
+01:37.840 --> 01:40.160
+and to a maintainer for them to review,
+
+01:40.160 --> 01:42.400
+to give you feedback, then you repeat that again
+
+01:42.400 --> 01:44.320
+until everybody is satisfied,
+
+01:44.320 --> 01:46.840
+it was a maintainer, whoever is concerned with that change.
+
+01:46.840 --> 01:50.640
+After this, your patches get merged into
+
+01:50.640 --> 01:53.520
+a sub-tree for the particular subsystem that you were changing,
+
+01:53.520 --> 01:54.840
+and then sometime later,
+
+01:54.840 --> 01:57.360
+this is getting merged into the main line,
+
+01:57.360 --> 02:01.320
+which Linus maintains, and you're done, basically.
+
+02:01.320 --> 02:04.300
+But at any point in that process,
+
+02:04.300 --> 02:06.680
+you can get some test results for your change.
+
+02:06.680 --> 02:08.140
+It could be if you're lucky,
+
+02:08.140 --> 02:10.360
+you can get it before it even gets reviewed,
+
+02:10.360 --> 02:12.560
+or sometimes it gets reviewed,
+
+02:12.560 --> 02:15.360
+or after it was merged, anytime.
+
+02:16.720 --> 02:22.300
+So, there is a whole bunch of kernel testing systems.
+
+02:22.300 --> 02:24.160
+This is just a sample.
+
+02:24.160 --> 02:27.440
+Each of them is trying to solve their own problem.
+
+02:27.440 --> 02:30.800
+For example, CKI is Red Hat's system.
+
+02:30.800 --> 02:35.720
+They will test particular hardware that our customers use,
+
+02:35.720 --> 02:38.640
+particular features that our customers request,
+
+02:38.640 --> 02:39.600
+and make sure that they work,
+
+02:39.600 --> 02:41.360
+that the distribution works.
+
+02:41.360 --> 02:43.540
+Intel tests their hardware,
+
+02:43.540 --> 02:46.560
+their graphics cards, and make sure that those work.
+
+02:46.560 --> 02:51.520
+Google fuzzes system calls at the sys caller and sys bot.
+
+02:51.520 --> 02:54.880
+Okay, FT from Linaro, they test arm boards,
+
+02:54.880 --> 02:58.560
+and finally, Kernel CI is aiming to be
+
+02:58.560 --> 03:00.560
+the official CI system for the Linux kernel,
+
+03:00.560 --> 03:02.640
+it's supported by Linux Foundation,
+
+03:02.640 --> 03:04.800
+and they're trying to run tests on
+
+03:04.800 --> 03:08.840
+the whatever hardware others can provide, we can have.
+
+03:10.040 --> 03:14.040
+You can see everybody has their own interest in that game.
+
+03:14.040 --> 03:16.840
+So, this is how your various email reports can
+
+03:16.840 --> 03:19.240
+look from those systems correspondingly,
+
+03:19.240 --> 03:21.240
+and this is their dashboards.
+
+03:21.240 --> 03:24.800
+From different systems.
+
+03:24.800 --> 03:29.560
+So, Kernel CI is, as I said,
+
+03:29.560 --> 03:32.400
+is striving to be the DCI system,
+
+03:32.400 --> 03:35.000
+and we have the testing system,
+
+03:35.000 --> 03:37.080
+and the hardware management,
+
+03:37.080 --> 03:41.440
+and the framework, and everything to run the tests in various labs.
+
+03:41.440 --> 03:44.880
+These labs can be located in different premises by people
+
+03:44.880 --> 03:50.200
+who have some hardware to run them on, the tests on,
+
+03:50.200 --> 03:54.080
+and then that gets collected and put into the database.
+
+03:54.080 --> 03:58.560
+Then we have various other CI systems collecting
+
+03:58.560 --> 04:02.000
+their results and sending them to the KCI DB database.
+
+04:02.000 --> 04:06.520
+KCI DB was conceived as a system to try to reduce
+
+04:06.520 --> 04:08.680
+the effort that all CI systems have to put into
+
+04:08.680 --> 04:11.920
+their dashboards into their reports and instead have
+
+04:11.920 --> 04:15.280
+one dashboard and one report if possible or close to that,
+
+04:15.280 --> 04:18.160
+and as well to save the developers attention,
+
+04:18.160 --> 04:21.320
+which is a precious resource because as you see,
+
+04:21.320 --> 04:24.440
+it's not so easy to investigate every report
+
+04:24.440 --> 04:27.760
+and from different CI systems,
+
+04:27.760 --> 04:30.520
+because there are different different format of the emails,
+
+04:30.520 --> 04:32.520
+different data, different dashboards,
+
+04:32.520 --> 04:33.600
+you have to look at them this way,
+
+04:33.600 --> 04:35.760
+that way, and you have to figure it out.
+
+04:35.760 --> 04:38.360
+So, that's KCI DB is therefore to bring
+
+04:38.360 --> 04:40.760
+this one interval the whole.
+
+04:40.760 --> 04:45.560
+So, conceptually, it's very simple.
+
+04:45.560 --> 04:47.920
+The CI system sent JSON which can consist
+
+04:47.920 --> 04:51.320
+of various objects in any combination,
+
+04:51.320 --> 04:52.960
+and we have the database, we put them in,
+
+04:52.960 --> 04:55.000
+we have the dashboard to display that,
+
+04:55.000 --> 04:58.400
+and we have a subscription system where you can give
+
+04:58.400 --> 04:59.480
+some rules and say, okay,
+
+04:59.480 --> 05:01.480
+I want to see these results from these tests and from
+
+05:01.480 --> 05:03.680
+this tree or for this architecture or whatever,
+
+05:03.680 --> 05:05.960
+and we can generate reports based on
+
+05:05.960 --> 05:09.280
+that whenever you need it as the data comes in.
+
+05:09.280 --> 05:12.960
+One important note about this is that compared
+
+05:12.960 --> 05:16.440
+to a regular CI system where you control everything,
+
+05:16.440 --> 05:19.040
+in this system,
+
+05:19.040 --> 05:20.640
+the data can come in any order.
+
+05:20.640 --> 05:21.680
+In a regular CI system,
+
+05:21.680 --> 05:24.920
+you have the results come in the same order as commits come in.
+
+05:24.920 --> 05:27.200
+So, you know, like if you tested something earlier,
+
+05:27.200 --> 05:28.600
+that means for an earlier commit,
+
+05:28.600 --> 05:29.720
+if you tested something later,
+
+05:29.720 --> 05:31.240
+it's for a later commit,
+
+05:31.240 --> 05:35.280
+and you can have a line of history with those results.
+
+05:35.280 --> 05:37.040
+But for case IDB,
+
+05:37.040 --> 05:38.880
+since there's different CI systems,
+
+05:38.880 --> 05:40.920
+they move with a different speed,
+
+05:40.920 --> 05:43.320
+they get in any order you wish.
+
+05:43.320 --> 05:49.680
+So, we have about 100,000 test results per day,
+
+05:49.680 --> 05:51.720
+a few thousands of builds and
+
+05:51.720 --> 05:54.680
+hundreds of hundred revisions per day tested received
+
+05:54.680 --> 05:57.320
+by the case IDB database.
+
+05:57.320 --> 06:00.920
+Well, actually, I think, yeah, that's correct.
+
+06:00.920 --> 06:02.600
+That's the correct scale. Yeah.
+
+06:02.600 --> 06:05.440
+So, it looks something like this is Grafana.
+
+06:05.440 --> 06:07.800
+It's like a prototype dashboard.
+
+06:07.800 --> 06:09.160
+We're thinking about building a new one,
+
+06:09.160 --> 06:11.840
+but I don't know how soon that's going to happen.
+
+06:11.840 --> 06:15.280
+So, Grafs, tables, all that jazz.
+
+06:15.280 --> 06:19.920
+This is our prototype reports look like this.
+
+06:19.920 --> 06:24.000
+So, what's the problem with the kernel CI in general,
+
+06:24.000 --> 06:26.440
+not with the kernel CI, the project?
+
+06:26.440 --> 06:29.840
+So, first of all,
+
+06:29.840 --> 06:33.680
+kernel is intended to be an obstruction layer for hardware.
+
+06:33.680 --> 06:35.120
+That's this whole purpose,
+
+06:35.120 --> 06:37.360
+and to make it easier to write software, right?
+
+06:37.360 --> 06:40.160
+So, in theory,
+
+06:40.160 --> 06:41.160
+to make sure that it works,
+
+06:41.160 --> 06:42.400
+you have to test it to the every piece
+
+06:42.400 --> 06:43.840
+that you abstract away from.
+
+06:43.840 --> 06:45.840
+But that's not possible, of course,
+
+06:45.840 --> 06:47.440
+and hardware is expensive.
+
+06:47.440 --> 06:51.080
+So, it's a natural scarcity in this whole system.
+
+06:51.080 --> 06:54.080
+Then the tests, since you cannot get
+
+06:54.080 --> 06:56.280
+all the hardware at the same time,
+
+06:56.280 --> 06:58.600
+and you cannot possibly run all the tests on
+
+06:58.600 --> 07:02.640
+all the hardware for every commit that people post.
+
+07:02.640 --> 07:05.320
+It means that sometimes the tests run on this hardware,
+
+07:05.320 --> 07:08.320
+sometimes on that hardware, sometimes they don't run.
+
+07:08.320 --> 07:11.520
+The tests themselves are not so reliable
+
+07:11.520 --> 07:12.440
+because there's a lot of
+
+07:12.440 --> 07:14.000
+concurrency management in the kernel,
+
+07:14.000 --> 07:15.560
+and that's hard to get right.
+
+07:15.560 --> 07:18.640
+In general, things happen at the same time in the operating system.
+
+07:18.640 --> 07:21.720
+So, then sometimes they're not so reliable.
+
+07:21.720 --> 07:24.960
+So, you can get a pass on your change,
+
+07:24.960 --> 07:27.000
+even if it's broken or get a fail on your change,
+
+07:27.000 --> 07:29.720
+even if it's not broken or even if it's
+
+07:29.720 --> 07:32.960
+somebody else's change to broken, basically hell.
+
+07:32.960 --> 07:37.520
+So, it's hard to remove noise from those results.
+
+07:37.520 --> 07:43.080
+For developers, it's hard to investigate even a valid change.
+
+07:43.080 --> 07:45.720
+While it's a kernel, you have to meet all the conditions,
+
+07:45.720 --> 07:47.680
+and well, sometimes you have to get the right hardware,
+
+07:47.680 --> 07:49.080
+or ask people for the right hardware,
+
+07:49.080 --> 07:51.720
+or ask them to actually run the test and send you results,
+
+07:51.720 --> 07:54.920
+like over e-mail takes a while.
+
+07:54.920 --> 08:01.000
+So, if we start sending people e-mails with results that are not valid,
+
+08:01.000 --> 08:04.240
+that are false positive, false negatives,
+
+08:04.240 --> 08:07.760
+then people get pissed because of that,
+
+08:07.760 --> 08:10.720
+because it takes such a long time to reproduce them.
+
+08:10.720 --> 08:17.120
+So, a lot of AI systems resort to human review before sending those reports.
+
+08:17.120 --> 08:19.080
+Like they see the failures, they say,
+
+08:19.080 --> 08:21.040
+okay, let's go send this to this mail list,
+
+08:21.040 --> 08:22.480
+and then they send them.
+
+08:22.480 --> 08:26.720
+Only a few manage without that so far.
+
+08:26.720 --> 08:31.440
+So, obviously, nobody stops the development to fix AI,
+
+08:31.440 --> 08:33.280
+because there's just so many developers,
+
+08:33.280 --> 08:35.760
+and if one system breaks something,
+
+08:35.760 --> 08:39.600
+like another subsystem doesn't want to care about that.
+
+08:40.880 --> 08:43.520
+Feedback loop is just too long.
+
+08:43.520 --> 08:45.520
+So, tests keep running, keep failing,
+
+08:45.520 --> 08:46.800
+and it takes a while to fix them.
+
+08:46.800 --> 08:50.880
+So, instead of the ideal case where you can move past,
+
+08:50.880 --> 08:53.880
+only move past the tests if they pass,
+
+08:53.880 --> 08:55.920
+and then do all the stages like review,
+
+08:55.920 --> 08:57.600
+and then it's merged, and it's fine,
+
+08:57.600 --> 08:58.780
+and then you can upstream it,
+
+08:58.780 --> 09:00.800
+you get something like this,
+
+09:00.800 --> 09:04.240
+where test fail, okay,
+
+09:04.240 --> 09:05.800
+it's probably not our problem,
+
+09:05.800 --> 09:07.480
+not have time to investigate it,
+
+09:07.480 --> 09:10.720
+or we just didn't get any test result, we move on.
+
+09:10.720 --> 09:16.800
+So, what we're trying to do is we got to fix this, right?
+
+09:16.800 --> 09:20.480
+So, we got to fix the test results.
+
+09:20.640 --> 09:25.480
+So, we fix the test result.
+
+09:25.480 --> 09:28.400
+We look at the test output conditions, etc,
+
+09:28.400 --> 09:30.280
+and we add the rule to the database saying like,
+
+09:30.280 --> 09:33.640
+okay, well, this failed, but we know about this.
+
+09:33.640 --> 09:34.840
+Here's the bug that was open.
+
+09:34.840 --> 09:37.300
+So, don't complain to developers,
+
+09:37.300 --> 09:40.320
+don't waste their attention.
+
+09:40.320 --> 09:44.240
+And it looks like this, shiny and sparkly,
+
+09:44.240 --> 09:47.080
+but after a while, we get this fixed into the test,
+
+09:47.080 --> 09:49.720
+and we repeat the process with another issue.
+
+09:49.720 --> 09:52.440
+So, these things are already working in
+
+09:52.440 --> 09:54.480
+separate CI systems like the CKI.
+
+09:54.480 --> 09:57.840
+There's a UI screen for an issue in the kernel,
+
+09:57.840 --> 09:59.700
+it says like, okay, look for this output in
+
+09:59.700 --> 10:01.800
+the test of this string in the test output.
+
+10:01.800 --> 10:04.040
+If you see it for this test,
+
+10:04.040 --> 10:08.640
+then you can see that the kernel bug and don't raise the problem.
+
+10:08.640 --> 10:11.860
+Okay. So, or bug logs,
+
+10:11.860 --> 10:14.680
+the Intel's CI system,
+
+10:14.680 --> 10:17.400
+they have like a huge form for filing this.
+
+10:17.400 --> 10:19.080
+You can see another string that is,
+
+10:19.080 --> 10:21.480
+you're supposed to look in the error output and
+
+10:21.480 --> 10:23.400
+the conditions and what kind of status you
+
+10:23.400 --> 10:25.160
+want to assign to the test, etc.
+
+10:25.160 --> 10:29.320
+So, here's a dog tags for you to take a breath.
+
+10:29.320 --> 10:31.920
+For me to take a drink.
+
+10:36.320 --> 10:39.960
+So, I'll take the model.
+
+10:40.440 --> 10:44.480
+We start with checkouts which basically just specify
+
+10:44.480 --> 10:47.320
+what kind of revision you're checking out.
+
+10:47.320 --> 10:51.160
+We have very taken it from repository branch and which commit,
+
+10:51.160 --> 10:52.920
+and if you had patches supplied on top and
+
+10:52.920 --> 10:55.360
+the patch log and everything like that,
+
+10:55.360 --> 10:57.840
+then we aggregate that to get the revision data
+
+10:57.840 --> 10:59.640
+like from multiple checkouts of the same revision,
+
+10:59.640 --> 11:01.640
+we get the same single revision.
+
+11:01.640 --> 11:05.680
+We have builds which link to the checkouts to say like,
+
+11:05.680 --> 11:09.720
+oh, we tested this checkout and therefore link to the revision.
+
+11:09.720 --> 11:12.880
+The builds describe which architecture compiler and
+
+11:12.880 --> 11:15.840
+the configuration output files and logs and everything.
+
+11:15.840 --> 11:18.280
+We get the test results finally,
+
+11:18.280 --> 11:20.040
+and yeah, builds can fail.
+
+11:20.040 --> 11:23.120
+We have failed builds all the time and it stops nobody.
+
+11:23.120 --> 11:27.360
+So, we have a kind of test which we are running
+
+11:27.360 --> 11:29.560
+the environment to train on.
+
+11:29.560 --> 11:32.560
+What kind of result was the status result,
+
+11:32.560 --> 11:34.720
+the pass fail, etc, and the output files,
+
+11:34.720 --> 11:37.160
+logs and stuff like that, very typical.
+
+11:37.160 --> 11:41.280
+Then we get the issues which describe like which bug it is
+
+11:41.280 --> 11:43.560
+and who is to blame that like the kernel,
+
+11:43.560 --> 11:45.080
+the test or the framework,
+
+11:45.080 --> 11:48.000
+and we will have the pattern there matching the test results.
+
+11:48.000 --> 11:49.480
+Okay, this test, this output,
+
+11:49.480 --> 11:51.600
+what you saw on that screen.
+
+11:51.600 --> 11:55.320
+The status that it should have and the issue version
+
+11:55.320 --> 11:58.360
+because we want to change those issues over time.
+
+11:58.360 --> 12:00.320
+Finally, we have the incidents which are linking
+
+12:00.320 --> 12:03.320
+those builds and issues together.
+
+12:03.320 --> 12:05.880
+So, saying like, oh, this is the issue with this build,
+
+12:05.880 --> 12:07.840
+and things like that.
+
+12:07.840 --> 12:11.880
+So, that's all we keep in the relational database,
+
+12:11.880 --> 12:14.880
+but then we got to talk about the revisions.
+
+12:14.880 --> 12:19.040
+So, revisions could be just commits and
+
+12:19.040 --> 12:21.840
+a Git history and here's your graph.
+
+12:21.840 --> 12:26.960
+So, that's a basic thing that we've tried to do,
+
+12:26.960 --> 12:31.200
+but we also need to have revisions of patches supplied on top,
+
+12:31.200 --> 12:33.200
+and somebody post a patch on the main list.
+
+12:33.200 --> 12:36.280
+We take it, apply it to some commit which is pointing to,
+
+12:36.280 --> 12:39.120
+and we test it, we get the results,
+
+12:39.120 --> 12:42.200
+and we know it was applied to this commit.
+
+12:42.200 --> 12:46.160
+Then somebody reworks that patch and post a new version,
+
+12:46.160 --> 12:49.520
+they got the link, both the commit we tested upon,
+
+12:49.520 --> 12:52.480
+and to the previous revision of the patch set.
+
+12:52.480 --> 12:55.400
+Then there's this weird thing when
+
+12:55.400 --> 12:58.160
+maintainers keep a special branch for CI,
+
+12:58.160 --> 13:00.400
+for the testing systems to pick up.
+
+13:00.400 --> 13:03.120
+They're working, testing send them results,
+
+13:03.120 --> 13:05.440
+and they just keep pushing there like they're working on something.
+
+13:05.440 --> 13:08.720
+They push there, they get results after a while from testing,
+
+13:08.720 --> 13:10.360
+then they push a new version,
+
+13:10.360 --> 13:13.080
+and then they get new results and they got to say like,
+
+13:13.080 --> 13:15.240
+okay, this is the Git commit history,
+
+13:15.240 --> 13:18.800
+but we also know that we checked this branch out previously.
+
+13:18.800 --> 13:24.320
+So this is the child of that branch, of that previous revision.
+
+13:26.480 --> 13:29.400
+This is basically it.
+
+13:29.400 --> 13:31.360
+As you probably all know,
+
+13:31.360 --> 13:32.840
+this is a directed acyclic graph.
+
+13:32.840 --> 13:37.000
+So tests directed edges and it doesn't loop on itself.
+
+13:37.000 --> 13:41.640
+So that's about what I know about graphs.
+
+13:43.080 --> 13:47.680
+Bear with me. Finally,
+
+13:47.680 --> 13:50.480
+I think that there's just too many build and test results to
+
+13:50.480 --> 13:53.560
+put them all into a graph database, at least so far.
+
+13:53.560 --> 13:55.840
+I might be wrong, but that's my idea.
+
+13:55.840 --> 13:58.480
+We obviously need to keep the graph of
+
+13:58.480 --> 14:00.800
+the revisions to be able to reason about them,
+
+14:00.800 --> 14:04.560
+but we might be able to put issues there as well in
+
+14:04.560 --> 14:07.520
+the same database if it saves something.
+
+14:07.520 --> 14:11.360
+So this is just a short list.
+
+14:11.680 --> 14:14.480
+Basically, what we want to know,
+
+14:14.480 --> 14:17.040
+okay, as the data commit comes in,
+
+14:17.040 --> 14:19.120
+test results, you got to trash them and match them
+
+14:19.120 --> 14:20.480
+against the issue so we can say, okay,
+
+14:20.480 --> 14:22.880
+we found an issue here so don't trace the flag,
+
+14:22.880 --> 14:26.840
+or something like that, like similar.
+
+14:28.120 --> 14:30.720
+There's no issue here in test result,
+
+14:30.720 --> 14:34.080
+but we want to raise the flag because there's actually an issue.
+
+14:35.080 --> 14:39.320
+We cannot possibly trash all the issues against
+
+14:39.320 --> 14:42.520
+all test results because there's going to be a lot.
+
+14:42.520 --> 14:45.920
+So we have to build a priority for those issues,
+
+14:45.920 --> 14:48.680
+and then we have to cut off that priority somehow,
+
+14:48.680 --> 14:50.280
+and say like, okay, at this moment,
+
+14:50.280 --> 14:51.640
+we can tell the developer that we've
+
+14:51.640 --> 14:53.040
+basically trashed these results.
+
+14:53.040 --> 14:54.200
+We can go take a look,
+
+14:54.200 --> 14:55.640
+but we can still continue and
+
+14:55.640 --> 14:57.640
+trash those issues as the time goes on.
+
+14:57.640 --> 15:04.040
+So we have to base that on one of the criteria that we might need
+
+15:04.040 --> 15:06.400
+is how far, for example,
+
+15:06.400 --> 15:08.640
+that revision is from the current situation.
+
+15:08.640 --> 15:12.280
+Like if this issue only appeared somewhere,
+
+15:12.280 --> 15:14.480
+I don't know, like a thousand commits ago,
+
+15:14.480 --> 15:17.120
+or a thousand is not that much for the Linux kernel,
+
+15:17.120 --> 15:19.920
+okay, 10,000 commits ago,
+
+15:19.920 --> 15:22.400
+then we don't need to trash it right now.
+
+15:22.400 --> 15:23.800
+We can tell the developer, okay, it's fine,
+
+15:23.800 --> 15:25.640
+and then we'll continue trashing,
+
+15:25.640 --> 15:27.720
+and if we find something,
+
+15:27.720 --> 15:29.960
+then we can raise the alarm.
+
+15:30.800 --> 15:33.560
+Then we can ask,
+
+15:33.560 --> 15:35.920
+like what were the last access results,
+
+15:35.920 --> 15:37.720
+like for this particular test,
+
+15:37.720 --> 15:42.720
+for this number of commits to be able to say,
+
+15:42.720 --> 15:47.080
+okay, this test wasn't often failing.
+
+15:47.080 --> 15:49.320
+Okay, it was failing sometimes, but that's okay.
+
+15:49.320 --> 15:51.320
+But if it suddenly starts failing more often,
+
+15:51.320 --> 15:52.680
+we got to raise the alarm,
+
+15:52.680 --> 15:54.880
+or if it stops failing so often,
+
+15:54.880 --> 15:58.920
+we got to also raise the alarm and see what's changed.
+
+15:58.920 --> 16:01.520
+Then we need to track the performance trends,
+
+16:01.520 --> 16:06.240
+of course, over the history of the development.
+
+16:06.240 --> 16:09.120
+Once again, we cannot do this just based on time,
+
+16:09.120 --> 16:12.160
+because CIO systems move at different speed,
+
+16:12.160 --> 16:14.840
+and some CIO systems might start to decide to,
+
+16:14.840 --> 16:16.400
+okay, we're going to test this old branch,
+
+16:16.400 --> 16:20.800
+because some of our clients wants to base their BSP on it,
+
+16:20.800 --> 16:23.080
+wants to base their release,
+
+16:23.080 --> 16:24.560
+release some software with that kernel,
+
+16:24.560 --> 16:25.760
+and we got to start testing it,
+
+16:25.760 --> 16:27.720
+and it starts coming in like the last year's release
+
+16:27.720 --> 16:29.280
+or something.
+
+16:29.280 --> 16:31.480
+We cannot just take that data into account
+
+16:31.480 --> 16:34.200
+for testing the current releases, or vice versa.
+
+16:36.520 --> 16:39.440
+Or for stable kernel maintainer,
+
+16:39.440 --> 16:42.520
+if Greg wants to release a branch,
+
+16:42.520 --> 16:44.320
+he might want to see like, okay,
+
+16:44.320 --> 16:45.760
+which issues were discovered starting
+
+16:45.760 --> 16:50.680
+from the previous release in this branch.
+
+16:52.720 --> 16:55.080
+Just for the dashboard, like, okay,
+
+16:55.080 --> 16:56.760
+I want to see issues in this branch,
+
+16:56.760 --> 16:59.720
+or which branches contain this issue.
+
+17:02.480 --> 17:05.480
+That's what we tried to do with Neo4j.
+
+17:05.480 --> 17:07.960
+I did basic things, so I wrote a little script to get
+
+17:07.960 --> 17:11.200
+the Git log in a particular format,
+
+17:11.200 --> 17:16.200
+and then generate the data for commits and for relations.
+
+17:16.520 --> 17:18.960
+It was a little over a million commits.
+
+17:20.000 --> 17:24.440
+Looked like this, and it was a little more relations,
+
+17:24.440 --> 17:27.200
+because as you probably know,
+
+17:27.200 --> 17:30.400
+a commit can have more than one parent in Git,
+
+17:30.400 --> 17:33.200
+and it looked like this, very simple.
+
+17:33.200 --> 17:38.000
+So I loaded this into Neo4j with something like this.
+
+17:38.000 --> 17:40.120
+This is updated to the latest release.
+
+17:40.120 --> 17:41.840
+It was different from the start,
+
+17:41.840 --> 17:43.440
+then created an index for hashes,
+
+17:43.440 --> 17:46.380
+and then loaded the relations.
+
+17:47.320 --> 17:50.000
+And it worked fine, but not a few days ago,
+
+17:50.000 --> 17:52.440
+when I tried the fresh Neo4j release,
+
+17:52.440 --> 17:56.040
+it just hung like this forever.
+
+17:56.040 --> 17:58.160
+So I don't know, I could not give you a fresh data
+
+17:58.160 --> 18:02.520
+how it works right now, but I tried it last year,
+
+18:02.520 --> 18:06.040
+and I couldn't get answer a simple question
+
+18:06.040 --> 18:07.840
+if these two commits are connected.
+
+18:09.120 --> 18:12.080
+It was just go on forever, then run out of RAM.
+
+18:14.880 --> 18:18.320
+But with Epoch, I could do that.
+
+18:18.320 --> 18:20.720
+I could get the answer, it was okay.
+
+18:22.960 --> 18:26.500
+But if I wanted to get the nodes between those two commits,
+
+18:26.500 --> 18:27.800
+it would do the same thing.
+
+18:27.800 --> 18:32.480
+But with Git, I complete that in milliseconds.
+
+18:33.640 --> 18:35.360
+So here you go.
+
+18:35.360 --> 18:37.520
+I think the problem, well in my opinion,
+
+18:37.520 --> 18:40.800
+is that the graph management databases and software,
+
+18:40.800 --> 18:44.280
+they are aimed at a general graph problem,
+
+18:44.280 --> 18:46.040
+and not tuned to DAGs.
+
+18:47.800 --> 18:49.680
+Git does that, Git is tuned to DAG,
+
+18:49.680 --> 18:51.480
+they have a lot of optimizations for that,
+
+18:51.480 --> 18:53.420
+and there are tricks to make like,
+
+18:53.420 --> 18:55.920
+repositories like the Linux kernel work.
+
+18:55.920 --> 19:00.040
+So I don't know nothing how you do this.
+
+19:00.040 --> 19:02.920
+This is magic to me, and this would be new to me,
+
+19:02.920 --> 19:05.900
+this book, but from a purely engineering perspective,
+
+19:05.900 --> 19:07.880
+I would have liked to see something like
+
+19:07.880 --> 19:11.400
+a support for databases that are restricted for DAGs only,
+
+19:11.400 --> 19:13.000
+and that apparently could be done
+
+19:14.120 --> 19:16.600
+with not so much computation.
+
+19:16.600 --> 19:20.240
+And then once you have that, then you can do some branching
+
+19:20.240 --> 19:21.800
+and say like, okay, if you are a DAG database,
+
+19:21.800 --> 19:26.200
+then we can do the optimizations and do the fast thing
+
+19:26.200 --> 19:27.560
+with them.
+
+19:27.560 --> 19:30.540
+So the fallback plan is obviously just push everything
+
+19:30.540 --> 19:34.000
+in Git, put the commits and the patches
+
+19:34.000 --> 19:36.080
+and all the branches and all the subsystems.
+
+19:36.080 --> 19:37.560
+It's gonna be giant repo.
+
+19:38.440 --> 19:41.040
+Maybe we can manage that and then query it with libgit2,
+
+19:41.040 --> 19:45.460
+which is the library that Git uses to work with the data.
+
+19:45.460 --> 19:47.280
+And then, well, shuttle the commits
+
+19:47.280 --> 19:48.880
+to the relational database, okay?
+
+19:48.880 --> 19:51.120
+We want to see if, between those releases,
+
+19:51.120 --> 19:54.440
+we have issues and we take the commit hashes from Git
+
+19:54.440 --> 19:56.560
+and then query the database with that.
+
+19:57.760 --> 19:58.600
+That's all.
+
+19:59.560 --> 20:00.400
+Thanks.
+
+20:00.400 --> 20:01.240
+Thanks.
+
+20:01.240 --> 20:02.080
+Thanks.
+
+20:02.080 --> 20:02.900
+Thanks.
+
+20:02.900 --> 20:03.740
+Thanks.
+
+20:03.740 --> 20:04.580
+Thanks.
+
+20:04.580 --> 20:05.420
+Thanks.
+
+20:05.420 --> 20:06.260
+Thanks.
+
+20:06.260 --> 20:07.100
+Thanks.
+
+20:07.100 --> 20:07.920
+Thanks.
+
+20:07.920 --> 20:08.760
+Thanks.
+
+20:08.760 --> 20:09.600
+Thanks.
+
+20:09.600 --> 20:12.000
+So we can help you with the Neo4j things.
+
+20:12.000 --> 20:16.680
+One aspect is text index is for full text indexes.
+
+20:16.680 --> 20:20.240
+It's not for strings, it's for full text.
+
+20:20.240 --> 20:23.800
+It's just like literally this string, this length.
+
+20:23.800 --> 20:27.120
+No, it's text index is for full text, like for.
+
+20:27.120 --> 20:27.960
+Oh, okay.
+
+20:27.960 --> 20:29.880
+Well, it was just this one thing.
+
+20:29.880 --> 20:32.320
+And the other thing is also,
+
+20:32.320 --> 20:35.600
+so do you have to data somewhere to try it out?
+
+20:35.600 --> 20:36.520
+Of course, of course.
+
+20:36.520 --> 20:38.600
+And there's a link from the slides to the script
+
+20:38.600 --> 20:40.600
+that you can use yourself on any Git repo.
+
+20:42.360 --> 20:44.080
+Well, same product.
+
+20:44.080 --> 20:45.600
+Yeah.
+
+20:45.600 --> 20:46.600
+Any more questions?
+
+20:47.640 --> 20:48.480
+Yes.
+
+20:48.480 --> 20:49.800
+Did you try any other graph data bases?
+
+20:49.800 --> 20:51.440
+Did you try any graph or?
+
+20:51.440 --> 20:54.360
+Well, I looked, the question is,
+
+20:54.360 --> 20:57.400
+did I try any other graph databases?
+
+20:57.400 --> 20:59.560
+Yeah, I looked at a bunch of them.
+
+20:59.560 --> 21:01.460
+Some of them require like so much setup
+
+21:01.460 --> 21:03.440
+that I was just floored.
+
+21:03.440 --> 21:05.120
+But I read the documentation.
+
+21:05.120 --> 21:06.640
+I couldn't see any indication
+
+21:06.640 --> 21:08.720
+that it would be any different
+
+21:08.720 --> 21:11.040
+because nobody says anything about DAGs,
+
+21:11.040 --> 21:13.080
+any optimizations or anything.
+
+21:13.080 --> 21:17.280
+I tried memgraph before this talk,
+
+21:17.280 --> 21:22.280
+but I had the same problem with loading revisions, I think,
+
+21:23.920 --> 21:24.760
+for some reason.
+
+21:24.760 --> 21:26.600
+Because like previously, I could load revisions.
+
+21:26.600 --> 21:28.880
+I guess like the, in Neo4j,
+
+21:28.880 --> 21:31.320
+the syntax for indexes has changed since then.
+
+21:31.320 --> 21:33.240
+Maybe I did create the index incorrectly
+
+21:33.240 --> 21:35.640
+as I was just hinted at.
+
+21:35.640 --> 21:37.800
+But I could load them in a reasonable time before
+
+21:37.800 --> 21:40.160
+in Neo4j and everything fine and like in query,
+
+21:40.160 --> 21:42.200
+but except that thing.
+
+21:42.200 --> 21:44.320
+In memgraph, I just hit the wall
+
+21:44.320 --> 21:46.400
+because like it's a different syntax slightly.
+
+21:46.400 --> 21:49.000
+It was slow, but yeah, not such luck.
+
+21:49.000 --> 21:51.840
+And it took like four gigabytes of disk space.
+
+21:51.840 --> 21:56.280
+So, not too bad, okay.
+
+22:00.480 --> 22:01.360
+I don't remember now.
+
+22:01.360 --> 22:04.840
+I think it was, if I take a look now, I think I.
+
+22:04.840 --> 22:07.400
+I think version will also be successful, just research.
+
+22:09.640 --> 22:14.640
+I tried one Neo4j desktop 1.4 before, 1.4.15.
+
+22:14.640 --> 22:16.440
+And that worked.
+
+22:16.440 --> 22:18.760
+I don't know which version it was included.
+
+22:23.440 --> 22:24.520
+Any other questions?
+
+22:26.680 --> 22:27.840
+Thank you so much, Nicole.
+
+22:27.840 --> 22:28.840
+I had the first question.
+
+22:28.840 --> 22:29.680
+Thank you.
+
+22:29.680 --> 22:30.680
+Thanks, everyone.
+
+22:30.680 --> 22:33.680
+Can we look at the graph database?
+
+22:33.680 --> 22:38.680
+I think that's actually a good fit for a graph database.
+
+22:41.400 --> 22:43.360
+And so we can make it work.
+
+22:43.360 --> 22:45.440
+And then, next thing you can come back
+
+22:45.440 --> 22:48.680
+and we do some fun large scale analysis on it.
+
+22:48.680 --> 22:50.240
+Okay, that would be great.
+
+22:50.240 --> 22:51.920
+But you can look up to book them.
+
+22:51.920 --> 22:52.760
+Yes, thank you.
+
+22:54.840 --> 22:55.680
+Cool.
+
+22:55.680 --> 22:56.520
+Thank you.
+
+22:56.520 --> 23:14.360
+Thank you.

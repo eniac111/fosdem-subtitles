@@ -1,0 +1,1420 @@
+1
+0:00:00.000 --> 0:00:07.160
+Hi, I'm Sean.
+
+2
+0:00:07.160 --> 0:00:12.960
+Today I'm going to talk about semi-hosting in the context of U-Boot and what it is and
+
+3
+0:00:12.960 --> 0:00:17.280
+how it works and maybe why you might want to use it.
+
+4
+0:00:17.280 --> 0:00:21.120
+So first I want to ask how do you bootstrap a system?
+
+5
+0:00:21.120 --> 0:00:23.280
+So you might do this for two reasons.
+
+6
+0:00:23.280 --> 0:00:27.800
+One, you have a new board right from the factory and it has nothing on it at all and you have
+
+7
+0:00:27.800 --> 0:00:29.640
+to get something on it.
+
+8
+0:00:29.640 --> 0:00:33.400
+And the other one is maybe you bricked it and this happens to me sometimes, actually
+
+9
+0:00:33.400 --> 0:00:41.080
+happens quite a lot, especially when I'm working on U-Boot and the board will no longer boot.
+
+10
+0:00:41.080 --> 0:00:43.760
+So there's two basic steps usually.
+
+11
+0:00:43.760 --> 0:00:48.560
+The first one is you want to get something running on your board and the second one is
+
+12
+0:00:48.560 --> 0:00:53.420
+you want to then write something to storage so you don't have to do the process again.
+
+13
+0:00:53.420 --> 0:00:55.960
+So there's a variety of protocols you can use.
+
+14
+0:00:55.960 --> 0:01:03.000
+USB, of course, I like UMS, it's very nice, it makes your device look like a USB flash
+
+15
+0:01:03.000 --> 0:01:06.560
+drive which is very, very convenient.
+
+16
+0:01:06.560 --> 0:01:10.480
+There's also a bunch of Ethernet stuff, the classic TFTP.
+
+17
+0:01:10.480 --> 0:01:14.200
+Fast Boot makes an appearance twice because it can do both.
+
+18
+0:01:14.200 --> 0:01:18.640
+If you have an SD card, bootstrapping is super easy, you just pop out the SD card and put
+
+19
+0:01:18.640 --> 0:01:21.040
+whatever you want on it and put the SD card back in.
+
+20
+0:01:21.040 --> 0:01:26.600
+But a lot of boards don't have SD cards, so this is not always an option.
+
+21
+0:01:26.600 --> 0:01:27.960
+There's serial.
+
+22
+0:01:27.960 --> 0:01:32.320
+This is usually kind of slow, so you might only want to use it for the code execution
+
+23
+0:01:32.320 --> 0:01:34.720
+part but it's definitely there.
+
+24
+0:01:34.720 --> 0:01:39.700
+Some boards have it built into the bootloader, you can just flash something over serial.
+
+25
+0:01:39.700 --> 0:01:41.860
+And there's also JTAG.
+
+26
+0:01:41.860 --> 0:01:44.640
+And JTAG is kind of a classic one.
+
+27
+0:01:44.640 --> 0:01:48.700
+Also slow, you probably wouldn't want to flash your whole root file system over it but it's
+
+28
+0:01:48.700 --> 0:01:53.720
+pretty reliable and a lot of boards have it.
+
+29
+0:01:53.720 --> 0:01:58.980
+What if you only have JTAG and you don't have any of these other nice protocols?
+
+30
+0:01:58.980 --> 0:02:05.400
+So I'd like to take a little bit of a different approach to the problem and let's talk about
+
+31
+0:02:05.400 --> 0:02:11.320
+something totally different which is the NXP Core IQ line of communications processors.
+
+32
+0:02:11.320 --> 0:02:20.840
+These are the newest iterations of a very old line which stretches to the M68K and there's
+
+33
+0:02:20.840 --> 0:02:24.740
+a very long lineage of power PC stuff in there.
+
+34
+0:02:24.740 --> 0:02:31.300
+And they tend to have lots of Ethernet, some PCIe, some USB, but not any display interfaces,
+
+35
+0:02:31.300 --> 0:02:34.000
+so they're not really media socks.
+
+36
+0:02:34.000 --> 0:02:37.180
+And they often have hardware accelerated networking.
+
+37
+0:02:37.180 --> 0:02:41.400
+So you can do some stuff in hardware which you would normally do in software.
+
+38
+0:02:41.400 --> 0:02:46.220
+And this is kind of the main selling point on why you might want to use these.
+
+39
+0:02:46.220 --> 0:02:51.440
+So all of these have something they call a reset configuration word or RCW.
+
+40
+0:02:51.440 --> 0:02:56.520
+And this started back in the power PC days as just basic initialization.
+
+41
+0:02:56.520 --> 0:03:00.880
+What NDS ministry sock is going to be, maybe what dividers you're going to have on some
+
+42
+0:03:00.880 --> 0:03:05.460
+clocks, how wide your boot bus is, what are you going to do with your debug pins.
+
+43
+0:03:05.460 --> 0:03:11.240
+This is kind of a small amount of data so they stuck it on some pull ups and pull downs
+
+44
+0:03:11.240 --> 0:03:12.240
+on some of the pins.
+
+45
+0:03:12.240 --> 0:03:18.160
+And this is a very standard thing you'll see on a lot of different socks.
+
+46
+0:03:18.160 --> 0:03:21.880
+And then they wanted some pin muxing because when they originally started with this, all
+
+47
+0:03:21.880 --> 0:03:26.720
+the pins were fixed function and you can sell more chips if you can change the function
+
+48
+0:03:26.720 --> 0:03:32.520
+of some of the pins so that you can use USB on one chip and maybe Ethernet on another.
+
+49
+0:03:32.520 --> 0:03:37.160
+So they added some pin muxing and they added it to the RCW.
+
+50
+0:03:37.160 --> 0:03:41.120
+And then they added a lot more pin muxing because the more pin muxing you have, the
+
+51
+0:03:41.120 --> 0:03:44.040
+more applications your chip can fit into.
+
+52
+0:03:44.040 --> 0:03:49.640
+And so they started running out of pins because they started getting maybe like 128, 256,
+
+53
+0:03:49.640 --> 0:03:54.920
+512 bits of stuff that they needed to configure.
+
+54
+0:03:54.920 --> 0:03:59.220
+And so they decided they were going to put the RCW on the boot device.
+
+55
+0:03:59.220 --> 0:04:04.000
+So the first thing the sock does when it boots up is it reads off this RCW and it configures
+
+56
+0:04:04.000 --> 0:04:07.260
+all the pins and then it continues with the boot.
+
+57
+0:04:07.260 --> 0:04:13.600
+And this is kind of convenient but it creates a chicken and egg problem where in order for
+
+58
+0:04:13.600 --> 0:04:18.860
+your sock to boot up there has to be something on your initial device.
+
+59
+0:04:18.860 --> 0:04:23.440
+And if you're in a situation where you have to boot strap it, there's nothing there.
+
+60
+0:04:23.440 --> 0:04:25.420
+So the sock won't boot up.
+
+61
+0:04:25.420 --> 0:04:30.040
+So what they did is they created a hard coded reset configuration board.
+
+62
+0:04:30.040 --> 0:04:32.280
+This is for maximum compatibility.
+
+63
+0:04:32.280 --> 0:04:36.260
+They would disable all the peripherals and you would just have your boot device.
+
+64
+0:04:36.260 --> 0:04:40.940
+And so you could always boot into this and be safe and not break your board.
+
+65
+0:04:40.940 --> 0:04:46.620
+But this is not so great because they never added runtime pin muxing.
+
+66
+0:04:46.620 --> 0:04:51.380
+So this chip you select a function for your pins and you can't change it.
+
+67
+0:04:51.380 --> 0:04:55.340
+There are a few pins where you can change it but for the most of them you're stuck.
+
+68
+0:04:55.340 --> 0:05:00.060
+So when you have this maximum compatibility RCW with everything disabled, you have no
+
+69
+0:05:00.060 --> 0:05:05.660
+Ethernet, you have no USB, you have no serial even and all you get is JTAG and your boot
+
+70
+0:05:05.660 --> 0:05:07.440
+device.
+
+71
+0:05:07.440 --> 0:05:15.300
+So NXP knew they had a problem and they decided to solve it by introducing this override.
+
+72
+0:05:15.300 --> 0:05:20.300
+So you would boot via the hard coded reset configuration board and then you would program
+
+73
+0:05:20.300 --> 0:05:24.300
+via JTAG the values that you actually wanted that would enable all your peripherals for
+
+74
+0:05:24.300 --> 0:05:29.180
+your board and then you would do a partial reset and it would come up and it would load
+
+75
+0:05:29.180 --> 0:05:31.060
+everything like it was supposed to.
+
+76
+0:05:31.060 --> 0:05:33.620
+But there's a couple problems with this.
+
+77
+0:05:33.620 --> 0:05:39.380
+The main one is that they never documented this stuff so in order to use it you have
+
+78
+0:05:39.380 --> 0:05:46.600
+to use the JTAG probe which is like most JTAG probes kind of a gouge because they know you're
+
+79
+0:05:46.600 --> 0:05:50.380
+buying the chips so you got to have the JTAG probe and you have to use their IDE which
+
+80
+0:05:50.380 --> 0:05:54.860
+is a yearly subscription and they're not cheap.
+
+81
+0:05:54.860 --> 0:06:00.220
+So this is not a great situation and if you didn't think this was great, here's a glowing
+
+82
+0:06:00.220 --> 0:06:02.140
+review I found on the forums.
+
+83
+0:06:02.140 --> 0:06:06.060
+Our manufacturer uses a single PC to perform the initial programming.
+
+84
+0:06:06.060 --> 0:06:10.420
+On this PC they have an evaluation copy of CodeWarrior which is their IDE.
+
+85
+0:06:10.420 --> 0:06:14.620
+Every time that evaluation copy expires they erase the hard drive of the PC, install the
+
+86
+0:06:14.620 --> 0:06:18.420
+OS again and load another evaluation copy.
+
+87
+0:06:18.420 --> 0:06:26.260
+So this is not ideal and I thought about how I might address this and make it better and
+
+88
+0:06:26.260 --> 0:06:30.900
+I remembered something that I had learned about a couple months ago which is called
+
+89
+0:06:30.900 --> 0:06:35.960
+semi-hosting and the basic idea of semi-hosting is that you attach a debugger, in my case
+
+90
+0:06:35.960 --> 0:06:41.980
+it's over JTAG and your code is going to execute a special breakpoint instruction and
+
+91
+0:06:41.980 --> 0:06:47.460
+when your debugger sees this it will read out their an opcode in R0 and an argument
+
+92
+0:06:47.460 --> 0:06:51.740
+in R1 and it will do something for you and then it will give you a return code back in
+
+93
+0:06:51.740 --> 0:06:53.540
+R0.
+
+94
+0:06:53.540 --> 0:06:58.300
+And this is very very similar to how sys calls work because your program will execute a special
+
+95
+0:06:58.300 --> 0:07:02.980
+instruction, the operating system will read out your registers, it will do something for
+
+96
+0:07:02.980 --> 0:07:06.860
+you and give you a return code.
+
+97
+0:07:06.860 --> 0:07:07.860
+So what do you get?
+
+98
+0:07:07.860 --> 0:07:11.980
+Well the thing that I wanted most is serial because I didn't have any.
+
+99
+0:07:11.980 --> 0:07:19.180
+So first I looked at some of the sys write C and sys write C is basically put char.
+
+100
+0:07:19.180 --> 0:07:23.460
+So we can implement put S here and so we're going to take in a string and we're going
+
+101
+0:07:23.460 --> 0:07:28.140
+to loop over all the characters in the string and for each character we're going to trap
+
+102
+0:07:28.140 --> 0:07:33.340
+or execute our breakpoint instruction and we're going to pass for our opcode write C
+
+103
+0:07:33.340 --> 0:07:39.100
+and we're also going to pass a pointer to the character and if you may know that put
+
+104
+0:07:39.100 --> 0:07:45.900
+char actually just takes the character and so this is kind of an unfortunate performance
+
+105
+0:07:45.900 --> 0:07:50.780
+implication because we have one breakpoint and one memory access per character in the
+
+106
+0:07:50.780 --> 0:07:56.480
+string and for JTAG this is not very performant.
+
+107
+0:07:56.480 --> 0:08:00.320
+If you've ever used a 300 baud modem you know that it's very slow.
+
+108
+0:08:00.320 --> 0:08:05.060
+This is even slower so this is really not useful if you actually want to use your serial
+
+109
+0:08:05.060 --> 0:08:06.580
+output.
+
+110
+0:08:06.580 --> 0:08:08.500
+So we can do better though.
+
+111
+0:08:08.500 --> 0:08:13.820
+They also have something called sys write zero and this is basically put S. So our PIDUS
+
+112
+0:08:13.820 --> 0:08:16.260
+implementation gets very simple.
+
+113
+0:08:16.260 --> 0:08:22.740
+We're just going to trap with write zero and now we get one breakpoint per string but we
+
+114
+0:08:22.740 --> 0:08:27.740
+still have to do one memory access per character and the problem is that we don't want to read
+
+115
+0:08:27.740 --> 0:08:28.900
+off the end of the string.
+
+116
+0:08:28.900 --> 0:08:31.540
+We have to make sure that we don't go past the null terminator.
+
+117
+0:08:31.540 --> 0:08:36.340
+So the debugger has to read a character and then see is it the null terminator and if
+
+118
+0:08:36.340 --> 0:08:40.260
+it's not you read another character and you keep doing this and we really don't want to
+
+119
+0:08:40.260 --> 0:08:42.380
+go off the end.
+
+120
+0:08:42.380 --> 0:08:47.580
+But the problem is that for JTAG setting up a read is a pretty intensive process.
+
+121
+0:08:47.580 --> 0:08:51.460
+There's a lot of overhead and it can be still pretty slow.
+
+122
+0:08:51.460 --> 0:08:56.860
+So this is faster, about ten times as fast but it's still slow.
+
+123
+0:08:56.860 --> 0:08:58.300
+Really not usable.
+
+124
+0:08:58.300 --> 0:09:00.700
+But we can do even better.
+
+125
+0:09:00.700 --> 0:09:06.300
+So we're going to use sys write which is basically the write system call and for this
+
+126
+0:09:06.300 --> 0:09:10.740
+one because we have multiple parameters, the previous ones only had one parameter so it
+
+127
+0:09:10.740 --> 0:09:12.060
+just goes in the argument.
+
+128
+0:09:12.060 --> 0:09:16.380
+But for this one we're going to fill in our arguments inside of a struct and we're going
+
+129
+0:09:16.380 --> 0:09:21.020
+to take the file descriptor and the buffer and the length of the buffer and we're going
+
+130
+0:09:21.020 --> 0:09:27.020
+to fill this in with standard out and our string and the length of our string and then
+
+131
+0:09:27.020 --> 0:09:32.120
+we're going to trap and we're going to pass a pointer to our struct and this is generally
+
+132
+0:09:32.120 --> 0:09:38.620
+how we pass multiple arguments to semi-hosting because there's only one argument register
+
+133
+0:09:38.620 --> 0:09:41.580
+so they will take a pointer to the struct.
+
+134
+0:09:41.580 --> 0:09:46.460
+And so now we get one breakpoint per string and two memory accesses per string and this
+
+135
+0:09:46.460 --> 0:09:48.500
+is reasonably fast.
+
+136
+0:09:48.500 --> 0:09:53.200
+We can do stuff with this and it's not glacially slow.
+
+137
+0:09:53.200 --> 0:09:56.620
+So this is the kind of implementation I ended up using it.
+
+138
+0:09:56.620 --> 0:10:00.840
+And if you've been paying attention you'll note that sys write kind of implies the existence
+
+139
+0:10:00.840 --> 0:10:08.540
+of sys open and you can open any file on your host system which is pretty convenient and
+
+140
+0:10:08.540 --> 0:10:13.840
+you can do all the standard stuff like seeking it and reading it and closing it.
+
+141
+0:10:13.840 --> 0:10:19.320
+We don't get stat but we do get the file length which is mostly what we want because usually
+
+142
+0:10:19.320 --> 0:10:24.780
+we just want to open it, find out how long it is and then read the whole thing.
+
+143
+0:10:24.780 --> 0:10:28.420
+So in U-Boot you may classically do something like this.
+
+144
+0:10:28.420 --> 0:10:32.340
+If you want to load your Linux and then boot it, you're going to load it from MMC0, add
+
+145
+0:10:32.340 --> 0:10:35.580
+a particular address and then you're going to give it a file name and then you'll boot
+
+146
+0:10:35.580 --> 0:10:37.820
+it.
+
+147
+0:10:37.820 --> 0:10:45.140
+And so we can replace this with load hostfs which is the something on your host debugger
+
+148
+0:10:45.140 --> 0:10:50.180
+file system and that Linux image will get read from the directory that you're running
+
+149
+0:10:50.180 --> 0:10:52.600
+your debugger from.
+
+150
+0:10:52.600 --> 0:10:59.300
+And it's the same structure because under the hood it's using the same API.
+
+151
+0:10:59.300 --> 0:11:04.760
+And there's a dash because there's only one hostfs and we don't need to have multiple
+
+152
+0:11:04.760 --> 0:11:07.220
+debugger support.
+
+153
+0:11:07.220 --> 0:11:12.020
+And there's a special file called colon TT which I think stands for teletype and this
+
+154
+0:11:12.020 --> 0:11:14.020
+is your standard in and standard out.
+
+155
+0:11:14.020 --> 0:11:19.340
+And almost everybody uses this except QMU because QMU doesn't have this huge overhead
+
+156
+0:11:19.340 --> 0:11:24.740
+for memory accesses so they don't actually care if you can use your console with read
+
+157
+0:11:24.740 --> 0:11:32.940
+and write and so you just use write zero with them and it works.
+
+158
+0:11:32.940 --> 0:11:38.660
+So one classic problem with booting with JTAG is that your regular boot process is going
+
+159
+0:11:38.660 --> 0:11:43.820
+to look something like load SPL and SPL is going to initialize DRAM and then SPL is going
+
+160
+0:11:43.820 --> 0:11:48.060
+to load regular U-Boot into DRAM and execute it.
+
+161
+0:11:48.060 --> 0:11:53.140
+And when you do this with JTAG instead you have to load SPL over JTAG and JTAG is going
+
+162
+0:11:53.140 --> 0:12:03.560
+to run and initialize DRAM and sometime you have to load U-Boot into DRAM over JTAG.
+
+163
+0:12:03.560 --> 0:12:06.360
+But we don't really know when.
+
+164
+0:12:06.360 --> 0:12:12.860
+And so a really classic way to do this is you just pick a time and you wait that long
+
+165
+0:12:12.860 --> 0:12:14.940
+and then you load U-Boot.
+
+166
+0:12:14.940 --> 0:12:19.940
+But this is kind of awful because if you have any kind of variance in how long DRAM initialization
+
+167
+0:12:19.940 --> 0:12:25.220
+takes or how long it takes, especially if you're doing other hardware initialization,
+
+168
+0:12:25.220 --> 0:12:29.380
+you have to just wait a lot longer and in the average case you're going to be doing
+
+169
+0:12:29.380 --> 0:12:30.380
+nothing.
+
+170
+0:12:30.380 --> 0:12:34.100
+And this can really drive you nuts as a developer because you might be waiting like 20 seconds
+
+171
+0:12:34.100 --> 0:12:39.740
+because sometimes it takes 20 seconds but most of the time it doesn't.
+
+172
+0:12:39.740 --> 0:12:46.980
+So you can also re-implement DRAM in TCL and this is a really common thing for vendors
+
+173
+0:12:46.980 --> 0:12:50.280
+to do because they love just, you know, it's very simple for them.
+
+174
+0:12:50.280 --> 0:12:53.960
+They just write all the registers and it happens over JTAG.
+
+175
+0:12:53.960 --> 0:12:59.540
+And this avoids the whole timing problem because we know exactly when DRAM has been initialized.
+
+176
+0:12:59.540 --> 0:13:01.620
+But it's a totally different process from normal.
+
+177
+0:13:01.620 --> 0:13:05.740
+You have to specify your parameters in a different format, in a different language.
+
+178
+0:13:05.740 --> 0:13:09.620
+It's not going to be tested as much and it probably won't initialize things in the same
+
+179
+0:13:09.620 --> 0:13:10.620
+way.
+
+180
+0:13:10.620 --> 0:13:17.780
+So it can be more buggy and it's kind of worrisome, especially when you have to, your regular
+
+181
+0:13:17.780 --> 0:13:21.600
+U-Boot will work fine and maybe this doesn't work so well.
+
+182
+0:13:21.600 --> 0:13:27.780
+But semi-hosting makes this really simple because SPL can load and then it will, over
+
+183
+0:13:27.780 --> 0:13:32.980
+JTAG, initialize DRAM and it says to your host, please load U-Boot at this address and
+
+184
+0:13:32.980 --> 0:13:36.740
+your host will do that and then it continues on its way.
+
+185
+0:13:36.740 --> 0:13:42.100
+And it's extremely simple to use and it solves this whole timing problem, which can be very
+
+186
+0:13:42.100 --> 0:13:43.820
+annoying.
+
+187
+0:13:43.820 --> 0:13:44.820
+So what else do you get?
+
+188
+0:13:44.820 --> 0:13:46.980
+Well, we get some error handling.
+
+189
+0:13:46.980 --> 0:13:51.260
+Error know is practically essential to find out why something failed.
+
+190
+0:13:51.260 --> 0:13:52.940
+Is error is not.
+
+191
+0:13:52.940 --> 0:13:57.060
+The idea of is error is that you will pass in a return code and is error will tell you
+
+192
+0:13:57.060 --> 0:13:59.020
+if it's an error or not.
+
+193
+0:13:59.020 --> 0:14:04.100
+But the problem is that some of these semi-hosting commands have different semantics for the return
+
+194
+0:14:04.100 --> 0:14:05.100
+code.
+
+195
+0:14:05.100 --> 0:14:09.020
+But most of the time, the semantic is negative numbers are errors.
+
+196
+0:14:09.020 --> 0:14:15.380
+So effectively, you're doing this whole big semi-hosting call just to compare to zero.
+
+197
+0:14:15.380 --> 0:14:16.980
+So I don't really know why this is in here.
+
+198
+0:14:16.980 --> 0:14:20.600
+And there's actually several functions that are kind of like that.
+
+199
+0:14:20.600 --> 0:14:27.180
+For example, sys time will get you the real time, which can be helpful if your device
+
+200
+0:14:27.180 --> 0:14:30.580
+doesn't have an RTC or you don't want to initialize it.
+
+201
+0:14:30.580 --> 0:14:34.520
+But sys elapsed will get you the number of ticks that your program has been running.
+
+202
+0:14:34.520 --> 0:14:38.000
+So maybe you would use this for benchmarking.
+
+203
+0:14:38.000 --> 0:14:45.180
+But the overhead of doing semi-hosting is a lot larger than the amount of precision
+
+204
+0:14:45.180 --> 0:14:46.180
+that you're going to get.
+
+205
+0:14:46.180 --> 0:14:49.340
+So I'm not really sure why you use that one either.
+
+206
+0:14:49.340 --> 0:14:51.000
+There's some libc emulation.
+
+207
+0:14:51.000 --> 0:14:52.860
+You can pass it in a command line.
+
+208
+0:14:52.860 --> 0:14:55.860
+U-Boot, we don't really need this because we have the environment and we have the device
+
+209
+0:14:55.860 --> 0:14:56.860
+tree.
+
+210
+0:14:56.860 --> 0:14:59.820
+And those are kind of classic ways to pass in parameters.
+
+211
+0:14:59.820 --> 0:15:04.860
+But if you're not using U-Boot and you don't have this sort of system set up, you can get
+
+212
+0:15:04.860 --> 0:15:07.140
+command line parameters pretty easily.
+
+213
+0:15:07.140 --> 0:15:11.580
+There's also assist heap, which is where you tell the device where it thinks the heap is
+
+214
+0:15:11.580 --> 0:15:14.400
+and where it should malloc stuff.
+
+215
+0:15:14.400 --> 0:15:16.500
+But usually you know this when you compile.
+
+216
+0:15:16.500 --> 0:15:19.700
+You say this address range is going to be where I'm going to stick my heap.
+
+217
+0:15:19.700 --> 0:15:23.020
+So also I'm not really sure why that's in there.
+
+218
+0:15:23.020 --> 0:15:28.020
+And as you may have noticed, you can write files.
+
+219
+0:15:28.020 --> 0:15:32.900
+So of course you can mess things up, especially on Unix, where you can open up a lot of files
+
+220
+0:15:32.900 --> 0:15:35.900
+that aren't really files and do some fun stuff with them.
+
+221
+0:15:35.900 --> 0:15:40.120
+But you can also just run arbitrary commands and you can remove files too.
+
+222
+0:15:40.120 --> 0:15:44.220
+So you have to really trust this stuff that you're going to run.
+
+223
+0:15:44.220 --> 0:15:46.380
+Because as far as I know, no one does sandboxing.
+
+224
+0:15:46.380 --> 0:15:49.140
+They just implement all this stuff.
+
+225
+0:15:49.140 --> 0:15:54.120
+So maybe they shouldn't, but that's how it is.
+
+226
+0:15:54.120 --> 0:15:58.860
+So if you've ever used semi-hosting before, you may be familiar with this problem.
+
+227
+0:15:58.860 --> 0:16:03.220
+Breakpoints are actually invalid instructions and your program will crash unless there is
+
+228
+0:16:03.220 --> 0:16:07.180
+a debugger attached and the debugger will handle it for you and you won't end up executing
+
+229
+0:16:07.180 --> 0:16:08.980
+it.
+
+230
+0:16:08.980 --> 0:16:11.640
+So typically you would have to have two programs.
+
+231
+0:16:11.640 --> 0:16:15.180
+One with semi-hosting enabled and one with semi-hosting not enabled.
+
+232
+0:16:15.180 --> 0:16:18.740
+And the one with semi-hosting enabled you'd have to run with a debugger.
+
+233
+0:16:18.740 --> 0:16:22.860
+But we can get around this using a pretty simple trick.
+
+234
+0:16:22.860 --> 0:16:25.980
+This one is from Tom Verbuehr.
+
+235
+0:16:25.980 --> 0:16:32.020
+And the idea is that in your synchronous support handler, you first check to make sure that
+
+236
+0:16:32.020 --> 0:16:36.160
+we have an invalid instruction and otherwise you panic which probably involves printing
+
+237
+0:16:36.160 --> 0:16:43.580
+out the registers or doing something complaining loudly on the serial which you might not have.
+
+238
+0:16:43.580 --> 0:16:49.220
+Then you would do, we need to check to make sure our instruction which is held in ELR
+
+239
+0:16:49.220 --> 0:16:56.700
+is the semi-hosting ARM64 HALT instruction which is the special breakpoint.
+
+240
+0:16:56.700 --> 0:17:04.260
+And the lower bits of the PC are actually not the PC on ARM because they have stuff
+
+241
+0:17:04.260 --> 0:17:06.700
+like are you in thumb mode or not.
+
+242
+0:17:06.700 --> 0:17:08.620
+So we need to mask those off.
+
+243
+0:17:08.620 --> 0:17:13.420
+You could probably just do and tilde 3.
+
+244
+0:17:13.420 --> 0:17:16.900
+And if we actually find out that it wasn't supposed to be a semi-hosting instruction,
+
+245
+0:17:16.900 --> 0:17:20.540
+we're going to disable semi-hosting which on your processor can do whatever it wants
+
+246
+0:17:20.540 --> 0:17:24.100
+but on U-Boot it just sets a global variable that says we don't have semi-hosting, don't
+
+247
+0:17:24.100 --> 0:17:25.700
+try it again.
+
+248
+0:17:25.700 --> 0:17:28.340
+And then we pretend that we get a failure.
+
+249
+0:17:28.340 --> 0:17:30.740
+Negative one is almost always a failure.
+
+250
+0:17:30.740 --> 0:17:35.940
+And then we advance the PC by 4 bytes.
+
+251
+0:17:35.940 --> 0:17:40.500
+So if you want to use semi-hosting in U-Boot, you can enable these configs.
+
+252
+0:17:40.500 --> 0:17:47.180
+The first one enables semi-hosting of any kind and also enables this command.
+
+253
+0:17:47.180 --> 0:17:51.020
+The second one, semi-hosting serial, will get you some serial input and output.
+
+254
+0:17:51.020 --> 0:17:55.360
+And you'll probably want this serial put s because normally U-Boot will print a character
+
+255
+0:17:55.360 --> 0:18:02.180
+at a time and put s will group those characters into strings and print them all at once.
+
+256
+0:18:02.180 --> 0:18:07.500
+And if you want to have this thing, you will need to enable config semi-hosting fallback.
+
+257
+0:18:07.500 --> 0:18:11.260
+And if you want to use it in SPL, then you can enable the SPL versions.
+
+258
+0:18:11.260 --> 0:18:16.220
+There's no serial version because U-Boot always enables the serial device in SPL that it's
+
+259
+0:18:16.220 --> 0:18:19.420
+using in the regular U-Boot.
+
+260
+0:18:19.420 --> 0:18:21.980
+And these are the things that I worked on adding.
+
+261
+0:18:21.980 --> 0:18:27.580
+And I also worked on config semi-hosting a lot but the basic support was already there.
+
+262
+0:18:27.580 --> 0:18:31.580
+There's also RISC-V support from Kautok console.
+
+263
+0:18:31.580 --> 0:18:35.860
+And this is pretty recently added so it's either in the January release or maybe the
+
+264
+0:18:35.860 --> 0:18:38.580
+March release, I'm not sure.
+
+265
+0:18:38.580 --> 0:18:43.100
+And if you want to know more about how to enable this, we have a documentation link.
+
+266
+0:18:43.100 --> 0:18:46.380
+And of course you're also going to need a debugger.
+
+267
+0:18:46.380 --> 0:18:52.780
+So I like to use OpenOCD, maybe because I'm a masochist.
+
+268
+0:18:52.780 --> 0:18:55.900
+And OpenOCD is a debug server for JTAG.
+
+269
+0:18:55.900 --> 0:19:02.560
+So the idea is you launch OpenOCD and it connects to your debug probe and then you can tell
+
+270
+0:19:02.560 --> 0:19:07.420
+the debug probe to do things like start or stop your processor and you can also attach
+
+271
+0:19:07.420 --> 0:19:10.580
+the GDB to it like it's a running process.
+
+272
+0:19:10.580 --> 0:19:12.980
+So this is pretty simple for OpenOCD.
+
+273
+0:19:12.980 --> 0:19:16.980
+You just halt the processor, you enable semi-hosting and then you resume it.
+
+274
+0:19:16.980 --> 0:19:21.140
+And typically what you would do is in between this enabling semi-hosting and resuming, you
+
+275
+0:19:21.140 --> 0:19:24.660
+would load your program and then resume at a particular address.
+
+276
+0:19:24.660 --> 0:19:30.700
+And this you could stick in a script and just run and automate the whole thing.
+
+277
+0:19:30.700 --> 0:19:35.180
+So there's a couple of downsides to OpenOCD.
+
+278
+0:19:35.180 --> 0:19:38.900
+You can kind of think of this as like a wish list or things that annoy me but not enough
+
+279
+0:19:38.900 --> 0:19:41.580
+that I fix them.
+
+280
+0:19:41.580 --> 0:19:46.460
+The one of them is that it uses the same terminal for regular logging messages like I attached
+
+281
+0:19:46.460 --> 0:19:50.780
+to the debugger and that sort of thing as semi-hosting output so they can be kind of
+
+282
+0:19:50.780 --> 0:19:51.780
+get intermixed.
+
+283
+0:19:51.780 --> 0:19:54.580
+So you have to watch out for that.
+
+284
+0:19:54.580 --> 0:19:59.340
+The serial is cooked, which means that when you type something, nothing happens until
+
+285
+0:19:59.340 --> 0:20:02.700
+you hit enter and then everything happens.
+
+286
+0:20:02.700 --> 0:20:09.100
+And this is kind of okay because if you're editing a command line, it's generally really
+
+287
+0:20:09.100 --> 0:20:14.580
+slow if you hit backspace and then you have to go to U-Boot and U-Boot interprets the
+
+288
+0:20:14.580 --> 0:20:18.620
+backspace and echoes it back and then it gets displayed on your terminal.
+
+289
+0:20:18.620 --> 0:20:20.380
+So cooked is nice here.
+
+290
+0:20:20.380 --> 0:20:25.740
+The problem is that OpenOCD is single-threaded so while it's waiting for you to input, it's
+
+291
+0:20:25.740 --> 0:20:26.900
+not doing anything.
+
+292
+0:20:26.900 --> 0:20:32.060
+So if you unplug the device or you hit control C in your debugger, it won't notice until
+
+293
+0:20:32.060 --> 0:20:33.860
+you hit enter.
+
+294
+0:20:33.860 --> 0:20:41.060
+So this can be kind of fun especially because even if you know about it, you might forget.
+
+295
+0:20:41.060 --> 0:20:44.940
+And this single-threaded thing also ties into there's no sandboxing.
+
+296
+0:20:44.940 --> 0:20:49.380
+So ideally you would do something like fork off another process and maybe unshare some
+
+297
+0:20:49.380 --> 0:20:54.880
+stuff or put it in a CH root and then that would be where you would run all your semi-hosting
+
+298
+0:20:54.880 --> 0:20:55.880
+stuff.
+
+299
+0:20:55.880 --> 0:21:00.700
+You could run the file and you could limit it to just a few files but there's no sandboxing.
+
+300
+0:21:00.700 --> 0:21:03.060
+So your whole system is there.
+
+301
+0:21:03.060 --> 0:21:05.980
+Once again, you have to trust your stuff.
+
+302
+0:21:05.980 --> 0:21:07.420
+So should you use semi-hosting?
+
+303
+0:21:07.420 --> 0:21:11.960
+I would say not unless you have to, especially not the serial stuff.
+
+304
+0:21:11.960 --> 0:21:13.240
+But it's good to have.
+
+305
+0:21:13.240 --> 0:21:16.620
+If you have to use it, it's nice.
+
+306
+0:21:16.620 --> 0:21:17.780
+And sometimes it's convenient.
+
+307
+0:21:17.780 --> 0:21:21.740
+If you're doing emulation, it can be really simple because you don't have to emulate an
+
+308
+0:21:21.740 --> 0:21:22.740
+MMC device.
+
+309
+0:21:22.740 --> 0:21:25.600
+You don't have to write a driver for an MMC device.
+
+310
+0:21:25.600 --> 0:21:29.220
+You just call your semi-hosting instruction and you can load the file right into where
+
+311
+0:21:29.220 --> 0:21:30.220
+you want it.
+
+312
+0:21:30.220 --> 0:21:32.780
+And you don't have to do any hardware.
+
+313
+0:21:32.780 --> 0:21:36.780
+And if you're already using JTAG boot, this can be really nice to solve some of your sequencing
+
+314
+0:21:36.780 --> 0:21:38.380
+stuff.
+
+315
+0:21:38.380 --> 0:21:41.300
+But I wouldn't recommend it in general.
+
+316
+0:21:41.300 --> 0:21:43.660
+So I'd like to thank a couple people.
+
+317
+0:21:43.660 --> 0:21:48.740
+Tom Verbuheir wrote a blog post on this stuff that got me thinking about the whole thing.
+
+318
+0:21:48.740 --> 0:21:55.160
+Andre Pshivara did the initial semi-hosting and he also worked with me when I was upstreaming
+
+319
+0:21:55.160 --> 0:21:57.180
+my stuff, so I'm grateful for that.
+
+320
+0:21:57.180 --> 0:22:02.220
+And of course, Tom Reaney and Simon Glass, who reviewed and merged all of this code and
+
+321
+0:22:02.220 --> 0:22:04.780
+a lot of other patches along the years.
+
+322
+0:22:04.780 --> 0:22:07.380
+And of course Merrick, who put me up to this talk.
+
+323
+0:22:07.380 --> 0:22:11.480
+And Seiko, who employed me while I was writing the code.
+
+324
+0:22:11.480 --> 0:22:15.820
+And if you're interested in this, there's that blog post I was talking about.
+
+325
+0:22:15.820 --> 0:22:21.180
+There is the RISC-V software spec, which is just the ARM software spec, but they use a
+
+326
+0:22:21.180 --> 0:22:23.880
+different instruction and different registers.
+
+327
+0:22:23.880 --> 0:22:25.440
+And of course the ARM software spec.
+
+328
+0:22:25.440 --> 0:22:32.220
+And this link may die because ARM has a tendency to rearrange things, but for now it works.
+
+329
+0:22:32.220 --> 0:22:35.220
+Thank you.
+
+330
+0:22:35.220 --> 0:22:46.300
+Does anyone have a question?
+
+331
+0:22:46.300 --> 0:22:47.300
+Questions?
+
+332
+0:22:47.300 --> 0:22:54.780
+Yes, I do.
+
+333
+0:22:54.780 --> 0:22:55.780
+Can you actually use semi-hosting for serial bundle in Linux?
+
+334
+0:22:55.780 --> 0:23:00.700
+Yes, but only for debug prints and I haven't looked into it that closely.
+
+335
+0:23:00.700 --> 0:23:06.660
+I think the whole stopping Linux to do a breakpoint is kind of invasive because Linux tends
+
+336
+0:23:06.660 --> 0:23:11.500
+not to like that because your interrupts for that core will just not happen while it's
+
+337
+0:23:11.500 --> 0:23:13.260
+stuck on the debugger.
+
+338
+0:23:13.260 --> 0:23:16.980
+And you can kind of break your devices that expect there to be an interrupt that gets
+
+339
+0:23:16.980 --> 0:23:19.840
+handled in a reasonable manner.
+
+340
+0:23:19.840 --> 0:23:26.640
+So typically when you stop the processor in Linux, like your EMMC will just break.
+
+341
+0:23:26.640 --> 0:23:31.260
+So generally I've only seen it for debug prints and usually only if like you can't get to
+
+342
+0:23:31.260 --> 0:23:33.260
+the real serial console.
+
+343
+0:23:33.260 --> 0:23:52.060
+Yeah.
+
+344
+0:23:52.060 --> 0:23:57.460
+Okay since we have a couple minutes I have a one more slide.
+
+345
+0:23:57.460 --> 0:24:03.460
+So normally when you will print something this is what it gets, it'll get like hello
+
+346
+0:24:03.460 --> 0:24:08.700
+and it'll normally print this like H E L L O slash R slash N and it inserts the slash
+
+347
+0:24:08.700 --> 0:24:11.220
+R and it'll do it one character at a time.
+
+348
+0:24:11.220 --> 0:24:16.000
+But as we've established earlier this is gleefully slow on semi-hosted hardware.
+
+349
+0:24:16.000 --> 0:24:21.540
+So what I initially did was this and I printed out hello slash N and then I added the dash
+
+350
+0:24:21.540 --> 0:24:27.420
+slash R. But this will actually break things because they expect it to be R N and not
+
+351
+0:24:27.420 --> 0:24:31.420
+N R even though like functionally they're the same.
+
+352
+0:24:31.420 --> 0:24:34.400
+So I ended up having to do it the other way.
+
+353
+0:24:34.400 --> 0:24:39.580
+So if you ever implement this stuff be aware of that.
+
+354
+0:24:39.580 --> 0:24:45.400
+Although if you are doing this like on a microcontroller you can probably just put hello R N in your
+
+355
+0:24:45.400 --> 0:24:59.180
+strings and maybe that's better.
+

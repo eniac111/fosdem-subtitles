@@ -1,0 +1,1332 @@
+1
+0:00:00.000 --> 0:00:07.320
+So, we're ready for our next talk.
+
+2
+0:00:07.320 --> 0:00:11.340
+Alex is going to talk about the new file system that they're proposing, Composivest, and opportunistically
+
+3
+0:00:11.340 --> 0:00:13.160
+sharing verified image file system.
+
+4
+0:00:13.160 --> 0:00:14.160
+Thank you.
+
+5
+0:00:14.160 --> 0:00:15.160
+All right, thank you.
+
+6
+0:00:15.160 --> 0:00:16.160
+Can you hear me?
+
+7
+0:00:16.160 --> 0:00:17.160
+Yeah?
+
+8
+0:00:17.160 --> 0:00:18.160
+All right.
+
+9
+0:00:18.160 --> 0:00:19.160
+All right, I'm Alex.
+
+10
+0:00:19.160 --> 0:00:24.740
+You may also know me from hits such as Flatpak, Flathub, GNOME, GTK, all such stuff.
+
+11
+0:00:24.740 --> 0:00:31.360
+But this here is my first kernel file system, which I proposed on the list a couple of months
+
+12
+0:00:31.360 --> 0:00:33.000
+ago.
+
+13
+0:00:33.000 --> 0:00:36.120
+It's not actually like a file system, a real file system.
+
+14
+0:00:36.120 --> 0:00:41.040
+It's more targeted for read-only images such that you would typically have many of them
+
+15
+0:00:41.040 --> 0:00:48.000
+running on the system, maybe on a container host or in my case, my primary concern is
+
+16
+0:00:48.000 --> 0:00:52.160
+the OSTree verified boot use case.
+
+17
+0:00:52.160 --> 0:00:58.640
+So rather than talking about composeFS first, I'm going to talk about OSTree because it
+
+18
+0:00:58.640 --> 0:01:01.800
+kind of explains where this comes from.
+
+19
+0:01:01.800 --> 0:01:06.880
+So in OSTree, we have images.
+
+20
+0:01:06.880 --> 0:01:10.240
+Normally the images are not simple like this, but actually the full-root file system for
+
+21
+0:01:10.240 --> 0:01:12.760
+your system that you want to boot.
+
+22
+0:01:12.760 --> 0:01:16.440
+But they're used in a bunch of files, and they have metadata and permissions and names
+
+23
+0:01:16.440 --> 0:01:17.800
+and whatnot.
+
+24
+0:01:17.800 --> 0:01:20.080
+So they're basically images.
+
+25
+0:01:20.080 --> 0:01:26.480
+And we have this repository format, which is the core format of OSTree.
+
+26
+0:01:26.480 --> 0:01:31.960
+And what we do is we take all the files, like the regular files, in the image and we hash
+
+27
+0:01:31.960 --> 0:01:33.120
+them.
+
+28
+0:01:33.120 --> 0:01:38.280
+And we store them by the hash name in this repository format.
+
+29
+0:01:38.280 --> 0:01:42.320
+So if you look at any of those files, they're just the same file with the name of their
+
+30
+0:01:42.320 --> 0:01:44.400
+own content.
+
+31
+0:01:44.400 --> 0:01:49.720
+And then we take all the directories we have, such as the sub-derp thing, and we make a
+
+32
+0:01:49.720 --> 0:01:55.720
+small descriptor of them, the names of the file in them, their permissions and whatnot,
+
+33
+0:01:55.720 --> 0:02:00.640
+and a reference to the content of the file by the checksum.
+
+34
+0:02:00.640 --> 0:02:04.560
+And we do the same for the root directory.
+
+35
+0:02:04.560 --> 0:02:09.560
+And this time we refer to the sub-directory by the checksum of the descriptor.
+
+36
+0:02:09.560 --> 0:02:16.440
+And then we add a final commit description, which describes, well, it has a pointer, meaning
+
+37
+0:02:16.440 --> 0:02:21.560
+the checksum of the root directory, and a parent doesn't have a parent because this
+
+38
+0:02:21.560 --> 0:02:25.320
+is the first commit, some metadata.
+
+39
+0:02:25.320 --> 0:02:30.840
+And then we add the refs file, which is basically just a file that says we have a branch called
+
+40
+0:02:30.840 --> 0:02:34.520
+image, and this is the current head.
+
+41
+0:02:34.520 --> 0:02:40.120
+So if anyone thinks this looks like the.get directory in any of your checkouts, that's
+
+42
+0:02:40.120 --> 0:02:41.120
+true.
+
+43
+0:02:41.120 --> 0:02:44.240
+It's basically Git for operating systems.
+
+44
+0:02:44.240 --> 0:02:49.520
+There are some details in exactly how the object files are stored, but basically the
+
+45
+0:02:49.520 --> 0:02:51.120
+entire structure is Git, right?
+
+46
+0:02:51.120 --> 0:02:53.000
+It's just a copy of Git.
+
+47
+0:02:53.000 --> 0:02:57.280
+And you can see even more clearly if you create a new commit, the new version, we added the
+
+48
+0:02:57.280 --> 0:02:58.780
+readme.
+
+49
+0:02:58.780 --> 0:03:04.080
+So all we have to do is add the file, the new root directory, and the new commit that
+
+50
+0:03:04.080 --> 0:03:10.360
+points to the previous one, and then we update the ref to the latest head.
+
+51
+0:03:10.360 --> 0:03:16.680
+So basically re-implementing Git for large binary trees.
+
+52
+0:03:16.680 --> 0:03:18.960
+But you can't use this directly.
+
+53
+0:03:18.960 --> 0:03:21.720
+Like you can't boot from a repository like this.
+
+54
+0:03:21.720 --> 0:03:29.120
+So when you do deploy, we call it deploy when you run a new version of something.
+
+55
+0:03:29.120 --> 0:03:30.760
+Typically you have a pre-existing version.
+
+56
+0:03:30.760 --> 0:03:35.480
+So you download the new version of the thing you want to run, which is very simple because
+
+57
+0:03:35.480 --> 0:03:41.480
+you can just iterate over these recursive descriptions of the image.
+
+58
+0:03:41.480 --> 0:03:47.120
+And whenever you have a reference to an object you already have downloaded, you can just
+
+59
+0:03:47.120 --> 0:03:50.120
+stop because recursively you know you have all the previous things.
+
+60
+0:03:50.120 --> 0:03:53.280
+So it's very efficient to get the new version.
+
+61
+0:03:53.280 --> 0:04:01.080
+And then we create a deploy directory, which is basically a hard-linked form that points
+
+62
+0:04:01.080 --> 0:04:07.720
+back into the objects, like the regular file objects.
+
+63
+0:04:07.720 --> 0:04:12.120
+So we create the directories with the right permissions and whatnot.
+
+64
+0:04:12.120 --> 0:04:18.040
+Whenever there's a regular file, we just point it at the same file by using a hardlink to
+
+65
+0:04:18.040 --> 0:04:20.200
+the one in the repository.
+
+66
+0:04:20.200 --> 0:04:25.520
+And then we somehow set some boot configuration that points to this particular commit, which
+
+67
+0:04:25.520 --> 0:04:31.560
+means this directory, and somewhere in the unit RDE we find this directory, bind-mounted,
+
+68
+0:04:31.560 --> 0:04:37.520
+read-only on the root, on top of the root, and then we boot into that.
+
+69
+0:04:37.520 --> 0:04:43.800
+And there are some clear advantages over this, over what would be the alternative, which
+
+70
+0:04:43.800 --> 0:04:47.120
+is the traditional A, B, but block device.
+
+71
+0:04:47.120 --> 0:04:52.720
+You have two block devices and you flash new image from B and then you boot into B.
+
+72
+0:04:52.720 --> 0:04:59.840
+First of all, it's very easy to do efficient downloads and deltas are very small.
+
+73
+0:04:59.840 --> 0:05:05.000
+You can easily store however many versions of things you want, whether they're related
+
+74
+0:05:05.000 --> 0:05:10.760
+or not, like if it's multiple versions of the same branch.
+
+75
+0:05:10.760 --> 0:05:13.120
+You can keep the last 10 or whatever.
+
+76
+0:05:13.120 --> 0:05:19.080
+Plus you can also have completely unrelated, you can have both the Fedora and a rel or
+
+77
+0:05:19.080 --> 0:05:20.080
+Debian or whatever.
+
+78
+0:05:20.080 --> 0:05:24.640
+And you can easily switch between them atomically.
+
+79
+0:05:24.640 --> 0:05:30.240
+And all the updates are atomic, we never modify an existing thing that you're running, we
+
+80
+0:05:30.240 --> 0:05:34.800
+always create a new deploy directory and we boot into that.
+
+81
+0:05:34.800 --> 0:05:37.920
+And also the format is very, it's very, very viable.
+
+82
+0:05:37.920 --> 0:05:43.680
+Like it's recursively describing itself and all you need is the signature, and there's
+
+83
+0:05:43.680 --> 0:05:47.360
+a GPG signature on the commit object.
+
+84
+0:05:47.360 --> 0:05:53.560
+So if you trust the commit object, you trust the root hash, you trust the hash of the subdirectories
+
+85
+0:05:53.560 --> 0:05:56.680
+and the files and whatnot.
+
+86
+0:05:56.680 --> 0:06:02.120
+The problem that I want to address is that this doesn't do runtime verification.
+
+87
+0:06:02.120 --> 0:06:09.160
+We verify when we download things, we can verify when we do the deploy or rather the
+
+88
+0:06:09.160 --> 0:06:13.920
+fact that we're deploying is going to cause us to verify things.
+
+89
+0:06:13.920 --> 0:06:20.080
+But if after some point after that something modifies, say we have a random bit flip on
+
+90
+0:06:20.080 --> 0:06:29.160
+the disk or we have a malicious evil mate style attack, someone could easily just remove
+
+91
+0:06:29.160 --> 0:06:34.400
+or modify a file in the deploy directory.
+
+92
+0:06:34.400 --> 0:06:39.560
+And to protect against this, the kernel has two features, the invert and fsverity.
+
+93
+0:06:39.560 --> 0:06:45.640
+The invertity is what you use in the typical AV image system because it's block based,
+
+94
+0:06:45.640 --> 0:06:48.480
+but it's completely a read-only block device.
+
+95
+0:06:48.480 --> 0:06:52.400
+There's no way we can do OSTRI like updates to its file system.
+
+96
+0:06:52.400 --> 0:06:55.060
+You just cannot write to it.
+
+97
+0:06:55.060 --> 0:06:57.920
+So the other thing is fsverity.
+
+98
+0:06:57.920 --> 0:07:04.720
+And fsverity sort of matches very well with the OSTRI repository format because if you
+
+99
+0:07:04.720 --> 0:07:11.360
+enable fsverity on a particular file, it essentially makes it immutable.
+
+100
+0:07:11.360 --> 0:07:15.840
+And immutable is exactly what these content address files are.
+
+101
+0:07:15.840 --> 0:07:17.320
+So it's good.
+
+102
+0:07:17.320 --> 0:07:22.080
+But the problem is that fsverity doesn't go all the way, it only protects the content
+
+103
+0:07:22.080 --> 0:07:23.640
+of the file.
+
+104
+0:07:23.640 --> 0:07:28.120
+You can easily make it set UID or replace it with a different one that has a different
+
+105
+0:07:28.120 --> 0:07:33.520
+fsverity or just add a new file or whatever.
+
+106
+0:07:33.520 --> 0:07:36.680
+So it doesn't protect structure.
+
+107
+0:07:36.680 --> 0:07:44.840
+So that's why composefs was created, to have another layer that does the structure.
+
+108
+0:07:44.840 --> 0:07:52.220
+And now I'm sort of going away from the OSTRI use case and this is the native way to use
+
+109
+0:07:52.220 --> 0:07:55.480
+composefs where you just have a directory with some data.
+
+110
+0:07:55.480 --> 0:08:00.240
+This is the same kind of example that I had in the posterior format.
+
+111
+0:08:00.240 --> 0:08:07.320
+And you just run mk-composefs on that directory and it creates this image file that contains
+
+112
+0:08:07.320 --> 0:08:10.160
+all the metadata for the structure of the thing.
+
+113
+0:08:10.160 --> 0:08:20.360
+And this object directory which is just copies of these files stored by fsverity-digest.
+
+114
+0:08:20.360 --> 0:08:24.280
+And they obviously are just pure files, you can cat them and they're just regular files
+
+115
+0:08:24.280 --> 0:08:25.320
+with the same contents.
+
+116
+0:08:25.320 --> 0:08:27.840
+They're actually pure data files.
+
+117
+0:08:27.840 --> 0:08:32.720
+You can see they don't have the executable rights or if you have some complex metadata
+
+118
+0:08:32.720 --> 0:08:34.440
+or extended attributes or whatever.
+
+119
+0:08:34.440 --> 0:08:38.440
+These are just regular files with content.
+
+120
+0:08:38.440 --> 0:08:45.160
+And then you mount the thing using composefs, pointing it at this object directory and then
+
+121
+0:08:45.160 --> 0:08:49.600
+you get a reproduction of the original image that you can look at.
+
+122
+0:08:49.600 --> 0:08:57.560
+Whenever you cat this, it will just do overlayfs style stacking, read the backing file.
+
+123
+0:08:57.560 --> 0:08:59.080
+So everything is always from the page cache.
+
+124
+0:08:59.080 --> 0:09:02.680
+And also the actual mount is not a loopback mount.
+
+125
+0:09:02.680 --> 0:09:10.300
+We just do stacking style, direct access of the file from the page cache.
+
+126
+0:09:10.300 --> 0:09:15.520
+So that gives you the general ability to reproduce this image.
+
+127
+0:09:15.520 --> 0:09:22.440
+But to get the fsverity or complete structural verification, you actually use fsverity on
+
+128
+0:09:22.440 --> 0:09:25.400
+the descriptor itself.
+
+129
+0:09:25.400 --> 0:09:29.240
+So if you enable fsverity on that, that makes it immutable.
+
+130
+0:09:29.240 --> 0:09:34.480
+So the file system cannot change or the file can't change on the file system.
+
+131
+0:09:34.480 --> 0:09:42.400
+At least the kernel API doesn't allow you and if it's somehow otherwise modified on
+
+132
+0:09:42.400 --> 0:09:45.920
+disk or whatnot, it will detect it.
+
+133
+0:09:45.920 --> 0:09:51.720
+And you can see I actually pass the digest, the expected digest, and whenever it mounts
+
+134
+0:09:51.720 --> 0:09:56.600
+it it starts by verifying before it does any IO, does it actually have the expected fsverity
+
+135
+0:09:56.600 --> 0:09:57.840
+digest?
+
+136
+0:09:57.840 --> 0:10:03.520
+And if so, we can rely on the kernel to basically do all our verification from us.
+
+137
+0:10:03.520 --> 0:10:09.720
+And if you replace something, we have in the metadata for all these backing files the expected
+
+138
+0:10:09.720 --> 0:10:11.760
+verity digest.
+
+139
+0:10:11.760 --> 0:10:20.240
+So if you replace something or if there's a random bit flip, it will detect it.
+
+140
+0:10:20.240 --> 0:10:24.120
+And actually the descriptor itself is very simple.
+
+141
+0:10:24.120 --> 0:10:31.080
+This is not a traditional file system where we have to update things at runtime.
+
+142
+0:10:31.080 --> 0:10:34.680
+We can just compute a very simple descriptor of this.
+
+143
+0:10:34.680 --> 0:10:40.960
+It's basically a fixed-size header followed by a table of fixed-size inode data.
+
+144
+0:10:40.960 --> 0:10:48.800
+But if the file system has n n inodes, then there are n copies of that structure.
+
+145
+0:10:48.800 --> 0:10:56.280
+And some of them point into the variable-size data at the end, which we found with the VData
+
+146
+0:10:56.280 --> 0:10:58.880
+offset in the header.
+
+147
+0:10:58.880 --> 0:11:02.480
+And that's basically all there is to it.
+
+148
+0:11:02.480 --> 0:11:06.160
+Inode zero is the root file system, or is the root inode.
+
+149
+0:11:06.160 --> 0:11:12.480
+You can look at that and if it's a type directory, then the variable data points to a table of
+
+150
+0:11:12.480 --> 0:11:17.840
+darenths, which is basically a pre-sorted table of darenths plus names that you use binary
+
+151
+0:11:17.840 --> 0:11:18.840
+search.
+
+152
+0:11:18.840 --> 0:11:21.440
+You get a new I know, then you just look at that offset.
+
+153
+0:11:21.440 --> 0:11:25.760
+And all this is just done by mapping the page cache directly.
+
+154
+0:11:25.760 --> 0:11:32.240
+So it's very simple in terms of structure.
+
+155
+0:11:32.240 --> 0:11:35.400
+If you want to use this actually with OSTree, it's slightly different.
+
+156
+0:11:35.400 --> 0:11:41.000
+Like we can't just, we don't want to take the OSTree repository, create this directory,
+
+157
+0:11:41.000 --> 0:11:43.720
+and then run mk-compose-fs on it.
+
+158
+0:11:43.720 --> 0:11:51.120
+Where we ship a library, libcompose-fs, where you basically link OSTree with this library
+
+159
+0:11:51.120 --> 0:11:57.280
+and it can generate these images directly from the metadata that exists in the repository.
+
+160
+0:11:57.280 --> 0:12:04.240
+So we don't have to do any kind of expensive IO to create these images.
+
+161
+0:12:04.240 --> 0:12:05.840
+Because it's just a metadata, right?
+
+162
+0:12:05.840 --> 0:12:06.840
+It's not very large.
+
+163
+0:12:06.840 --> 0:12:12.200
+You can put it into memory, generate these, optimize them, and just write a single file.
+
+164
+0:12:12.200 --> 0:12:17.560
+And the way we can do it, it's very flexible so we can ensure that we can use the existing
+
+165
+0:12:17.560 --> 0:12:20.680
+repository for the backing files.
+
+166
+0:12:20.680 --> 0:12:24.040
+And it's also designed so that there's a standardized way.
+
+167
+0:12:24.040 --> 0:12:30.080
+We put everything, so every time you create a new image based on the same OSTree commit,
+
+168
+0:12:30.080 --> 0:12:33.760
+we will be creating the exact same binary file.
+
+169
+0:12:33.760 --> 0:12:35.160
+Like bit by bit.
+
+170
+0:12:35.160 --> 0:12:40.880
+So what you do is then when you create the commit on the server, you basically generate
+
+171
+0:12:40.880 --> 0:12:46.160
+one of these, take the digest of it, like the Fs-varied to digest of it, put it in the
+
+172
+0:12:46.160 --> 0:12:53.840
+same commit, and then whenever you recreate, there's no need to extend the OSTree format
+
+173
+0:12:53.840 --> 0:12:55.840
+on the network or anything.
+
+174
+0:12:55.840 --> 0:13:01.720
+What you do is when you deploy a commit, instead of making this hardling form, you recreate
+
+175
+0:13:01.720 --> 0:13:07.080
+one of these and then you use the supply digest as the expected digest when you mount it.
+
+176
+0:13:07.080 --> 0:13:13.240
+So if anything anywhere went wrong or was attacked or whatever, it will refuse to mount
+
+177
+0:13:13.240 --> 0:13:14.240
+it.
+
+178
+0:13:14.240 --> 0:13:21.560
+So obviously you have to put that trusted digest somewhere in your secure boot stack
+
+179
+0:13:21.560 --> 0:13:23.240
+or whatever.
+
+180
+0:13:23.240 --> 0:13:27.960
+Something would have to, it has to be trusted, but that's outside exactly of the scope of
+
+181
+0:13:27.960 --> 0:13:31.520
+ComposeFS.
+
+182
+0:13:31.520 --> 0:13:38.400
+And it's very similar to what you would do with the M-variety in a pure image-based system.
+
+183
+0:13:38.400 --> 0:13:40.880
+But another interesting use case is the container use case.
+
+184
+0:13:40.880 --> 0:13:45.640
+And Giuseppe, who is not here actually, but he is one of the other people behind the ComposeFS
+
+185
+0:13:45.640 --> 0:13:51.580
+people, or developers, he is more, he's one of the part-man developers.
+
+186
+0:13:51.580 --> 0:13:58.880
+So his use case is to use this for containers because containers are also used images, right?
+
+187
+0:13:58.880 --> 0:14:05.520
+And it would be nice if we can get this very, what I call opportunistic sharing of files.
+
+188
+0:14:05.520 --> 0:14:11.920
+Like if you use layers and stuff, you can sort of share stuff between different containers,
+
+189
+0:14:11.920 --> 0:14:17.040
+but you have to manually ensure you do the right thing, whereas with this opportunistic
+
+190
+0:14:17.040 --> 0:14:22.360
+style of sharing, whenever you happen to have a file that is identical, it just automatically
+
+191
+0:14:22.360 --> 0:14:23.360
+gets shared.
+
+192
+0:14:23.360 --> 0:14:31.840
+But like on disk and in page cache, because of the way these things work.
+
+193
+0:14:31.840 --> 0:14:37.160
+So we also don't want to like change the container format.
+
+194
+0:14:37.160 --> 0:14:42.760
+There was a talk yesterday about using the M-variety in SquashFS for, it's not sharing,
+
+195
+0:14:42.760 --> 0:14:46.400
+but like the similar kind of way you can mount an image.
+
+196
+0:14:46.400 --> 0:14:53.560
+But we don't want to, that forces all the users to create a new form of container.
+
+197
+0:14:53.560 --> 0:15:03.960
+But we want to use, allow this for all existing tarball-based layered OCI images.
+
+198
+0:15:03.960 --> 0:15:11.040
+So an image, in the OSI world, is a list of tarballs that you extract in order and then
+
+199
+0:15:11.040 --> 0:15:14.520
+you mount it using OverlyFS.
+
+200
+0:15:14.520 --> 0:15:21.000
+There is an extension of this called E-tar, E-star GC, which is some weird-ass hack where
+
+201
+0:15:21.000 --> 0:15:26.560
+you put an index at the end of the G-zip and then you can use partial HTTP downloads to
+
+202
+0:15:26.560 --> 0:15:30.960
+just get the index and you can see which part of the layer you already have and you can
+
+203
+0:15:30.960 --> 0:15:35.480
+just range HTTP gets to only download those parts.
+
+204
+0:15:35.480 --> 0:15:41.480
+So if you happen to have one of those archives in your layers, we can, in combination with
+
+205
+0:15:41.480 --> 0:15:48.440
+the locally stored content storage, avoid downloading the parts that we don't need.
+
+206
+0:15:48.440 --> 0:15:55.040
+If you don't have them, we have to download everything, which is what we do now, but we
+
+207
+0:15:55.040 --> 0:15:56.040
+can do better.
+
+208
+0:15:56.040 --> 0:16:03.640
+But even then, you can still hash them locally and get all the sharing and then you combine
+
+209
+0:16:03.640 --> 0:16:10.800
+this with creating an OverlyFS, or a composite FS for the entire image.
+
+210
+0:16:10.800 --> 0:16:17.840
+So you mount, this is for the local storage of images.
+
+211
+0:16:17.840 --> 0:16:27.120
+You can use, instead of storing these layers, you store the repository, content stored repository
+
+212
+0:16:27.120 --> 0:16:33.480
+plus these generated composed FS images and then whenever you run this, you just mount
+
+213
+0:16:33.480 --> 0:16:35.320
+it and it goes.
+
+214
+0:16:35.320 --> 0:16:40.240
+It's also nice, you can easily combine all the layers.
+
+215
+0:16:40.240 --> 0:16:46.160
+So if you have a 10 layer container and you want to resolve libc, which is in the base
+
+216
+0:16:46.160 --> 0:16:51.680
+layer, you have to do a negative denture lookup in every layer before you reach the bottom
+
+217
+0:16:51.680 --> 0:16:52.680
+most.
+
+218
+0:16:52.680 --> 0:17:01.440
+But since the image is just metadata, it's very cheap to create a completely squashed
+
+219
+0:17:01.440 --> 0:17:06.840
+composed FS image for single layer lookups.
+
+220
+0:17:06.840 --> 0:17:11.520
+And I don't know if anyone is following the list, but there are some discussions about
+
+221
+0:17:11.520 --> 0:17:12.520
+this.
+
+222
+0:17:12.520 --> 0:17:14.960
+I'm trying to get it merged upstream.
+
+223
+0:17:14.960 --> 0:17:22.320
+And one alternative has appeared, that there's waste, you can actually use some of OverlyFS
+
+224
+0:17:22.320 --> 0:17:27.200
+features to sort of get these features.
+
+225
+0:17:27.200 --> 0:17:33.320
+If you use the not super well-known or documented features called Overlay redirect and Overlay
+
+226
+0:17:33.320 --> 0:17:42.360
+metacopy, you can create an OverlayFS layer that does a similar style of here are the
+
+227
+0:17:42.360 --> 0:17:49.240
+metadata for this attribute redirected to a different path, which would be the content
+
+228
+0:17:49.240 --> 0:17:52.040
+address name in the lower layer.
+
+229
+0:17:52.040 --> 0:17:57.080
+And then you can use some kind of read-only file system for the upper layer where you
+
+230
+0:17:57.080 --> 0:18:02.620
+store all these extended attribute files that just contain this structure.
+
+231
+0:18:02.620 --> 0:18:13.080
+So this combination of OverlayFS plus right now EROFS is probably the best approach for
+
+232
+0:18:13.080 --> 0:18:16.800
+those, for the upper layer.
+
+233
+0:18:16.800 --> 0:18:18.760
+You can sort of create this.
+
+234
+0:18:18.760 --> 0:18:21.800
+Unfortunately, that doesn't do the verification.
+
+235
+0:18:21.800 --> 0:18:28.320
+You can use DVRT on the Overlay, or I mean on the read-only file system itself.
+
+236
+0:18:28.320 --> 0:18:35.720
+But you need some kind of extension to overlay itself to allow this recording of the expected
+
+237
+0:18:35.720 --> 0:18:37.760
+Fs verity of the backing file.
+
+238
+0:18:37.760 --> 0:18:41.080
+But that does seem like a trivial thing.
+
+239
+0:18:41.080 --> 0:18:47.680
+The less trivial part, and this is where opinions on the list vary, is I think this kind of
+
+240
+0:18:47.680 --> 0:18:56.120
+combination of things is way more complicated than the simple, like composeFS is, I think,
+
+241
+0:18:56.120 --> 0:18:58.560
+100 lines of code.
+
+242
+0:18:58.560 --> 0:19:00.280
+It's very direct.
+
+243
+0:19:00.280 --> 0:19:05.200
+It doesn't use loopback devices, device buffer devices.
+
+244
+0:19:05.200 --> 0:19:12.960
+When you do a lookup in this combined thing of a particular file, you would do a lookup
+
+245
+0:19:12.960 --> 0:19:22.600
+in the Overlay layer in the read-only system and in all the backing layers.
+
+246
+0:19:22.600 --> 0:19:30.200
+So there's just like four times more INODES around, there's four times more D-cache lookups,
+
+247
+0:19:30.200 --> 0:19:35.000
+and it just uses more memory and performs worse.
+
+248
+0:19:35.000 --> 0:19:37.360
+So I ran some simple lookups.
+
+249
+0:19:37.360 --> 0:19:40.720
+These are just, some people complain about the measurements here.
+
+250
+0:19:40.720 --> 0:19:49.720
+I'm just comparing like a recursive find or L-S-L-R, which is basically just measuring
+
+251
+0:19:49.720 --> 0:19:54.200
+the performance of lookups and readers.
+
+252
+0:19:54.200 --> 0:19:58.160
+But on the other hand, that's all that composeFS does.
+
+253
+0:19:58.160 --> 0:20:03.120
+All the actual IO performance is left to the backing file system.
+
+254
+0:20:03.120 --> 0:20:07.280
+So wherever you store your real files, that's where streaming performance and things like
+
+255
+0:20:07.280 --> 0:20:08.920
+that would appear.
+
+256
+0:20:08.920 --> 0:20:17.280
+So I'm personally in the automotive use case right now, so we have very harsh requirements
+
+257
+0:20:17.280 --> 0:20:24.880
+on cool boot performance, so the cold cache numbers are very important to me.
+
+258
+0:20:24.880 --> 0:20:30.120
+I mean, you might not, this is like listing recursively a large developer snapshot, like
+
+259
+0:20:30.120 --> 0:20:33.440
+a three gigabyte CentroStream 9 image.
+
+260
+0:20:33.440 --> 0:20:39.760
+So it's not an operation you might do, but just looking at the numbers, the recursive
+
+261
+0:20:39.760 --> 0:20:46.240
+listing is more than like three times slower for the cold cache situation because it has
+
+262
+0:20:46.240 --> 0:20:50.120
+to do multiple lookups.
+
+263
+0:20:50.120 --> 0:20:56.680
+And even for the cached case, where most things should be from the decached anyway, that's,
+
+264
+0:20:56.680 --> 0:20:59.760
+you know, I think I've seen better numbers than this.
+
+265
+0:20:59.760 --> 0:21:09.200
+I think that, but there's at least 10% difference in the warm cache situation.
+
+266
+0:21:09.200 --> 0:21:12.360
+I hope that was useful to someone.
+
+267
+0:21:12.360 --> 0:21:17.280
+Yeah, we have some time for questions.
+
+268
+0:21:17.280 --> 0:21:22.760
+So you said about halfway through that you're, one of the goals was to actually keep the,
+
+269
+0:21:22.760 --> 0:21:27.480
+reading the OCI image format, but I think everybody pretty much agrees the OCI image
+
+270
+0:21:27.480 --> 0:21:33.680
+format is crap for lazy pulling of container images.
+
+271
+0:21:33.680 --> 0:21:37.000
+Basically because it has an end to end hash, so you can't do the hash until you pull the
+
+272
+0:21:37.000 --> 0:21:38.000
+whole image.
+
+273
+0:21:38.000 --> 0:21:40.200
+And that means signatures are completely rubbish anyway.
+
+274
+0:21:40.200 --> 0:21:44.360
+In order to fix this, we have to do a Merkle tree or something else anyway.
+
+275
+0:21:44.360 --> 0:21:48.440
+So the image format is going to have to change radically to something that will be much
+
+276
+0:21:48.440 --> 0:21:50.240
+more suitable for your image.
+
+277
+0:21:50.240 --> 0:21:55.640
+So I think trying to keep the image compatibility, which is partly what the argument over this
+
+278
+0:21:55.640 --> 0:22:02.080
+versus the internal alternatives is not going to be a good argument for that.
+
+279
+0:22:02.080 --> 0:22:03.080
+And I think you should consider.
+
+280
+0:22:03.080 --> 0:22:04.240
+I agree and I don't agree.
+
+281
+0:22:04.240 --> 0:22:07.200
+I mean, I think I'm not a fan of OCI.
+
+282
+0:22:07.200 --> 0:22:11.920
+I've been part of the OCI specification team for a bit.
+
+283
+0:22:11.920 --> 0:22:15.800
+I used to be one of the Docker maintainers a long time ago.
+
+284
+0:22:15.800 --> 0:22:21.560
+It is not nice, but it is what we have and it's everywhere.
+
+285
+0:22:21.560 --> 0:22:26.280
+It's so easy as a developer sitting around thinking this is bullshit, we should just
+
+286
+0:22:26.280 --> 0:22:28.340
+fix it.
+
+287
+0:22:28.340 --> 0:22:32.400
+But there are trillions of dollars invested in the existing containers.
+
+288
+0:22:32.400 --> 0:22:34.640
+It's going to be a long time.
+
+289
+0:22:34.640 --> 0:22:37.960
+Even when we replace it, this will still do the right thing.
+
+290
+0:22:37.960 --> 0:22:38.960
+True.
+
+291
+0:22:38.960 --> 0:22:39.960
+True.
+
+292
+0:22:39.960 --> 0:22:47.960
+But like there are discussions of OCI v2.
+
+293
+0:22:47.960 --> 0:22:52.760
+I don't follow them because the whole thing is bullshit.
+
+294
+0:22:52.760 --> 0:22:59.640
+But even then, if we just had a better way to get partial updates for an image file,
+
+295
+0:22:59.640 --> 0:23:03.680
+you could still use this to use it.
+
+296
+0:23:03.680 --> 0:23:10.240
+Before taking the next question, I'm obliged to point out from the chat that these performance
+
+297
+0:23:10.240 --> 0:23:13.120
+numbers are before optimizing overlay FS and E-ROVs.
+
+298
+0:23:13.120 --> 0:23:14.120
+Yeah.
+
+299
+0:23:14.120 --> 0:23:15.120
+So, yeah.
+
+300
+0:23:15.120 --> 0:23:19.760
+There's been some work in that and optimizing.
+
+301
+0:23:19.760 --> 0:23:26.560
+There's ideas to make the overlays stuff work better.
+
+302
+0:23:26.560 --> 0:23:27.560
+Would that be possible?
+
+303
+0:23:27.560 --> 0:23:28.560
+Sure.
+
+304
+0:23:28.560 --> 0:23:29.560
+Maybe.
+
+305
+0:23:29.560 --> 0:23:34.640
+Oh, hi.
+
+306
+0:23:34.640 --> 0:23:39.280
+I actually still had a question.
+
+307
+0:23:39.280 --> 0:23:40.280
+So here in the back.
+
+308
+0:23:40.280 --> 0:23:44.480
+Well, it's not really a question, more a remark.
+
+309
+0:23:44.480 --> 0:23:48.480
+I think there's sort of like one missing slide in your deck, namely one use case that you
+
+310
+0:23:48.480 --> 0:23:53.040
+haven't considered at all but still really worth calling out.
+
+311
+0:23:53.040 --> 0:24:00.480
+Many remote build systems, such as like GOMA, Bazel, et cetera, are all nowadays converging
+
+312
+0:24:00.480 --> 0:24:05.160
+on the single remote execution protocol called RE v2.
+
+313
+0:24:05.160 --> 0:24:08.760
+And that one is actually also using a CAS as a data store for storing both input files
+
+314
+0:24:08.760 --> 0:24:13.400
+for like compiler binaries, source files, header files, but also output files, object
+
+315
+0:24:13.400 --> 0:24:15.720
+files that are generated.
+
+316
+0:24:15.720 --> 0:24:18.160
+I actually maintain one of the implementations.
+
+317
+0:24:18.160 --> 0:24:23.960
+And one of the hard parts of implementing such a build cluster is instantiating the
+
+318
+0:24:23.960 --> 0:24:29.480
+data that's stored in the CAS in the form of an input route on disk where you can just
+
+319
+0:24:29.480 --> 0:24:32.200
+run a compiler against certain source files.
+
+320
+0:24:32.200 --> 0:24:35.360
+And a tool like Composivest would also really help in such an implementation.
+
+321
+0:24:35.360 --> 0:24:36.720
+That's just something I wanted to call out.
+
+322
+0:24:36.720 --> 0:24:39.960
+And you should really also market it towards those kinds of use cases.
+
+323
+0:24:39.960 --> 0:24:41.960
+It makes a lot of sense.
+
+324
+0:24:41.960 --> 0:24:42.960
+Yeah.
+
+325
+0:24:42.960 --> 0:24:43.960
+I'm sure.
+
+326
+0:24:43.960 --> 0:24:45.160
+Images are used for all sorts of stuff.
+
+327
+0:24:45.160 --> 0:24:50.720
+I'm sure there are many use cases other than the ones I've mainly focused on.
+
+328
+0:24:50.720 --> 0:24:52.360
+Okay.
+
+329
+0:24:52.360 --> 0:25:00.400
+Then since you already ended the Q&A a bit early, then the next talk is going to be recorded.
+
+330
+0:25:00.400 --> 0:25:02.680
+This gives us a bit more time to prepare.
+
+331
+0:25:02.680 --> 0:25:03.920
+Thank you very much for the talk.
+
+332
+0:25:03.920 --> 0:25:04.920
+Thank you for all the questions and being here.
+
+333
+0:25:04.920 --> 0:25:30.420
+Thank you very much.
+

@@ -1,0 +1,625 @@
+WEBVTT
+
+00:00.000 --> 00:13.440
+So now we have two presenters, Benjamin DeKosny and Morgan Reschenberger.
+
+00:13.440 --> 00:20.960
+So Benjamin is a member of the Modilla Performance Engineering team and Morgan is a senior software
+
+00:20.960 --> 00:25.920
+engineer working on platform accessibility and Morgan if you want to repeat your name
+
+00:25.920 --> 00:30.400
+probably the right pronunciation. No you got it, Morgan Reschenberger that's me.
+
+00:32.560 --> 00:35.920
+Yeah we're going to talk to you about an accessibility project called
+
+00:35.920 --> 00:40.240
+Cache the World and the way that we're monitoring and measuring performance.
+
+00:43.840 --> 00:50.240
+So I'm Benjamin, I am on the performance team and I'm going to be talking about
+
+00:50.240 --> 00:56.080
+the collaboration from the performance side. And I'm Morgan, I'm on the accessibility team.
+
+00:56.080 --> 01:00.480
+I'm going to talk about the accessibility side. We put the matrix rooms for both of our teams here
+
+01:00.480 --> 01:03.840
+so if you have topic related questions after this you can follow up there.
+
+01:06.720 --> 01:10.720
+So here's the agenda, we're going to just talk a little bit about accessibility in
+
+01:11.680 --> 01:17.920
+Firefox. Morgan's going to go through intro to the rendering and accessibility architecture
+
+01:17.920 --> 01:24.000
+and some of the changes that happened with Cache the World. I'm going to talk a little bit about
+
+01:24.000 --> 01:29.440
+how we're measuring performance and some of those questions and current problems. We're going to go
+
+01:29.440 --> 01:34.480
+through our future work plans and then we're going to open it up for questions.
+
+01:37.040 --> 01:44.480
+So the first thing is scoping context for accessibility in Firefox. The goal is of
+
+01:44.480 --> 01:51.200
+course a faster accessibility engine and more performant web use for users, all users and
+
+01:51.200 --> 01:56.400
+especially users using accessible technologies. We also want to try to create a performance
+
+01:56.960 --> 02:04.720
+testing infrastructure that will be able to prove these things and test the more we change
+
+02:04.720 --> 02:10.640
+our internal infrastructures, we want to be able to make sure that we can catch problems.
+
+02:10.640 --> 02:18.320
+We also wanted to establish some accessibility metrics and we want to work in public with
+
+02:18.320 --> 02:24.480
+public dashboards that show the kind of performance that we're getting. We want to
+
+02:26.720 --> 02:35.440
+improve our documentation, we want to improve the debug experience and as such we're going to talk
+
+02:35.440 --> 02:40.320
+a little bit later about the profile markers that Nazeem talked about earlier but specifically the
+
+02:40.320 --> 02:45.520
+accessibility ones and we want to set up an infrastructure for collaboration.
+
+02:48.480 --> 02:53.920
+So scope on this is we're going to be talking about screen readers pretty much only and we're
+
+02:53.920 --> 02:57.680
+not going to be talking about any of these other accessibility technologies like screen
+
+02:57.680 --> 03:02.720
+magnification, contrast modes, on-screen keyboards, subtitles, any of that, that's all
+
+03:02.720 --> 03:11.680
+deferred until later in this work. So context for Firefox and accessible technologies is not great
+
+03:11.680 --> 03:17.840
+from the free software perspective, like almost all our users are on Windows and then you have
+
+03:17.840 --> 03:26.480
+a very small sliver of Mac and Linux and Linux is like under a percent. We just have to know where
+
+03:26.480 --> 03:34.720
+we are and that's where we are. In general 5.5% of all Firefox page loads for the month of January
+
+03:34.720 --> 03:42.720
+were had some accessible technology built in and that's not evenly distributed across the OSes. We
+
+03:42.720 --> 03:51.200
+see a much higher use on Windows and you know Linux isn't bad, Orca, yay! And then Mac is
+
+03:51.200 --> 03:57.680
+far below that but for the most part if we were talking about who is touching this work and who
+
+03:57.680 --> 04:04.640
+do we have to care about, it's these Windows users. And then here just for a little bit more context
+
+04:04.640 --> 04:12.400
+about in that 5.5% of page loads that use accessible technologies like what accessible
+
+04:12.400 --> 04:21.200
+technologies are they using? They're using mostly screen magnifiers which is the black line and then
+
+04:21.920 --> 04:29.360
+the purple line is speech rec in general and then underneath that is NVDA which is the Windows
+
+04:29.360 --> 04:34.240
+screen reader. So those are like the top three that we really have to care about.
+
+04:34.240 --> 04:42.880
+More again. Before we get into all the details about the performance work, I want to give you
+
+04:42.880 --> 04:46.800
+some background on how rendering works in web browsers and how it translates to
+
+04:47.680 --> 04:50.240
+the accessibility architecture that we're going to be talking about today.
+
+04:51.200 --> 04:57.920
+The general job of a web browser is to convert HTML and CSS written by web authors into visual
+
+04:57.920 --> 05:04.160
+navigable content. We do this through a rendering engine in Firefox called Gecko. It has five
+
+05:04.160 --> 05:09.920
+different phases and stages that produce artifacts that are used in the following phases and stages.
+
+05:09.920 --> 05:15.120
+So first we parse the HTML document. This creates the DOM or document object model which is a
+
+05:15.120 --> 05:21.280
+hierarchical view of the web page. Then we look at the CSS and figure out the style information for
+
+05:21.280 --> 05:27.120
+each node, what visual changes we need to make when we render. Then we do layout which computes
+
+05:27.120 --> 05:32.320
+positional and size information for each of these nodes. It also constructs an artifact with that
+
+05:32.320 --> 05:38.000
+information called the frame tree which becomes useful later. Then we do painting and compositing
+
+05:38.000 --> 05:46.560
+and rendering which is the visual part of rendering. But this process is all extremely visual, right?
+
+05:46.560 --> 05:51.760
+What if you do not navigate the web visually? What if you navigate it with technology like a screen
+
+05:51.760 --> 05:57.600
+reader which turns visual content into audio? What do you do then? How does a screen reader figure
+
+05:57.600 --> 06:04.640
+out what it should be telling you? That's the job of the accessibility engine. Like we have a
+
+06:04.640 --> 06:08.960
+rendering engine, we also have an accessibility engine in Firefox. It doesn't have a fun name.
+
+06:08.960 --> 06:15.280
+So if you can come up with a fun name, you should let me know on matrix. What it does is it takes
+
+06:15.280 --> 06:20.240
+in those artifacts we talked about before, the DOM, the frame tree, style structs, et cetera,
+
+06:20.240 --> 06:25.120
+and it marshals them into a new kind of tree which we call the accessibility tree or I like to call
+
+06:25.120 --> 06:30.480
+it the accessibility tree because that's more fun. But it takes all of those and computes
+
+06:31.040 --> 06:38.000
+excessively relevant information. So this is stuff like semantic, role, name, the kinds of actions you
+
+06:38.000 --> 06:43.920
+can perform on an element, things like that. This is not necessarily one-to-one. There's not a single
+
+06:43.920 --> 06:48.640
+accessible for every node in the DOM tree or a single accessible for every frame in the frame
+
+06:48.640 --> 06:53.600
+tree. We care about different things which is why we have to build a new structure. And building
+
+06:53.600 --> 06:58.800
+the structure happens in the content process. We have one accessibility tree per web page.
+
+07:01.200 --> 07:07.120
+So let's take a look at how these queries happen from an assistive technology standpoint. So at
+
+07:07.120 --> 07:11.920
+the bottom here, I've got a couple different kinds of assistive technologies. These are ones that
+
+07:11.920 --> 07:16.160
+Benjamin mentioned on that graph from before. So we have screen readers, voice control, window managers,
+
+07:16.160 --> 07:24.960
+et cetera. These clients or ATs make requests to Firefox for web content information. So if you are
+
+07:24.960 --> 07:30.000
+navigating with a screen reader, the screen reader needs to ask what node is focused and what should
+
+07:30.000 --> 07:36.400
+I say about it to the end user? The way that those requests happen are through platform-specific APIs,
+
+07:37.040 --> 07:42.160
+but they all hit the parent process in Firefox. The assistive technologies are separate applications.
+
+07:42.160 --> 07:50.240
+So they are communicating with Firefox through the parent process. Each web page lives in one or more
+
+07:50.240 --> 07:55.840
+other processes, one or more content processes, and is not reachable by the assistive technology
+
+07:55.840 --> 08:02.240
+directly. So we can't inject the screen reader into web content for a lot of reasons, security
+
+08:02.240 --> 08:09.280
+being one of them. All these calls go through the parent process. And there are some problems with
+
+08:09.280 --> 08:14.160
+this architecture that motivate what we're going to talk about next. So let's get into it.
+
+08:15.760 --> 08:21.600
+Like I said, computation of the relevant properties that the assistive technologies are requesting,
+
+08:21.600 --> 08:28.000
+that all happens using the accessibility tree in the content process. The result gets sent to the
+
+08:28.000 --> 08:34.960
+parent process from content via IPC, interprocess communication. This is slow and it's also
+
+08:34.960 --> 08:40.640
+synchronous. So if a call gets blocked or is taking a really long time in content,
+
+08:40.640 --> 08:45.280
+you can't do anything. The parent process just hangs. And because the parent process includes
+
+08:45.280 --> 08:51.200
+all of the browser UI as well, it just looks like Firefox is not responding, which isn't great.
+
+08:51.920 --> 08:57.440
+So what can we do about that? Well, our solution is this project we call Cache the World,
+
+08:58.000 --> 09:04.480
+which introduces a cache in the parent process that keeps track of snippets of content information
+
+09:04.480 --> 09:10.080
+that we need to compute and respond to those API calls. So we're trying to offload as much work as
+
+09:10.080 --> 09:16.080
+we can from content into parent. And this cache gets updated asynchronously based on content
+
+09:16.080 --> 09:20.080
+mutations. So we no longer have this problem of synchronous blocking IPC.
+
+09:22.720 --> 09:27.840
+Cool. So now I'm back and I'm going to talk a little bit about, like, how do we see if this
+
+09:27.840 --> 09:34.560
+stuff's working? So the first thing we did is actually not at all metric or measurement-based,
+
+09:34.560 --> 09:40.000
+but it was more about helping debug in the profiler. So one of my great colleagues, Michael
+
+09:40.000 --> 09:45.600
+Kamala, added some accessibility markers in the profiler to kind of, like, get us an idea of,
+
+09:45.600 --> 09:51.920
+like, what's going on where? You can see the specific calls here. And then I'm going to show
+
+09:51.920 --> 09:58.720
+you what it looks like kind of in the profiler. So the red circle is where we start to drop in to
+
+09:58.720 --> 10:04.720
+some of the accessibility calls. So watch this space, because we're going to be adding more
+
+10:04.720 --> 10:09.760
+markers here. The second thing we had to do is really come up with, like, how do we test
+
+10:09.760 --> 10:17.840
+accessibility? And what's going on here? There's a huge amount of screen reader. There's just, like,
+
+10:17.840 --> 10:22.640
+a whole bunch of different screen readers. And they're all different. And each OS has a different
+
+10:22.640 --> 10:29.360
+strategy for dealing with this. So we have, like, a huge complex testing matrix here. In addition,
+
+10:29.360 --> 10:34.720
+we had to, like, in terms of testing, we had to, like, run a large number of variations to kind of
+
+10:34.720 --> 10:40.400
+verify our results. We have five different variations starting with the baseline. And then
+
+10:40.400 --> 10:48.000
+we kind of, like, have caches on and off with the accessibility implicitly on by just plugging in
+
+10:48.000 --> 10:52.960
+screen reader. And also with accessibility forced on with preferences. So we have a really large
+
+10:52.960 --> 11:01.280
+matrix of five on our tasks here. And then we were looking for specific problematic web content
+
+11:01.840 --> 11:07.680
+that would really trigger kind of the worst case scenarios here. And they are, in general,
+
+11:07.680 --> 11:15.840
+the worst case web content for this are really large static web pages. So what did we do? We added
+
+11:15.840 --> 11:19.600
+three specific sites. Actually, I think we have, like, five sites. But in general, it's, like,
+
+11:20.240 --> 11:26.640
+Wikipedia World War II is a great test page for testing accessibility. We have some
+
+11:26.640 --> 11:33.440
+search box links because we're Firefox engineers. And then what WG HTML specs. So these kind of,
+
+11:33.440 --> 11:38.160
+like, really large static pages, which is not necessarily how a lot of the web is built right
+
+11:38.160 --> 11:44.480
+now. But these are, like, specific problem points that we wanted to be aware of and address.
+
+11:46.160 --> 11:52.640
+And then comes a question of, like, well, what are we measuring? What's important? And we have,
+
+11:52.640 --> 12:00.000
+like, three general choices here. We have, like, W3C, navigation timing, kind of page load metrics,
+
+12:00.000 --> 12:06.560
+like, OG performance metrics, that segment browser page load into distinct phases,
+
+12:06.560 --> 12:27.060
+H
+
+12:27.060 --> 12:33.240
+flows and time and measure. And that's really showing the most promise, frankly, and what we're
+
+12:33.240 --> 12:43.080
+going to be using more of in the future. Whoops. And so what we're trying to work in public,
+
+12:43.080 --> 12:50.600
+and we have some public dashboards for this work, which are at the end here. Whoops. Sorry.
+
+12:50.600 --> 12:59.480
+So this is, like, some preliminary results. This graph's a little hard to understand,
+
+12:59.480 --> 13:07.920
+and I'm sorry about that. We have the blue baseline performance. We have these dotted lines with the
+
+13:07.920 --> 13:13.760
+caches turned off. And then we have with the caches turned on. And so we're seeing, like,
+
+13:13.760 --> 13:23.640
+eh, not great performance for these static web pages right now, at least on Linux. I think
+
+13:23.640 --> 13:30.560
+that actually varies on Windows. But we're seeing some wins and some more, even performance on
+
+13:30.560 --> 13:40.120
+things like IMD web pages, which aren't, like, these pathological test cases. So in general,
+
+13:40.120 --> 13:45.400
+what we're going to be doing is we're going to be trying to align the profile markers that were put
+
+13:45.400 --> 13:51.960
+in to performance metrics using our internal tools at first. And we're just going to try to
+
+13:51.960 --> 13:59.400
+start measuring, like, the actual cache creation time. And we also want to start paying attention
+
+13:59.400 --> 14:06.080
+to not just straight, class-seq page load, but we want to start thinking about page reload,
+
+14:06.080 --> 14:16.040
+tab switching, and one of the other leads on this project, Jamie T., has a great blog post about
+
+14:16.040 --> 14:21.240
+those kind of, like, anecdotal performance measurements. We definitely want accessibility
+
+14:21.240 --> 14:27.320
+first metrics, and we would like to get away from generic page load type metrics on this.
+
+14:27.320 --> 14:36.520
+We have a public dashboard, work in progress. It will continue to evolve as this work evolves.
+
+14:36.520 --> 14:45.320
+And then really quickly, future work. Yeah, so the accessibility team at Mozilla is responsible
+
+14:45.320 --> 14:49.920
+for a lot more than just the accessibility engine. We're also responsible for high contrast mode,
+
+14:49.920 --> 14:57.640
+Zoom, Firefox front end, usability and accessibility. So we've got a lot of projects apart from this
+
+14:57.640 --> 15:02.120
+that we're working on, but our main goal for this half is to ship Cache the World to release. We're
+
+15:02.120 --> 15:07.360
+currently in beta, and we have a lot of promising results. So we're really optimistic about getting
+
+15:07.360 --> 15:13.120
+this to all of our users. We're also planning on working on optimizations based on the performance
+
+15:13.120 --> 15:17.360
+work that you're seeing here. We have a couple of optimizations in mind. Like, we know we can
+
+15:17.360 --> 15:23.120
+improve on cache granularity, but this work will inform the kind of work that we're doing next.
+
+15:23.120 --> 15:32.600
+And then performance team is going to really try to get these Windows results in since we know it's
+
+15:32.600 --> 15:40.040
+so important. At the same time, we want to make sure that Linux performance doesn't degrade. Also,
+
+15:40.040 --> 15:45.800
+we would like to kind of, like, put this into standard continuous integration tests infrastructure,
+
+15:45.800 --> 15:52.600
+kind of tune our markers, make sure we're measuring what we think we're measuring, and then things
+
+15:52.600 --> 15:59.320
+that we deem successful in a wide variety of web content. We want to try to push out to public
+
+15:59.320 --> 16:08.800
+telemetry so that we can actually measure much larger environments and users. And then, of course,
+
+16:08.800 --> 16:15.760
+all the internal collaborations inside of Mozilla with PerfTools and ETL and DevOps to try and make
+
+16:15.760 --> 16:23.280
+all the magic happen. We have some questions. If we have time for questions, we have time for
+
+16:23.280 --> 16:29.280
+questions. We have time for questions. Fantastic. And if you have other thoughts, you can email us.
+
+16:29.280 --> 16:50.560
+Or, you know, Twitter. And I'm on MasterCard. I'm not. Are there any questions? All right.
+
+16:50.560 --> 17:07.440
+So complete. Yeah. We actually, on the slide deck, but not in our presentation, we did have,
+
+17:07.440 --> 17:13.040
+we have some additional resources and notes for people who are trying to work with accessibility,
+
+17:13.040 --> 17:22.400
+maybe new to it, and things that, here's some resources for you to use. Again, Jamie's blog post,
+
+17:22.400 --> 17:29.440
+really, I'm going to really hype that again. Please read it. Morgan is going to put a video up. That
+
+17:29.440 --> 17:35.720
+has to be redone because there is some internal stuff that can't be shown. But there's a great,
+
+17:35.720 --> 17:42.720
+she has a great walkthrough about how to debug CSS for accessibility. And then I have a web page on
+
+17:42.720 --> 17:50.960
+color and contrast for accessibility and how you can compute colors at work for a wide variety of
+
+17:50.960 --> 17:58.680
+people. And also I want to shamelessly plug that you can contribute to Firefox. Oh, yeah. And if
+
+17:58.680 --> 18:05.440
+you are interested in working on platform specific bugs or front end bugs or whatever,
+
+18:05.440 --> 18:09.720
+accessibility is a great place to get involved because we span a lot of components and we could
+
+18:09.720 --> 18:15.000
+always use your help. So if you are interested, we have an accessibility room on matrix at the
+
+18:15.000 --> 18:23.040
+Mozilla domain. And you should reach out. And we're there. So. Thin. Yeah. Oh, great. We'll take a
+
+18:23.040 --> 18:29.240
+question. Hi. So you mentioned it's not safe to embed the screen reader directly into the web
+
+18:29.240 --> 18:34.080
+page because of security concerns. But now with caching, you're providing a little bit more
+
+18:34.080 --> 18:40.080
+information to this parent process. Are there any security considerations you have to look at or
+
+18:40.080 --> 18:45.720
+address doing this work? We're paying attention to the kind of information that we're caching. We,
+
+18:45.720 --> 18:50.120
+of course, don't want to give any private user information away. Largely the information we're
+
+18:50.120 --> 18:55.440
+caching is already represented in the parent process in some form. But the way that we compute
+
+18:55.440 --> 19:01.560
+things is different than how DOM or layout or other parts of the browser compute them. We're
+
+19:01.560 --> 19:10.080
+caching really, really granular information as well. So, yeah. We're not currently concerned
+
+19:10.080 --> 19:27.040
+about security risk. But that is a consideration. Oh, cool. Yeah, that's what that website is. Oh,
+
+19:27.040 --> 19:32.440
+sorry. Do we have tests with accessibility? Are we performance testing for accessibility? Yes,
+
+19:32.440 --> 19:47.880
+we're starting to do that. And. Yeah. So we're. Okay. So the question is like how, like what's,
+
+19:47.880 --> 19:52.840
+what's the method there? And you can contact me offline if we, if we're running close. But we're
+
+19:52.840 --> 19:58.480
+using a standard framework for performance testing called browser time, which is open source. And,
+
+19:58.480 --> 20:05.920
+yes, what we're doing is we have OS specific handlers that basically start screen readers
+
+20:05.920 --> 20:11.720
+before we start running that and then stop it when we're done. So it's just RAI, straight style on
+
+20:11.720 --> 20:18.880
+that. Yeah. And then pointing that to Windows too. One of the difficulties with that approach that
+
+20:18.880 --> 20:23.120
+we're running into is that we are most interested in perceived performance. So we want to know how
+
+20:23.120 --> 20:29.200
+does the user feel about this? Like is it perceivably faster? And that's really hard to do because
+
+20:29.200 --> 20:34.840
+screen readers are difficult to automate from that perspective. Speech rate is extremely variable.
+
+20:34.840 --> 20:40.400
+Right. You can, you know, do key presses and stuff, but it's really hard to get the kinds of
+
+20:40.400 --> 20:44.080
+measurements we want. So we're aware that the performance testing we're doing right now is
+
+20:44.080 --> 20:48.800
+a number and it's something that we can track consistently, but it isn't entirely what we would
+
+20:48.800 --> 20:53.200
+like to be. And there's different strategies on the Windows screen readers about like having to
+
+20:53.200 --> 21:00.680
+have the full page ready before we actually start, start in with the speech. And that's not, that's
+
+21:00.680 --> 21:06.400
+like configurable and that's not the default setting for, on Linux for instance. So Orca, I think,
+
+21:06.400 --> 21:11.280
+is actually pretty smart about this. And they, they can do partial, partial reads and start the
+
+21:11.280 --> 21:22.560
+speech earlier. So, so we're not getting quite sure. Note that the caching of the parent moves
+
+21:22.560 --> 21:31.640
+information into a process that is not exposed to web content. There's nothing before that.
+
+21:31.640 --> 21:41.760
+It's not appearing here. Maybe. Yes. Yeah. Oh, can you talk about how the cache is populated
+
+21:41.760 --> 21:56.080
+and invalidated? Oh, sure. How much time do we have? So the cache is populated from content. So
+
+21:56.080 --> 22:00.800
+it's a push based cache. We aren't invalidating from parent because we can't observe content
+
+22:00.800 --> 22:05.560
+mutations from parent effectively. Each content process is responsible for monitoring their own
+
+22:05.560 --> 22:11.640
+mutations and pushing or invalidating stuff in the parent process as needed. We have an initial
+
+22:11.640 --> 22:20.920
+cache push that, oh no, sorry. On, on page load we collect a bunch of information and push it
+
+22:20.920 --> 22:26.160
+always. So there isn't any sort of mutation that we're responding to there. That is one of our big
+
+22:26.160 --> 22:30.960
+performance concerns is the initial cache push varies by page size or scales by page size. And
+
+22:30.960 --> 22:37.320
+that's really costly. But that's why you put all those big tests. Yeah. Yeah. But from, from
+
+22:37.320 --> 22:46.440
+initial cache push onward, we're responding to mutations in content from content. Are there any
+
+22:46.440 --> 23:01.680
+other questions? Yeah, go into the limit. On the web app side, what may impact negatively the
+
+23:01.680 --> 23:09.320
+performance of the accessibility? Like how could you design web content such that it's, it's optimal
+
+23:09.320 --> 23:19.000
+for accessibility? That's a great question. And we'll come back at you later with an answer. Yeah,
+
+23:19.000 --> 23:22.920
+we're still, we're still like kind of early in phase on this, but I feel it would be a great idea
+
+23:22.920 --> 23:29.840
+to do some kind of like web content help to get people to know like the performance choices are
+
+23:29.840 --> 23:38.920
+making for accessibility. Oh yeah. Performa, could we come up with some guidelines for
+
+23:38.920 --> 23:45.360
+performance linting and general guidelines for how to do perform an accessibility request submitted.
+
+23:45.360 --> 24:10.320
+Thank you. So thank you very much. We are done.

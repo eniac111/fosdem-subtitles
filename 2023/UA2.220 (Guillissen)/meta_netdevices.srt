@@ -1,0 +1,1000 @@
+1
+0:00:00.000 --> 0:00:08.060
+Okay, we're ready for our next talk.
+
+2
+0:00:08.060 --> 0:00:10.640
+Daniel is going to talk about MetaNet devices.
+
+3
+0:00:10.640 --> 0:00:11.640
+Thanks.
+
+4
+0:00:11.640 --> 0:00:12.640
+All right.
+
+5
+0:00:12.640 --> 0:00:13.640
+Thanks a lot.
+
+6
+0:00:13.640 --> 0:00:14.640
+So, yeah.
+
+7
+0:00:14.640 --> 0:00:15.640
+So, this talk is about MetaNet devices.
+
+8
+0:00:15.640 --> 0:00:19.680
+This work has been done by my colleague and myself.
+
+9
+0:00:19.680 --> 0:00:24.600
+We are at Isovalent software engineers working on the kernel and also psyllium.
+
+10
+0:00:24.600 --> 0:00:31.480
+So, really, the goal is the question we were asking ourselves, like, how can we leverage
+
+11
+0:00:31.480 --> 0:00:35.840
+the BPF infrastructure in the kernel and also the networking features to really achieve
+
+12
+0:00:35.840 --> 0:00:40.360
+maximum performance for Kubernetes parts?
+
+13
+0:00:40.360 --> 0:00:46.720
+And before I go into the kernel bits, just a really quick recap around Kubernetes and
+
+14
+0:00:46.720 --> 0:00:48.320
+parts and what it is.
+
+15
+0:00:48.320 --> 0:00:51.480
+So, basically, what you can see here is a host.
+
+16
+0:00:51.480 --> 0:00:55.520
+A host can have one or many parts in Kubernetes.
+
+17
+0:00:55.520 --> 0:01:00.800
+It's an orchestration system, essentially, and a part is usually defined as a network
+
+18
+0:01:00.800 --> 0:01:07.800
+namespace and it is connected to typically to weave devices to get traffic in and out
+
+19
+0:01:07.800 --> 0:01:09.320
+of them.
+
+20
+0:01:09.320 --> 0:01:14.240
+A part can have one or many containers that are sharing this network namespace.
+
+21
+0:01:14.240 --> 0:01:22.760
+So, yeah, and CNI is basically a networking plugin which will set up various things.
+
+22
+0:01:22.760 --> 0:01:28.520
+When a part comes up, for example, it will set up Net devices, assign IP addresses.
+
+23
+0:01:28.520 --> 0:01:33.640
+It has an IPAM infrastructure to manage a pool of addresses.
+
+24
+0:01:33.640 --> 0:01:36.480
+It will install routes.
+
+25
+0:01:36.480 --> 0:01:42.760
+In the case of psyllium, which is a CNI, it will also set up the BPF data paths to basically
+
+26
+0:01:42.760 --> 0:01:45.280
+route traffic in and out.
+
+27
+0:01:45.280 --> 0:01:50.720
+It has various features on top as well, such as policy enforcement, load balancing, bandwidth
+
+28
+0:01:50.720 --> 0:01:52.520
+management, and so on and so forth.
+
+29
+0:01:52.520 --> 0:01:58.000
+But I don't want to make this talk about all the different features about psyllium, but
+
+30
+0:01:58.000 --> 0:02:02.080
+rather about performance.
+
+31
+0:02:02.080 --> 0:02:07.640
+There was an interesting keynote last year at the SA Econ from Brandon Gregg where he
+
+32
+0:02:07.640 --> 0:02:11.880
+talked about computing performance and what's on the horizon.
+
+33
+0:02:11.880 --> 0:02:17.080
+He had a couple of predictions and one was quite interesting when he was talking about
+
+34
+0:02:17.080 --> 0:02:20.440
+OS performance.
+
+35
+0:02:20.440 --> 0:02:27.280
+The statement that he made is that given the kernel is becoming increasingly complex, the
+
+36
+0:02:27.280 --> 0:02:32.480
+performance defaults are getting worse and worse.
+
+37
+0:02:32.480 --> 0:02:38.560
+He stated that it basically takes a whole US team to make the operating system perform
+
+38
+0:02:38.560 --> 0:02:40.480
+well.
+
+39
+0:02:40.480 --> 0:02:48.840
+The problem is, given all these performance teams they are trying to optimize at the larger
+
+40
+0:02:48.840 --> 0:02:54.800
+scale, nobody is actually looking at the defaults anymore and how they can be optimized.
+
+41
+0:02:54.800 --> 0:02:58.080
+This was quite interesting.
+
+42
+0:02:58.080 --> 0:03:04.640
+In case of defaults, we were wondering, given two Kubernetes nodes with part to part and
+
+43
+0:03:04.640 --> 0:03:10.440
+they connected with 100 gigabit NIC, we wanted to look at the single flow, like a single
+
+44
+0:03:10.440 --> 0:03:14.200
+TCP stream.
+
+45
+0:03:14.200 --> 0:03:21.000
+We asked what's the default baseline you can get to, where are bottlenecks, how can they
+
+46
+0:03:21.000 --> 0:03:27.440
+be overcome, and actually can we provide better defaults out of that, what we figure out.
+
+47
+0:03:27.440 --> 0:03:33.080
+Why buttering with single stream performance?
+
+48
+0:03:33.080 --> 0:03:38.240
+First of all, it's interesting for the kernel to cope with growing NIC speeds, 100, 200
+
+49
+0:03:38.240 --> 0:03:43.000
+gigabit or more, how can this be maxed out with the single stream.
+
+50
+0:03:43.000 --> 0:03:49.360
+There are lots of data intensive workloads from user and customer sites around machine
+
+51
+0:03:49.360 --> 0:03:55.320
+learning, AI and so on, but generally it's also interesting to be able to free up the
+
+52
+0:03:55.320 --> 0:04:02.400
+resources and give them to the application instead of the kernel having to block them.
+
+53
+0:04:02.400 --> 0:04:07.840
+The assumptions for our test is usually the Kubernetes worker nodes that users run, they
+
+54
+0:04:07.840 --> 0:04:11.160
+are quite generic, they can run any kind of workloads.
+
+55
+0:04:11.160 --> 0:04:15.120
+What we are also seeing is a large number of users typically just stick to defaults,
+
+56
+0:04:15.120 --> 0:04:19.400
+they don't tune specifically the kernel.
+
+57
+0:04:19.400 --> 0:04:27.160
+There's an interesting cloud native usage report where they try to get some insights
+
+58
+0:04:27.160 --> 0:04:33.360
+into how Kubernetes deployments usually look like.
+
+59
+0:04:33.360 --> 0:04:38.920
+There's definitely an increasing trend to have a higher density of containers per host,
+
+60
+0:04:38.920 --> 0:04:50.680
+so around 50 or more is expected these days and the number of pods per node is also increasing.
+
+61
+0:04:50.680 --> 0:04:57.000
+The question now is, so a very basic compatibility setting, for example, for the kernel, for
+
+62
+0:04:57.000 --> 0:05:03.520
+the case of psyllium, we used the, like if you deployed in a basic mode, we just used
+
+63
+0:05:03.520 --> 0:05:06.680
+the upper stack for routing and forwarding.
+
+64
+0:05:06.680 --> 0:05:10.680
+There are various reasons why people might want to use that.
+
+65
+0:05:10.680 --> 0:05:15.760
+For example, in case of Kubernetes, there's a component called QProxy which uses NetFilter
+
+66
+0:05:15.760 --> 0:05:24.800
+IP tables for service management, for service load balancing, some people stick to that.
+
+67
+0:05:24.800 --> 0:05:30.440
+Or they have custom NetFilter rules, so maybe they require to use the upper stack for that,
+
+68
+0:05:30.440 --> 0:05:35.960
+or just simply they for now just went with defaults and might look into more tuning at
+
+69
+0:05:35.960 --> 0:05:37.680
+a later point in time.
+
+70
+0:05:37.680 --> 0:05:42.040
+When we try to look at the performance for that, what you can see here is on the yellow
+
+71
+0:05:42.040 --> 0:05:49.520
+bar is the host to host performance for a single stream, so we got to 4 gigabit per
+
+72
+0:05:49.520 --> 0:06:02.400
+second but then if you do the pod to pod connectivity, it's really reduced dramatically.
+
+73
+0:06:02.400 --> 0:06:07.920
+One of the reasons is, and I will get into this in a bit, is because the upper stack
+
+74
+0:06:07.920 --> 0:06:21.200
+is giving false feedback to the TCP stack, one thing that we did a year ago or so is
+
+75
+0:06:21.200 --> 0:06:27.360
+to introduce a feature which is called BPF host routing, where we don't use the upper
+
+76
+0:06:27.360 --> 0:06:30.600
+stack.
+
+77
+0:06:30.600 --> 0:06:35.360
+For BPF itself, given we attach to physical devices but also to these devices, we added
+
+78
+0:06:35.360 --> 0:06:42.520
+a couple of new helper functions there, one is called BPF redirect peer, what this is
+
+79
+0:06:42.520 --> 0:06:48.320
+basically doing is adding a fast switch into the network name space for the ingress traffic,
+
+80
+0:06:48.320 --> 0:06:55.400
+so basically we're just, instead of going to the usual Xmid route to the weaves devices,
+
+81
+0:06:55.400 --> 0:07:04.200
+we can retrieve the weaves device inside the pod and just scrub the packet to remove the
+
+82
+0:07:04.200 --> 0:07:09.320
+necessary data that we typically remove from switching network namespaces but also to set
+
+83
+0:07:09.320 --> 0:07:16.040
+the device to the device inside the pod and then circle around in the main receive loop
+
+84
+0:07:16.040 --> 0:07:22.480
+without going to a per CPU backlog queue that you would normally do when you transfer data
+
+85
+0:07:22.480 --> 0:07:27.000
+through weaves devices and we don't need to use the upper stack because there's all the
+
+86
+0:07:27.000 --> 0:07:35.480
+information already available in BPF context and for the way out we added a helper which
+
+87
+0:07:35.480 --> 0:07:41.320
+is called BPF redirect neighbor, so that one will basically insert the packet into the
+
+88
+0:07:41.320 --> 0:07:50.840
+neighboring subsystem of the kernel, so usually we can do a flip lookup out of BPF, so there's
+
+89
+0:07:50.840 --> 0:07:57.720
+a helper for this as well and then combined with this for the resolution of neighbors,
+
+90
+0:07:57.720 --> 0:08:03.560
+it will allow that you don't need to go to the upper stack, so the nice benefit you get
+
+91
+0:08:03.560 --> 0:08:10.800
+as well with this is that the socket context for the network packet for the SKP is retained
+
+92
+0:08:10.800 --> 0:08:16.440
+all the way to the physical device until the packet is actually sent out and this is not
+
+93
+0:08:16.440 --> 0:08:23.160
+the case when you normally go to the upper stack, so then the TCP stack actually thinks
+
+94
+0:08:23.160 --> 0:08:28.640
+that like once you go to the upper stack that it already left the node but it's actually
+
+95
+0:08:28.640 --> 0:08:35.560
+not the case and this way it can be retained and this is how the complete picture looks
+
+96
+0:08:35.560 --> 0:08:41.880
+like and if you look at the performance it's already much better, so we were able to get
+
+97
+0:08:41.880 --> 0:08:49.440
+almost to 40 gigabit per second under 1.5k MTU, so this was interesting, now the question
+
+98
+0:08:49.440 --> 0:08:55.560
+is like how could we close the remaining gap?
+
+99
+0:08:55.560 --> 0:09:03.160
+On the 8k MTU we also did some tests and one thing to note here is that we were able to
+
+100
+0:09:03.160 --> 0:09:09.600
+like for single TCP stream to get to 98 gigabit per second for the host to host case but still
+
+101
+0:09:09.600 --> 0:09:14.760
+like the situation looks quite the same for the WEEF with the BPF host routing, so there's
+
+102
+0:09:14.760 --> 0:09:21.840
+still like a small gap that we want to close here as well and that's where we introduce
+
+103
+0:09:21.840 --> 0:09:30.320
+a new device type as a WEEF replacement, so we call this meta device because it's programmable
+
+104
+0:09:30.320 --> 0:09:36.920
+to a BPF and you can implement various, you know, like your own business logic into this,
+
+105
+0:09:36.920 --> 0:09:43.080
+so it's flexible and this time like the main difference is that this also gets like a faster
+
+106
+0:09:43.080 --> 0:09:49.480
+switch on the Egress side for the Egress traffic so it doesn't need to go to the per CPU backlog
+
+107
+0:09:49.480 --> 0:09:53.880
+view for the Egress as well.
+
+108
+0:09:53.880 --> 0:09:59.280
+So if you look at the flame graphs, so that's like the worst case scenario where we compared
+
+109
+0:09:59.280 --> 0:10:08.000
+the WEEF and the meta device, so what you can see here on the WEEF device, like on XMID
+
+110
+0:10:08.000 --> 0:10:13.040
+it will basically scrub the packet data, it will unqueue the packet to a per CPU backlog
+
+111
+0:10:13.040 --> 0:10:18.840
+view and then at some point there's a network's action, it will pick up the packets from the
+
+112
+0:10:18.840 --> 0:10:23.920
+queue again and in the worst case it can be deferred to the kernel software queue daemon
+
+113
+0:10:23.920 --> 0:10:31.680
+and then you see this rescheduling where you have a new stack where this is processed again
+
+114
+0:10:31.680 --> 0:10:39.960
+and then from the BPF side it will reach BPF from the TC ingress on the host WEEF where
+
+115
+0:10:39.960 --> 0:10:45.960
+we then can only forward this to the physical device to leave the node, right?
+
+116
+0:10:45.960 --> 0:10:52.640
+And all of this can be done in one go without rescheduling through this meta device, so
+
+117
+0:10:52.640 --> 0:10:55.960
+it will scrub the packet, it will switch the network namespace, it will reset the device
+
+118
+0:10:55.960 --> 0:11:04.480
+pointers and it will then directly call the BPF program and if the BPF program says that
+
+119
+0:11:04.480 --> 0:11:09.520
+based on the FIP lookup and so on that it will forward the packet directly to the physical
+
+120
+0:11:09.520 --> 0:11:16.600
+device then it will avoid this rescheduling scenario.
+
+121
+0:11:16.600 --> 0:11:22.560
+So like on the right side, I mean it's really straightforward, that's how the implementation
+
+122
+0:11:22.560 --> 0:11:26.960
+of the driver ex-mid routine looks like, so it will basically just call into BPF and then
+
+123
+0:11:26.960 --> 0:11:30.880
+based on the verdict push it out.
+
+124
+0:11:30.880 --> 0:11:36.280
+It's really just like 500 lines of code, so it's very simple and straightforward, I think
+
+125
+0:11:36.280 --> 0:11:42.520
+it's just one fifth of the WEEF driver that we have right now and the other focus that
+
+126
+0:11:42.520 --> 0:11:48.480
+we wanted to put into is compatibility as well so that like given in Sium we need to
+
+127
+0:11:48.480 --> 0:11:56.160
+support multiple kernels, the ideal case would be like that we don't need to change much
+
+128
+0:11:56.160 --> 0:11:59.680
+of the BPF program and can keep it as is.
+
+129
+0:11:59.680 --> 0:12:06.840
+And in case of XTP we didn't want to implement it because like for the WEEF case it really
+
+130
+0:12:06.840 --> 0:12:12.440
+is very complex, it even adds multi-queue support which you normally would not need
+
+131
+0:12:12.440 --> 0:12:18.440
+on a virtual device, so we wanted to keep it as simple as possible and to have to flip
+
+132
+0:12:18.440 --> 0:12:22.760
+the ability that this can be added as a single or paired device.
+
+133
+0:12:22.760 --> 0:12:25.960
+Like for the WEEF replacement it would be a paired device but you could also do it as
+
+134
+0:12:25.960 --> 0:12:34.680
+a single device and then implement whatever logic you would want in BPF for that.
+
+135
+0:12:34.680 --> 0:12:41.160
+So looking at the performance, again like the TCP stream under 8K, so this is really
+
+136
+0:12:41.160 --> 0:12:50.640
+able to reach through this approach the full 98 gigabit per second and in terms of latency,
+
+137
+0:12:50.640 --> 0:12:56.480
+so we did some Netperf TCP or R measurements as well where you get the minimum, the P90,
+
+138
+0:12:56.480 --> 0:13:04.640
+99 latency and so on, so this is really on par with the host.
+
+139
+0:13:04.640 --> 0:13:09.560
+So now we were asking ourselves can we push this even further, I mean well so we were
+
+140
+0:13:09.560 --> 0:13:16.920
+able to get to 98 gigabit per second but like the cost for like a megabyte to transfer can
+
+141
+0:13:16.920 --> 0:13:23.160
+just push even more and there's a relatively recent kernel feature which is called big
+
+142
+0:13:23.160 --> 0:13:24.960
+TCP.
+
+143
+0:13:24.960 --> 0:13:33.360
+It landed for IPv6 only in 519 and was developed by Google and the whole idea behind big TCP
+
+144
+0:13:33.360 --> 0:13:42.880
+is to even more aggressively aggregate for geo and gso, so normally the kernel will try
+
+145
+0:13:42.880 --> 0:13:47.320
+it basically out of the incoming packet stream, create a super packet and then we'll push
+
+146
+0:13:47.320 --> 0:13:52.840
+it up to the networking stack so it only needs to be traversed once and the limit up until
+
+147
+0:13:52.840 --> 0:13:59.920
+that point was for 64K packets simply because in the IP header that's the maximum packet
+
+148
+0:13:59.920 --> 0:14:06.720
+size that you can do and the idea for a big TCP for IPv6 was that well maybe we could
+
+149
+0:14:06.720 --> 0:14:15.280
+create a hop by hop header in the geo layer and then add and then like the 16 bit packet
+
+150
+0:14:15.280 --> 0:14:21.720
+length field can be overcome because there is a jumbogram extension in there which allows
+
+151
+0:14:21.720 --> 0:14:23.760
+for 32 bits field.
+
+152
+0:14:23.760 --> 0:14:32.440
+So you can do much more aggressive aggregation and yeah, so this is also now supported with
+
+153
+0:14:32.440 --> 0:14:39.120
+the new release where this will be set up for all the devices and the need for automatically
+
+154
+0:14:39.120 --> 0:14:40.200
+for IPv6.
+
+155
+0:14:40.200 --> 0:14:45.160
+Actually like this week there was also, got also merged for IPv4 now so this will land
+
+156
+0:14:45.160 --> 0:14:53.400
+in kernel 6.3 which is exciting and when we looked at the performance again under big
+
+157
+0:14:53.400 --> 0:15:00.680
+TCP turns out like the using the upper stack is currently broken into kernel so that still
+
+158
+0:15:00.680 --> 0:15:04.800
+needs to be fixed, we will look into that.
+
+159
+0:15:04.800 --> 0:15:11.840
+So forwarding there wouldn't work then with the host routing cases so it will basically
+
+160
+0:15:11.840 --> 0:15:20.280
+bump up the regular weave one to get this on par with the meta and also the host so
+
+161
+0:15:20.280 --> 0:15:25.440
+it will basically hide those glitches.
+
+162
+0:15:25.440 --> 0:15:37.440
+The latency is still better in terms of like the short packet request response type workloads
+
+163
+0:15:37.440 --> 0:15:41.720
+for the meta so that's still on par with the host.
+
+164
+0:15:41.720 --> 0:15:48.360
+So what is the remaining offender like when you run all these features together it's basically
+
+165
+0:15:48.360 --> 0:15:54.760
+the copying to users so like between 60 and 70% of the cycles is really spent on copying
+
+166
+0:15:54.760 --> 0:15:57.640
+all this data to user space.
+
+167
+0:15:57.640 --> 0:16:03.800
+So the next question we ask ourselves actually in this experiment, so what if we combine
+
+168
+0:16:03.800 --> 0:16:09.360
+the whole big TCP stuff with TCP zero copy so what if we could leverage the memory map
+
+169
+0:16:09.360 --> 0:16:15.080
+TCP and it turns out that's currently not possible in the kernel, that's a limitation
+
+170
+0:16:15.080 --> 0:16:20.840
+because in the GRO layer big TCP will create a frag list which is essentially like a list
+
+171
+0:16:20.840 --> 0:16:27.040
+of SKBs you know as a single big one that is being pushed up the stack and TCP zero
+
+172
+0:16:27.040 --> 0:16:33.560
+copy only works on the SKB frags so that's like an internal so where basically you have
+
+173
+0:16:33.560 --> 0:16:41.820
+a single SKB and it has like the pages as read only attached in the nonlinear section.
+
+174
+0:16:41.820 --> 0:16:47.480
+So that currently does not work combining those two would probably have like really
+
+175
+0:16:47.480 --> 0:16:54.720
+big potential but what we now try to do is we just looked at the just using the TCP zero
+
+176
+0:16:54.720 --> 0:17:00.480
+copy to see how it looks without the big TCP.
+
+177
+0:17:00.480 --> 0:17:05.040
+Generally speaking is not as straightforward to deploy because first of all you need to
+
+178
+0:17:05.040 --> 0:17:12.520
+rewrite your application in order to leverage memory map TCP this can be done for RX but
+
+179
+0:17:12.520 --> 0:17:20.080
+also for TX or both and it needs driver changes and in particular driver changes to be able
+
+180
+0:17:20.080 --> 0:17:27.560
+to split the header from the data because the data you want to memory map to user space.
+
+181
+0:17:27.560 --> 0:17:32.360
+Some Nix might do this with the hardware and some others you would have to do some kind
+
+182
+0:17:32.360 --> 0:17:40.080
+of pseudo header data splits over you basically just copy the header into a linear section.
+
+183
+0:17:40.080 --> 0:17:46.760
+So this is how it would look like we tried this for 4K and 8K MTU.
+
+184
+0:17:46.760 --> 0:17:52.720
+There's a great talk from Eric Dumasay the TCP maintainer in terms of what all the all
+
+185
+0:17:52.720 --> 0:17:57.880
+those things you need to do in order to be able to make use of this for example you also
+
+186
+0:17:57.880 --> 0:18:06.560
+need to align the TCP window scale to 12 segments so that you fill exactly those pages.
+
+187
+0:18:06.560 --> 0:18:14.200
+And yeah the driver support can be very different like we had in our lab MLX 500 gigabit Nix
+
+188
+0:18:14.200 --> 0:18:21.000
+and they did not implement the header data splits so my colleague Nikolai did the POC
+
+189
+0:18:21.000 --> 0:18:26.280
+implementation to change the driver to be able to do that so that we could get some
+
+190
+0:18:26.280 --> 0:18:32.960
+measurements out of this and if you want to look into an example application and how you
+
+191
+0:18:32.960 --> 0:18:38.180
+can implement that there's one in the networking self test in the upstream tree called TCP
+
+192
+0:18:38.180 --> 0:18:41.440
+mmap which is useful also for the benchmarking.
+
+193
+0:18:41.440 --> 0:18:48.640
+So you really need to align various different settings like for our test implementation
+
+194
+0:18:48.640 --> 0:18:53.880
+we used for MLX 5 the non-striding modes or the legacy modes we need to switch that off
+
+195
+0:18:53.880 --> 0:18:59.960
+and Eve tool first because I mean for the POC it was easier to do the way like the packet
+
+196
+0:18:59.960 --> 0:19:09.880
+layout is done there then you need to align the MTU to either one page or two pages and
+
+197
+0:19:09.880 --> 0:19:14.120
+you need to do various other settings like in the for the course of time I will not go
+
+198
+0:19:14.120 --> 0:19:17.240
+into all of the details.
+
+199
+0:19:17.240 --> 0:19:23.640
+In generally I would think it would be useful addition to the kernel to have like a configuration
+
+200
+0:19:23.640 --> 0:19:30.160
+framework for that and to be able to have more drivers supporting the header data split
+
+201
+0:19:30.160 --> 0:19:35.120
+there's actually one in Windows kernel turns out so there's some documentation around there
+
+202
+0:19:35.120 --> 0:19:40.240
+that we found while preparing for the talk the other thing is a caveat is like the TCP
+
+203
+0:19:40.240 --> 0:19:46.320
+zero copy may like the benefits might be limited if you then actually go in your application
+
+204
+0:19:46.320 --> 0:19:49.800
+and then touch the data because then they need to be pulled into the cache which they
+
+205
+0:19:49.800 --> 0:19:54.240
+would be if like if you would have to copy things to user but they may not be like if
+
+206
+0:19:54.240 --> 0:20:01.520
+you just memory map so the applications there is mostly like on the for example storage
+
+207
+0:20:01.520 --> 0:20:08.760
+side where you wouldn't have to do that and looking at the data for 4k MTU we tried with
+
+208
+0:20:08.760 --> 0:20:19.160
+the implementation we got to 81 gigabit per second so that's a bit limiting could also
+
+209
+0:20:19.160 --> 0:20:26.400
+be that this is mostly because the implementation was you know a PLC with lots of optimization
+
+210
+0:20:26.400 --> 0:20:32.000
+potential that can still be there but we looked at it came to you and there we were able to
+
+211
+0:20:32.000 --> 0:20:39.160
+get to 98 gigabit per second but the interesting piece here is the cost per megabyte we could
+
+212
+0:20:39.160 --> 0:20:45.160
+we were able to reduce from 85 down to 27 microseconds per megabyte so this really is
+
+213
+0:20:45.160 --> 0:20:56.160
+significant and yeah because of the avoidance that you don't copy anymore so as a summary
+
+214
+0:20:56.160 --> 0:21:03.480
+so we started with the default and then you know switch to the 8k MTU then we went to
+
+215
+0:21:03.480 --> 0:21:08.960
+the host routing that we covered then the addition of the meta device where we can avoid
+
+216
+0:21:08.960 --> 0:21:14.320
+where we can do this low latency you know for ingress and egress then the big TCP and
+
+217
+0:21:14.320 --> 0:21:21.280
+that all works without changes to the application and with that you can already get like a 2x
+
+218
+0:21:21.280 --> 0:21:28.120
+improvement and then it gets even more dramatic but it's of course dependent on your application
+
+219
+0:21:28.120 --> 0:21:34.000
+for the zero copy some of the future directions as I mentioned earlier it would be useful
+
+220
+0:21:34.000 --> 0:21:39.920
+to have like a generic header data split framework for NIC drivers that they can implement that
+
+221
+0:21:39.920 --> 0:21:46.680
+and expose it this setting there's potential here as well to optimize for example like
+
+222
+0:21:46.680 --> 0:21:55.520
+the header pages could be the head page could be packed with the headers it could get recycling
+
+223
+0:21:55.520 --> 0:22:03.120
+which we didn't implement here and in future big TCP would be interesting to combine with
+
+224
+0:22:03.120 --> 0:22:09.160
+the zero copy so that discovers the frag list in geo and the other thing that is at
+
+225
+0:22:09.160 --> 0:22:15.160
+some point on the horizon is to push the big TCP actually onto the wire as well if the
+
+226
+0:22:15.160 --> 0:22:23.640
+hardware supports that and yeah so with that I'm done with the talk and the prototype for
+
+227
+0:22:23.640 --> 0:22:29.040
+the meta device is currently you can find on this branch we are working on pushing this
+
+228
+0:22:29.040 --> 0:22:34.800
+upstream in the coming months and there's also the prototype public for the MLX 5 header
+
+229
+0:22:34.800 --> 0:22:40.280
+data split and yeah so the plan is basically to get this into upstream kernel and then
+
+230
+0:22:40.280 --> 0:22:47.120
+also to get this integrated into psyllium for the for the next release yeah thank you
+
+231
+0:22:47.120 --> 0:22:58.640
+are there any questions thanks we already have two questions in the chat so we can start
+
+232
+0:22:58.640 --> 0:23:04.760
+with them if there are no in the room alright so the first question we got was can we my
+
+233
+0:23:04.760 --> 0:23:07.760
+well not really a question so much as a comment I think which is can we please come up with
+
+234
+0:23:07.760 --> 0:23:15.240
+a better name than meta for this just call it BPF or BPF dev or something yeah the other
+
+235
+0:23:15.240 --> 0:23:22.760
+thing was if the perf benefit comes from calling sure from inside the network namespace can
+
+236
+0:23:22.760 --> 0:23:31.440
+we just make vf do that instead I think we could but the question is like I haven't looked
+
+237
+0:23:31.440 --> 0:23:38.440
+into the the like how it would affect the XTP related bits so it felt easier to do something
+
+238
+0:23:38.440 --> 0:23:43.720
+simple and start from scratch like one thing I don't really like about the weave devices
+
+239
+0:23:43.720 --> 0:23:50.880
+to be honest how complex it got with the older XTP additions and it's not even that beneficial
+
+240
+0:23:50.880 --> 0:23:55.680
+and it added like multi queue support and all of that which was not needed at all for
+
+241
+0:23:55.680 --> 0:24:06.600
+a virtual device so I really wanted to have something simple and yeah and easy so any
+
+242
+0:24:06.600 --> 0:24:23.800
+more questions from the audience here I have a question you are about big TCP and TCP zero
+
+243
+0:24:23.800 --> 0:24:30.720
+copy it's in your lab you only did benchmarks host to host right because so but also part
+
+244
+0:24:30.720 --> 0:24:37.120
+to part so we tried both yeah okay because do you know how it would work with the switches
+
+245
+0:24:37.120 --> 0:24:41.880
+do you need special switch support for no no so the big TCP is only local to the node
+
+246
+0:24:41.880 --> 0:24:47.000
+so like the packets on the wire they will still be your MTU size packets it's just that
+
+247
+0:24:47.000 --> 0:24:53.080
+the the aggregation on like for the local stack is much bigger so it's it doesn't affect
+
+248
+0:24:53.080 --> 0:25:00.720
+anything on the wire that's a nice thing okay and for zero copy I mean like for the zero
+
+249
+0:25:00.720 --> 0:25:04.840
+copy you need to change definitely the MTU which also affects the rest of your network
+
+250
+0:25:04.840 --> 0:25:23.480
+of course so that's one thing that would be required for that thank you.
+

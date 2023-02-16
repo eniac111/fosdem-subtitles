@@ -1,0 +1,1945 @@
+WEBVTT
+
+00:00.000 --> 00:17.320
+But what you should not do in Postgres, so please welcome Jimmy Angelagos.
+
+00:17.320 --> 00:19.560
+Thanks very much.
+
+00:19.560 --> 00:28.480
+I'm a senior solutions architect at EDB, and I am grateful to EDB for allowing me to make
+
+00:28.480 --> 00:36.520
+Postgres my day job, because it is an excellent database, it is an excellent community, and
+
+00:36.520 --> 00:41.640
+thank you all for attending a talk with such a clickbaity title.
+
+00:41.640 --> 00:43.960
+And thank you to the guys at home for clicking.
+
+00:43.960 --> 00:46.800
+So why this title?
+
+00:46.800 --> 00:48.120
+I didn't come up with it.
+
+00:48.120 --> 00:57.240
+So this title is the title of Postgres Wiki page that's called Don't Do This, and I got
+
+00:57.240 --> 01:02.240
+all the content from there, so that's the end of the talk.
+
+01:02.240 --> 01:06.800
+So this talk is not all inclusive, right?
+
+01:06.800 --> 01:10.760
+I'm not going to tell you all the mistakes you can make with Postgres.
+
+01:10.760 --> 01:11.760
+Who can?
+
+01:11.760 --> 01:18.460
+I mean, there is literally nothing that you cannot mess up with, no matter which database
+
+01:18.460 --> 01:19.460
+you use.
+
+01:19.460 --> 01:23.440
+You can always find a way to mess up.
+
+01:23.440 --> 01:28.720
+But these are some of the things that we've noticed that people are doing wrong in general
+
+01:28.720 --> 01:30.200
+with Postgres.
+
+01:30.200 --> 01:35.520
+So some of them are misconceptions, like I believe this thing works this way, but it
+
+01:35.520 --> 01:38.080
+doesn't.
+
+01:38.080 --> 01:44.160
+Some things are confusing because of the way they're implemented in Postgres, especially
+
+01:44.160 --> 01:52.000
+things that are not part of the SQL standard, but Postgres extensions to the SQL standard,
+
+01:52.000 --> 01:57.680
+although to be fair, Postgres is the most SQL standard compliant database.
+
+01:57.680 --> 02:00.480
+It just has some things on top of it.
+
+02:00.480 --> 02:05.440
+Other databases implement a subset of the SQL standard and also confusing things.
+
+02:05.440 --> 02:09.560
+So we're a bit better from that respect.
+
+02:09.560 --> 02:15.440
+And some common mistakes that people make that usually have a significant impact in
+
+02:15.440 --> 02:16.800
+production environments.
+
+02:16.800 --> 02:24.480
+So we'll be looking at some bad examples of SQL that you can write in Postgres.
+
+02:24.480 --> 02:30.760
+We'll be looking at some improper data types for storing certain things.
+
+02:30.760 --> 02:37.080
+Andreas had a good talk this morning about this covering many of the same topics.
+
+02:37.080 --> 02:44.740
+We will be looking at wrong ways to use Postgres features.
+
+02:44.740 --> 02:51.240
+And also some things that affect your performance and affect the security of the server that
+
+02:51.240 --> 02:53.840
+you need to be aware of.
+
+02:53.840 --> 03:00.140
+So let's start off with some bad SQL.
+
+03:00.140 --> 03:04.320
+First and foremost, not in.
+
+03:04.320 --> 03:07.600
+As in the Boolean, not in, right?
+
+03:07.600 --> 03:10.900
+It doesn't work the way you expect it to.
+
+03:10.900 --> 03:20.120
+So when you're writing, select something where something else is not in this subquery, you
+
+03:20.120 --> 03:25.720
+have to keep in mind that SQL and Postgres by extension is not Python and it's not Ruby.
+
+03:25.720 --> 03:32.000
+So it doesn't behave the way you expect it to if you're used to writing not in Booleans
+
+03:32.000 --> 03:34.060
+in programming languages.
+
+03:34.060 --> 03:42.400
+So select A from table one where A not in one constant, right?
+
+03:42.400 --> 03:44.960
+So it's always true.
+
+03:44.960 --> 03:50.040
+And null returns nothing.
+
+03:50.040 --> 04:00.280
+Because if you perform not in and there's even one null, the result is null.
+
+04:00.280 --> 04:02.880
+Not false, null.
+
+04:02.880 --> 04:12.660
+So equally, select A from table one, a more real world scenario where A is not in select
+
+04:12.660 --> 04:15.960
+B from table two.
+
+04:15.960 --> 04:21.600
+Even if one B is null, then the whole result is null.
+
+04:21.600 --> 04:26.740
+So it's not doing what you're expecting it to.
+
+04:26.740 --> 04:30.880
+Let's say that table two has no null Bs, right?
+
+04:30.880 --> 04:32.520
+B is not null.
+
+04:32.520 --> 04:34.640
+Why is this still bad?
+
+04:34.640 --> 04:36.960
+And you should not use it.
+
+04:36.960 --> 04:42.400
+Because it doesn't optimize well in the Postgres query planner.
+
+04:42.400 --> 04:49.280
+And instead of performing what is known as an anti-join, so it's the complete opposite
+
+04:49.280 --> 04:50.280
+of a join.
+
+04:50.280 --> 04:55.080
+Show me the rows you cannot join from this table.
+
+04:55.080 --> 04:58.360
+The Postgres query planner chooses a subplan.
+
+04:58.360 --> 05:03.540
+And if that's a hashed subplan, that's kind of okay.
+
+05:03.540 --> 05:08.160
+If it's a simple subplan, then the performance of this thing is disastrous.
+
+05:08.160 --> 05:12.440
+So even if you don't have nulls, you don't want to use it.
+
+05:12.440 --> 05:15.520
+What should you use instead?
+
+05:15.520 --> 05:21.280
+You should use an anti-join, as we just said, which looks something like this.
+
+05:21.280 --> 05:28.200
+Select column from table one where not exists is a better way to write not in.
+
+05:28.200 --> 05:37.640
+So wherever column from table two does not exist where table one column equals table
+
+05:37.640 --> 05:38.640
+two column.
+
+05:38.640 --> 05:47.080
+So you want the rows that table two doesn't can't match up to table one.
+
+05:47.080 --> 05:51.080
+So that's an anti-join.
+
+05:51.080 --> 05:57.760
+Or another way you could write this is select column from table one and use a left join.
+
+05:57.760 --> 06:07.300
+So left join table two using the column, using this Postgres shorthand for join on column
+
+06:07.300 --> 06:12.400
+equals column, but in this case I'm using column because it's the same name in both
+
+06:12.400 --> 06:13.400
+tables.
+
+06:13.400 --> 06:18.520
+So left join where table two dot call is null.
+
+06:18.520 --> 06:20.640
+What does that do?
+
+06:20.640 --> 06:27.200
+If it cannot find matches on the left-hand side to the right-hand side, then the right-hand
+
+06:27.200 --> 06:31.960
+side the result from table two is a null.
+
+06:31.960 --> 06:35.520
+And that's how you get your anti-join.
+
+06:35.520 --> 06:44.560
+To be fair, not in is okay if you know that there are no nulls and you cannot know that
+
+06:44.560 --> 06:49.900
+for a table and as we said it has performance implications, but when you're excluding constants
+
+06:49.900 --> 06:51.940
+that's fine, right?
+
+06:51.940 --> 06:57.180
+Because if you have an index and you're able to tell that none of this is in the index,
+
+06:57.180 --> 06:59.440
+then you're fine to use not in.
+
+06:59.440 --> 07:06.720
+But generally speaking, try to prefer not exists or anti-joins.
+
+07:06.720 --> 07:17.720
+Another thing is that we've seen people use the wrong way without knowing is between,
+
+07:17.720 --> 07:24.240
+especially when you write a query with a where clause that specifies between timestamp one
+
+07:24.240 --> 07:26.140
+and timestamp two.
+
+07:26.140 --> 07:28.760
+Why is that?
+
+07:28.760 --> 07:34.040
+Because between A and B is inclusive.
+
+07:34.040 --> 07:35.960
+It's a closed interval.
+
+07:35.960 --> 07:42.880
+So when you're saying between one and 100, you're saying include one and also include
+
+07:42.880 --> 07:47.000
+100 in the results.
+
+07:47.000 --> 07:48.360
+When is this bad?
+
+07:48.360 --> 07:57.200
+This is bad when you're a bank, let's say, and you want to sum up the transactions for
+
+07:57.200 --> 07:59.160
+the day, right?
+
+07:59.160 --> 08:03.240
+The amounts from all transactions from the day.
+
+08:03.240 --> 08:06.560
+And your DBA has written the following query.
+
+08:06.560 --> 08:12.780
+Select some of the amounts from transactions where transaction timestamp is between the
+
+08:12.780 --> 08:16.480
+end of the previous day and the end of the current day, right?
+
+08:16.480 --> 08:17.880
+So it should be fine.
+
+08:17.880 --> 08:18.880
+No, it's not.
+
+08:18.880 --> 08:26.240
+Because if a transaction has happened exactly at midnight, you'll get it twice.
+
+08:26.240 --> 08:30.340
+Because when you run that query tomorrow, it's going to return the same row because
+
+08:30.340 --> 08:35.000
+you've included midnight in both queries, right?
+
+08:35.000 --> 08:38.180
+So that's a bad thing.
+
+08:38.180 --> 08:44.680
+So it's better to be explicit instead and use select some amount from transactions where
+
+08:44.680 --> 08:53.400
+transaction timestamp is greater or equal than and transaction timestamp is less than
+
+08:53.400 --> 08:57.160
+excluding the equality with midnight, right?
+
+08:57.160 --> 08:59.880
+So that is very, very safe.
+
+08:59.880 --> 09:02.520
+And there's no way to read it wrong.
+
+09:02.520 --> 09:08.680
+It's very explicit, very clear.
+
+09:08.680 --> 09:10.400
+Another thing.
+
+09:10.400 --> 09:13.640
+Using uppercase and identifiers.
+
+09:13.640 --> 09:18.780
+Many people like to do this because it looks very professional.
+
+09:18.780 --> 09:24.520
+Because they're used to some database that was out there in the 80s that only could support
+
+09:24.520 --> 09:27.320
+uppercase table names.
+
+09:27.320 --> 09:34.820
+And that database can now use lowercase, but the habit is still there.
+
+09:34.820 --> 09:38.920
+Now why is that a bad thing in Postgres?
+
+09:38.920 --> 09:45.480
+So if you use table or column names that are all capitals or mixed case, Postgres will
+
+09:45.480 --> 09:53.280
+just ignore you and make everything lowercase unless you use double quotes around the names.
+
+09:53.280 --> 09:59.380
+So create table Plurp and create table Quux.
+
+09:59.380 --> 10:04.000
+What are the consequences of issuing these two DDLs?
+
+10:04.000 --> 10:16.120
+It creates a table named Plurp, lowercase, and the table named Quux with a capital Q.
+
+10:16.120 --> 10:17.120
+Why is that a problem?
+
+10:17.120 --> 10:22.560
+So table here is shorthand for select star from Plurp.
+
+10:22.560 --> 10:30.400
+So table Plurp works because it's not quoted, so Postgres ignores the case.
+
+10:30.400 --> 10:35.200
+Table Plurp, quoted, even if it's exactly the same way we specified it when we were
+
+10:35.200 --> 10:36.880
+creating the table, will fail.
+
+10:36.880 --> 10:41.840
+And it will say there's no such table.
+
+10:41.840 --> 10:49.480
+Equally table Quux fails because there's no lowercase table Quux.
+
+10:49.480 --> 10:52.860
+Table Quux in double quotes works fine.
+
+10:52.860 --> 10:56.060
+So you can see how you can mess up your schema with this.
+
+10:56.060 --> 11:00.440
+If you give your schema to a developer and they're not aware that there's a difference
+
+11:00.440 --> 11:06.480
+between double quoted and unquoted table names, then you get in trouble.
+
+11:06.480 --> 11:13.680
+I think.NET by default, even if you don't do anything, double quotes everything.
+
+11:13.680 --> 11:21.400
+So if you make the mistake of including capitals there, then they're not going to work in Postgres.
+
+11:21.400 --> 11:27.840
+So unless you create the tables from within.NET, that is.
+
+11:27.840 --> 11:32.380
+So the same goes for column names.
+
+11:32.380 --> 11:38.840
+If you want pretty column names in your output and your reports, then just use select call
+
+11:38.840 --> 11:41.280
+as pretty name.
+
+11:41.280 --> 11:42.700
+Double quote the pretty name.
+
+11:42.700 --> 11:43.700
+It can have spaces.
+
+11:43.700 --> 11:46.040
+It can have emoji, whatever you want.
+
+11:46.040 --> 11:51.920
+And Postgres will just return exactly that name and you don't have to change your column
+
+11:51.920 --> 11:58.960
+name in your table to make accounting happy.
+
+11:58.960 --> 12:07.840
+Now moving on from SQL, let's look at the wrong use of some of Postgres's built in data
+
+12:07.840 --> 12:11.120
+types.
+
+12:11.120 --> 12:13.400
+Again time stamps.
+
+12:13.400 --> 12:24.640
+So if you create a column that is type timestamp, that means timestamp without time zone.
+
+12:24.640 --> 12:31.480
+So these are naive time stamps and they represent a local time somewhere, but you don't know
+
+12:31.480 --> 12:34.220
+where.
+
+12:34.220 --> 12:38.800
+It stores a date and a time with no time zone information.
+
+12:38.800 --> 12:45.200
+There's no way to retrieve the time zone where this row was inserted.
+
+12:45.200 --> 12:46.560
+And why is that a bad thing?
+
+12:46.560 --> 12:49.060
+Because arithmetic breaks down totally.
+
+12:49.060 --> 12:56.560
+You cannot add and subtract dates and intervals and anything else because you can't calculate,
+
+12:56.560 --> 13:01.460
+you can't make computations of what the time would be because of things such as time zone
+
+13:01.460 --> 13:05.880
+changes and daylight savings times.
+
+13:05.880 --> 13:10.880
+So it's meaningless and will give you the wrong results.
+
+13:10.880 --> 13:17.400
+So instead, please use timestamp TZ or TZ if you're British.
+
+13:17.400 --> 13:22.240
+Timestamp with time zone is the equivalent.
+
+13:22.240 --> 13:27.240
+Timestamp TZ is the shorthand and that stores a moment in time.
+
+13:27.240 --> 13:34.840
+A moment in time means the number of seconds that have passed from midnight at the beginning
+
+13:34.840 --> 13:38.660
+of the 1st of January 2000.
+
+13:38.660 --> 13:48.240
+So it's absolute, it's definite, and you know exactly which moment in time you're specifying.
+
+13:48.240 --> 13:53.840
+The arithmetic works correctly, as you would expect.
+
+13:53.840 --> 14:00.540
+And this by default displays in your time zone, but you can also choose to display it
+
+14:00.540 --> 14:02.000
+at time zone.
+
+14:02.000 --> 14:09.720
+So if you've inserted something which is midnight UTC and you wanted an Eastern time, that would
+
+14:09.720 --> 14:11.180
+automatically convert it.
+
+14:11.180 --> 14:17.240
+If you said at time zone Eastern, it would automatically convert it to minus five hours
+
+14:17.240 --> 14:23.800
+or minus six hours if there's a DST difference between the two time zones.
+
+14:23.800 --> 14:26.160
+So you don't have to worry about the conversions.
+
+14:26.160 --> 14:30.480
+Just use timestamp with time zone and you won't have to worry about it.
+
+14:30.480 --> 14:36.080
+Even if you don't need time zone calculations and all of your operations and all of your
+
+14:36.080 --> 14:41.360
+queries are coming from within the same time zone, it's better to use this.
+
+14:41.360 --> 14:45.640
+Because then when you have to export your data and give it to someone else, they know
+
+14:45.640 --> 14:50.640
+exactly what this means, even if they don't know your time zone.
+
+14:50.640 --> 14:58.440
+So also if you've decided to only use UTC throughout your organization, then don't use
+
+14:58.440 --> 15:03.160
+timestamp to store UTC because Postgres doesn't know it is UTC.
+
+15:03.160 --> 15:11.120
+It just sees a local time and doesn't know where it is so it can't convert it.
+
+15:11.120 --> 15:21.320
+Now something less frequently used is the type time TZ or time with time zone.
+
+15:21.320 --> 15:27.240
+That is a quirk of SQL.
+
+15:27.240 --> 15:32.840
+It is there because the standard specifies it and that's the only way Postgres implements.
+
+15:32.840 --> 15:36.120
+That's the only reason why Postgres has implemented this.
+
+15:36.120 --> 15:45.840
+So time with time zone has questionable usefulness because time zones in the real world have
+
+15:45.840 --> 15:48.240
+little meaning without dates.
+
+15:48.240 --> 15:54.560
+It can be the middle of the day in Australia and the previous day here.
+
+15:54.560 --> 16:02.720
+So it will be times in some time zone but the date is different and you don't know it.
+
+16:02.720 --> 16:11.320
+So the offset can vary with day lag savings time and that's a bad thing because time TZ
+
+16:11.320 --> 16:20.760
+has a fixed offset and that makes it impossible to do date calculations across day lag savings
+
+16:20.760 --> 16:23.400
+times boundaries.
+
+16:23.400 --> 16:27.720
+So just use timestamp TZ instead.
+
+16:27.720 --> 16:29.160
+There's also a space saving.
+
+16:29.160 --> 16:31.400
+For some reason this thing is 12 bytes.
+
+16:31.400 --> 16:33.480
+I don't know why.
+
+16:33.480 --> 16:35.120
+A timestamp is 8 bytes.
+
+16:35.120 --> 16:42.520
+So just use timestamp TZ or timestamp with time zone instead.
+
+16:42.520 --> 16:45.640
+Current underscore time is another favorite.
+
+16:45.640 --> 16:49.600
+Current time is timestamp TZ.
+
+16:49.600 --> 16:52.440
+So we just said don't use timestamp TZ.
+
+16:52.440 --> 16:58.720
+Instead use current timestamp or the function now to get the current time with the time
+
+16:58.720 --> 17:04.880
+zone and local timestamp that returns the timestamp if you just want to know what time
+
+17:04.880 --> 17:09.520
+it is here in your local time zone.
+
+17:09.520 --> 17:17.680
+Equally you can use current date for a date and local time for the local time.
+
+17:17.680 --> 17:20.040
+These are not timestamps.
+
+17:20.040 --> 17:24.680
+These are dates sometimes, right?
+
+17:24.680 --> 17:28.200
+This is one of my favorites.
+
+17:28.200 --> 17:33.560
+This morning address showed that many people when they want to store a string they just
+
+17:33.560 --> 17:37.480
+create car 255.
+
+17:37.480 --> 17:41.440
+That should take care of it.
+
+17:41.440 --> 17:43.480
+What is the problem with that?
+
+17:43.480 --> 17:48.180
+It's that this is padded with white space up to N.
+
+17:48.180 --> 17:57.160
+So if you create a car 255 and you insert a single character to store, then that inserts
+
+17:57.160 --> 18:05.720
+254 blank spaces after it in the database for no reason.
+
+18:05.720 --> 18:09.960
+The padding spaces are useless because they are ignored when comparing.
+
+18:09.960 --> 18:13.200
+But equally they create a problem.
+
+18:13.200 --> 18:19.440
+Because they don't work for like expressions and they don't work for regular expressions.
+
+18:19.440 --> 18:24.120
+Because a regex will see the spaces.
+
+18:24.120 --> 18:25.240
+So it's inconsistent.
+
+18:25.240 --> 18:27.480
+So just don't use it.
+
+18:27.480 --> 18:33.520
+And anyway, you're not gaining anything by specifying a limit in the number of characters
+
+18:33.520 --> 18:38.440
+because it's not even stored as a fixed with field in Postgres.
+
+18:38.440 --> 18:41.160
+The storage is exactly the same.
+
+18:41.160 --> 18:46.540
+You're just wasting space by adding white space.
+
+18:46.540 --> 18:49.680
+Performance wise, it's even worse.
+
+18:49.680 --> 18:54.940
+Because Postgres is spending the extra time discarding those zeros when you're requesting
+
+18:54.940 --> 18:56.360
+a result.
+
+18:56.360 --> 18:59.560
+That it's supposed to ignore those zeros.
+
+18:59.560 --> 19:12.760
+Also, another consequence of car N is that an index created for a character of N length
+
+19:12.760 --> 19:20.800
+may not work with a query that accepts a text parameter or a var car parameter with no limit.
+
+19:20.800 --> 19:24.640
+The index is created for a different data type.
+
+19:24.640 --> 19:26.760
+Therefore it does not apply to that query.
+
+19:26.760 --> 19:32.320
+So also limits are bad.
+
+19:32.320 --> 19:33.400
+Always.
+
+19:33.400 --> 19:35.540
+Limits on strings are bad.
+
+19:35.540 --> 19:39.920
+If you create a company name and you think 50 characters are enough, I don't know any
+
+19:39.920 --> 19:42.920
+company name that has more than 50 characters.
+
+19:42.920 --> 19:47.480
+Then you get a customer that's called Peterson's and Sons and Friends Bits and Parts Limited,
+
+19:47.480 --> 19:50.520
+which is 54.
+
+19:50.520 --> 19:55.600
+And then you have to go and change the column width in the database and your DBA starts
+
+19:55.600 --> 20:05.560
+wearing even though they selected the character length themselves because they were told to.
+
+20:05.560 --> 20:08.240
+Also it's useless for restricting length.
+
+20:08.240 --> 20:14.400
+It throws an error, okay, but it doesn't make sure that the length is exactly what you want.
+
+20:14.400 --> 20:24.900
+So if you want a four digit pin and you enter it as car four, that is not enforced if someone
+
+20:24.900 --> 20:26.240
+enters a three digit pin.
+
+20:26.240 --> 20:27.240
+You need an extra check.
+
+20:27.240 --> 20:29.440
+So it doesn't guarantee anything.
+
+20:29.440 --> 20:36.040
+So to restrict length and make sure that the length of what everyone enters is consistent,
+
+20:36.040 --> 20:40.900
+then use a check constraint and enforce it.
+
+20:40.900 --> 20:44.020
+So bottom line is just use text.
+
+20:44.020 --> 20:50.280
+Text is the same as the confusingly named var car with no parenthesis.
+
+20:50.280 --> 20:59.960
+So text, money, get away from the type money because it's useless.
+
+20:59.960 --> 21:06.260
+It's fixed point, which means that it doesn't handle fractions of a cent, right?
+
+21:06.260 --> 21:12.120
+So for finance, that's very bad because you usually have subdivisions of the lowest denomination
+
+21:12.120 --> 21:16.920
+of currency, whether it's a cent or a penny or whatever else.
+
+21:16.920 --> 21:24.320
+So the rounding may be off and that is a bad thing in finance.
+
+21:24.320 --> 21:30.020
+Another bad thing is that it doesn't know which currency it's storing the values for.
+
+21:30.020 --> 21:37.980
+So it assumes that the currency is what you specified in LC monetary.
+
+21:37.980 --> 21:42.520
+And if you don't know what LC monetary is, it's just going to assume whatever it finds
+
+21:42.520 --> 21:47.200
+in your Unix configuration or Linux.
+
+21:47.200 --> 21:50.140
+Even worse, it accepts garbage input.
+
+21:50.140 --> 21:57.780
+So if you select that thing and convert it to money, it casts it to whatever it believes
+
+21:57.780 --> 22:00.520
+is right.
+
+22:00.520 --> 22:10.840
+And because my laptop was set up for UK pounds, it assumed that that's UK pounds.
+
+22:10.840 --> 22:18.040
+So just use numeric and store the currency in another column for that row with a foreign
+
+22:18.040 --> 22:25.720
+key so you know which currency that is.
+
+22:25.720 --> 22:36.440
+Serial, how many people here use serial and like it?
+
+22:36.440 --> 22:39.720
+So I will explain why you shouldn't like it.
+
+22:39.720 --> 22:42.260
+It used to be useful shorthand.
+
+22:42.260 --> 22:44.640
+It is still useful shorthand.
+
+22:44.640 --> 22:52.720
+But it's now less useful than it used to be because it's non-SQL standard and it messes
+
+22:52.720 --> 22:54.920
+up the permissions when you use it.
+
+22:54.920 --> 23:01.120
+So permissions for sequences created using serial automatically created using the serial
+
+23:01.120 --> 23:03.060
+keyword when creating a table.
+
+23:03.060 --> 23:06.640
+They need to be managed separately from the table.
+
+23:06.640 --> 23:15.840
+So a consequence of this disconnect is that create table like another table with a table
+
+23:15.840 --> 23:20.360
+that uses serial will use the same sequence from the other table.
+
+23:20.360 --> 23:24.000
+And you don't want that usually.
+
+23:24.000 --> 23:32.280
+So instead we've come up with identity columns that are more verbose but much clearer in
+
+23:32.280 --> 23:36.840
+what they do because they're attached to the table that created them.
+
+23:36.840 --> 23:48.300
+So create table, ID, big int generated by default as identity and also primary key.
+
+23:48.300 --> 23:54.440
+With an identity column, you don't need to know the name of the sequence.
+
+23:54.440 --> 24:01.840
+So when you alter table tab, alter column ID, restart 1000, you don't need to know what
+
+24:01.840 --> 24:03.320
+the sequence is called.
+
+24:03.320 --> 24:04.540
+It's attached to the table.
+
+24:04.540 --> 24:10.480
+So it will just restart the sequence from 1000.
+
+24:10.480 --> 24:15.640
+A side note here, if your application is depending on a serial sequence to generate things like
+
+24:15.640 --> 24:21.380
+receipt IDs, receipt numbers, that is something you should generally generate in your application
+
+24:21.380 --> 24:26.600
+to make sure that there are no gaps because there's no guarantees whatsoever that a sequence
+
+24:26.600 --> 24:29.980
+in Postgres will have no gaps, right?
+
+24:29.980 --> 24:34.480
+If you try to insert something and there's an error and you roll back, you've skipped
+
+24:34.480 --> 24:37.080
+over that sequence number.
+
+24:37.080 --> 24:38.520
+Never goes back.
+
+24:38.520 --> 24:39.920
+Cool.
+
+24:39.920 --> 24:48.480
+So now let's look at improper usage of Postgres features.
+
+24:48.480 --> 24:52.760
+Character encoding SQL underscore ASCII.
+
+24:52.760 --> 24:58.080
+It is not a database encoding that you should be using unless you know exactly what you're
+
+24:58.080 --> 24:59.660
+doing.
+
+24:59.660 --> 25:07.400
+So things like storing text from the 1960s where there were no character sets other than
+
+25:07.400 --> 25:10.680
+ASCII.
+
+25:10.680 --> 25:18.640
+When you specify that your database is encoding is SQL ASCII, you are skipping all encoding
+
+25:18.640 --> 25:21.540
+conversion and all encoding validation.
+
+25:21.540 --> 25:23.640
+So it will accept just anything.
+
+25:23.640 --> 25:29.920
+And it will assume that if your character has a byte value from 0 to 127, that it's
+
+25:29.920 --> 25:30.920
+ASCII.
+
+25:30.920 --> 25:37.660
+And if it's over 127 to 255, then it will not even try.
+
+25:37.660 --> 25:41.560
+It will just store it and not interpret it as anything.
+
+25:41.560 --> 25:47.280
+So it doesn't behave the same way as a character set setting.
+
+25:47.280 --> 25:50.120
+And it's very bad that this is the default.
+
+25:50.120 --> 25:58.320
+Fortunately, most distributions, the packages that Devrim makes for distributions have UTF-8
+
+25:58.320 --> 25:59.840
+as the default.
+
+25:59.840 --> 26:04.520
+So that's a safer choice.
+
+26:04.520 --> 26:09.480
+Also when you use SQL ASCII, you can end up storing a mixture of encodings because it
+
+26:09.480 --> 26:12.360
+doesn't check and validate anything.
+
+26:12.360 --> 26:15.480
+So once you've done that, there's no going back.
+
+26:15.480 --> 26:19.520
+There's no way to recover the original strings because you don't know which encoding they
+
+26:19.520 --> 26:21.760
+came from.
+
+26:21.760 --> 26:24.000
+Rules.
+
+26:24.000 --> 26:28.880
+Rules are a thing that predates SQL and Postgres.
+
+26:28.880 --> 26:32.880
+When it was just Postgres, not PostgreSQL.
+
+26:32.880 --> 26:40.640
+It's a very old thing that has its specific purpose and its purpose is not to work like
+
+26:40.640 --> 26:42.480
+a trigger.
+
+26:42.480 --> 26:47.360
+Rules do not apply conditional logic.
+
+26:47.360 --> 26:54.680
+They rewrite your queries to modify them or add extra queries on top of them.
+
+26:54.680 --> 27:01.400
+So any rule that's non-trivial, so any rule that's not like a select or an update into
+
+27:01.400 --> 27:06.520
+a view is going to have unintended consequences because it's going to execute the original
+
+27:06.520 --> 27:11.920
+query if it's an insert and then apply the rule and then generate another row potentially
+
+27:11.920 --> 27:14.480
+or change the value of the row you inserted.
+
+27:14.480 --> 27:21.280
+So also, as we said, it's older than SQL and Postgres and it's non-SQL standard.
+
+27:21.280 --> 27:28.480
+So unless you're using rules to create views that you can write to, use a trigger instead.
+
+27:28.480 --> 27:31.460
+That's what you want to use.
+
+27:31.460 --> 27:36.240
+There's an exhaustive blog post by Depeche that you can read.
+
+27:36.240 --> 27:41.800
+You will find the link in the slides afterwards.
+
+27:41.800 --> 27:53.840
+Table inheritance is a relic of the time of object-oriented databases.
+
+27:53.840 --> 27:59.160
+If you remember, up on our website, we used to say that Postgres is an object-relational
+
+27:59.160 --> 28:00.880
+database.
+
+28:00.880 --> 28:02.880
+Maybe we still do.
+
+28:02.880 --> 28:04.880
+Okay.
+
+28:04.880 --> 28:07.640
+But everything in Postgres is an object.
+
+28:07.640 --> 28:08.640
+Fine.
+
+28:08.640 --> 28:15.800
+So that doesn't mean that table inheritance applies to tables because it seemed like a
+
+28:15.800 --> 28:21.240
+good idea before ORMs that you would have some sort of inheritance from a table type
+
+28:21.240 --> 28:24.520
+to another table type.
+
+28:24.520 --> 28:29.880
+And the way you would write that was create table events, let's say, with an ID and some
+
+28:29.880 --> 28:34.040
+columns and then create the table meetings.
+
+28:34.040 --> 28:36.720
+Meetings are events, right?
+
+28:36.720 --> 28:43.680
+And they have a scheduled time, but all the other characteristics of an event.
+
+28:43.680 --> 28:49.680
+So why not create table, inherits the other table?
+
+28:49.680 --> 28:58.040
+It's also used to implement partitioning in Postgres before Postgres 10, but is now incompatible
+
+28:58.040 --> 29:01.760
+with the new way of partitioning after Postgres 10.
+
+29:01.760 --> 29:10.800
+So you cannot inherit from a partition table and you cannot add inheritance to a table
+
+29:10.800 --> 29:13.920
+that's partitioned.
+
+29:13.920 --> 29:18.240
+So if you've got it in your database, there is a way to undo it.
+
+29:18.240 --> 29:20.860
+And I will just skim over it.
+
+29:20.860 --> 29:25.520
+You can replace it with a foreign key relationship between the two tables.
+
+29:25.520 --> 29:28.400
+And it works exactly the same way.
+
+29:28.400 --> 29:38.560
+So create table new meetings like meetings.
+
+29:38.560 --> 29:47.560
+Table inheritance is scary.
+
+29:47.560 --> 29:50.480
+I apologize.
+
+29:50.480 --> 29:52.120
+It's not for young guys.
+
+29:52.120 --> 29:58.640
+So create table new meetings like meetings creates it in exactly the same way.
+
+29:58.640 --> 30:03.200
+Alter table to add another column to store the foreign key relationship.
+
+30:03.200 --> 30:10.760
+So that should have been event ID, excuse me.
+
+30:10.760 --> 30:12.280
+Anyway.
+
+30:12.280 --> 30:16.640
+So you copy the data from the old table into the new table.
+
+30:16.640 --> 30:23.020
+So insert into new meetings, select everything from meetings, including the ID.
+
+30:23.020 --> 30:28.160
+You create the required constraints, triggers, et cetera, everything you need for the table,
+
+30:28.160 --> 30:31.180
+new meetings.
+
+30:31.180 --> 30:36.440
+And if you have a very large table, you can apply a very dirty hack that says that because
+
+30:36.440 --> 30:41.680
+I know that the data in the other table is valid, I don't need to validate it again.
+
+30:41.680 --> 30:49.640
+So I add the constraint, the foreign key constraint as not valid.
+
+30:49.640 --> 30:53.520
+If you're doing this on a live system that needs to be online while you're making this
+
+30:53.520 --> 30:58.280
+change, create a trigger so that changes coming into meetings can go into new meetings as
+
+30:58.280 --> 31:00.920
+well.
+
+31:00.920 --> 31:07.520
+And the dirtiness of the hack comes in the fact that you should really not be touching
+
+31:07.520 --> 31:09.460
+PG catalog at all.
+
+31:09.460 --> 31:13.880
+But if you do know that your constraint is valid because the data in your existing table
+
+31:13.880 --> 31:19.280
+is valid, you just go ahead and update PG constraint set, constraint validated equals
+
+31:19.280 --> 31:28.420
+true for that foreign key constraint we just created.
+
+31:28.420 --> 31:37.380
+And then finally, in order not to do lengthy locking when you're doing this, begin a transaction
+
+31:37.380 --> 31:41.820
+in a code block, an anonymous code block.
+
+31:41.820 --> 31:45.920
+You alter table meetings, rename to old meetings.
+
+31:45.920 --> 31:52.160
+Then you change new meetings that has exactly the same content now with an additional column.
+
+31:52.160 --> 31:53.880
+You rename it to meetings.
+
+31:53.880 --> 31:56.880
+You drop the old table and then you commit.
+
+31:56.880 --> 31:57.880
+Be careful.
+
+31:57.880 --> 32:06.000
+Also create a trigger to insert, update, delete items and events as they get changed in meetings.
+
+32:06.000 --> 32:07.000
+And that's about it.
+
+32:07.000 --> 32:13.200
+You've gotten rid of your table inheritance.
+
+32:13.200 --> 32:18.640
+Another very confusing thing, if you look at the Postgres documentation, it explains
+
+32:18.640 --> 32:20.600
+very well how to do this.
+
+32:20.600 --> 32:23.360
+But this is probably not what you want to do.
+
+32:23.360 --> 32:29.320
+So partitioning by multiple keys is not partitioning on multiple levels.
+
+32:29.320 --> 32:38.720
+So let's say we create a table transactions and it has a location code and the timestamp,
+
+32:38.720 --> 32:40.600
+among other columns.
+
+32:40.600 --> 32:46.060
+And I want to partition it by timestamp and also location code.
+
+32:46.060 --> 32:52.320
+Because I want a separate table for each time period, for each location code.
+
+32:52.320 --> 33:05.000
+So I create table transactions, 2023.02a for values from timestamp 2023, so the first of
+
+33:05.000 --> 33:13.040
+February to the first of March, and for location codes, AAA to BAA.
+
+33:13.040 --> 33:18.720
+Then I create the second partition.
+
+33:18.720 --> 33:25.400
+And 2023.02b is a partition of transactions for values from the same time period, but
+
+33:25.400 --> 33:28.680
+different locations.
+
+33:28.680 --> 33:33.360
+So I'm using locations BAA to BZZ.
+
+33:33.360 --> 33:35.400
+Error.
+
+33:35.400 --> 33:39.900
+Partition transactions 2023.02b would overlap.
+
+33:39.900 --> 33:42.200
+Why is that?
+
+33:42.200 --> 33:50.560
+Because you're specifying limits for the keys within each partition.
+
+33:50.560 --> 33:55.340
+So it will accept values that satisfy those keys.
+
+33:55.340 --> 33:58.560
+But this is not sub-partitioning.
+
+33:58.560 --> 34:01.200
+What you do want is sub-partitioning.
+
+34:01.200 --> 34:06.380
+You want to partition by one key and then partition those tables by another key.
+
+34:06.380 --> 34:08.360
+That is the way to do it correctly.
+
+34:08.360 --> 34:14.520
+So you create table transactions, location type, etc., etc., partition by range of timestamp
+
+34:14.520 --> 34:16.680
+first.
+
+34:16.680 --> 34:20.220
+Because we want the first level of partitioning to be timestamp based.
+
+34:20.220 --> 34:30.360
+Then you create table partitions as a partition of transactions for values from February to
+
+34:30.360 --> 34:38.920
+the 1st of March and we choose hash partitioning within those partitions for the location code.
+
+34:38.920 --> 34:49.560
+And all that means over there is that when I create the first partition, it's for values
+
+34:49.560 --> 34:56.600
+with modulus four remainder zero means just divided by four equal parts.
+
+34:56.600 --> 35:03.800
+And that creates a partition, a table that is partitioned by both things.
+
+35:03.800 --> 35:04.800
+Sub-partitioned.
+
+35:04.800 --> 35:09.600
+Now let's talk a little bit about performance.
+
+35:09.600 --> 35:19.320
+One thing we see people doing all the time is using many more connections than they should
+
+35:19.320 --> 35:20.320
+be.
+
+35:20.320 --> 35:24.340
+Accepting many more connections into their Postgres server than they should be.
+
+35:24.340 --> 35:26.160
+The default is very sensible.
+
+35:26.160 --> 35:29.640
+It's at 100 connections.
+
+35:29.640 --> 35:37.660
+We see things like 5,000 connections in production on a server with 32 CPUs.
+
+35:37.660 --> 35:43.920
+A server with 32 CPUs, there's no way on earth it's going to do more than 32 things at the
+
+35:43.920 --> 35:46.680
+same time, right?
+
+35:46.680 --> 35:48.680
+It's common sense.
+
+35:48.680 --> 35:57.400
+You may accept up to 100 things with 32 CPUs and interleave and overlap.
+
+35:57.400 --> 35:58.400
+That's fine.
+
+35:58.400 --> 36:03.240
+Or one of the connections may be idle and you take advantage of that to serve the other
+
+36:03.240 --> 36:04.240
+connections.
+
+36:04.240 --> 36:05.600
+But 5,000 is excessive.
+
+36:05.600 --> 36:07.400
+And we'll see why.
+
+36:07.400 --> 36:10.680
+Because Postgres is process based.
+
+36:10.680 --> 36:14.800
+And for every new client connection, it spawns a new process.
+
+36:14.800 --> 36:21.640
+The new process comes with interprocess communication through semaphores and shared memory.
+
+36:21.640 --> 36:23.520
+And that has an overhead.
+
+36:23.520 --> 36:27.740
+So every process you add to the system adds to that overhead.
+
+36:27.740 --> 36:34.080
+And you run the risk of your CPU spending most of its time doing context switching between
+
+36:34.080 --> 36:38.120
+one process and the other.
+
+36:38.120 --> 36:44.780
+So accessing the same objects from multiple connections may cause many lightweight locks
+
+36:44.780 --> 36:49.680
+to appear, what are called latches in other databases.
+
+36:49.680 --> 36:56.400
+And if you're trying to access the same objects from many client connections, then that lock,
+
+36:56.400 --> 37:00.040
+even if it's not explicit, it becomes heavily contented.
+
+37:00.040 --> 37:06.460
+And the other connections trying to access that object will slow each other down.
+
+37:06.460 --> 37:14.120
+So instead of opening one connection that does 400 times the work, you open 400 connections
+
+37:14.120 --> 37:17.880
+that do 1 400th the amount of work.
+
+37:17.880 --> 37:19.840
+And that doesn't perform the same.
+
+37:19.840 --> 37:21.280
+That performs worse.
+
+37:21.280 --> 37:23.840
+Because it's making your data hotter for no reason.
+
+37:23.840 --> 37:27.840
+Because they compete for access to that data.
+
+37:27.840 --> 37:30.080
+And also there's no fair queuing.
+
+37:30.080 --> 37:31.680
+It's more or less random.
+
+37:31.680 --> 37:36.600
+So lightweight locks don't have queuing, so you don't know who will get priority.
+
+37:36.600 --> 37:39.680
+There's no guaranteed quality of service.
+
+37:39.680 --> 37:51.080
+Now mitigation strategy is also you need to be aware that before Postgres 13 there's the
+
+37:51.080 --> 37:55.680
+issue of snapshot contention.
+
+37:55.680 --> 38:02.560
+So each transaction keeps an MVCC snapshot, even if it's idle.
+
+38:02.560 --> 38:10.320
+And so you can end up using server resources even for idle connections and slow everything
+
+38:10.320 --> 38:11.880
+else down.
+
+38:11.880 --> 38:15.860
+So this is contention that is caused by too much concurrency.
+
+38:15.860 --> 38:22.120
+So instead of opening 5,000 connections, just put a PG bouncer in front of your database
+
+38:22.120 --> 38:28.400
+or another connection puller and just allow fewer connections into the database while
+
+38:28.400 --> 38:32.840
+accepting the client connections from the connection puller.
+
+38:32.840 --> 38:38.400
+That way you throttle or you introduce latency on the application side, but that's not always
+
+38:38.400 --> 38:43.720
+bad because in some cases it can protect your service performance, which is more important
+
+38:43.720 --> 38:49.760
+than making, let's say, a noninteractive client wait for a few milliseconds more.
+
+38:49.760 --> 38:56.040
+It sounds counterintuitive, but it leads to higher performance overall.
+
+38:56.040 --> 39:01.960
+High transaction rate is also a problem when you're burning through transactions very quickly
+
+39:01.960 --> 39:08.400
+because there's a lot of detail here about the way transaction IDs work in Postgres,
+
+39:08.400 --> 39:14.280
+but the bottom line is that there's 4.2 billion transaction IDs.
+
+39:14.280 --> 39:20.600
+The future for you is 2.1 billion transactions in the future and the past is another 2.1 billion
+
+39:20.600 --> 39:21.600
+transactions.
+
+39:21.600 --> 39:30.880
+So if you are writing with a huge data rate with, let's say, an OLTP workload that can
+
+39:30.880 --> 39:40.520
+go through 2.1 billion transactions in a week, that will overrun the last transaction and
+
+39:40.520 --> 39:44.240
+you will no longer know whether that transaction is in the past or in the future.
+
+39:44.240 --> 39:45.240
+That's a problem.
+
+39:45.240 --> 39:46.520
+Postgres won't let you do that.
+
+39:46.520 --> 39:50.680
+It will shut down to avoid doing that.
+
+39:50.680 --> 39:58.280
+The solution that we came up with is called freezing, where you go through the table and
+
+39:58.280 --> 40:05.960
+you mark each row as, that you know to be old, as frozen, and you know that that row
+
+40:05.960 --> 40:12.000
+is always in the past, even if it has a transaction ID from another time.
+
+40:12.000 --> 40:18.740
+So the problem is you need to make sure that Postgres has the chance to freeze those rows
+
+40:18.740 --> 40:21.000
+before the wrap around.
+
+40:21.000 --> 40:24.200
+So what can you do?
+
+40:24.200 --> 40:26.920
+You can reduce the number of transactions.
+
+40:26.920 --> 40:28.680
+You can use batching.
+
+40:28.680 --> 40:36.160
+Instead of committing 100 things, just batch them or 1,000 things and that automatically
+
+40:36.160 --> 40:45.040
+uses 1,000 transactions less, sorry, 1,000 the transaction rate that you have.
+
+40:45.040 --> 40:46.400
+And that helps.
+
+40:46.400 --> 40:54.880
+Also, it helps to bump up the effectiveness of auto vacuum and that takes care of freezing.
+
+40:54.880 --> 40:57.880
+Another favorite is people that turn off auto vacuum.
+
+40:57.880 --> 41:02.520
+So the thing that actually makes multi-view concurrency control work.
+
+41:02.520 --> 41:05.080
+So don't turn it off.
+
+41:05.080 --> 41:09.120
+This work is removing dead tuples, freezing things, among other things.
+
+41:09.120 --> 41:15.720
+It does have overhead because it scans tables and indexes and acquires locks and gives them
+
+41:15.720 --> 41:18.560
+up voluntarily.
+
+41:18.560 --> 41:21.600
+And that's why it has limited capacity by default.
+
+41:21.600 --> 41:25.640
+But the defaults are not suitable for production workload.
+
+41:25.640 --> 41:31.920
+So if you're concerned about the overhead of auto vacuum, then turning it off is not
+
+41:31.920 --> 41:36.440
+the solution because the alternative is worse.
+
+41:36.440 --> 41:39.600
+You can risk shutting down your database.
+
+41:39.600 --> 41:45.880
+Or accumulating bloat because there's no way to avoid the vacuum in Postgres yet.
+
+41:45.880 --> 41:53.000
+And when you outrun vacuum by writing faster than your database can auto vacuum it, then
+
+41:53.000 --> 41:58.320
+you may come up with a bloat runaway that requires a vacuum full.
+
+41:58.320 --> 42:02.320
+And that takes a total lock on the table and nobody can use it.
+
+42:02.320 --> 42:10.480
+So instead of turning off auto vacuum, actually make it work harder and you can find in the
+
+42:10.480 --> 42:16.280
+Postgres documentation how to make it work harder in order to avoid bloat and transaction
+
+42:16.280 --> 42:19.240
+ID wraparound.
+
+42:19.240 --> 42:25.040
+There's some standard stuff here about explicit locking.
+
+42:25.040 --> 42:32.200
+If your application needs to lock things to make sure that concurrency, oops, out of
+
+42:32.200 --> 42:35.200
+power.
+
+42:35.200 --> 42:47.200
+Can I use something else?
+
+42:47.200 --> 43:03.080
+I have a copy.
+
+43:03.080 --> 43:17.760
+Can you?
+
+43:17.760 --> 43:18.760
+Can you?
+
+43:18.760 --> 43:19.760
+Thanks.
+
+43:19.760 --> 43:24.120
+Okay, so there were only like two or three slides.
+
+43:24.120 --> 43:27.840
+If you're really interested in knowing them, you can talk to Jimmy afterwards.
+
+43:27.840 --> 43:30.640
+But you can ask now questions about what he already talked about.
+
+43:30.640 --> 43:33.280
+So we have like five minutes for questions.
+
+43:33.280 --> 43:36.040
+So if you have a question, please raise your hand and we are going to bring the microphone
+
+43:36.040 --> 43:37.040
+to you so you can ask questions.
+
+43:37.040 --> 43:39.040
+There is a question there.
+
+43:39.040 --> 43:40.040
+Good.
+
+43:40.040 --> 43:41.040
+Thanks.
+
+43:41.040 --> 43:42.040
+It's on the website.
+
+43:42.040 --> 43:43.040
+Hi, Greto.
+
+43:43.040 --> 43:53.720
+Is there any difference on how, is there any difference in how Varkar and Varkar N are stored
+
+43:53.720 --> 43:54.720
+on the disk?
+
+43:54.720 --> 43:56.240
+Sorry, I didn't hear your question.
+
+43:56.240 --> 44:01.680
+Is there any difference in how Varkar and Varkar N and text are stored on disk?
+
+44:01.680 --> 44:04.160
+No, Varkar is exactly the same as text.
+
+44:04.160 --> 44:05.160
+It's the same type.
+
+44:05.160 --> 44:06.160
+Okay.
+
+44:06.160 --> 44:08.680
+So it doesn't matter like also for indexes like I know in my SQL.
+
+44:08.680 --> 44:10.640
+No, no, it doesn't make a difference.
+
+44:10.640 --> 44:13.360
+But Varkar with a limit is a different type.
+
+44:13.360 --> 44:14.360
+Got it.
+
+44:14.360 --> 44:15.360
+Thank you.
+
+44:15.360 --> 44:16.360
+Thanks.
+
+44:16.360 --> 44:17.360
+Another question?
+
+44:17.360 --> 44:20.360
+I just want to browse.
+
+44:20.360 --> 44:21.360
+Questions, questions?
+
+44:21.360 --> 44:24.320
+Jimmy, I have a question.
+
+44:24.320 --> 44:30.720
+So you were talking about money and why does money is actually implemented?
+
+44:30.720 --> 44:33.120
+Is it SQL standard or?
+
+44:33.120 --> 44:34.120
+Connected.
+
+44:34.120 --> 44:36.240
+Sorry, what was the question?
+
+44:36.240 --> 44:41.480
+If money is so bad as a data type, why is it implemented in Postgres?
+
+44:41.480 --> 44:46.800
+Because it was actually deprecated because of those bad things that we talked about.
+
+44:46.800 --> 44:47.800
+Twice.
+
+44:47.800 --> 44:48.880
+Twice.
+
+44:48.880 --> 44:54.280
+As Andreas pointed out this morning, and people requested it, so we reinstated it twice.
+
+44:54.280 --> 44:55.280
+Oops.
+
+44:55.280 --> 44:56.280
+There you go.
+
+44:56.280 --> 44:58.280
+So people wanted it.
+
+44:58.280 --> 45:01.280
+People wants money.
+
+45:01.280 --> 45:04.920
+Different kind of money, exactly.
+
+45:04.920 --> 45:05.920
+Any other questions?
+
+45:05.920 --> 45:11.760
+Okay, we have another question here.
+
+45:11.760 --> 45:14.120
+Quick question about table inheritance.
+
+45:14.120 --> 45:19.480
+So I know I've read the Postgres documentation about all its flaws and why you shouldn't
+
+45:19.480 --> 45:22.880
+use it, especially now that there's partitioning.
+
+45:22.880 --> 45:30.200
+But overall, I think the idea of having tables that have some common columns but then diverge
+
+45:30.200 --> 45:34.000
+on some others is an interesting idea.
+
+45:34.000 --> 45:36.440
+There's other ways to solve it.
+
+45:36.440 --> 45:43.600
+Like in previous jobs, I've implemented one table that had all the common columns and
+
+45:43.600 --> 45:46.840
+then one separate table for each variation.
+
+45:46.840 --> 45:54.640
+But are there other solutions that you implement for those types of ORMs?
+
+45:54.640 --> 46:01.840
+Why not use ORMs to make as complicated a data model as you like, but not store the
+
+46:01.840 --> 46:06.320
+complexity as inheritance relationships on the database?
+
+46:06.320 --> 46:13.920
+But doesn't that create larger tables that you'll have to read no matter if the data
+
+46:13.920 --> 46:14.920
+is sparse?
+
+46:14.920 --> 46:17.480
+You need to link them as a foreign key relationship.
+
+46:17.480 --> 46:20.920
+So you're just storing an extra identifier, I guess.
+
+46:20.920 --> 46:21.920
+Yeah.
+
+46:21.920 --> 46:22.920
+Thank you.
+
+46:22.920 --> 46:23.920
+Okay.
+
+46:23.920 --> 46:24.920
+Never mind.
+
+46:24.920 --> 46:32.640
+So, anyway, before the last thing I wanted to tell you, right, it was the security slides.
+
+46:32.640 --> 46:34.080
+They're important.
+
+46:34.080 --> 46:39.640
+Never use trust over TCPIP in your PGHBA conf.
+
+46:39.640 --> 46:43.280
+That was the most important thing I had to say in the remainder of the slides.
+
+46:43.280 --> 46:47.520
+Do not trust anything coming from TCPIP.
+
+46:47.520 --> 46:54.360
+Always use password, MD5 certificate, SCRAM authentication.
+
+46:54.360 --> 46:55.360
+That was the last thing.
+
+46:55.360 --> 46:56.360
+Sorry.
+
+46:56.360 --> 46:57.360
+I'll take your question.
+
+46:57.360 --> 46:58.360
+No, thanks.
+
+46:58.360 --> 47:02.560
+I'm just curious as to why outer left join isn't implemented.
+
+47:02.560 --> 47:04.400
+It's just left join.
+
+47:04.400 --> 47:08.680
+Is that, of course, it's the same thing as using the anti-join you used earlier.
+
+47:08.680 --> 47:11.760
+I'm just curious why it isn't implemented.
+
+47:11.760 --> 47:13.920
+It's the same thing.
+
+47:13.920 --> 47:16.800
+Outer left join is the same thing as left join in Postgres.
+
+47:16.800 --> 47:17.800
+Yeah, I know.
+
+47:17.800 --> 47:25.320
+But outer left join should be, according to my old books of SQL 89 or something, just
+
+47:25.320 --> 47:27.840
+anti-join left side.
+
+47:27.840 --> 47:32.800
+So you do not take the center part where the rings meet.
+
+47:32.800 --> 47:35.560
+You remove the intersection, just take the left part.
+
+47:35.560 --> 47:36.560
+Right.
+
+47:36.560 --> 47:40.760
+So, yeah, the way Postgres implements it is it just enters null for the things that don't
+
+47:40.760 --> 47:43.040
+exist, that don't correspond.
+
+47:43.040 --> 47:46.040
+And the right join would put the nulls on the other side.
+
+47:46.040 --> 47:47.040
+That's the difference.
+
+47:47.040 --> 47:54.040
+There was another question here before.
+
+47:54.040 --> 47:57.280
+Okay.
+
+47:57.280 --> 48:06.160
+So you mentioned about the date and the time handling.
+
+48:06.160 --> 48:12.520
+Is there any way in Postgres that doesn't involve an awful lot of hackery to deal with
+
+48:12.520 --> 48:13.520
+partial dates?
+
+48:13.520 --> 48:18.840
+For example, if I say I'm going to take the train tomorrow morning or I'm going on holiday
+
+48:18.840 --> 48:22.240
+in August.
+
+48:22.240 --> 48:25.680
+So you want to store, like, August?
+
+48:25.680 --> 48:28.840
+Well, August 24th.
+
+48:28.840 --> 48:30.320
+Right.
+
+48:30.320 --> 48:32.760
+So you can use a date with no context.
+
+48:32.760 --> 48:35.240
+You can use a date that says August 24th.
+
+48:35.240 --> 48:38.680
+No, not as in August 24th as in August 2024.
+
+48:38.680 --> 48:39.680
+Okay.
+
+48:39.680 --> 48:47.080
+So you can just use extract from that date or truncate and lose all the other context
+
+48:47.080 --> 48:50.560
+of that date and only store August 2024.
+
+48:50.560 --> 48:52.560
+Thank you.
+
+48:52.560 --> 48:59.560
+We have time for the very last question here.
+
+48:59.560 --> 49:01.720
+Somebody who already...
+
+49:01.720 --> 49:06.920
+Hi, when you write V2 of this presentation, what are the other don't do's that you would
+
+49:06.920 --> 49:07.920
+add?
+
+49:07.920 --> 49:08.920
+Sorry, I couldn't...
+
+49:08.920 --> 49:12.360
+Are there other like don't do's to involve, like, I don't know, like, foreign data wrappers
+
+49:12.360 --> 49:13.360
+or well?
+
+49:13.360 --> 49:15.920
+I guess the more exotic parts of Postgres that you would say...
+
+49:15.920 --> 49:18.600
+Yeah, as I said, this talk couldn't be all inclusive.
+
+49:18.600 --> 49:23.160
+It was the top things that we see people doing wrong every day.
+
+49:23.160 --> 49:25.520
+Fair enough.
+
+49:25.520 --> 49:27.160
+Right.
+
+49:27.160 --> 49:30.160
+Well, thanks, everybody, for staying until the very last talk.
+
+49:30.160 --> 49:32.160
+Thank you.
+
+49:32.160 --> 49:34.160
+Excellent.
+
+49:34.160 --> 49:45.960
+And remember, you can now get out here on the front because there are no more talks.
+
+49:45.960 --> 49:48.240
+You can pick up your stickers here.
+
+49:48.240 --> 49:51.320
+And once again, thank you, Jimmy, for your presentation.
+
+49:51.320 --> 50:00.680
+Cheers.

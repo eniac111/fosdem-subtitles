@@ -1,0 +1,1604 @@
+1
+0:00:00.000 --> 0:00:08.240
+We'll talk about AVX-512 in FFmpeg.
+
+2
+0:00:08.240 --> 0:00:12.440
+He's also the co-organizer of this bedroom.
+
+3
+0:00:12.440 --> 0:00:15.000
+Please welcome Kirano.
+
+4
+0:00:15.000 --> 0:00:24.280
+So yes, I'm going to be talking about AVX-512 in FFmpeg.
+
+5
+0:00:24.280 --> 0:00:25.280
+What is AVX-512?
+
+6
+0:00:25.280 --> 0:00:28.880
+AVX stands for Advanced Vector Extensions.
+
+7
+0:00:28.880 --> 0:00:32.160
+There'll be a lot of acronyms and jargon, unfortunately, in this one.
+
+8
+0:00:32.160 --> 0:00:35.360
+But I will try and explain all of them.
+
+9
+0:00:35.360 --> 0:00:42.640
+So AVX-512 is a relatively new single instruction, multiple data instruction set for Intel CPUs
+
+10
+0:00:42.640 --> 0:00:48.320
+from about 2017 and more recently in the last six months or so with AMD CPUs.
+
+11
+0:00:48.320 --> 0:00:54.440
+In particular, it has a larger 512-bit register size, many new instructions, which we'll talk
+
+12
+0:00:54.440 --> 0:00:56.440
+about in a minute.
+
+13
+0:00:56.440 --> 0:00:58.920
+Top masks, we'll talk about in a minute.
+
+14
+0:00:58.920 --> 0:01:00.160
+Comparisons, which are quite new.
+
+15
+0:01:00.160 --> 0:01:03.600
+And also lots of other things that are not so interesting in multimedia.
+
+16
+0:01:03.600 --> 0:01:08.880
+Cryptography, neural networks, and I'm sure there are other people at FOSDEM who could
+
+17
+0:01:08.880 --> 0:01:11.180
+talk a lot more about these kind of things.
+
+18
+0:01:11.180 --> 0:01:15.280
+As I mentioned, lots of fancy words, but the thing to bear in mind is in FFmpeg, high
+
+19
+0:01:15.280 --> 0:01:17.320
+schoolers have gone and written assembly.
+
+20
+0:01:17.320 --> 0:01:20.040
+This is heavily jargon-centric.
+
+21
+0:01:20.040 --> 0:01:24.480
+It sounds complicated, but actually quite a big, reasonable chunk of assembly in FFmpeg
+
+22
+0:01:24.480 --> 0:01:28.320
+has been written by people who are in high school.
+
+23
+0:01:28.320 --> 0:01:29.320
+Why is this relevant now?
+
+24
+0:01:29.320 --> 0:01:34.200
+So yeah, I have mentioned AVX-512 has been around since 2017.
+
+25
+0:01:34.200 --> 0:01:36.840
+So why it's 2023?
+
+26
+0:01:36.840 --> 0:01:42.120
+Well, Skylake was the first CPU generation from Intel to have AVX-512 support, but it
+
+27
+0:01:42.120 --> 0:01:45.560
+had very large performance throttling when you use them.
+
+28
+0:01:45.560 --> 0:01:51.360
+So your effective CPU capability speed went down quite dramatically.
+
+29
+0:01:51.360 --> 0:01:56.400
+And so this was fine if you were doing high performance computing in academia, for example,
+
+30
+0:01:56.400 --> 0:02:00.760
+like Fluid Dynamics, where you were using these instructions 100% of the time.
+
+31
+0:02:00.760 --> 0:02:01.760
+That was fine.
+
+32
+0:02:01.760 --> 0:02:06.520
+But in multimedia is a mixture of assembly and C code, where you're not necessarily always
+
+33
+0:02:06.520 --> 0:02:07.680
+using these instructions.
+
+34
+0:02:07.680 --> 0:02:13.600
+So this relative remains unused for the last couple of years.
+
+35
+0:02:13.600 --> 0:02:17.000
+You could still use these new instructions, though, with the smaller register sizes.
+
+36
+0:02:17.000 --> 0:02:20.760
+And I'll show an example of this later.
+
+37
+0:02:20.760 --> 0:02:25.880
+The first Intel CPUs not to have throttling were the Ice Lake 10th and 11th Gen Intel
+
+38
+0:02:25.880 --> 0:02:26.880
+CPUs.
+
+39
+0:02:26.880 --> 0:02:29.300
+They were the first to have no throttling.
+
+40
+0:02:29.300 --> 0:02:37.080
+And this meant these ZMM-based instructions could be first-class citizens.
+
+41
+0:02:37.080 --> 0:02:38.400
+How to get started?
+
+42
+0:02:38.400 --> 0:02:42.960
+One of the tricky things as well in the last few years has been actually getting access
+
+43
+0:02:42.960 --> 0:02:44.280
+to devices that have this.
+
+44
+0:02:44.280 --> 0:02:47.160
+And unfortunately, Intel have not made it easy.
+
+45
+0:02:47.160 --> 0:02:51.800
+From their 12th generation CPUs have actually removed support in consumer equipment.
+
+46
+0:02:51.800 --> 0:02:57.000
+It's still available on AMD, Zen 4 CPUs, though.
+
+47
+0:02:57.000 --> 0:03:01.520
+And if using the cloud is your kind of thing, available also from many cloud providers in
+
+48
+0:03:01.520 --> 0:03:04.640
+the server CPU range, such as AWS or others.
+
+49
+0:03:04.640 --> 0:03:08.960
+Personally, I think the easiest way is to buy an 11th generation Intel NUC.
+
+50
+0:03:08.960 --> 0:03:09.960
+That's what I did for FMPG.
+
+51
+0:03:09.960 --> 0:03:13.040
+I bought two of them for the project and host them.
+
+52
+0:03:13.040 --> 0:03:14.040
+It's the easiest way.
+
+53
+0:03:14.040 --> 0:03:16.360
+It's only a few hundred euros.
+
+54
+0:03:16.360 --> 0:03:18.640
+It's quiet if it's under your desk.
+
+55
+0:03:18.640 --> 0:03:19.640
+And that's the easiest way to get started.
+
+56
+0:03:19.640 --> 0:03:24.720
+You get a full AVX-512 stack.
+
+57
+0:03:24.720 --> 0:03:29.960
+So let's look at some of the existing work in multimedia that's using AVX-512.
+
+58
+0:03:29.960 --> 0:03:33.280
+And probably most importantly, we had a sort of introduction from J.V.
+
+59
+0:03:33.280 --> 0:03:36.240
+earlier today, the David project, which is an AV-1 decoder.
+
+60
+0:03:36.240 --> 0:03:42.120
+This added AVX-512 support, I think a year or two ago.
+
+61
+0:03:42.120 --> 0:03:48.880
+It's particularly beneficial in AV-1 because AV-1 has large block sizes, sort of in comparison
+
+62
+0:03:48.880 --> 0:03:53.760
+to more traditional standards, traditional codecs like H.264 and others, which are smaller.
+
+63
+0:03:53.760 --> 0:03:57.760
+So AVX-512 in David gave, I think, 10% to 20% overall.
+
+64
+0:03:57.760 --> 0:03:59.520
+So not just the functions themselves.
+
+65
+0:03:59.520 --> 0:04:03.760
+The overall decode performance was improved.
+
+66
+0:04:03.760 --> 0:04:06.720
+And it's actually been a running topic, which is quite interesting.
+
+67
+0:04:06.720 --> 0:04:13.200
+AVX-264 today is an FFmpeg that we use and David and also we use this classic FFmpeg X264 approach
+
+68
+0:04:13.200 --> 0:04:21.080
+to assembly, which is no intrinsics, no inline assembly, no special SIMD sort of libraries
+
+69
+0:04:21.080 --> 0:04:22.240
+to make life easier.
+
+70
+0:04:22.240 --> 0:04:26.080
+It's raw assembly language.
+
+71
+0:04:26.080 --> 0:04:28.640
+And I'll show some examples of that.
+
+72
+0:04:28.640 --> 0:04:33.400
+And also we don't also compile them in and force you to have a particular CPU generation.
+
+73
+0:04:33.400 --> 0:04:35.560
+I know this is quite controversial.
+
+74
+0:04:35.560 --> 0:04:37.840
+I think it's MongoDB, for example.
+
+75
+0:04:37.840 --> 0:04:42.680
+They forced one year a particular CPU generation and this was super controversial because not
+
+76
+0:04:42.680 --> 0:04:44.680
+everybody had that.
+
+77
+0:04:44.680 --> 0:04:49.400
+So what we do in FFmpeg is we detect CPU capabilities and I'll show the function in a minute.
+
+78
+0:04:49.400 --> 0:04:50.600
+And then we use function pointers.
+
+79
+0:04:50.600 --> 0:04:54.160
+So we set them once at the beginning and therefore the overhead of doing that measurement is
+
+80
+0:04:54.160 --> 0:04:58.120
+done once, but doing the capabilities is checked once.
+
+81
+0:04:58.120 --> 0:05:01.640
+And then those function pointers are executed after that.
+
+82
+0:05:01.640 --> 0:05:08.120
+And unfortunately, though, on Intel, there's a very messy Venn diagram of capabilities.
+
+83
+0:05:08.120 --> 0:05:12.520
+But in practice, we really, so far, they may change their mind, but care about these kind
+
+84
+0:05:12.520 --> 0:05:13.520
+of two things.
+
+85
+0:05:13.520 --> 0:05:17.720
+So these are the CPU flags you get in FFmpeg.
+
+86
+0:05:17.720 --> 0:05:23.840
+There are others, but the AVX-512 related ones are broadly speaking legacy Skylake and the
+
+87
+0:05:23.840 --> 0:05:26.240
+newer ICL I put in bold for Icelake.
+
+88
+0:05:26.240 --> 0:05:31.040
+But you can see there are actually a lot of different subcategories in there.
+
+89
+0:05:31.040 --> 0:05:34.080
+But in practice, it's at the moment one or the other.
+
+90
+0:05:34.080 --> 0:05:39.400
+But as I mentioned, Intel are very keen on adding and removing features and possibly
+
+91
+0:05:39.400 --> 0:05:44.120
+even charging your subscription for certain features is one of their new ideas.
+
+92
+0:05:44.120 --> 0:05:49.680
+So it could be that newer additions to this are subscription based or you buy and pay
+
+93
+0:05:49.680 --> 0:05:52.920
+for it later or something much more complicated.
+
+94
+0:05:52.920 --> 0:05:58.400
+So who knows?
+
+95
+0:05:58.400 --> 0:06:02.640
+So I guess unfortunately, there's some sort of dependency in explaining a few of the topics
+
+96
+0:06:02.640 --> 0:06:06.480
+and some of the benefits without explaining some of the backstory.
+
+97
+0:06:06.480 --> 0:06:13.200
+So historically, in old AVX, you had all the 256-bit registers.
+
+98
+0:06:13.200 --> 0:06:16.280
+And these were split in practice into lanes.
+
+99
+0:06:16.280 --> 0:06:20.800
+So in practice, you've got 228-bit lanes.
+
+100
+0:06:20.800 --> 0:06:24.160
+And instructions, broadly speaking, operated in these lanes.
+
+101
+0:06:24.160 --> 0:06:29.840
+So if you ran in a structure and it worked on data and it was actually quite difficult,
+
+102
+0:06:29.840 --> 0:06:34.720
+it was possible but difficult to move data between these lanes.
+
+103
+0:06:34.720 --> 0:06:41.200
+And it's one of the historical limitations on existing AVX and AVX2 code that we have
+
+104
+0:06:41.200 --> 0:06:47.800
+in FMPG is lane crossing and all sorts of trickery that essentially cost CPU cycles
+
+105
+0:06:47.800 --> 0:06:49.400
+to take up this time.
+
+106
+0:06:49.400 --> 0:06:54.680
+Sorry, that takes time to compensate for the lanes.
+
+107
+0:06:54.680 --> 0:06:57.640
+I have to talk a bit about K-mask registers as well.
+
+108
+0:06:57.640 --> 0:07:02.920
+So AVX-512 has this new set of registers called K-masks, K0 to K7.
+
+109
+0:07:02.920 --> 0:07:07.560
+And this allows a destination register to remain unchanged.
+
+110
+0:07:07.560 --> 0:07:12.400
+So for example, underneath, you could have an addition but actually have a simple case
+
+111
+0:07:12.400 --> 0:07:15.760
+and you wouldn't, obviously, you could just add zero and it's unchanged.
+
+112
+0:07:15.760 --> 0:07:21.160
+But you could actually use the K-masks to say, actually, I don't want addition to be
+
+113
+0:07:21.160 --> 0:07:22.160
+applied to these elements.
+
+114
+0:07:22.160 --> 0:07:25.000
+I want this to be a pure pass-through.
+
+115
+0:07:25.000 --> 0:07:28.920
+Or you could even force some of the elements to zero if you wanted to.
+
+116
+0:07:28.920 --> 0:07:32.520
+There's a specific, I think it's a flag that lets you do that.
+
+117
+0:07:32.520 --> 0:07:36.000
+And there's a whole set of new instructions to go and manipulate these K-mask registers.
+
+118
+0:07:36.000 --> 0:07:43.240
+And certainly David, in particular, makes good use of K-masks.
+
+119
+0:07:43.240 --> 0:07:47.360
+So now that I've sort of explained some of the back story, I think it's fair to say one
+
+120
+0:07:47.360 --> 0:07:52.960
+of the most important instructions, if not the most important instruction, is a shuffle
+
+121
+0:07:52.960 --> 0:07:55.200
+in multimedia.
+
+122
+0:07:55.200 --> 0:07:56.200
+Also known as permutes.
+
+123
+0:07:56.200 --> 0:07:58.720
+And there might be a technical difference between a shuffle and a permute.
+
+124
+0:07:58.720 --> 0:07:59.720
+Someone might be able to correct me.
+
+125
+0:07:59.720 --> 0:08:02.160
+That might be some mathematical difference.
+
+126
+0:08:02.160 --> 0:08:06.880
+But these are the most important or one of the most important instructions in multimedia.
+
+127
+0:08:06.880 --> 0:08:13.200
+And as you can see on the right, basically, it lets you, shuffles let you have various
+
+128
+0:08:13.200 --> 0:08:17.000
+bits of data and rearrange them in any way that you want, duplicate them, as you can
+
+129
+0:08:17.000 --> 0:08:22.360
+see, or even set individual elements to zero.
+
+130
+0:08:22.360 --> 0:08:29.120
+And this is, for example, famously one use case of this is in the ZigZagScan of FFmpeg,
+
+131
+0:08:29.120 --> 0:08:32.720
+which groups a larger coefficient in a block together.
+
+132
+0:08:32.720 --> 0:08:36.720
+But the way that that's done is via a ZigZagScan.
+
+133
+0:08:36.720 --> 0:08:40.920
+The thing about VPIRM B, which is the new AVX-512 instruction, is it lets you cross
+
+134
+0:08:40.920 --> 0:08:41.920
+a lane.
+
+135
+0:08:41.920 --> 0:08:44.200
+This wasn't something that was possible in before.
+
+136
+0:08:44.200 --> 0:08:49.120
+And as I'll show you later, this makes things substantially faster in many cases.
+
+137
+0:08:49.120 --> 0:08:54.720
+PSHAF B, probably one of the most commonly used instructions in all of open source multimedia.
+
+138
+0:08:54.720 --> 0:09:01.120
+You do git grep, PSHAF B. There will be a huge, you know, that your screen will be full
+
+139
+0:09:01.120 --> 0:09:02.120
+of PSHAF Bs.
+
+140
+0:09:02.120 --> 0:09:06.840
+They'll be used everywhere in open source multimedia.
+
+141
+0:09:06.840 --> 0:09:10.520
+PSHAF B had a kind of useful benefit that if you set the index to minus one, you had
+
+142
+0:09:10.520 --> 0:09:13.280
+a automatically did a zeroing out.
+
+143
+0:09:13.280 --> 0:09:14.720
+With VPIRM B, this isn't the case.
+
+144
+0:09:14.720 --> 0:09:18.160
+You have to actually use a K-Masks to do that.
+
+145
+0:09:18.160 --> 0:09:20.720
+So that just makes things slightly more complicated.
+
+146
+0:09:20.720 --> 0:09:26.240
+There's all sorts of other interesting permutes that AVX-512 offers.
+
+147
+0:09:26.240 --> 0:09:28.960
+I think David also again makes good use of this VPIRM 2B.
+
+148
+0:09:28.960 --> 0:09:32.640
+So you can actually not just have one set of data, you can actually permute from two
+
+149
+0:09:32.640 --> 0:09:33.640
+different registers.
+
+150
+0:09:33.640 --> 0:09:38.320
+So you could have IJK, et cetera, et cetera, in a different register and your output could
+
+151
+0:09:38.320 --> 0:09:40.260
+be a mixture of both of those.
+
+152
+0:09:40.260 --> 0:09:44.080
+So that's kind of interesting.
+
+153
+0:09:44.080 --> 0:09:46.080
+Variable shifts.
+
+154
+0:09:46.080 --> 0:09:48.740
+You have now variable right shifts.
+
+155
+0:09:48.740 --> 0:09:56.160
+So I've given the example of a VPSRLVW, logical right shift, and VPSLVW, variable left shift
+
+156
+0:09:56.160 --> 0:09:57.520
+logical.
+
+157
+0:09:57.520 --> 0:10:01.080
+Big letter soup, quite confusing.
+
+158
+0:10:01.080 --> 0:10:04.440
+In effect, when writing this slide, I misspelt the word shift.
+
+159
+0:10:04.440 --> 0:10:08.240
+You can have a think about how that may have been spelt.
+
+160
+0:10:08.240 --> 0:10:11.920
+Thankfully the rehearsals will pick this up.
+
+161
+0:10:11.920 --> 0:10:15.560
+But this word soup is exceptionally confusing both when writing slides and writing code,
+
+162
+0:10:15.560 --> 0:10:17.040
+it seems.
+
+163
+0:10:17.040 --> 0:10:23.480
+So historically to do variable shifts, so if you want to take off just a step back,
+
+164
+0:10:23.480 --> 0:10:28.360
+take an element and shift each element by a different amount, this was quite complicated.
+
+165
+0:10:28.360 --> 0:10:33.040
+There's various bits of trickery, various idioms that people use to try and emulate
+
+166
+0:10:33.040 --> 0:10:34.800
+that, but they had limitations.
+
+167
+0:10:34.800 --> 0:10:39.600
+I think for example, you were not shifting by zero, possibly wasn't allowed in one of
+
+168
+0:10:39.600 --> 0:10:42.560
+the various bits of trickery.
+
+169
+0:10:42.560 --> 0:10:46.760
+And so if you needed a zero shift, you had to do it a different way, et cetera, et cetera.
+
+170
+0:10:46.760 --> 0:10:51.160
+But now you have this variable shift and it's all usable.
+
+171
+0:10:51.160 --> 0:10:55.240
+Particularly on the left shift, the naive way of doing an emulated left shift is just
+
+172
+0:10:55.240 --> 0:10:59.280
+to multiply, but these instructions are actually faster than to multiply, so there's still
+
+173
+0:10:59.280 --> 0:11:01.280
+some benefit.
+
+174
+0:11:01.280 --> 0:11:09.960
+VP turn log D, this is a, I think no presentation about AVX 512 could not fail to mention VP
+
+175
+0:11:09.960 --> 0:11:13.800
+turn log D. This instruction is literally a kitchen sink.
+
+176
+0:11:13.800 --> 0:11:17.240
+It's quite remarkable in what it can actually do.
+
+177
+0:11:17.240 --> 0:11:22.040
+You can literally program a truth table within an individual instruction itself, and in theory
+
+178
+0:11:22.040 --> 0:11:25.120
+could replace up to eight different instructions.
+
+179
+0:11:25.120 --> 0:11:31.800
+So you could do a whole presentation on VP turn log D, so I thought it would be best
+
+180
+0:11:31.800 --> 0:11:36.240
+to try and pick one of the simplest ones, which is a ternary operation.
+
+181
+0:11:36.240 --> 0:11:42.180
+So this is a bitwise equivalent to the C ternary operation.
+
+182
+0:11:42.180 --> 0:11:48.720
+So in each register, each bit is iterated through, and you can see, for example, one,
+
+183
+0:11:48.720 --> 0:11:52.360
+the ternary operation, so if that bit set chooses this or versus this, and you can see
+
+184
+0:11:52.360 --> 0:11:54.400
+the output of that is that.
+
+185
+0:11:54.400 --> 0:11:59.480
+And so essentially it's a bitwise operation of ZM zero, ZM zero is equal to ZM zero, question
+
+186
+0:11:59.480 --> 0:12:03.480
+mark, ZM one, ZM two, but on a bitwise level.
+
+187
+0:12:03.480 --> 0:12:07.000
+And there's all sorts of other interesting things you can do, and this article's very
+
+188
+0:12:07.000 --> 0:12:08.000
+good.
+
+189
+0:12:08.000 --> 0:12:13.120
+So there's all sorts of interesting things you can do, bit selects, all sorts of various
+
+190
+0:12:13.120 --> 0:12:18.560
+different operations that you can do, multiple XORs, for example.
+
+191
+0:12:18.560 --> 0:12:22.780
+So yeah, also very interesting.
+
+192
+0:12:22.780 --> 0:12:24.640
+So let's look at a real world example.
+
+193
+0:12:24.640 --> 0:12:26.120
+I don't know how well you can see that.
+
+194
+0:12:26.120 --> 0:12:29.600
+I was hoping the dark mode would actually make life easier, but maybe it's made things
+
+195
+0:12:29.600 --> 0:12:30.600
+worse.
+
+196
+0:12:30.600 --> 0:12:33.480
+But I'll talk about some of the, how's it going, mouse?
+
+197
+0:12:33.480 --> 0:12:34.720
+Is it a mouse?
+
+198
+0:12:34.720 --> 0:12:37.560
+No, you can't, because the mouse on the Mac is dark.
+
+199
+0:12:37.560 --> 0:12:41.800
+But anyway, this is V210, Inc.
+
+200
+0:12:41.800 --> 0:12:45.360
+It's probably one of the most simplest assembly functions in FMPEG, but what it does is it
+
+201
+0:12:45.360 --> 0:12:50.600
+takes three 8-bit samples from different memory locations.
+
+202
+0:12:50.600 --> 0:12:55.360
+Sort of as part of its work extends to 10 bits and then packs those three 10-bit words
+
+203
+0:12:55.360 --> 0:12:58.080
+into 32 bits.
+
+204
+0:12:58.080 --> 0:13:03.220
+So what's interesting in this function is we're already starting to do lane crossing
+
+205
+0:13:03.220 --> 0:13:04.580
+that wasn't possible before.
+
+206
+0:13:04.580 --> 0:13:11.360
+So we load the Y samples, so the Luma samples, into the lower 256 bits.
+
+207
+0:13:11.360 --> 0:13:17.880
+We do the U section of the chroma into the third or the second if zero indexed portion
+
+208
+0:13:17.880 --> 0:13:19.400
+of the register.
+
+209
+0:13:19.400 --> 0:13:31.480
+And then equally the same for the V. And then we do one, excuse me, and then one single
+
+210
+0:13:31.480 --> 0:13:35.680
+V perm B can rearrange all of that in one go.
+
+211
+0:13:35.680 --> 0:13:41.160
+This was a lot more complicated back in the olden days.
+
+212
+0:13:41.160 --> 0:13:46.040
+P MAD sub SW is some trickery that unfortunately is not going to be enough time to explain,
+
+213
+0:13:46.040 --> 0:13:51.000
+but eventually is a multiply and add and we use that to emulate a shift.
+
+214
+0:13:51.000 --> 0:13:57.920
+And then the, but then for the second element in the three elements we need to do a D word
+
+215
+0:13:57.920 --> 0:14:01.800
+shift because it actually spans the middle.
+
+216
+0:14:01.800 --> 0:14:06.680
+So then, but therefore then we have sort of conflicting bits in each register.
+
+217
+0:14:06.680 --> 0:14:07.960
+How do we do a bit selection?
+
+218
+0:14:07.960 --> 0:14:14.340
+And this was quite a, I think it's a two or three even operand two, three different instructions
+
+219
+0:14:14.340 --> 0:14:16.160
+in the previous code.
+
+220
+0:14:16.160 --> 0:14:24.160
+And this can now be done in a single VP turn log B. So essentially C turnery B or A. So
+
+221
+0:14:24.160 --> 0:14:29.640
+if bit C is set, choose the bit from B or choose it from A otherwise.
+
+222
+0:14:29.640 --> 0:14:34.160
+And you'll see in a second that actually provides quite a big, well certainly a measurable speed
+
+223
+0:14:34.160 --> 0:14:37.200
+improvement.
+
+224
+0:14:37.200 --> 0:14:38.200
+So these are the benchmarks.
+
+225
+0:14:38.200 --> 0:14:44.000
+So this is a, so I wanted to show a bit about how you can get benefits from AVX 512 even
+
+226
+0:14:44.000 --> 0:14:47.680
+on the older hardware with the shorter existing registers.
+
+227
+0:14:47.680 --> 0:14:49.040
+These are not scientifically benchmarked.
+
+228
+0:14:49.040 --> 0:14:51.280
+I just ran them yesterday.
+
+229
+0:14:51.280 --> 0:14:55.360
+When you do benchmarking you should run them 10 or 100 of times, average them, do standard
+
+230
+0:14:55.360 --> 0:14:56.360
+deviations, et cetera.
+
+231
+0:14:56.360 --> 0:15:05.960
+But just for the simple case, you can see that the C code versus the AVX2 code is around
+
+232
+0:15:05.960 --> 0:15:06.960
+10 times faster.
+
+233
+0:15:06.960 --> 0:15:10.720
+And you can see just by replacing, I think it's a set of two or three different P ANDs
+
+234
+0:15:10.720 --> 0:15:17.560
+or various Boolean functions, you can get a measurable increase just with a small, just
+
+235
+0:15:17.560 --> 0:15:24.200
+with one instruction replacing three, even on the older YM registers.
+
+236
+0:15:24.200 --> 0:15:27.240
+The way the big gains come are on Ice Lake.
+
+237
+0:15:27.240 --> 0:15:34.760
+You can see the C code versus the AVX 512 ICL.
+
+238
+0:15:34.760 --> 0:15:35.760
+There's a huge difference.
+
+239
+0:15:35.760 --> 0:15:44.240
+So by using VPIRMB and the ZMM, you can already make the legacy AVX 512 twice as fast.
+
+240
+0:15:44.240 --> 0:15:48.400
+And if something was 10 times faster, that now becomes 20 times faster.
+
+241
+0:15:48.400 --> 0:15:51.840
+And I often have to say that's not a multiply, that's a times.
+
+242
+0:15:51.840 --> 0:15:54.400
+So it's massive improvement.
+
+243
+0:15:54.400 --> 0:15:58.680
+This was code that could, if you have a large resolution file, take up an entire CPU call
+
+244
+0:15:58.680 --> 0:16:02.440
+and now it takes essentially 5% of a call.
+
+245
+0:16:02.440 --> 0:16:06.000
+It's really tiny.
+
+246
+0:16:06.000 --> 0:16:09.600
+What AVX 512 code is next?
+
+247
+0:16:09.600 --> 0:16:14.040
+Anything really that's line-based or frame-based such as filtering or scaling, I think the
+
+248
+0:16:14.040 --> 0:16:18.160
+next thing we're working on is deinterlacing.
+
+249
+0:16:18.160 --> 0:16:19.160
+Anything involving comparisons.
+
+250
+0:16:19.160 --> 0:16:22.080
+I haven't really talked about comparisons, but there are bits of code that often need
+
+251
+0:16:22.080 --> 0:16:25.280
+to do comparisons.
+
+252
+0:16:25.280 --> 0:16:28.120
+That's going to be an obvious place for AVX 512.
+
+253
+0:16:28.120 --> 0:16:35.040
+Lots of places that do triple Boolean, multiple XORs or multiple XORs and ANDs.
+
+254
+0:16:35.040 --> 0:16:39.720
+And I think it's almost always as possible to replace that with a VP-10 log D.
+
+255
+0:16:39.720 --> 0:16:45.040
+Likewise, in the code base, there's various different idioms and trickery to try and emulate
+
+256
+0:16:45.040 --> 0:16:48.120
+a variable left shift and right shift.
+
+257
+0:16:48.120 --> 0:16:51.080
+Or multiplies for the left shifts and trickery for the right shifts.
+
+258
+0:16:51.080 --> 0:16:56.800
+This could be used with the word suit, the sort of letter suit instructions to try and
+
+259
+0:16:56.800 --> 0:16:59.760
+reproduce that.
+
+260
+0:16:59.760 --> 0:17:01.800
+Intel provides an official manual to all of this.
+
+261
+0:17:01.800 --> 0:17:05.920
+It's very verbose, which is great in many cases because it provides really precise detail
+
+262
+0:17:05.920 --> 0:17:07.720
+of how the instructions work.
+
+263
+0:17:07.720 --> 0:17:09.960
+But unfortunately, it's not at all approachable.
+
+264
+0:17:09.960 --> 0:17:13.560
+There are a few websites that try and simplify things.
+
+265
+0:17:13.560 --> 0:17:17.080
+I think this website on officedaytime.com is some kind of Japanese website, but it's
+
+266
+0:17:17.080 --> 0:17:18.080
+in English.
+
+267
+0:17:18.080 --> 0:17:25.920
+It tries to group all the instructions in some kind of logical ordering, and that makes
+
+268
+0:17:25.920 --> 0:17:29.600
+it a lot simpler to understand.
+
+269
+0:17:29.600 --> 0:17:30.600
+Any questions?
+
+270
+0:17:30.600 --> 0:17:32.440
+Hopefully, I'll be able to answer them.
+
+271
+0:17:32.440 --> 0:17:35.600
+But thankfully, at Fostem, there's always somebody with more knowledge than you in the
+
+272
+0:17:35.600 --> 0:17:36.600
+room.
+
+273
+0:17:36.600 --> 0:17:43.600
+I don't know where they are, but I did see them at one point.
+
+274
+0:17:43.600 --> 0:17:44.600
+Thanks.
+
+275
+0:17:44.600 --> 0:17:45.600
+Any questions?
+
+276
+0:17:45.600 --> 0:17:46.600
+Yes?
+
+277
+0:17:46.600 --> 0:17:53.600
+Regarding the direct assembly writings of AV-X5 film, there's about 7,000 instructions
+
+278
+0:17:53.600 --> 0:17:57.600
+for the AV-X5 film.
+
+279
+0:17:57.600 --> 0:18:05.240
+One, if you choose the direct assembly, then you essentially might miss out on potential
+
+280
+0:18:05.240 --> 0:18:10.240
+instruction scheduling between different architectures.
+
+281
+0:18:10.240 --> 0:18:15.960
+You compile this might schedule better, you might get performance benefit in the future.
+
+282
+0:18:15.960 --> 0:18:20.680
+But then you have to ship a binary for each version.
+
+283
+0:18:20.680 --> 0:18:21.680
+Sorry, repeat the question.
+
+284
+0:18:21.680 --> 0:18:25.680
+You have to write in physics, that's what I'm saying.
+
+285
+0:18:25.680 --> 0:18:28.160
+In order to...
+
+286
+0:18:28.160 --> 0:18:33.160
+The question is, it's the classic question, can the compiler do a better job than the
+
+287
+0:18:33.160 --> 0:18:35.480
+human question?
+
+288
+0:18:35.480 --> 0:18:40.680
+In David, certainly the register allocation has not been very good in compilers historically.
+
+289
+0:18:40.680 --> 0:18:42.440
+David has got its own...
+
+290
+0:18:42.440 --> 0:18:48.080
+David has shown this quite dramatically, because it has its own custom ABI internally.
+
+291
+0:18:48.080 --> 0:18:51.760
+You wouldn't be able to do that with the compiler, like come up with your own internal ABI between
+
+292
+0:18:51.760 --> 0:18:52.760
+functions.
+
+293
+0:18:52.760 --> 0:18:59.840
+So there's certainly 10% plus on the individual function speed gains versus doing it in intrinsics.
+
+294
+0:18:59.840 --> 0:19:05.480
+Some bits of some instructions are not available in intrinsics, like always.
+
+295
+0:19:05.480 --> 0:19:07.480
+It's a compromise.
+
+296
+0:19:07.480 --> 0:19:12.040
+Overall, it's been the way in FM-PEG-X264 for the last 10 years.
+
+297
+0:19:12.040 --> 0:19:16.920
+And I think all intrinsics and inline assembly is banned, and there's only one or two bits
+
+298
+0:19:16.920 --> 0:19:21.920
+left and there's a very good reason why it needs to be there.
+
+299
+0:19:21.920 --> 0:19:24.520
+I have a mixed experience about this.
+
+300
+0:19:24.520 --> 0:19:26.400
+I agree on the...
+
+301
+0:19:26.400 --> 0:19:31.400
+Ideally, assembly is better, but we had some code in intrinsics, we compiled it with the
+
+302
+0:19:31.400 --> 0:19:37.960
+latest clunk, 15, and we saw a 15 to 20% speed increase, just for you compiling.
+
+303
+0:19:37.960 --> 0:19:40.320
+But did you try writing it to begin with?
+
+304
+0:19:40.320 --> 0:19:42.320
+Yes, it was in...
+
+305
+0:19:42.320 --> 0:19:47.440
+Write it originally in assembly and compare.
+
+306
+0:19:47.440 --> 0:19:49.440
+It wouldn't be much...
+
+307
+0:19:49.440 --> 0:19:58.080
+So for example, some of the bit twizzling in there, for example, a compiler would never
+
+308
+0:19:58.080 --> 0:20:00.040
+really have the understanding to do...
+
+309
+0:20:00.040 --> 0:20:04.520
+In fact, I did try chatGPT, and chatGPT at least understood a few of the concepts.
+
+310
+0:20:04.520 --> 0:20:08.600
+It was quite interesting, because not quite out of a day job, but it is...
+
+311
+0:20:08.600 --> 0:20:12.280
+I did ask chatGPT to write this function, actually, just to see what...
+
+312
+0:20:12.280 --> 0:20:14.400
+And it did have some vague idea what was going on.
+
+313
+0:20:14.400 --> 0:20:17.120
+It didn't need to be helped, which is quite interesting.
+
+314
+0:20:17.120 --> 0:20:18.120
+Yep.
+
+315
+0:20:18.120 --> 0:20:25.160
+Is there any collaboration between the multimedia of the people who write the products and
+
+316
+0:20:25.160 --> 0:20:32.720
+the guys writing the compiler, who tell them, look, perhaps you could target certain patterns?
+
+317
+0:20:32.720 --> 0:20:37.360
+So the question is, is there collaboration between people writing the compilers and multimedia
+
+318
+0:20:37.360 --> 0:20:38.360
+community?
+
+319
+0:20:38.360 --> 0:20:41.800
+Yes, in ARM in particular, I think...
+
+320
+0:20:41.800 --> 0:20:42.800
+Is Martin here?
+
+321
+0:20:42.800 --> 0:20:47.720
+No, Martin is not here, but Martin spends a lot of time talking to the compiler community
+
+322
+0:20:47.720 --> 0:20:55.520
+and the linker community on mostly miscompilations, is more his thing.
+
+323
+0:20:55.520 --> 0:21:00.440
+And I think there is also some sharing of mostly around the C code, if the C code is
+
+324
+0:21:00.440 --> 0:21:06.480
+badly miscompiled or thought about the wrong...
+
+325
+0:21:06.480 --> 0:21:09.920
+This sort of thought of the wrong approach, because you could see actually this...
+
+326
+0:21:09.920 --> 0:21:13.480
+And in some cases, in some versions of the compiler will really do a bad job on the C,
+
+327
+0:21:13.480 --> 0:21:14.480
+and it can be 40...
+
+328
+0:21:14.480 --> 0:21:16.000
+The assembly can be 40 times faster.
+
+329
+0:21:16.000 --> 0:21:20.800
+I don't know if that's something you can really trust if one day you change compiler version
+
+330
+0:21:20.800 --> 0:21:31.000
+and a function that you thought was immeasurable is now 40 times slower than it is.
+
+331
+0:21:31.000 --> 0:21:34.320
+And then the question from the internet is, did you have the occasion to look at ARMVA
+
+332
+0:21:34.320 --> 0:21:36.640
+SVE vector instructions for a firm peg?
+
+333
+0:21:36.640 --> 0:21:40.440
+Wow, there's a surprise for this person, because the next speaker is going to be talking about
+
+334
+0:21:40.440 --> 0:21:41.440
+this entire topic.
+
+335
+0:21:41.440 --> 0:21:42.440
+Where is the next speaker?
+
+336
+0:21:42.440 --> 0:21:43.440
+Is he here?
+
+337
+0:21:43.440 --> 0:21:44.440
+He's over there.
+
+338
+0:21:44.440 --> 0:21:47.880
+And the next speaker here, Remy, will be talking about this entire topic.
+
+339
+0:21:47.880 --> 0:21:50.560
+Another question in the room?
+
+340
+0:21:50.560 --> 0:21:51.560
+There's one there.
+
+341
+0:21:51.560 --> 0:21:59.560
+Yeah, I was wondering, so obviously the runtime CPU capability detection and dispatching of
+
+342
+0:21:59.560 --> 0:22:05.560
+the right function is desirable, but I don't think it's necessarily contradictory to having
+
+343
+0:22:05.560 --> 0:22:06.560
+some amount of abstraction.
+
+344
+0:22:06.560 --> 0:22:16.920
+Have you, for instance, looked into the highway library that is being used in some places
+
+345
+0:22:16.920 --> 0:22:25.720
+that is trying to provide some kind of abstraction while still allowing to do runtime dispatch?
+
+346
+0:22:25.720 --> 0:22:31.200
+So the question was, have you looked into some of the abstraction libraries like Highway
+
+347
+0:22:31.200 --> 0:22:36.440
+that's trying to do a sort of compromise between runtime dispatch and abstraction?
+
+348
+0:22:36.440 --> 0:22:40.760
+I think this question was already answered, I think, two presentations ago.
+
+349
+0:22:40.760 --> 0:22:43.080
+Not with Highway, but I think with a different SIMD library.
+
+350
+0:22:43.080 --> 0:22:49.800
+But there have been various approaches, LibOil, SIMDEasy, various different approaches.
+
+351
+0:22:49.800 --> 0:22:57.280
+And again, the result from certainly a firm peg x264, David, has been righted by hand.
+
+352
+0:22:57.280 --> 0:23:03.320
+It's written once, and you know almost certainly that it's going to be usable for a long time.
+
+353
+0:23:03.320 --> 0:23:07.360
+I didn't really talk about it, but the abstraction, there is a lightweight abstraction layer in
+
+354
+0:23:07.360 --> 0:23:13.440
+x264 and FMpeg to try and basically to handle 32-bit, 64-bit, and to handle other things
+
+355
+0:23:13.440 --> 0:23:17.520
+like the different ABI cores.
+
+356
+0:23:17.520 --> 0:23:23.200
+The abstraction layer kind of handles some of the future proofing in that respect.
+
+357
+0:23:23.200 --> 0:23:27.240
+But that's a, well, there's a blog post online from Ronald if he's here, but he's not here.
+
+358
+0:23:27.240 --> 0:23:30.440
+He explains some of this.
+
+359
+0:23:30.440 --> 0:23:32.640
+It's another presentation in itself, unfortunately.
+
+360
+0:23:32.640 --> 0:23:35.600
+I have a question.
+
+361
+0:23:35.600 --> 0:23:42.880
+For your benchmark, do you know which optimization the C code was compiled with?
+
+362
+0:23:42.880 --> 0:23:48.600
+Question was, for the benchmark, what optimizations were the C code compiled with?
+
+363
+0:23:48.600 --> 0:23:53.120
+GCC-003.
+
+364
+0:23:53.120 --> 0:23:59.520
+Doing versions of GCC in FMpeg test suite, there's all sorts, I think from GCC, there's
+
+365
+0:23:59.520 --> 0:24:05.120
+a whole range depending on the build OS, but from 4 to 12, I think.
+
+366
+0:24:05.120 --> 0:24:06.720
+And then maybe some people test nightly.
+
+367
+0:24:06.720 --> 0:24:08.760
+I think Martin certainly tests nightly for ARM.
+
+368
+0:24:08.760 --> 0:24:11.160
+I don't know if anyone tests nightly on x86.
+
+369
+0:24:11.160 --> 0:24:13.680
+Some are LVM as well.
+
+370
+0:24:13.680 --> 0:24:18.000
+But again, I would be very surprised if the compiler would be able to come up with something
+
+371
+0:24:18.000 --> 0:24:25.240
+because, like, what a human wrote, because this is involving bit properties of the actual
+
+372
+0:24:25.240 --> 0:24:32.960
+packing and actually the trick with PMADSW is a kind of trick to try and do a multiply
+
+373
+0:24:32.960 --> 0:24:35.600
+and a zeroing at the same time.
+
+374
+0:24:35.600 --> 0:24:41.960
+And it probably doesn't have the level of thinking to understand the bit patterns internally.
+
+375
+0:24:41.960 --> 0:24:44.680
+Something like chat GPT might one day, which would be quite interesting.
+
+376
+0:24:44.680 --> 0:24:46.240
+But I don't think the compiler does.
+
+377
+0:24:46.240 --> 0:24:48.240
+Last question.
+
+378
+0:24:48.240 --> 0:24:52.240
+I'm just going to follow up on what you said.
+
+379
+0:24:52.240 --> 0:24:57.600
+If you have a small algorithm, a small function like 10, 100 clients maybe, writing in assembly
+
+380
+0:24:57.600 --> 0:24:58.600
+might be easy.
+
+381
+0:24:58.600 --> 0:25:04.800
+But if you have a huge function, like a filter, a variance filter, or something, a GCT, writing
+
+382
+0:25:04.800 --> 0:25:07.440
+directly in assembly might take a long time.
+
+383
+0:25:07.440 --> 0:25:13.600
+That's why originally we write it in C and then we try to write it in easy, intrinsic.
+
+384
+0:25:13.600 --> 0:25:22.560
+So the question is a longer function might take a longer time to write in assembly compared
+
+385
+0:25:22.560 --> 0:25:24.360
+to C or intrinsic.
+
+386
+0:25:24.360 --> 0:25:29.760
+Yes, but there are DCTs in FMPEG, but they're macroed.
+
+387
+0:25:29.760 --> 0:25:33.720
+There's steps of macros to try and help that.
+
+388
+0:25:33.720 --> 0:25:37.720
+Again the abstraction layer also adds, I think, macros on top of what the normal assembler
+
+389
+0:25:37.720 --> 0:25:40.320
+does in terms of macros.
+
+390
+0:25:40.320 --> 0:25:42.720
+The blog post explains, but swap is kind of interesting.
+
+391
+0:25:42.720 --> 0:25:47.280
+It lets you swap registers, but then continue with them and the layer just handles all of
+
+392
+0:25:47.280 --> 0:25:49.680
+that internally.
+
+393
+0:25:49.680 --> 0:25:51.640
+There's also just macros for clipping.
+
+394
+0:25:51.640 --> 0:25:55.320
+I think it was on the example, but clip, don't worry about this.
+
+395
+0:25:55.320 --> 0:25:56.840
+But clip is an example.
+
+396
+0:25:56.840 --> 0:26:01.600
+So clipUB is a macro and on the right target set it will go and use the right clipping
+
+397
+0:26:01.600 --> 0:26:03.400
+functions if they're available, for example.
+
+398
+0:26:03.400 --> 0:26:06.520
+And there's a bunch of these, I think transpose, butterfly.
+
+399
+0:26:06.520 --> 0:26:09.400
+There's a few others like that.
+
+400
+0:26:09.400 --> 0:26:10.400
+Thank you, Kiawan.
+
+401
+0:26:10.400 --> 0:26:18.200
+Thank you.
+

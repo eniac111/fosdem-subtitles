@@ -1,0 +1,790 @@
+WEBVTT
+
+00:00.000 --> 00:10.000
+Julia is going to be talking about graphing tools for scheduler tracing.
+
+00:10.000 --> 00:14.000
+Okay. Do you hear me?
+
+00:14.000 --> 00:17.000
+Okay. So thank you.
+
+00:17.000 --> 00:22.000
+So I'm going to be talking about graphing tools for scheduler tracing.
+
+00:22.000 --> 00:28.000
+So I'll start out, like actually someone started out yesterday with what is a task scheduler.
+
+00:28.000 --> 00:31.000
+For me, a task scheduler is like an important part of the Linux kernel.
+
+00:31.000 --> 00:33.000
+It does two things.
+
+00:33.000 --> 00:40.000
+It places tasks on cores when they either are created with fork or when they wake up
+
+00:40.000 --> 00:42.000
+or when there's load balancing.
+
+00:42.000 --> 00:46.000
+And it also, when a core becomes empty, it decides what core should run next.
+
+00:46.000 --> 00:53.000
+Basically, I'm interested in the Linux kernel files core.c and fer.c, so CFS.
+
+00:53.000 --> 00:55.000
+I'm not at all interested in the second point.
+
+00:55.000 --> 00:58.000
+I'm interested in where cores get placed when they wake up.
+
+00:58.000 --> 01:02.000
+So let's conclude the entire focus of this talk.
+
+01:02.000 --> 01:07.000
+So next question is, how does the scheduler impact application performance?
+
+01:07.000 --> 01:11.000
+Basically, a scheduler is confronted with a bunch of tasks and a bunch of cores,
+
+01:11.000 --> 01:13.000
+and it needs to make decisions.
+
+01:13.000 --> 01:16.000
+Where is it going to put these tasks on these cores?
+
+01:16.000 --> 01:22.000
+And so sometimes if you make a bad decision, it can have a short-term impact.
+
+01:22.000 --> 01:26.000
+Maybe some task has to wait a little bit of extra time,
+
+01:26.000 --> 01:30.000
+but this impact can kind of, there's kind of a domino effect.
+
+01:30.000 --> 01:37.000
+You do one bad decision, and then other bad decisions follow from that.
+
+01:37.000 --> 01:41.000
+So one issue that one might be concerned with is what's called work conservation.
+
+01:41.000 --> 01:43.000
+So we have a machine that has four cores.
+
+01:43.000 --> 01:45.000
+We have a task that wakes up.
+
+01:45.000 --> 01:47.000
+T1, where should we put it?
+
+01:47.000 --> 01:49.000
+So based on the information we have right now,
+
+01:49.000 --> 01:52.000
+we've just got an empty machine and a random task.
+
+01:52.000 --> 01:55.000
+Maybe we have no idea what this, put it on core zero.
+
+01:55.000 --> 01:58.000
+Now another task wakes up.
+
+01:58.000 --> 02:01.000
+What should we do with T2?
+
+02:01.000 --> 02:05.000
+So kind of intuitively, it might be good to put T2 on either core one
+
+02:05.000 --> 02:09.000
+or core two or core three, because they're not doing anything at the moment.
+
+02:09.000 --> 02:13.000
+Putting on a core zero would perhaps be a poor choice
+
+02:13.000 --> 02:17.000
+because it will have to wait for task one to finish.
+
+02:17.000 --> 02:21.000
+So that seems completely obvious as a human looking at boxes on the screen,
+
+02:21.000 --> 02:25.000
+but the scheduler is going to have to hunt around to find those empty cores.
+
+02:25.000 --> 02:28.000
+And so actually CFS is not actually work conserving.
+
+02:28.000 --> 02:34.000
+The basic principle is no core should be overloaded if any core is idle.
+
+02:34.000 --> 02:38.000
+So if you have overload, you should have put it on that idle core instead.
+
+02:38.000 --> 02:40.000
+Another issue is locality.
+
+02:40.000 --> 02:46.000
+So instead of having just four random cores, we may have a multi-socket machine.
+
+02:46.000 --> 02:49.000
+We've got cores zero and one, which are together on one socket.
+
+02:49.000 --> 02:52.000
+Core two and three are together on a socket.
+
+02:52.000 --> 02:54.000
+We have T1 is on core zero.
+
+02:54.000 --> 02:57.000
+Where should we put T2?
+
+02:57.000 --> 03:01.000
+So we have those three idle cores, but maybe core one would be a better choice
+
+03:01.000 --> 03:07.000
+if either T2 has already allocated all of its data on the first socket
+
+03:07.000 --> 03:11.000
+or if T2 wants to discuss things with T1.
+
+03:11.000 --> 03:15.000
+If we put it on two or three, things might get slower.
+
+03:15.000 --> 03:21.000
+So basically you can see that there's a lot of potential for things to go wrong.
+
+03:21.000 --> 03:25.000
+So we need to understand maybe what the scheduler is actually doing,
+
+03:25.000 --> 03:28.000
+but the problem is the scheduler is buried down there in the OS.
+
+03:28.000 --> 03:33.000
+When you're on the application, you don't really know where your tasks are running.
+
+03:33.000 --> 03:37.000
+So we want to consider how we can see what the scheduler is doing.
+
+03:37.000 --> 03:40.000
+So fortunately there's some tools that are available.
+
+03:40.000 --> 03:43.000
+So the most helpful one, I would say, is trace command.
+
+03:43.000 --> 03:48.000
+So trace command allows you to trace all different kinds of kernel events.
+
+03:48.000 --> 03:52.000
+Basically it's a front end on ftrace, but in particular it lets you trace scheduling events.
+
+03:52.000 --> 03:54.000
+So that's the part we're interested in.
+
+03:54.000 --> 03:57.000
+So you can see a trace here, and if you get this trace,
+
+03:57.000 --> 04:03.000
+it will have basically all the information you need to solve all of your scheduling problems.
+
+04:03.000 --> 04:07.000
+On the other hand, it unfortunately has all the information you need to solve all of your scheduling problems.
+
+04:07.000 --> 04:09.000
+That is, it's ordered.
+
+04:09.000 --> 04:11.000
+It's a sequential thing.
+
+04:11.000 --> 04:13.000
+It's ordered according to time.
+
+04:13.000 --> 04:17.000
+If your application runs for a certain amount of time, you'll end up with a huge file.
+
+04:17.000 --> 04:20.000
+And you can see even in this little tiny trace that I'm showing,
+
+04:20.000 --> 04:23.000
+we've got different activities on different cores are mixed up.
+
+04:23.000 --> 04:29.000
+We have core 26 and core 62 here.
+
+04:29.000 --> 04:32.000
+And so in practice it can get very hard to actually sort out what's going on,
+
+04:32.000 --> 04:34.000
+who's doing what, and so on.
+
+04:34.000 --> 04:38.000
+And so the next tool, which is very helpful, is one that's called kernel shark.
+
+04:38.000 --> 04:44.000
+So this gives you a graphical interface that lets you see what's going on on your different cores.
+
+04:44.000 --> 04:48.000
+And it also gives you that same textual output at the bottom.
+
+04:48.000 --> 04:50.000
+You can kind of correlate them to each other.
+
+04:50.000 --> 04:54.000
+You can zoom in quite easily, and so on.
+
+04:54.000 --> 05:01.000
+On the other hand, in my personal application where I'm interested in actually very large machines,
+
+05:01.000 --> 05:06.000
+kernel shark has some kind of, a bit difficult to use in some cases.
+
+05:06.000 --> 05:09.000
+It's great for if you want to really zoom in on a specific problem.
+
+05:09.000 --> 05:13.000
+It's not so great if you actually don't really know where your problem is,
+
+05:13.000 --> 05:17.000
+and you want to see somehow an overview with everything at once.
+
+05:17.000 --> 05:19.000
+Here I'm only showing two cores.
+
+05:19.000 --> 05:23.000
+You can see that the display is kind of a bit spread out.
+
+05:23.000 --> 05:33.000
+It's going to be hard to get 128 cores to fit on your screen and be reasonably understandable.
+
+05:33.000 --> 05:39.000
+So what we would like is some way of understanding what's going on on big machines.
+
+05:39.000 --> 05:47.000
+So the thing I put the emphasis on previously is that we want to see what's going on on all the cores at once.
+
+05:47.000 --> 05:54.000
+Something that I've also found extremely useful in practice is to be able to collect traces,
+
+05:54.000 --> 06:00.000
+collect these images, share them with my colleagues, put them in papers, put them in slides, and so on.
+
+06:00.000 --> 06:08.000
+So I found it useful to collect lots of traces, compare them, store them, look at them later, and so on.
+
+06:08.000 --> 06:17.000
+On the other hand, I have, at least for the moment, completely abandoned this nice feature of kernel shark,
+
+06:17.000 --> 06:22.000
+which is that you can zoom in or zoom out and find out exactly what you want to see at what time.
+
+06:22.000 --> 06:28.000
+My proposed approach that I'm going to present in this talk is completely uninteractive.
+
+06:28.000 --> 06:32.000
+So you run a command, you get a picture, you look at your picture, and you run another command,
+
+06:32.000 --> 06:36.000
+you get another picture, and you look at that picture.
+
+06:36.000 --> 06:42.000
+So actually, in the last few years, I've made lots and lots of tools that start out with trace command input
+
+06:42.000 --> 06:44.000
+and visualize it in different ways.
+
+06:44.000 --> 06:48.000
+Sort of the ones that have stood the test of time are the ones I'm going to present,
+
+06:48.000 --> 06:52.000
+which are DAT2GRAPH and running-waiting.
+
+06:52.000 --> 06:54.000
+The names are not super imaginative, perhaps.
+
+06:54.000 --> 07:00.000
+DAT2GRAPH takes a DAT file, so that's what the trace command produces, and it makes a graph for you.
+
+07:00.000 --> 07:06.000
+So basically, it's going to show you, we have the x-axis and the y-axis, the x-axis is the time,
+
+07:06.000 --> 07:11.000
+and then on the y-axis we have our cores, and we see what's running on each core at each time.
+
+07:11.000 --> 07:15.000
+So kind of like what kernel shark show you, Sue, but in much more compressed format.
+
+07:15.000 --> 07:18.000
+And running-waiting is just a line graph.
+
+07:18.000 --> 07:26.000
+It shows you how many tasks are running at a particular time and how many tasks are waiting on a run queue
+
+07:26.000 --> 07:28.000
+and are not able to run.
+
+07:28.000 --> 07:30.000
+So we'll see how that's used.
+
+07:30.000 --> 07:34.000
+So the rest of this talk I'm going to present these two tools,
+
+07:34.000 --> 07:38.000
+and I'm going to be motivated by this patch that I submitted a few years ago.
+
+07:38.000 --> 07:40.000
+I'm not going to discuss the patch in detail now.
+
+07:40.000 --> 07:44.000
+We'll see it later after we've seen all the examples.
+
+07:44.000 --> 07:49.000
+The application I'm going to be interested in is part of the NAS parallel benchmarks.
+
+07:49.000 --> 07:58.000
+These are a bunch of, it says what, you can read what it says, it's small kernels having to do with HPC kind of things.
+
+07:58.000 --> 08:01.000
+We're going to focus on the UA benchmark.
+
+08:01.000 --> 08:03.000
+It does something.
+
+08:03.000 --> 08:09.000
+What's important for our purposes is that it has n tasks and they're running on n cores.
+
+08:09.000 --> 08:14.000
+And so they kind of run, they seem, at least superficially, they seem to run all the time.
+
+08:14.000 --> 08:21.000
+You would expect that they would just choose their cores, stay on their cores, and run on those cores forever.
+
+08:21.000 --> 08:26.000
+So you would expect this benchmark to be completely uninteresting from a scheduling point of view.
+
+08:26.000 --> 08:32.000
+So if we take this benchmark and we run it a few times, so I run it 10 times,
+
+08:32.000 --> 08:36.000
+and I've taken these runs and I've sorted it by increasing runtime,
+
+08:36.000 --> 08:42.000
+you can see that something is going on because there's kind of these runs on the left-hand side here,
+
+08:42.000 --> 08:45.000
+which start out around 20 seconds.
+
+08:45.000 --> 08:47.000
+And there's a definite gap here.
+
+08:47.000 --> 08:55.000
+I mean, it gets a bit longer, a small amount, but there's a definite gap here and then it jumps up to closer to 30 seconds.
+
+08:55.000 --> 09:01.000
+So maybe we have 40 percent overhead between the fastest one and the slowest one.
+
+09:01.000 --> 09:08.000
+It's only 10 runs, it's quite a lot of variation. For a benchmark that we expect, we'll just run like this
+
+09:08.000 --> 09:11.000
+and not doing anything interesting at all.
+
+09:11.000 --> 09:13.000
+So we can ask why so much variation.
+
+09:13.000 --> 09:17.000
+So now we can actually look and see what's going on at the scheduling level.
+
+09:17.000 --> 09:19.000
+So this is the graphs.
+
+09:19.000 --> 09:27.000
+We have, as I said, we have the time on the x-axis and we have the, what's going on on the different cores on the y-axis.
+
+09:27.000 --> 09:33.000
+It says socket order on the different cores. What I've done is actually on my machine,
+
+09:33.000 --> 09:36.000
+the numbers go kind of round robin between the different sockets,
+
+09:36.000 --> 09:42.000
+but I have organized it so that we have the first socket at the bottom, second socket kind of in the middle, and so on.
+
+09:42.000 --> 09:46.000
+It's not very important at this point, though.
+
+09:46.000 --> 09:50.000
+So, I don't know, we have a graph and we see what it's doing.
+
+09:50.000 --> 09:53.000
+So this is the fastest run.
+
+09:53.000 --> 09:58.000
+It looks kind of like what we expected. The thing's not moving around, not much is happening.
+
+09:58.000 --> 10:03.000
+This is a much slower run. So this previous one was 22 seconds. This next one is 28 seconds.
+
+10:03.000 --> 10:06.000
+So that's kind of a big overhead.
+
+10:06.000 --> 10:13.000
+And here we can see that things are not going as well at all because in particular over here in this region,
+
+10:13.000 --> 10:23.000
+we have these white spaces and white spaces means that nothing is happening on that core.
+
+10:23.000 --> 10:28.000
+So there could be two reasons why nothing is happening. One of them is that there's nothing to do.
+
+10:28.000 --> 10:32.000
+So maybe one of these tasks has gotten way ahead of the other one and so it needs to sleep
+
+10:32.000 --> 10:35.000
+and to wait for the others to finish what they want to do.
+
+10:35.000 --> 10:42.000
+The more unpleasant reason that nothing is happening is because several of these tasks can be stuck on the same core
+
+10:42.000 --> 10:45.000
+and they're going to have to bounce back and forth between each other.
+
+10:45.000 --> 10:50.000
+And actually, nothing, we have a work conservation problem, nothing, some of the cores are idle.
+
+10:50.000 --> 10:55.000
+So we can see which case we're in by looking at the running waiting graph.
+
+10:55.000 --> 11:02.000
+So here we have, again we have our, this time we have the number of tasks on the Y axis,
+
+11:02.000 --> 11:06.000
+but we have n tasks on n cores so it's the same.
+
+11:06.000 --> 11:11.000
+At the top we have a dotted line which is the number of cores on the machine.
+
+11:11.000 --> 11:15.000
+And then the green lines are things, the number of tasks that are running.
+
+11:15.000 --> 11:19.000
+So it's kind of like all the tasks that are running all the time, but not exactly.
+
+11:19.000 --> 11:24.000
+There's sometimes when only a very few tasks are running down here.
+
+11:24.000 --> 11:29.000
+And then we have over here in this situation, this is the place where we had the gaps on the other graph.
+
+11:29.000 --> 11:37.000
+And here we have, often we have like almost all the cores, all the tasks that are running, but not quite.
+
+11:37.000 --> 11:41.000
+And we have this red lines here, and so red lines means tasks that are waiting.
+
+11:41.000 --> 11:46.000
+So we're in an overload situation, so some tasks have been placed on the same cores as each other,
+
+11:46.000 --> 11:49.000
+and so they have to wait for each other to finish.
+
+11:49.000 --> 11:53.000
+So this is kind of more of a problem for this kind of application.
+
+11:53.000 --> 11:57.000
+So basically the two problems we have, we have public tasks that are moving around,
+
+11:57.000 --> 12:04.000
+and we have some cores that are overloaded, and so the tasks don't get to run as much as they ought to be.
+
+12:04.000 --> 12:11.000
+So now what we're going to do is we're going to zoom into some of these situations and see what the problem could be.
+
+12:11.000 --> 12:14.000
+So here's the first one of these situations.
+
+12:14.000 --> 12:20.000
+If you look over here, basically around three seconds, at this point that I've circled,
+
+12:20.000 --> 12:24.000
+you can see we have an orange core, sorry, orange task and then a blue task.
+
+12:24.000 --> 12:31.000
+And so something is happening to cause one course to change to another one.
+
+12:31.000 --> 12:38.000
+And if you look up a bit more, there's some other situations where that happens, kind of all in the same area.
+
+12:38.000 --> 12:43.000
+So we can look into that in more detail if we zoom in a bit.
+
+12:43.000 --> 12:48.000
+So here I have the command line that you have to write.
+
+12:48.000 --> 12:52.000
+This socket order is to get the pore's order in a certain way.
+
+12:52.000 --> 12:57.000
+Min and max are the, we want to go from three seconds to 3.2 seconds.
+
+12:57.000 --> 13:05.000
+Target UA is, it's going to give our application special colors and other things that happen are going to be black.
+
+13:05.000 --> 13:09.000
+So then we can see other, if there's some other strange things that are happening on the machine.
+
+13:09.000 --> 13:18.000
+So now that we have zoomed in at this level, we can see that things actually are not as nice as they looked when we were in the zoomed out situation.
+
+13:18.000 --> 13:23.000
+Here we have like everybody, almost everybody has stopped for a little gap here.
+
+13:23.000 --> 13:30.000
+And then here, this is basically the fourth socket. There's a lot of unfortunate things happening up here.
+
+13:30.000 --> 13:34.000
+So we can zoom in a bit more.
+
+13:34.000 --> 13:39.000
+So now I've zoomed in just on this big vertical line here.
+
+13:39.000 --> 13:47.000
+And when we zoom in a bit more, then we start to see that there are some other things going on on our machine.
+
+13:47.000 --> 13:51.000
+So they're the colored lines and then we have some little black lines.
+
+13:51.000 --> 13:59.000
+So we can try to find out what the little black lines are. So this data graph, it has another option.
+
+13:59.000 --> 14:05.000
+What are the black lines? It has another option where we can have colors for to see, it's color by command.
+
+14:05.000 --> 14:09.000
+The colors are chosen not by the PID, but by what the command is.
+
+14:09.000 --> 14:14.000
+So mostly we have our command, which is blue, UA, but we have some demons here.
+
+14:14.000 --> 14:18.000
+So these are kind of inevitable. The kernel needs to do some things.
+
+14:18.000 --> 14:26.000
+And so basically, if we jump back here, we can see that if we look, for example, in this place, our task is running along,
+
+14:26.000 --> 14:33.000
+a demon comes and then it interrupts our task. So our task is not going to be working, but at least our task is staying in the same place.
+
+14:33.000 --> 14:39.000
+And so nothing extremely horrible happens, but these things get a bit unsynchronized.
+
+14:39.000 --> 14:47.000
+Some of them get slowed down and so on. So that's one kind of slowdown that we can have.
+
+14:47.000 --> 14:55.000
+But in principle, it shouldn't have a huge long term impact. So now we can move a bit further off to the right.
+
+14:55.000 --> 15:04.000
+We can see there are some more of these little black things here. Here what we have here, we have orange task.
+
+15:04.000 --> 15:13.000
+Here we have a black line. And here we have another orange task up here that happens sort of at the same thing, the same, the same.
+
+15:13.000 --> 15:19.000
+It's a little bit off to the right. It doesn't start exactly right. So what's happening here is we're doing load balancing.
+
+15:19.000 --> 15:23.000
+And so the kernel thinks, OK, so there are two things going on here.
+
+15:23.000 --> 15:29.000
+We should find one of these many idle cores up here and use one of them to put this task.
+
+15:29.000 --> 15:38.000
+But that's actually quite a poor choice in this case because basically in this application, we have all the sockets being filled up with all of their tasks.
+
+15:38.000 --> 15:48.000
+And so by doing this load balancing, we have put an extra task up there on the fourth socket. And that's something we will come to regret later, one might say.
+
+15:48.000 --> 15:59.000
+Even though it seems OK for the moment. So what this leads to, though, is so as I just said, it's going to lead to a cascade of migrations.
+
+15:59.000 --> 16:11.000
+We put something on that task. Someone else is going to wake up for that core. It will have to go somewhere else. And that other place is someone's going to wake up for that and so on.
+
+16:11.000 --> 16:17.000
+So then the third situation, this is actually in the same position. We see another situation over here.
+
+16:17.000 --> 16:27.000
+Here's another case where we are changing from one task to another one. But this time there's no little black dot, which is motivating this change somehow.
+
+16:27.000 --> 16:33.000
+Nothing strange seems to be happening. It just seems to be happening spontaneously by itself.
+
+16:33.000 --> 16:38.000
+So we can look again at the running waiting graph to see what's happening. It's not super easy to see.
+
+16:38.000 --> 16:44.000
+But basically what's happening is we have a green line, which is below the number of cores and we have a red line that's just above it.
+
+16:44.000 --> 16:55.000
+And again, we have overload situation. So there's one thread, which is actually this orange one here, this blue and orange core here.
+
+16:55.000 --> 17:01.000
+Orange task are sharing the same core. And so they're going to have to bounce back and forth between them.
+
+17:01.000 --> 17:11.000
+So we can try to look and see how did we end up with this situation. So this here, this is a graph that I made by hand, more or less.
+
+17:11.000 --> 17:18.000
+This is just focusing on the two specific cores that we're interested in. Here we have this orange task. It's running along.
+
+17:18.000 --> 17:27.000
+It prefers to be on this core number one, one, one. It then goes to sleep. And then after some time, we move along over here.
+
+17:27.000 --> 17:35.000
+At this point, it wakes up and we want to figure out it's waking up.
+
+17:35.000 --> 17:42.000
+It's actually the task on core number 68 that is going to wake it up. And so we need to find a place to put it.
+
+17:42.000 --> 17:52.000
+So the obvious place to put it would be on core one, one, one. That's where it was before. And that core, the important thing is that core is actually not doing anything.
+
+17:52.000 --> 18:04.000
+But that's not what happens. What happens is it gets placed on core number 68. It gets placed on the core of the parent as opposed to the core where it was running before.
+
+18:04.000 --> 18:16.000
+So this seems very surprising. We expect that we prefer to put cores where it can run immediately. Why does it, for no particular reason, get moved off?
+
+18:16.000 --> 18:27.000
+So the key to the situation is this mysterious little dot here. So it's a key worker that woke up and took advantage of this empty space so it could run immediately.
+
+18:27.000 --> 18:44.000
+And at the time, this is like Linux 5.10, where all of these graphs come from. At this time, basically, there's a decision whenever a core wakes up, should it go on the socket where it was before?
+
+18:44.000 --> 18:50.000
+Or should it go on the socket of the waker? And there are different sockets in this case.
+
+18:50.000 --> 19:00.000
+And the issue is that when you make that decision, you take into account the load average.
+
+19:00.000 --> 19:08.000
+And the load average is something that is collected over time, and then the old information gets decreased a bit over time.
+
+19:08.000 --> 19:19.000
+And so because we have this key worker here, the load average is not zero. And so this core is seen as being not completely idle, even though it is completely idle.
+
+19:19.000 --> 19:29.000
+And so when that situation arises, then there's some kind of competition between the parent, the waker, and the place where you were before.
+
+19:29.000 --> 19:35.000
+And for some reason, this core number 111 is going to lose this competition in this situation.
+
+19:35.000 --> 19:43.000
+And so the kernel thinks that this core down here would be a better place for it, which in this case, it definitely is not.
+
+19:43.000 --> 20:00.000
+So that's where this comes in. There's a little patch. All it does is it checks if the core where the task was previously, if that is completely idle, then just use that instead of considering other possibilities.
+
+20:00.000 --> 20:06.000
+So if we apply that patch, then here we have the pink lines here. So now we still have a slight increase.
+
+20:06.000 --> 20:10.000
+We still have our task moving around. It's not going to solve all the problems.
+
+20:10.000 --> 20:18.000
+But we don't have this big jump, which happens when the overload situation is introduced.
+
+20:18.000 --> 20:26.000
+And we can see how what the impact on another completely different application. So this is a Java program as part of the decapo benchmark suite.
+
+20:26.000 --> 20:34.000
+And this patch causes tasks to kind of have a better chance of remaining where they were before.
+
+20:34.000 --> 20:45.000
+And on this benchmark, what happens after we have the patch is that the all the tasks manage to stay on the same socket because there's actually not that many of them one at a time.
+
+20:45.000 --> 20:51.000
+And they fit there nicely. Previously, they were tending to kind of move over the entire machine.
+
+20:51.000 --> 20:57.000
+And we have here much like more than 20 seconds between the fastest and slowest.
+
+20:57.000 --> 21:03.000
+Here we have a much more uniform running time. And obviously, the running time is also much faster.
+
+21:03.000 --> 21:14.000
+It has multiple benefits. So in conclusion, if you want to understand what your scheduler is really doing, you have to actually look and see what your scheduler is really doing.
+
+21:14.000 --> 21:22.000
+Just seeing that the number now it's faster, now it's slower, something like that, it doesn't really give you a good understanding of what's going on.
+
+21:22.000 --> 21:29.000
+Different perspectives. We found that it provides different kinds of information. The running rating graph is actually very coarse-grained.
+
+21:29.000 --> 21:36.000
+It actually can sometimes can show you like the problem is exactly in this region because there's overload in this region.
+
+21:36.000 --> 21:45.000
+So we have our two tools that to graph what's going on at what time and running waiting, how much is happening at each point in time.
+
+21:45.000 --> 21:54.000
+In future work, these graphs are a little bit slow to generate because we at the moment for technical reasons, we go through postscript and then go to PDF.
+
+21:54.000 --> 21:59.000
+So it'd be nice to be able to generate them more quickly to be a bit more interactive looking.
+
+21:59.000 --> 22:03.000
+And also, as I mentioned in the beginning, I've made lots of tools.
+
+22:03.000 --> 22:12.000
+If these tools could become a bit more configurable, then maybe I wouldn't have to like restart the implementation each time and be more useful for other people.
+
+22:12.000 --> 22:26.000
+So everything is publicly available. Thank you.
+
+22:26.000 --> 22:34.000
+We have time for one or two questions.
+
+22:34.000 --> 22:45.000
+Thanks for the talk. I have two questions. Do you have a solution to visualize the latencies due to cache misses, for example, after a migration?
+
+22:45.000 --> 22:55.000
+And the second one is, do you have a way to visualize when tasks are synchronizing on the mutex, for example, that also can bring some latencies?
+
+22:55.000 --> 23:05.000
+So, no, we haven't done anything for cache misses. It could be interesting.
+
+23:05.000 --> 23:13.000
+I mean, I have another tool which deals with events, and I think there's some way to add events to that graph.
+
+23:13.000 --> 23:19.000
+So then maybe you could see when different locking operations are happening. I mean, I definitely think that's useful.
+
+23:19.000 --> 23:27.000
+I don't think the support is as great as one might like at the moment, but it's definitely an important thing.
+
+23:27.000 --> 23:33.000
+One more question.
+
+23:33.000 --> 23:35.000
+Hello, Julia.
+
+23:35.000 --> 23:52.000
+I was wondering, is there a way to show the CPU state at the time you are putting the time, because your graph is making the assumption that typically the CPU frequency is stable over time.
+
+23:52.000 --> 24:07.000
+It would be very interesting to know the physical state of the processor at the time we are putting, because maybe the task is running on a faster, the CPU frequency is higher on one call than the other.
+
+24:07.000 --> 24:15.000
+So being able to visualize that this application is running on a fast or slow CPU could be very interesting to know.
+
+24:15.000 --> 24:29.000
+I think the tool does that, but the unfortunate thing I didn't talk about it because you have to actually go and add a line, a trace print K line to your kernel to actually print out that information because it doesn't exist anywhere in the kernel.
+
+24:29.000 --> 24:39.000
+So that's the only issue. But actually the tool, once you print it out in the proper format, it actually does everything and it will show you, it can show you just the frequencies.
+
+24:39.000 --> 24:51.000
+So you can see different colors for how fast it's going. You can also see the merged thing where you have the frequency in one line and you have the activity in the other line.
+
+24:51.000 --> 25:20.000
+Thank you for the talk. Thank you for the question. Sorry we can't take all questions, but I'm sure you can find Julia later.

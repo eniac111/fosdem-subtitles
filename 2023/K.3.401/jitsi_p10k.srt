@@ -1,0 +1,408 @@
+1
+0:00:00.000 --> 0:00:14.640
+Well, alright. I'll get going since we're here. My name is Saul and today I'd like to
+
+2
+0:00:14.640 --> 0:00:19.120
+talk to you about our little project P10K or how to get 10,000 participants into a
+
+3
+0:00:19.120 --> 0:00:22.000
+GTSI meeting. I...
+
+4
+0:00:22.000 --> 0:00:23.600
+Sorry? My voice?
+
+5
+0:00:23.600 --> 0:00:28.280
+No, it doesn't go on the loudspeakers. It's just for the recording. It is, but it is.
+
+6
+0:00:28.280 --> 0:00:35.320
+Sorry, I lost my voice. I'll try. I suppose most of you know what it is, but for those
+
+7
+0:00:35.320 --> 0:00:41.720
+who don't, it's a WebRTC compatible video conferencing application. I'd like to say
+
+8
+0:00:41.720 --> 0:00:46.640
+that I can think of it in three ways. A set of open source projects that allow you to
+
+9
+0:00:46.640 --> 0:00:52.040
+either deploy it or, you know, piecemeal it and build something with it. It's also a set
+
+10
+0:00:52.040 --> 0:00:57.920
+of APIs and mobile SDKs so you can embed it into your existing application and it's fully
+
+11
+0:00:57.920 --> 0:01:03.120
+open source Apache 2 license and we have a pretty vibrant community that helps us build
+
+12
+0:01:03.120 --> 0:01:11.120
+some stuff. So I've talked about scaling GTSI meet a couple of years ago here at FOSDEM
+
+13
+0:01:11.120 --> 0:01:18.520
+with what we did during the pandemic. Also at ComCom about how we reached 500 participants.
+
+14
+0:01:18.520 --> 0:01:24.440
+But then of course somebody will ask, how do you do more, right? So that's what I'm
+
+15
+0:01:24.440 --> 0:01:31.920
+about to go on today. A quick TLDR on what the trick is to scale up is mostly to cheat
+
+16
+0:01:31.920 --> 0:01:37.840
+because it turns out that you never see 10,000 participants at the same time. So you need
+
+17
+0:01:37.840 --> 0:01:43.760
+to paginate and not show all of them at the same time, not load them at the same time.
+
+18
+0:01:43.760 --> 0:01:47.440
+Also on the back end, you don't want to be, you know, taking care of 10,000 things at
+
+19
+0:01:47.440 --> 0:01:53.560
+once. You want to be really careful avoiding re-renders on the React side of things, so
+
+20
+0:01:53.560 --> 0:02:00.160
+on your front end. You definitely don't want to have 10,000 things. And very importantly,
+
+21
+0:02:00.160 --> 0:02:05.720
+reducing the signaling. And this is kind of the crux of the thing. So with all of those
+
+22
+0:02:05.720 --> 0:02:12.200
+things we ended up getting 500 participants in a single meeting. All of them are fully
+
+23
+0:02:12.200 --> 0:02:18.240
+functional bidirectional audio video participants. They will never all have video on, so that's
+
+24
+0:02:18.240 --> 0:02:19.240
+sort of fine.
+
+25
+0:02:19.240 --> 0:02:25.200
+I'm going to go a quick run through our architecture. So when we dive into XMPP, we know what we're
+
+26
+0:02:25.200 --> 0:02:31.240
+talking about. XMPP is our core signal protocol. You heard it from Matt for chat. So all the
+
+27
+0:02:31.240 --> 0:02:36.720
+participants joined an XMPP muck, so a group chat. And then our focus, Jekofo negotiates
+
+28
+0:02:36.720 --> 0:02:42.840
+a session with each participant. And then they all end up mixed in the JVP, which is
+
+29
+0:02:42.840 --> 0:02:49.280
+where we allocate the media. So this is like a back of a napkin design level, but it's
+
+30
+0:02:49.280 --> 0:02:57.080
+pretty accurate. Prosthodies are XMPP server of choice. And Jekofo is the one that will
+
+31
+0:02:57.080 --> 0:03:03.080
+allocate sessions here and then establish sessions with the users. So they all end up
+
+32
+0:03:03.080 --> 0:03:05.280
+having this connection.
+
+33
+0:03:05.280 --> 0:03:12.320
+Now how do you go about solving 10,000 participants? Well, first of all, we do some research. And
+
+34
+0:03:12.320 --> 0:03:18.440
+what we knew is that presence is Tansa. So XMPP presence was our Achilles heel. So we
+
+35
+0:03:18.440 --> 0:03:25.760
+needed to sort that out. And intuitively, when you need to support many of something,
+
+36
+0:03:25.760 --> 0:03:30.200
+you think of, well, I'll partition it in smaller chunks, and maybe that's how I do it. So there
+
+37
+0:03:30.200 --> 0:03:34.040
+is federated muck for that. So we thought maybe that's where it goes. And turns out
+
+38
+0:03:34.040 --> 0:03:39.960
+the military had sort of researched this problem as well. And there is this cool white paper
+
+39
+0:03:39.960 --> 0:03:45.800
+called Federated Multi-User Chat for military deployments. And one of the things they got
+
+40
+0:03:45.800 --> 0:03:53.160
+there is how to avoid these presence flooding. And they do that with the visitor role. And
+
+41
+0:03:53.160 --> 0:03:56.800
+that's where we got the idea from. So the idea is that we're going to have two types
+
+42
+0:03:56.800 --> 0:04:04.120
+of users, the active users and passive users. And we don't need to know about all these
+
+43
+0:04:04.120 --> 0:04:08.480
+passive users. All these audience, we just need to know the number. We don't need to
+
+44
+0:04:08.480 --> 0:04:13.440
+draw a tile for them. They don't need to be as apparent that they're participating in
+
+45
+0:04:13.440 --> 0:04:18.400
+the meeting. They're just viewers. And this is what the visitor role in XMPP muck lingo
+
+46
+0:04:18.400 --> 0:04:25.280
+means. So a passive participant can then become an active participant by switching the role.
+
+47
+0:04:25.280 --> 0:04:29.040
+Because we're not building live streaming. So what we want to build is a way to actually
+
+48
+0:04:29.040 --> 0:04:33.240
+actively be able to participate. Anybody of those 10,000 participants should be able to
+
+49
+0:04:33.240 --> 0:04:42.360
+take the mic anytime. Scenarios for this, earnings calls on publicly traded companies,
+
+50
+0:04:42.360 --> 0:04:49.880
+just because we can, you name it. So step two, how do we test it? Because if we build
+
+51
+0:04:49.880 --> 0:04:54.560
+it, we need to be able to know we have accomplished our goal. And in order to test 10,000 participants,
+
+52
+0:04:54.560 --> 0:05:01.180
+you need, well, 10,000 participants. So we use a big-ass lineum grid. And we created
+
+53
+0:05:01.180 --> 0:05:05.880
+some lightweight clients so that we could have a lot of chumps to join the call. They've
+
+54
+0:05:05.880 --> 0:05:11.880
+got no UI. We spawn multiple browser windows with multiple tabs with multiple of these
+
+55
+0:05:11.880 --> 0:05:18.200
+clients. And a recent trick is we use insertable streams to drop all media. One thing you can
+
+56
+0:05:18.200 --> 0:05:22.600
+do is modify it. And another thing you can do is drop it. So they say nothing. And then
+
+57
+0:05:22.600 --> 0:05:26.080
+they are a lot more lightweight than our Selenium grid. Otherwise, it would take millions just
+
+58
+0:05:26.080 --> 0:05:32.320
+to test if what you're doing is right. There's a PR by Philip Hanke actually to do something
+
+59
+0:05:32.320 --> 0:05:38.720
+like Chrome would say, black frames, very tiny ones. So maybe that's where we go in
+
+60
+0:05:38.720 --> 0:05:44.320
+the future as well. And we also delay track creation so that we don't create tracks. If
+
+61
+0:05:44.320 --> 0:05:49.320
+you join muted, we don't need to do the whole create a video track that is useless and things
+
+62
+0:05:49.320 --> 0:05:55.880
+like this. And the next thing is we scale the signaling. And the way we do it is we
+
+63
+0:05:55.880 --> 0:06:01.040
+ended up having multiple prosody servers. This is one node, but it could be spread to
+
+64
+0:06:01.040 --> 0:06:06.360
+multiple nodes. So we have the main prosody server, which is where the active participants
+
+65
+0:06:06.360 --> 0:06:13.280
+join the meeting. And then we have up to five extra nodes which we call visitor nodes, where
+
+66
+0:06:13.280 --> 0:06:20.120
+people join in this visitor role. So the presence is not broadcasted. Jikofo will decide which
+
+67
+0:06:20.120 --> 0:06:25.760
+one you join, usually depending on the capacity. And the trick to actually become an active
+
+68
+0:06:25.760 --> 0:06:31.560
+participant is to just join this one, join the main one afterwards. And we can do that
+
+69
+0:06:31.560 --> 0:06:40.800
+very fast because you don't need to recreate the XMPP connection. So now in order to establish
+
+70
+0:06:40.800 --> 0:06:46.160
+this sort of mesh, we ended up using Federation, even though it's like within a single server,
+
+71
+0:06:46.160 --> 0:06:52.680
+but still. So there's server to server bidirectional connections to avoid having duplicated connections.
+
+72
+0:06:52.680 --> 0:06:57.480
+So custom modules, that's where prosody shines because it allows us to do all these customizations
+
+73
+0:06:57.480 --> 0:07:03.300
+to mirror chat messages that have been typed in a visitor node to the main node and back.
+
+74
+0:07:03.300 --> 0:07:10.560
+So to kind of fake it that they are in separate instances actually. And as I said, becoming
+
+75
+0:07:10.560 --> 0:07:15.320
+active is fast because you don't need to recreate the XMPP connection, just you need to join
+
+76
+0:07:15.320 --> 0:07:22.280
+a different MOOC. Our step number four is to have an improved topology for media routing.
+
+77
+0:07:22.280 --> 0:07:27.160
+Currently we have Octo, which allows us to spread the load across multiple bridges. But
+
+78
+0:07:27.160 --> 0:07:31.400
+this doesn't work very well for such a large load. You need like a tree style topology
+
+79
+0:07:31.400 --> 0:07:37.160
+where some people are just receiving and a full mesh for those who are actively participating.
+
+80
+0:07:37.160 --> 0:07:46.040
+So both loads can be spread. And last, we need to fix up the UI, let's say. So we don't
+
+81
+0:07:46.040 --> 0:07:51.280
+need to render the visitors. We just need to know that there is, you know, 100 people
+
+82
+0:07:51.280 --> 0:07:57.520
+and then 9,000 visitors. And that's it. So we want to refine the UI a little bit. We're
+
+83
+0:07:57.520 --> 0:08:01.680
+thinking of using like the raised hand functionality to become an active participant. So you raise
+
+84
+0:08:01.680 --> 0:08:08.280
+your hand, you are approved and then you become active. That's how we're thinking about it.
+
+85
+0:08:08.280 --> 0:08:13.920
+Now some of it is in the present, some of it is in the future. So how is it going? We
+
+86
+0:08:13.920 --> 0:08:24.120
+got there with 51 bridges. We got 10,009 participants. So it worked out. There's still some work
+
+87
+0:08:24.120 --> 0:08:30.480
+to do. So the UI is not yet final. We're polishing up a little bit. And we're still
+
+88
+0:08:30.480 --> 0:08:35.720
+need to add some more modules to mirror all the data we want, like the polls and other
+
+89
+0:08:35.720 --> 0:08:42.080
+stuff. And we're thinking that maybe we don't really need to support 500 active participants
+
+90
+0:08:42.080 --> 0:08:47.000
+because that's a weird conference, really. So that number could actually be lower or
+
+91
+0:08:47.000 --> 0:08:50.880
+pretty much configurable. So you can say, I want this very many active participants and
+
+92
+0:08:50.880 --> 0:08:55.720
+the rest, it will be visitors. And that's that. And of course, we need to make it easy
+
+93
+0:08:55.720 --> 0:09:01.160
+to deploy for everyone. Right now, this is a bit held together with Duct Tape. Before
+
+94
+0:09:01.160 --> 0:09:07.120
+I go, I'd like to give a shout out to the heroes that worked on the gaps of this. You
+
+95
+0:09:07.120 --> 0:09:13.480
+may know their names from our community. Boy is Demento and Jonathan. Incredible characters.
+
+96
+0:09:13.480 --> 0:09:21.080
+And I'm relaying the message. I know the words, but they did the work. And I'd like to share
+
+97
+0:09:21.080 --> 0:09:25.720
+the love we have for Prosody. We wouldn't have been able to do it, I think, without
+
+98
+0:09:25.720 --> 0:09:32.120
+such a flexible piece of software. They help us. We help them. It's a very nice relationship
+
+99
+0:09:32.120 --> 0:09:39.120
+we have with the project. We love Matt and team. So shout out to them. And since that's
+
+100
+0:09:39.120 --> 0:09:44.200
+all I got, you can follow the progress there. We have documentation actually how to deploy
+
+101
+0:09:44.200 --> 0:09:51.120
+the existing way of doing things. Again, early stages, but it's there. And if you have any
+
+102
+0:09:51.120 --> 0:10:02.120
+questions, well, I'm around here. Or find me online. Thank you very much.
+
