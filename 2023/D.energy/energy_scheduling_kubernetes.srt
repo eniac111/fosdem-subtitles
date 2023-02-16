@@ -1,0 +1,724 @@
+1
+0:00:00.000 --> 0:00:11.000
+Hello everyone. Today we are going to talk about how you can achieve sustainability in computing,
+
+2
+0:00:11.000 --> 0:00:19.000
+how you can do energy efficient placement of Kubernetes workload. My name is Parul Singh and I work as a senior software engineer at Red Hat.
+
+3
+0:00:19.000 --> 0:00:29.000
+With me we have Kai Liu. He is a software engineer in turn. And today we are presenting this presentation together.
+
+4
+0:00:29.000 --> 0:00:36.000
+So we are part of CNCF and we are taking community based initiatives on environment sustainability.
+
+5
+0:00:36.000 --> 0:00:48.000
+If you want to check our proposal, you can follow the link. We also have done a few projects, again, using community based approach.
+
+6
+0:00:48.000 --> 0:00:57.000
+The first one of them is carbon aware scaling with KETA. We did this with Microsoft and we investigated how you can use electricity
+
+7
+0:00:57.000 --> 0:01:04.000
+and carbon intensity to make workload scaling decisions. Another one that we were working with, IBM Research is Clever.
+
+8
+0:01:04.000 --> 0:01:17.000
+That is container level energy efficient VP, a recommender for Kubernetes. And if you want to check out both of these projects, you can just follow the QR.
+
+9
+0:01:17.000 --> 0:01:29.000
+So the agenda is very simple. We'll give a brief background of the things, how they are at the moment. And then we're going to introduce a sustainability stack,
+
+10
+0:01:29.000 --> 0:01:37.000
+which consists of two projects, the Kepler and the Model Server, and then we will have a demo.
+
+11
+0:01:37.000 --> 0:01:44.000
+So here we have an interesting quote that sums up the motivation of our sustainability stack and the problem it seeks to solve.
+
+12
+0:01:44.000 --> 0:01:58.000
+So according to Gardner in 2021, an ACM technology brief estimated that the information and communication technology sector contributed between 1.8% and 3.9% of global carbon emissions,
+
+13
+0:01:58.000 --> 0:02:05.000
+which is astonishingly more than the CO2 emission contributions of both Germany and Italy combined.
+
+14
+0:02:05.000 --> 0:02:14.000
+The significant carbon footprint and significant energy consumption of the tech industry begs the following questions.
+
+15
+0:02:14.000 --> 0:02:21.000
+How can we measure energy consumption quickly and indirectly? How can we measure energy consumption of workloads?
+
+16
+0:02:21.000 --> 0:02:28.000
+And how can we then attribute power on shared resources to processes, containers and pods?
+
+17
+0:02:28.000 --> 0:02:36.000
+So with these issues in mind, we introduce the cloud native sustainability stack, which seeks to address these questions and problems.
+
+18
+0:02:36.000 --> 0:02:43.000
+Parul will first start by discussing the Kepler project, and then I will discuss the Kepler Model Server project.
+
+19
+0:02:43.000 --> 0:02:50.000
+Let's talk about the energy consumption attribution methodology used by the Kepler.
+
+20
+0:02:50.000 --> 0:02:59.000
+Kepler is based on the principle that power consumption is attributed to the resource usage by process containers and pods.
+
+21
+0:02:59.000 --> 0:03:07.000
+For example, let's say you have a pod that consumed 10% of CPU. That means it attributed to 10% of CPU power consumption.
+
+22
+0:03:07.000 --> 0:03:19.000
+Similar, if you have like five containers and they total contributed to 50% of CPU usage, that means they attributed to 50% of CPU power consumption.
+
+23
+0:03:19.000 --> 0:03:28.000
+And so on and so forth for other resources like memory and GPU, etc.
+
+24
+0:03:28.000 --> 0:03:39.000
+And we based this principle based on the studies and we have attached the link to the paper. If you're interested, you can check that out.
+
+25
+0:03:39.000 --> 0:03:53.000
+So Kepler is a Kubernetes based efficient power level exporter and it uses software counters to measure power consumption by hardware resources and exports them as Prometheus metrics.
+
+26
+0:03:53.000 --> 0:04:03.000
+Kepler does three things. The first is reporting. It reports for a pod level energy consumption, including resources like CPU, GPU and RAM.
+
+27
+0:04:03.000 --> 0:04:14.000
+And it supports bare metal as well as VM. So you can measure your workloads energy consumption even on AWS or Azure, etc.
+
+28
+0:04:14.000 --> 0:04:25.000
+And it supports Prometheus for exporting the metrics and you can see the dashboards using Grafana.
+
+29
+0:04:25.000 --> 0:04:38.000
+It's very important that Kepler has low energy footprint because what we're trying to do is measure. So we don't want to have Kepler consuming a lot of power itself.
+
+30
+0:04:38.000 --> 0:04:47.000
+So we used EBPF to probe the counters and this considerably reduced the computation resource used by Kepler.
+
+31
+0:04:47.000 --> 0:05:13.000
+And at last we support ML models to estimate energy consumption when you don't have a power meter. And I will talk more about it in the Kepler model server portion, but we use ML models to predict the energy consumption when inherent power meter is not available.
+
+32
+0:05:13.000 --> 0:05:18.000
+The second part of the sustainability stack is the Kepler model server.
+
+33
+0:05:18.000 --> 0:05:32.000
+So by default, Kepler will use a supported power measurement tool or meter to measure node related energy metrics like CPU core, DRAM, and then it uses this to estimate pod level energy metrics.
+
+34
+0:05:32.000 --> 0:05:37.000
+But what happens when Kepler does not have access to a supported power meter?
+
+35
+0:05:37.000 --> 0:05:46.000
+This is where the Kepler model server steps in to provide trained models that use software counters and performance metrics to predict relevant energy metrics.
+
+36
+0:05:46.000 --> 0:05:55.000
+The tech stack of the Kepler model server also includes TensorFlow Keras, Scikit, Flask, and Prometheus.
+
+37
+0:05:55.000 --> 0:06:00.000
+So let's take a look at some of the models the Kepler model server has implemented.
+
+38
+0:06:00.000 --> 0:06:12.000
+For example, we have a linear regression model that predicts node level CPU core energy consumption with the following categorical and normalized numerical software counters and performance metrics.
+
+39
+0:06:12.000 --> 0:06:21.000
+This model also supports incremental learning, incremental training on new batches of data to improve the model's performance on a cluster.
+
+40
+0:06:21.000 --> 0:06:34.000
+The second example also provides a linear regression model capable of online learning, but it instead predicts node level DRAM energy consumption with the following software counters and performance metrics.
+
+41
+0:06:34.000 --> 0:06:39.000
+So let's take a look at how the model server fits in Kepler as a whole.
+
+42
+0:06:39.000 --> 0:06:50.000
+So the first part is training our models on a variety of training workloads where Kepler can export node energy metrics and performance metrics because a power meter is present.
+
+43
+0:06:50.000 --> 0:06:58.000
+In this case, Kepler retrieves these node energy metrics from agents which are then collected and exported as Prometheus metrics.
+
+44
+0:06:58.000 --> 0:07:11.000
+The model server scrapes these Prometheus metrics, sets up training, testing, and validation data sets, and then trains, evaluates, and saves the model with the new data.
+
+45
+0:07:11.000 --> 0:07:19.000
+The second part is now exporting these trained models to Kepler for prediction whenever a power meter is not provided.
+
+46
+0:07:19.000 --> 0:07:25.000
+The Kepler model server can export the model itself as an archive to Kepler, and this is done with Flask routes.
+
+47
+0:07:25.000 --> 0:07:32.000
+The model server can also export the model's weights directly using Flask routes and or Prometheus metrics.
+
+48
+0:07:32.000 --> 0:07:40.000
+In the future, we will also like to export the model weights using the OpenTelemetry metrics API.
+
+49
+0:07:40.000 --> 0:07:47.000
+Now that we have talked about a sustainability stack, let's see how you can do carbon intensity-aware scheduling.
+
+50
+0:07:47.000 --> 0:07:55.000
+So the use case that we are trying to solve is can you put a check or can you control the carbon intensity of your workload?
+
+51
+0:07:55.000 --> 0:08:10.000
+For example, is it possible to fuel your workloads using renewable energy like solar power or wind power when available and switch to fossil fuel when the renewable energy is not at this pose?
+
+52
+0:08:10.000 --> 0:08:17.000
+So the use case premise is based on multi-node cluster where you have nodes in different geographical zones,
+
+53
+0:08:17.000 --> 0:08:27.000
+and the workloads that we will be talking about is long-running batch or machine learning workloads that keeps on retraining algorithm
+
+54
+0:08:27.000 --> 0:08:41.000
+or any long-running batch workloads that are not affected by rescheduling of, that runs long enough that have an impact, considerable impact on carbon intensity,
+
+55
+0:08:41.000 --> 0:08:48.000
+and they're not affected if you reschedule them on different nodes.
+
+56
+0:08:48.000 --> 0:08:54.000
+So our demo setup is based on OpenShift cluster, and for monitoring we're using Prometheus.
+
+57
+0:08:54.000 --> 0:09:03.000
+We would be using features like taint, starloration, and node selectors to orchestrate where the workload is going to run on which node,
+
+58
+0:09:03.000 --> 0:09:09.000
+and we will have a carbon intensity forecaster that will forecast the carbon intensity of nodes.
+
+59
+0:09:09.000 --> 0:09:13.000
+And for this demo, we are only considering two hours step.
+
+60
+0:09:13.000 --> 0:09:19.000
+That means that a carbon intensity forecaster would predict what is the carbon intensity for the next two hours.
+
+61
+0:09:19.000 --> 0:09:24.000
+So let's first describe the carbon intensity forecaster.
+
+62
+0:09:24.000 --> 0:09:36.000
+The forecaster has access to an exporter which scrapes time series carbon intensity data from numerous public APIs like electricity map or national grid.
+
+63
+0:09:36.000 --> 0:09:39.000
+And it then exports this data as Prometheus metrics.
+
+64
+0:09:39.000 --> 0:09:48.000
+The forecaster will then scrape the Prometheus metrics from the exporter and update its models for each of the node with new time series data.
+
+65
+0:09:48.000 --> 0:09:50.000
+In this demo, we will have three nodes.
+
+66
+0:09:50.000 --> 0:09:56.000
+So the forecaster will have individual models for each of the three nodes, which are in different zones, of course.
+
+67
+0:09:56.000 --> 0:10:03.000
+The carbon forecaster will then provide a prediction of the carbon intensity of the desired region a few hours in advance.
+
+68
+0:10:03.000 --> 0:10:08.000
+Note that the carbon intensity forecaster and exporter are extendable interfaces.
+
+69
+0:10:08.000 --> 0:10:19.000
+This means the forecaster can implement many different types of time series forecasting models and the exporter can scrape from many different carbon data APIs.
+
+70
+0:10:19.000 --> 0:10:32.000
+So now that we have a carbon intensity forecaster, external applications like the Cron job will forecast the potential carbon intensity sometime into the future for each of the three nodes.
+
+71
+0:10:32.000 --> 0:10:41.000
+The Cron job does this by making an HTTP request to the carbon forecaster using the get slash forecasted CI endpoint.
+
+72
+0:10:41.000 --> 0:10:47.000
+And each of the three nodes are then periodically assigned node labels, depending on the carbon intensity.
+
+73
+0:10:47.000 --> 0:10:50.000
+Red stands for a relatively high carbon intensity.
+
+74
+0:10:50.000 --> 0:10:55.000
+Yellow stands for a medium carbon intensity and green stands for a relatively low carbon intensity.
+
+75
+0:10:55.000 --> 0:11:02.000
+So in this example, node one is forecasted two hours in the future to have the highest carbon intensity.
+
+76
+0:11:02.000 --> 0:11:04.000
+So it is labeled red.
+
+77
+0:11:04.000 --> 0:11:09.000
+Node two is forecasted two hours in the future to have a medium carbon intensity.
+
+78
+0:11:09.000 --> 0:11:11.000
+So it is labeled yellow.
+
+79
+0:11:11.000 --> 0:11:16.000
+And node three is forecasted two hours in the future to have the lowest carbon intensity.
+
+80
+0:11:16.000 --> 0:11:20.000
+So it is labeled green.
+
+81
+0:11:20.000 --> 0:11:24.000
+Now that you have assigned labels to the node, it's on the pot.
+
+82
+0:11:24.000 --> 0:11:34.000
+To declare its intention that what kind of node it prefers and also what kind of node it does not prefer at all.
+
+83
+0:11:34.000 --> 0:11:42.000
+So, for example, in the pot YAML, you specify node selector carbon intensity as green.
+
+84
+0:11:42.000 --> 0:11:47.000
+That means it prefers nodes that have labels as carbon intensity green.
+
+85
+0:11:47.000 --> 0:12:08.000
+And you also have to add as tolerations where you have to say that you don't have the toleration effect no execute means that this pot does not have toleration to run on nodes that have been tainted as red.
+
+86
+0:12:08.000 --> 0:12:19.000
+So if the scheduler will try to schedule this spot on node one that has label and tainted as red, this spot would evict within five seconds.
+
+87
+0:12:19.000 --> 0:12:27.000
+So that's what the toleration second is for.
+
+88
+0:12:27.000 --> 0:12:31.000
+So let's see how this looks like.
+
+89
+0:12:31.000 --> 0:12:40.000
+So you have node one and there was that has labeled that had labeled green. Now it's turning to red.
+
+90
+0:12:40.000 --> 0:12:50.000
+That means this carbon intensity is increasing. So we will change the node and we will apply the taint as carbon intensity red and no execute.
+
+91
+0:12:50.000 --> 0:13:03.000
+So as soon as this taint is applied, the pod is evicted from node one and it's assigned to node two, which has the carbon intensity is changing from red to green and it has been tainted.
+
+92
+0:13:03.000 --> 0:13:13.000
+So tainting the nodes ensures that pods are evicted by the nodes if pods have no tolerations for taint.
+
+93
+0:13:13.000 --> 0:13:28.000
+So this is like the whole picture. We have a carbon intensity exporter that queries the various public API to gather the carbon intensity data and it exports them as Prometheus metrics.
+
+94
+0:13:28.000 --> 0:13:41.000
+Now the node label and Y is a cruncher. What it does, it queries the carbon intensity forecaster and it queries in ahead of time what is going to be the carbon intensity of the various nodes.
+
+95
+0:13:41.000 --> 0:13:48.000
+And it patches the labels and taints based on the forecasted carbon intensity.
+
+96
+0:13:48.000 --> 0:13:51.000
+So let's get to the demo.
+
+97
+0:13:51.000 --> 0:13:57.000
+First I'm going to show you how you can install a Kepler operator on an open shift environment.
+
+98
+0:13:57.000 --> 0:14:09.000
+The first the release that we have right now is V1 alpha one and it has a prerequisite that it means C group V2 and it follows Kepler point four release.
+
+99
+0:14:09.000 --> 0:14:23.000
+And deploys Kepler both on Kubernetes and OpenShift. So when you're deploying it on OpenShift, it also reconfigure your OpenShift nodes by applying a machine config and SCC.
+
+100
+0:14:23.000 --> 0:14:33.000
+And right now Kepler uses local linear regression estimator in Kepler main container with offline trained models.
+
+101
+0:14:33.000 --> 0:14:43.000
+But in the next release we are planning to provide end to end learning pipeline where it can train the model as well as use the model.
+
+102
+0:14:43.000 --> 0:15:00.000
+So if you're interested in a code, you can follow us on GitHub repository and so let's get to the demo.
+
+103
+0:15:00.000 --> 0:15:07.000
+To deploy the operator, go inside the Kepler operator project and run the main deploy.
+
+104
+0:15:07.000 --> 0:15:15.000
+That will create all the manifest and install the operator in the namespace Kepler operator system.
+
+105
+0:15:15.000 --> 0:15:25.000
+So now I'm just going to go into the Kepler operator system, the namespace, and I'm going to apply.
+
+106
+0:15:25.000 --> 0:15:30.000
+Let's see if the operator has been. Yeah, so you can see that the operator is running.
+
+107
+0:15:30.000 --> 0:15:37.000
+Now I'm going to apply the CRD and wait for the Kepler instances to get started.
+
+108
+0:15:37.000 --> 0:15:52.000
+So as you can see, the Kepler instances are running and each of them is up and running and they are each of them are running on each of the nodes as a daemon set pod.
+
+109
+0:15:52.000 --> 0:15:58.000
+So that's why you see so many of them and now I'm going to deploy Grafana.
+
+110
+0:15:58.000 --> 0:16:04.000
+Give it a second. Yes, so Grafana is deployed now to enable user workload monitoring.
+
+111
+0:16:04.000 --> 0:16:14.000
+I'm going to apply the config map and that ensures that the Prometheus and the user workload monitoring namespace is capturing the Prometheus metrics.
+
+112
+0:16:14.000 --> 0:16:23.000
+So let's see if the pods are up and running in the OpenShift user monitoring project.
+
+113
+0:16:23.000 --> 0:16:34.000
+As you can see that all the pods are running. So now to see the metrics, I'm just going to the Grafana URL.
+
+114
+0:16:34.000 --> 0:16:44.000
+Let's just sign in and because we applied the Grafana operator, so the default Kepler dashboard should be available.
+
+115
+0:16:44.000 --> 0:16:50.000
+Give it a second. It will load. Yeah, so now you can see the energy reporting from Kepler.
+
+116
+0:16:50.000 --> 0:17:03.000
+You can see the carbon footprint. You can see the power consumption in namespaces, total power consumption, pod process power consumption and total power consumption by namespace.
+
+117
+0:17:03.000 --> 0:17:08.000
+So that's the default Grafana dashboard.
+
+118
+0:17:08.000 --> 0:17:14.000
+So now that we have seen how you can install and play around with your Kepler operator,
+
+119
+0:17:14.000 --> 0:17:20.000
+it's time to see how you can also do carbon intensity aware scheduling.
+
+120
+0:17:20.000 --> 0:17:28.000
+So for that I have a cluster already ready.
+
+121
+0:17:28.000 --> 0:17:39.000
+So you can see that there are six nodes on this cluster and for this demo, I'm not going to run anything on the master node.
+
+122
+0:17:39.000 --> 0:17:45.000
+So I'm only going to do things on the worker node.
+
+123
+0:17:45.000 --> 0:17:52.000
+So I have applied the cron job and I'm just waiting it to become active.
+
+124
+0:17:52.000 --> 0:18:00.000
+All right, so the job has been scheduled. Let's wait for it to get completed.
+
+125
+0:18:00.000 --> 0:18:14.000
+As you can see that the cron job has been completed. So let's see what things and what labels it has applied to the three nodes.
+
+126
+0:18:14.000 --> 0:18:23.000
+So to see the labels, I'm going to use the same script that I have written.
+
+127
+0:18:23.000 --> 0:18:29.000
+OK, so you can see that the node 223 has got the label green.
+
+128
+0:18:29.000 --> 0:18:39.000
+Node 222 has got the label red and node 126 has the label yellow.
+
+129
+0:18:39.000 --> 0:18:51.000
+So anytime that we are going to schedule a carbon intensive aware pod or workload, it should favor 223, which has carbon intensity as green.
+
+130
+0:18:51.000 --> 0:18:58.000
+Let's also check what taints has been assigned and if they match the labels.
+
+131
+0:18:58.000 --> 0:19:13.000
+So you can see that the node 126 and 123, which has carbon intensity as green and yellow, have no taints while the node 222,
+
+132
+0:19:13.000 --> 0:19:19.000
+which has the carbon intensity as red, as you can see over here, has the taint applied.
+
+133
+0:19:19.000 --> 0:19:29.000
+Now I am going to test it out if this works as expected by scheduling a long running workload.
+
+134
+0:19:29.000 --> 0:19:36.000
+Before I do that, I just want to watch all the pods in the namespace.
+
+135
+0:19:36.000 --> 0:19:51.000
+So right now there's no pods. So I have applied this pod and it has no tolerations for node that has tainted red
+
+136
+0:19:51.000 --> 0:19:57.000
+and it favors a node or it wants a node that has the label green.
+
+137
+0:19:57.000 --> 0:20:07.000
+So over here you can see that the CI test pod, the pod that I just ran, had some issue or had some problem in finding the right node.
+
+138
+0:20:07.000 --> 0:20:17.000
+That's because the default scheduler was trying to assign it on a node that didn't have the right label or didn't have the right taint, so it took a while.
+
+139
+0:20:17.000 --> 0:20:22.000
+So let's verify where this pod is running.
+
+140
+0:20:22.000 --> 0:20:31.000
+So you can see that it has been scheduled on, it was scheduled on 223, but right now it's running on 126.
+
+141
+0:20:31.000 --> 0:20:41.000
+And 126 is a node that has carbon intensity as yellow, so that's completely okay.
+
+142
+0:20:41.000 --> 0:20:49.000
+At the time it was scheduled on either the green node or on the yellow node, which is okay as long as it's not scheduled on the red node.
+
+143
+0:20:49.000 --> 0:20:55.000
+So that would be all. Thank you for watching the demo.
+
+144
+0:20:55.000 --> 0:21:01.000
+We would like to share a few lessons that we learned while working on this project.
+
+145
+0:21:01.000 --> 0:21:05.000
+The first is that finding the zone carbon intensity data is not simple.
+
+146
+0:21:05.000 --> 0:21:11.000
+Some points are missing and not all of them are free.
+
+147
+0:21:11.000 --> 0:21:15.000
+We also need to support multiple and complex query types.
+
+148
+0:21:15.000 --> 0:21:22.000
+For example, right now we are just querying what is the current or the average carbon intensity in zone XYZ.
+
+149
+0:21:22.000 --> 0:21:28.000
+But we need to have more complicated queries like which zone has the lowest carbon intensity.
+
+150
+0:21:28.000 --> 0:21:40.000
+And we are also thinking of contributing the work that we have done with carbon intensity forecasting and integrating it with Green Software Foundation Carbon Away SDK,
+
+151
+0:21:40.000 --> 0:21:49.000
+which is another open source community that has been working on sustainability in Green Software.
+
+152
+0:21:49.000 --> 0:22:00.000
+So the road ahead for us looks like we are thinking of extending the multi node logic to multi cluster and we're exploring how you can do that using KCP.
+
+153
+0:22:00.000 --> 0:22:09.000
+And we are also thinking of integrating carbon intensity awareness in Kubernetes plugins, existing plugins.
+
+154
+0:22:09.000 --> 0:22:16.000
+For example, the trimaran target load packing is a scheduler plugin in the Kubernetes SIG.
+
+155
+0:22:16.000 --> 0:22:29.000
+And we're thinking of integrating the profile with carbon intensity awareness and also thinking of how you can tune trimaran further for energy efficiency.
+
+156
+0:22:29.000 --> 0:22:43.000
+So that was all. If you are more interested in learning about the principle that Kepler is based on, you can follow the link and check out our project.
+
+157
+0:22:43.000 --> 0:22:50.000
+We have attached the GitHub repo for the project as well as Kepler as well as the model server.
+
+158
+0:22:50.000 --> 0:23:04.000
+And thank you so much. And any questions?
+
+159
+0:23:20.000 --> 0:23:22.000
+Thank you.
+
+160
+0:23:50.000 --> 0:24:19.000
+Thank you.
+
+161
+0:24:19.000 --> 0:24:35.000
+Kai, do you want to take that question? Do you see the question?
+
+162
+0:24:35.000 --> 0:24:37.000
+Okay, so yeah.
+
+163
+0:24:37.000 --> 0:24:45.000
+Sorry, I'm just trying to see the questions. I have to switch back and forth.
+
+164
+0:24:45.000 --> 0:24:51.000
+Okay, so
+
+165
+0:24:51.000 --> 0:24:57.000
+I'm just trying to see the questions. I have to switch back and forth.
+
+166
+0:24:57.000 --> 0:25:20.000
+Okay, so
+
+167
+0:25:20.000 --> 0:25:31.000
+somebody asked how do we split the energy for the pod?
+
+168
+0:25:31.000 --> 0:25:43.000
+Oh, yeah, I think I can answer that. This was done on Kepler, I believe, and I was developed by somebody else. But essentially, there are two ways.
+
+169
+0:25:43.000 --> 0:25:57.000
+For like the model server, we also have recently have like models that will use the performance metrics and then the software counters to directly try and predict pod energy.
+
+170
+0:25:57.000 --> 0:26:11.000
+When it that that's one option and then second option in Kepler is typically once it generates the energy, it'll then try and attribute it, I believe, to each of the pods.
+
+171
+0:26:11.000 --> 0:26:15.000
+And I think that's based on
+
+172
+0:26:15.000 --> 0:26:17.000
+CPU utilization.
+
+173
+0:26:17.000 --> 0:26:35.000
+Yeah, what we do is we monitor the CPU utilization or whatever the CPU instruction or the process is going on and then we use cgroup ID to kind of like attribute what how that energy is related to which pod.
+
+174
+0:26:35.000 --> 0:26:55.000
+Because we take the cgroup ID and we translate that which particular process or container it's related to. So that's how we gather the metrics. So the important thing to note over here is Kepler uses the models to estimate or predict the energy consumption.
+
+175
+0:26:55.000 --> 0:27:11.000
+And these models are already trained. They already have, they are already been published. So Kepler uses these models to predict pod energy level consumption on scenarios where you're not running on bare metal.
+
+176
+0:27:11.000 --> 0:27:23.000
+On those cases, we don't have the access to the inbuilt power meter. So in those scenarios, we estimate or we predict what is going to be the energy consumption.
+
+177
+0:27:23.000 --> 0:27:43.000
+So another question is how do what is the credibility of the
+
+178
+0:27:43.000 --> 0:28:07.000
+greenness that data is as good as the data published by the public API. For example, we have electricity map in US and national grid in Europe and that is one of a one of a problem as well that the the greenness or the accuracy of the carbon intensity is as good as the data that's being published by the public API.
+
+179
+0:28:07.000 --> 0:28:21.000
+So we cannot control that.
+
+180
+0:28:21.000 --> 0:28:36.000
+I should probably note that we also aim for any data that's from the government. So I think national grid is straight from the is from the UK government. So I think that's pretty reliable.
+
+181
+0:28:36.000 --> 0:28:46.000
+So we need to make sure that the data that we use is from reliable sources.
+

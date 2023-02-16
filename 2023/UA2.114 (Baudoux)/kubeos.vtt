@@ -1,0 +1,517 @@
+WEBVTT
+
+00:00.000 --> 00:09.840
+Should I start?
+
+00:09.840 --> 00:14.840
+Yeah, go ahead.
+
+00:14.840 --> 00:16.040
+So hello everyone.
+
+00:16.040 --> 00:18.760
+First of all, this is not my talk.
+
+00:18.760 --> 00:24.800
+I've been receiving this talk because my colleague didn't make it to get the visa on time.
+
+00:24.800 --> 00:27.840
+So I'm sorry, I don't know anything about Kubernetes.
+
+00:27.840 --> 00:31.920
+I'm usually more into low-level stuff, kernel and embedded.
+
+00:31.920 --> 00:35.600
+But I will deliver the talk with the notes that I received and if you have questions,
+
+00:35.600 --> 00:38.200
+you can directly direct it by email to my colleague.
+
+00:38.200 --> 00:40.200
+I wouldn't be able to answer.
+
+00:40.200 --> 00:43.960
+I'm sorry for this in advance.
+
+00:43.960 --> 00:51.080
+So before getting to the architecture and principle of the QoS, let's define what it
+
+00:51.080 --> 00:52.080
+solves.
+
+00:52.080 --> 00:57.680
+So there is a cloud-native development that is encouraged by Docker, Kubernetes communities,
+
+00:57.680 --> 01:02.720
+and many infrastructures being cloudified.
+
+01:02.720 --> 01:07.160
+But some of the problems with the general purpose operating systems reappear in this
+
+01:07.160 --> 01:09.040
+cloud-native environment.
+
+01:09.040 --> 01:14.360
+So you have a container management, workload scheduling, automatic service deployment,
+
+01:14.360 --> 01:16.720
+rollbacks of updates and so on.
+
+01:16.720 --> 01:23.440
+That's all capabilities that are provided by Kubernetes, but it is unable to control
+
+01:23.440 --> 01:26.880
+the cluster nodes operating system directly.
+
+01:26.880 --> 01:33.520
+So the first problem in cloud-native environments is the desynchronization between OS and Kubernetes
+
+01:33.520 --> 01:38.600
+that are managed and controlled completely separately.
+
+01:38.600 --> 01:43.000
+Also Kubernetes, like the operating system management, needs upkeep, upgrades, user access
+
+01:43.000 --> 01:45.920
+control, all these things.
+
+01:45.920 --> 01:52.920
+And then you can have like the ops operation guys, or patient people, sorry, that need
+
+01:52.920 --> 01:57.120
+to complain, read the task between the two systems.
+
+01:57.120 --> 02:03.280
+The maintenance are therefore poorly synchronized usually, and the greater modification of the
+
+02:03.280 --> 02:09.800
+OS components can affect the availability of the OS, which require additional monitoring
+
+02:09.800 --> 02:11.880
+from Kubernetes.
+
+02:11.880 --> 02:18.760
+So an example is that you have operation staff that must block the nodes to stop newer workloads
+
+02:18.760 --> 02:23.880
+from arriving in order to upgrade the OS without interfering with the Kubernetes.
+
+02:23.880 --> 02:30.000
+And after everything is clear and everything is updated, you can unblock the node again.
+
+02:30.000 --> 02:35.040
+So this makes it complicated and expensive.
+
+02:35.040 --> 02:39.920
+So another issue is the OS version management.
+
+02:39.920 --> 02:49.520
+So if you have a standard package manager and you can add, remove, modify packages independently
+
+02:49.520 --> 02:53.640
+on the OS, at the beginning you have an image which is clean, but then it starts differing
+
+02:53.640 --> 02:56.240
+from your different instances.
+
+02:56.240 --> 03:00.120
+So you have like what they call OS version splitting.
+
+03:00.120 --> 03:04.440
+So you will have different packages installed on different nodes.
+
+03:04.440 --> 03:10.960
+The version of these packages can also differ, security updates and all that stuff.
+
+03:10.960 --> 03:14.140
+So you have this divergence that appear over time.
+
+03:14.140 --> 03:20.480
+So if you want some integrity and consistency that you want to ensure for your OS nodes,
+
+03:20.480 --> 03:25.640
+this can harm this constraint.
+
+03:25.640 --> 03:32.360
+And yes, so if you want also to update from a major version, it's also more difficult.
+
+03:32.360 --> 03:36.320
+So other people have worked on this problem.
+
+03:36.320 --> 03:47.680
+So rebuilding the operating system is an approach that has been taken to solve these problems.
+
+03:47.680 --> 03:53.280
+So previously you have many technology packages that are part of the OS that are moving to
+
+03:53.280 --> 03:54.280
+containers.
+
+03:54.280 --> 03:58.440
+So the old guest OS is less reliant.
+
+03:58.440 --> 04:03.760
+We rely less on the guest OS so it can be replaced by a lightweight operating system
+
+04:03.760 --> 04:06.040
+with less services that are on and so on.
+
+04:06.040 --> 04:13.040
+So container OS, the lightweight operating system designed to run containers.
+
+04:13.040 --> 04:19.080
+And so like on the figure on the right, there is an OS OS and it's not the OS running inside
+
+04:19.080 --> 04:20.240
+the container.
+
+04:20.240 --> 04:23.200
+So you have three important aspects.
+
+04:23.200 --> 04:26.640
+Minimalism, usability and atomic updates.
+
+04:26.640 --> 04:33.040
+Minimalism means that you will only include what you really need as components in the
+
+04:33.040 --> 04:36.840
+host OS.
+
+04:36.840 --> 04:43.240
+So the container OS requires Linux kernel, container engines like Docker, container D,
+
+04:43.240 --> 04:47.040
+and security mechanisms such as SELinux to ensure the security.
+
+04:47.040 --> 04:52.800
+And other applications that are running containers are running containers because you don't need
+
+04:52.800 --> 04:55.840
+it in the host.
+
+04:55.840 --> 05:00.440
+And this can also reduce the attack surface because you have less in the host OS.
+
+05:00.440 --> 05:05.960
+Mutabilities that you use are really only a file system that can be configured at the
+
+05:05.960 --> 05:09.400
+start of the deployment and that also reduce the risk.
+
+05:09.400 --> 05:14.360
+And the atomic update is that you do the upgrade for the entire OS and not individually for
+
+05:14.360 --> 05:16.640
+packages.
+
+05:16.640 --> 05:22.720
+So the core OS was started in 2013 and was the first widely used container operating
+
+05:22.720 --> 05:23.720
+system.
+
+05:23.720 --> 05:30.640
+You also have a system like AWS bottle rocket, flat car, and container optimized OS.
+
+05:30.640 --> 05:35.640
+Where am I right here?
+
+05:35.640 --> 05:40.840
+So QOS, it's a container operating system built on open Euler which is a distribution
+
+05:40.840 --> 05:42.800
+maintained by Huawei.
+
+05:42.800 --> 05:47.320
+So QOS main design concept is to use Kubernetes to manage the operating systems.
+
+05:47.320 --> 05:53.120
+Once you have QOS that has been installed on a cluster, the user only knew the kubecontrol
+
+05:53.120 --> 05:56.040
+command file on the master node.
+
+05:56.040 --> 06:00.560
+The OS of the cluster work a node can be managed.
+
+06:00.560 --> 06:06.960
+And this OS on QOS is connected to the cluster as a Kubernetes component, putting it in the
+
+06:06.960 --> 06:10.040
+same position as the other resources in the clusters.
+
+06:10.040 --> 06:16.160
+And containers and operating system can be managed in a unified way through Kubernetes.
+
+06:16.160 --> 06:21.520
+So open Euler base reconstruction is used so that the operating system can be updated
+
+06:21.520 --> 06:26.800
+automatically like to avoid the problems I introduced before.
+
+06:26.800 --> 06:32.400
+So now we are going to go a little bit in more depth about QOS.
+
+06:32.400 --> 06:39.920
+So the first feature is the ability to manage the OS through directly Kubernetes.
+
+06:39.920 --> 06:47.160
+So we use API extension, custom resource, CRD, to the design and the registering in
+
+06:47.160 --> 06:49.180
+the cluster.
+
+06:49.180 --> 06:54.200
+We use Kubernetes operating framework to create a customized controller for the OS to monitor
+
+06:54.200 --> 06:58.160
+M energies.
+
+06:58.160 --> 07:03.560
+Then this Kubernetes operating framework, we use it to create customer...
+
+07:03.560 --> 07:08.520
+Yeah, this is what you said.
+
+07:08.520 --> 07:14.800
+So the other only need to modify this CR until the expected OS status to the cluster and
+
+07:14.800 --> 07:24.600
+the QOS and Kubernetes handle this and you only have to manage it in the control plane.
+
+07:24.600 --> 07:28.560
+So the next one is atomicity management of the OS.
+
+07:28.560 --> 07:31.800
+QOS upgrade is an atomic dual zone upgrade.
+
+07:31.800 --> 07:35.160
+It does not include packet manager.
+
+07:35.160 --> 07:40.240
+The change of each software package corresponds to the change of the operating system version.
+
+07:40.240 --> 07:45.720
+When the OS version corresponds to a specific OS image or RPM package combination, each
+
+07:45.720 --> 07:51.880
+software update as shown in this diagram is a noise version of this.
+
+07:51.880 --> 07:57.040
+So you avoid the version splitting problems and the cluster nodes remain consistent at
+
+07:57.040 --> 07:59.740
+all times.
+
+07:59.740 --> 08:06.240
+So QOS is lightweight with unnecessary components removed to reduce the attack surface and enable
+
+08:06.240 --> 08:10.040
+faster startup and upgrades.
+
+08:10.040 --> 08:13.280
+So this is a diagram of the QOS overall architecture.
+
+08:13.280 --> 08:14.960
+So you have two main parts.
+
+08:14.960 --> 08:21.160
+The first with three different components, OS operator, OS proxy and OS agent in the
+
+08:21.160 --> 08:27.000
+red box above the diagram which are used for Kubernetes cluster docking, complete OS monitoring
+
+08:27.000 --> 08:28.280
+and management.
+
+08:28.280 --> 08:32.440
+And the second part is the QOS image creation tool.
+
+08:32.440 --> 08:37.920
+The user can use QOS scripts to generate QOS images from the open Euler repo source which
+
+08:37.920 --> 08:44.040
+supports the generation of container image, virtual machine image and so on.
+
+08:44.040 --> 08:49.760
+So the three main components I mentioned like OS operator, proxy and agent are critical
+
+08:49.760 --> 08:53.360
+to the ability to manage cluster using Kubernetes.
+
+08:53.360 --> 08:58.080
+The OS operator and proxy are the operators we mentioned earlier.
+
+08:58.080 --> 09:04.120
+The OS operator will be deployed in the cluster as deployment and daemon sets and will communicate
+
+09:04.120 --> 09:08.040
+with Kubernetes to issue upgrade instructions.
+
+09:08.040 --> 09:12.240
+The operator is a global OS manager that monitors all cluster nodes.
+
+09:12.240 --> 09:16.560
+When a new version of the OS information is configured by the user, it determines whether
+
+09:16.560 --> 09:20.040
+to upgrade and sends a brigade task to each node.
+
+09:20.040 --> 09:25.060
+The proxy is a single node operating system manager that monitors the current node information.
+
+09:25.060 --> 09:29.160
+When the operator sends the grid notification, it will lock the node to expel the pods and
+
+09:29.160 --> 09:32.480
+forward the OS information to the agent.
+
+09:32.480 --> 09:37.040
+The agent is not included in the Kubernetes cluster.
+
+09:37.040 --> 09:44.840
+The real executor of the OS management communicates with the proxy via Unix domain sockets, receives
+
+09:44.840 --> 09:51.320
+message from the proxy and performs the upgrade back in configuration operations.
+
+09:51.320 --> 09:59.600
+So the upgrade process, we will use an upgrade process as an explaining example.
+
+09:59.600 --> 10:03.040
+So we consider all the different components to communicate and interact.
+
+10:03.040 --> 10:07.920
+First the user configures the OS information to be upgraded via kubectl and yml files such
+
+10:07.920 --> 10:13.720
+as OS version, address of the OS image, number of nodes to be upgraded concurrently and so
+
+10:13.720 --> 10:14.720
+on.
+
+10:14.720 --> 10:20.040
+Then when the OS instance changes, the operator begins the upgrade process, levels the nodes
+
+10:20.040 --> 10:23.860
+that must be upgraded and limits the number of nodes to be upgraded each time to the number
+
+10:23.860 --> 10:25.880
+specified by the user.
+
+10:25.880 --> 10:30.960
+Then the proxy checks to see if the current node is marked as an upgrade node, locks the
+
+10:30.960 --> 10:37.080
+nodes to expel the pods and retrieves the OS information from the cluster before sending
+
+10:37.080 --> 10:39.080
+it to the OS agent.
+
+10:39.080 --> 10:43.480
+After receiving the message, the agent will download the upgraded package from the address
+
+10:43.480 --> 10:47.760
+specified by the user, complete the upgrade and restart.
+
+10:47.760 --> 10:52.280
+After restarting, the proxy will detect that the node OS version has reached the expected
+
+10:52.280 --> 10:58.000
+version and will unlock the node and remove the upgrade, so this is the complete upgrade
+
+10:58.000 --> 11:01.800
+process.
+
+11:01.800 --> 11:10.080
+Then finally the file system, so how do we design and upgrade the file system in QoS?
+
+11:10.080 --> 11:16.160
+It adopts a dual array upgrade like mentioned earlier to upgrade the OS, so you have two
+
+11:16.160 --> 11:22.440
+root partitions, the grid of partition A is to download the updated image for the partition
+
+11:22.440 --> 11:27.560
+B and then modify the default block loader as the B partition after and then you restart
+
+11:27.560 --> 11:32.240
+from the B by default and the opposite happens for the next upgrade.
+
+11:32.240 --> 11:37.400
+It's a classic dual image thing.
+
+11:37.400 --> 11:43.280
+The file system of QoS is read-only, which improves the security, but we also support
+
+11:43.280 --> 11:45.280
+persistent data partitions.
+
+11:45.280 --> 11:50.040
+The union path, which is mounted as an overlay and the files in the image other than the
+
+11:50.040 --> 11:53.120
+user change can still be seen.
+
+11:53.120 --> 11:59.640
+There is a writable path, which has a writable file layer to the image using the bind mounts.
+
+11:59.640 --> 12:04.720
+The files in the image are not displayed, only user data is stored and there is also
+
+12:04.720 --> 12:11.280
+the boot partition which contains the bootloader files.
+
+12:11.280 --> 12:15.160
+We determined the main concept of QoS and designed and implemented a set of components
+
+12:15.160 --> 12:20.360
+to complete the OS management and we intend to continue completing more functions based
+
+12:20.360 --> 12:22.480
+on this process.
+
+12:22.480 --> 12:27.720
+One thing is the ability to provide a configuration, like in the grid process, the configuration
+
+12:27.720 --> 12:32.600
+is delivered to the node via the Kubernetes cluster on the cluster control plane to ensure
+
+12:32.600 --> 12:37.320
+the consistency of the configurations of the nodes and given that some of the configuration
+
+12:37.320 --> 12:42.360
+must be complete before the nodes join the cluster, more configuration capabilities to
+
+12:42.360 --> 12:45.480
+the QoS image creation are planned.
+
+12:45.480 --> 12:48.480
+Then there is the improved upgrade capability.
+
+12:48.480 --> 12:53.320
+We have realized the function-based OS upgrade and will provide upgrade strategies that users
+
+12:53.320 --> 12:59.360
+can customize, such as upgrading based on the cluster on the label to provide more upgrade
+
+12:59.360 --> 13:00.360
+solutions.
+
+13:00.360 --> 13:06.640
+In addition to the rich functions, we intend to improve the usability of QoS by displaying
+
+13:06.640 --> 13:11.640
+the upgrade of configuration process and improving the image creation tool so that users can
+
+13:11.640 --> 13:16.080
+more easily customize the image.
+
+13:16.080 --> 13:19.080
+That's it.
+
+13:19.080 --> 13:27.800
+Sorry again for the questions, but for the questions, we can always shoot the colleague
+
+13:27.800 --> 13:37.840
+in the mail.

@@ -1,0 +1,2080 @@
+1
+0:00:00.000 --> 0:00:13.880
+So, we have Samuel here to talk about Pydantic 2 and how it leverages Rust superpowers.
+
+2
+0:00:13.880 --> 0:00:16.080
+Thank you very much.
+
+3
+0:00:16.080 --> 0:00:18.080
+Can you hear me at the back?
+
+4
+0:00:18.080 --> 0:00:19.080
+Great.
+
+5
+0:00:19.080 --> 0:00:21.800
+So, a bit about me.
+
+6
+0:00:21.800 --> 0:00:22.800
+I'm Samuel.
+
+7
+0:00:22.800 --> 0:00:26.400
+I've been a software developer for 10 years, among other things.
+
+8
+0:00:26.400 --> 0:00:30.480
+I've been doing open source quite a lot for the last five years.
+
+9
+0:00:30.480 --> 0:00:35.680
+Mostly Python projects, but moving a bit into Rust over the last few years.
+
+10
+0:00:35.680 --> 0:00:41.000
+The most high profile Python project that I maintain is Pydantic, which I started back
+
+11
+0:00:41.000 --> 0:00:47.640
+in 2017 and has subsequently kind of taken over my life.
+
+12
+0:00:47.640 --> 0:00:50.960
+I've been working on it full time for the last year.
+
+13
+0:00:50.960 --> 0:00:55.160
+So, what I'm going to talk about today.
+
+14
+0:00:55.160 --> 0:01:00.760
+I'm going to give you an introduction to Pydantic, some hype numbers for vanity, but also for
+
+15
+0:01:00.760 --> 0:01:05.000
+some context of why making Pydantic better is worthwhile.
+
+16
+0:01:05.000 --> 0:01:08.600
+I'm going to explain why I decided to rebuild Pydantic completely.
+
+17
+0:01:08.600 --> 0:01:14.680
+I'm going to talk about how I've done that with Rust and I guess most importantly why
+
+18
+0:01:14.680 --> 0:01:16.760
+doing it in Rust is the right choice.
+
+19
+0:01:16.760 --> 0:01:20.320
+I guess I'm preaching to the converted, but hey.
+
+20
+0:01:20.320 --> 0:01:25.720
+What I'm not going to do is hello world, this is how you would build a Python extension
+
+21
+0:01:25.720 --> 0:01:26.720
+in Rust.
+
+22
+0:01:26.720 --> 0:01:28.000
+There were lots of other talks on that.
+
+23
+0:01:28.000 --> 0:01:29.000
+They're great.
+
+24
+0:01:29.000 --> 0:01:30.920
+And also the PYO3 documentation is amazing.
+
+25
+0:01:30.920 --> 0:01:38.000
+So I think it's more interesting to go into a bit of depth on the challenges, the advantages,
+
+26
+0:01:38.000 --> 0:01:42.240
+than just to do the hello world example again.
+
+27
+0:01:42.240 --> 0:01:43.240
+What is it?
+
+28
+0:01:43.240 --> 0:01:46.760
+Well, Pydantic is a data validation library in Python.
+
+29
+0:01:46.760 --> 0:01:47.760
+It's not the first.
+
+30
+0:01:47.760 --> 0:01:49.280
+It's definitely not the last.
+
+31
+0:01:49.280 --> 0:01:53.160
+It started off as a side project like so many open source projects.
+
+32
+0:01:53.160 --> 0:01:54.160
+Nothing special.
+
+33
+0:01:54.160 --> 0:01:55.160
+I maintained it in my spare time.
+
+34
+0:01:55.160 --> 0:01:57.200
+People came along occasionally.
+
+35
+0:01:57.200 --> 0:01:59.400
+Said nice things, reported bugs.
+
+36
+0:01:59.400 --> 0:02:00.600
+Occasionally said not very nice things.
+
+37
+0:02:00.600 --> 0:02:03.880
+And then something weird happened.
+
+38
+0:02:03.880 --> 0:02:05.640
+And its usage went crazy.
+
+39
+0:02:05.640 --> 0:02:10.160
+So the first thing that happened, which you can't really see on this graph in 2018, my
+
+40
+0:02:10.160 --> 0:02:15.640
+friend Sebastian Ramirez started the fast API project, which is a web framework in Python
+
+41
+0:02:15.640 --> 0:02:22.200
+which uses Pydantic and has now got, I don't know, how many thousand stars, 60,000 stars
+
+42
+0:02:22.200 --> 0:02:23.200
+or something.
+
+43
+0:02:23.200 --> 0:02:24.200
+It's got a lot of attention.
+
+44
+0:02:24.200 --> 0:02:27.240
+You can see fast API's growth there.
+
+45
+0:02:27.240 --> 0:02:31.520
+That got a lot of people, I think, to first find out about Pydantic.
+
+46
+0:02:31.520 --> 0:02:37.360
+But something else happened at the beginning of 2021 to cause Pydantic's download numbers
+
+47
+0:02:37.360 --> 0:02:38.360
+to go crazy.
+
+48
+0:02:38.360 --> 0:02:44.400
+Now, I'm well aware that Aaron Armin's speech talk earlier kind of pre-trolled me before
+
+49
+0:02:44.400 --> 0:02:48.280
+I even made my talk saying that download numbers are a terrible metric.
+
+50
+0:02:48.280 --> 0:02:49.840
+But they are the only metric.
+
+51
+0:02:49.840 --> 0:02:52.000
+So that's what we have to use.
+
+52
+0:02:52.000 --> 0:02:56.400
+It's also worth saying that I have actually looked at Pydantic's downloads in terms of
+
+53
+0:02:56.400 --> 0:03:00.200
+as a dependency and as a direct download.
+
+54
+0:03:00.200 --> 0:03:05.240
+It's not that easy to do with PyPI, but it looks like about 15 million downloads a month
+
+55
+0:03:05.240 --> 0:03:07.480
+are from as a dependency of another package.
+
+56
+0:03:07.480 --> 0:03:12.800
+And the remaining 25 or so million are people installing Pydantic directly.
+
+57
+0:03:12.800 --> 0:03:17.440
+So it seems like people are using it not just as a dependency of another library.
+
+58
+0:03:17.440 --> 0:03:22.160
+I've included Django on there as the middle line because it's the most high profile, most
+
+59
+0:03:22.160 --> 0:03:25.800
+well-known web framework in Python.
+
+60
+0:03:25.800 --> 0:03:26.800
+Not to be critical of it.
+
+61
+0:03:26.800 --> 0:03:27.800
+It's amazing.
+
+62
+0:03:27.800 --> 0:03:28.800
+It's like changed my life.
+
+63
+0:03:28.800 --> 0:03:33.960
+I mean, no disrespect by saying we've overtaken it, but just that Pydantic's usage has gone
+
+64
+0:03:33.960 --> 0:03:36.000
+mad.
+
+65
+0:03:36.000 --> 0:03:41.080
+In terms of how it's used, it's used by lots of organizations you would expect.
+
+66
+0:03:41.080 --> 0:03:46.680
+All the fan companies, something like 19 out of the top 25 companies in NASDAQ, but also
+
+67
+0:03:46.680 --> 0:03:51.160
+by organizations which you wouldn't expect like JP Morgan.
+
+68
+0:03:51.160 --> 0:03:52.160
+Use it quite a lot.
+
+69
+0:03:52.160 --> 0:03:54.160
+I don't know in what regard.
+
+70
+0:03:54.160 --> 0:03:55.160
+But it's quite interesting.
+
+71
+0:03:55.160 --> 0:03:59.920
+If you have an open source project, if you look in analytics at the referrers, lots of
+
+72
+0:03:59.920 --> 0:04:04.800
+those big, very security-centric companies forget to turn off the referrer header from
+
+73
+0:04:04.800 --> 0:04:06.300
+their internal systems.
+
+74
+0:04:06.300 --> 0:04:11.760
+And they name their internal systems things like github.jpmorgan.net.
+
+75
+0:04:11.760 --> 0:04:16.000
+So you can see which companies are using your dependencies by looking at those referrers.
+
+76
+0:04:16.000 --> 0:04:21.560
+So, for example, Apple have no public demonstration of using Pydantic at all, but six different
+
+77
+0:04:21.560 --> 0:04:26.200
+enterprise instances of GitHub within Apple use Pydantic, and you can even see which ones
+
+78
+0:04:26.200 --> 0:04:27.200
+they are.
+
+79
+0:04:27.200 --> 0:04:36.280
+They're like maps.github.maps.apple.com, github.siri.apple.com, et cetera.
+
+80
+0:04:36.280 --> 0:04:40.760
+It's also used by some cool organizations, used by NASA for processing imagery from James
+
+81
+0:04:40.760 --> 0:04:48.480
+Webb and used by the International Panel on Climate Change for processing the data they
+
+82
+0:04:48.480 --> 0:04:52.200
+give to the UN on climate change every month, which is the stuff I'm most proud of and why
+
+83
+0:04:52.200 --> 0:04:56.040
+I want to make Pydantic better.
+
+84
+0:04:56.040 --> 0:04:57.800
+So what's so great about Pydantic?
+
+85
+0:04:57.800 --> 0:04:59.200
+Why are so many people using it?
+
+86
+0:04:59.200 --> 0:05:01.280
+The short answer is I don't know.
+
+87
+0:05:01.280 --> 0:05:02.760
+Because you can't go and ask those people.
+
+88
+0:05:02.760 --> 0:05:05.000
+You can look at a graph, but it can't really tell you.
+
+89
+0:05:05.000 --> 0:05:10.680
+But we can look at Pydantic and what people say, and we can guess at what's made it popular.
+
+90
+0:05:10.680 --> 0:05:12.560
+So this is, I know we're in the Rust room.
+
+91
+0:05:12.560 --> 0:05:13.560
+We've got some Python code.
+
+92
+0:05:13.560 --> 0:05:14.560
+Don't worry.
+
+93
+0:05:14.560 --> 0:05:15.960
+We'll get to Rust later.
+
+94
+0:05:15.960 --> 0:05:19.320
+This is some Python code that demonstrates what Pydantic does.
+
+95
+0:05:19.320 --> 0:05:24.520
+So we have a model which represents a talk which has four fields in this case.
+
+96
+0:05:24.520 --> 0:05:26.360
+Obviously, title is a string.
+
+97
+0:05:26.360 --> 0:05:28.040
+Attendance is an integer.
+
+98
+0:05:28.040 --> 0:05:32.800
+Number of people who came when, which is a date time or none and has a default value
+
+99
+0:05:32.800 --> 0:05:33.800
+of none.
+
+100
+0:05:33.800 --> 0:05:39.600
+And then the mistakes I make, which is a list of tuples with the time they were made at
+
+101
+0:05:39.600 --> 0:05:42.600
+and a description.
+
+102
+0:05:42.600 --> 0:05:47.840
+And then lastly, last line, we instantiate an instance of talk using that data.
+
+103
+0:05:47.840 --> 0:05:49.800
+And if there was a mistake, we would get an error.
+
+104
+0:05:49.800 --> 0:05:51.880
+If there wasn't a mistake, we'd obviously get the instance.
+
+105
+0:05:51.880 --> 0:05:55.640
+The first thing that makes Pydantic special and the reason that people like it is because
+
+106
+0:05:55.640 --> 0:05:59.440
+we use Python type hints to define the types.
+
+107
+0:05:59.440 --> 0:06:01.200
+That's become reasonably commonplace now.
+
+108
+0:06:01.200 --> 0:06:05.520
+There are a whole suite of different libraries that do the same thing.
+
+109
+0:06:05.520 --> 0:06:07.520
+Either because it's obvious or because they're copying Pydantic.
+
+110
+0:06:07.520 --> 0:06:13.760
+But Pydantic was the first to do that because type hints were kind of new in 2017.
+
+111
+0:06:13.760 --> 0:06:16.280
+And obviously, the main advantage is it's easy to learn.
+
+112
+0:06:16.280 --> 0:06:19.040
+You don't need to learn a new kind of DSL to define stuff.
+
+113
+0:06:19.040 --> 0:06:23.720
+But it's also compatible with static type checking with all the rest of your code, with
+
+114
+0:06:23.720 --> 0:06:24.920
+your IDE.
+
+115
+0:06:24.920 --> 0:06:29.520
+Once you defined your model, and if Pydantic's worked correctly, then you know you've got
+
+116
+0:06:29.520 --> 0:06:31.760
+a proper instance of talk.
+
+117
+0:06:31.760 --> 0:06:37.120
+So the frustration that caused me to create Pydantic was that type annotations existed.
+
+118
+0:06:37.120 --> 0:06:39.440
+They sat there in the code.
+
+119
+0:06:39.440 --> 0:06:41.160
+You could read them, but they did nothing at runtime.
+
+120
+0:06:41.160 --> 0:06:46.320
+And so effectively, could we try and make them work?
+
+121
+0:06:46.320 --> 0:06:51.160
+The second and slightly more controversial thing that Pydantic does, which I think is
+
+122
+0:06:51.160 --> 0:06:55.280
+one of the reasons that people find it easy to use, is because we default to coercion.
+
+123
+0:06:55.280 --> 0:06:58.200
+So you can see a tendency there, although it needs to be an integer.
+
+124
+0:06:58.200 --> 0:07:00.960
+It's defined as a string.
+
+125
+0:07:00.960 --> 0:07:05.800
+Pydantic will automatically coerce from, for example, a valid string to an integer.
+
+126
+0:07:05.800 --> 0:07:09.960
+But it'll also do other coersions that are a bit more commonplace, like coercing a string
+
+127
+0:07:09.960 --> 0:07:13.640
+as an ISO date format into a date time object.
+
+128
+0:07:13.640 --> 0:07:17.280
+And same for the durations.
+
+129
+0:07:17.280 --> 0:07:18.280
+Some people hate that.
+
+130
+0:07:18.280 --> 0:07:19.280
+Some people complain about it a lot.
+
+131
+0:07:19.280 --> 0:07:24.760
+I suspect lots of people who don't even realize they're using it.
+
+132
+0:07:24.760 --> 0:07:31.080
+They process environment variables, or JSON, or URL arguments, and they're always strings.
+
+133
+0:07:31.080 --> 0:07:33.320
+And Pydantic just works, and they don't even see it.
+
+134
+0:07:33.320 --> 0:07:35.680
+A few other reasons I think were quite popular.
+
+135
+0:07:35.680 --> 0:07:36.680
+We're fast-ish.
+
+136
+0:07:36.680 --> 0:07:38.640
+We're friendly-ish on the bug tracker.
+
+137
+0:07:38.640 --> 0:07:41.600
+I don't promise not to ever be cross of people.
+
+138
+0:07:41.600 --> 0:07:44.880
+And we're reasonably feature complete.
+
+139
+0:07:44.880 --> 0:07:45.880
+So that was Pydantic.
+
+140
+0:07:45.880 --> 0:07:46.880
+It's great.
+
+141
+0:07:46.880 --> 0:07:47.880
+Lots of people are using it.
+
+142
+0:07:47.880 --> 0:07:48.880
+What's the problem?
+
+143
+0:07:48.880 --> 0:07:51.560
+Well, it started off as a side project for me.
+
+144
+0:07:51.560 --> 0:07:54.960
+It wasn't designed to be successful, and the internals stink.
+
+145
+0:07:54.960 --> 0:07:58.080
+I'm very proud of what Pydantic is doing in terms of how it's being used.
+
+146
+0:07:58.080 --> 0:08:00.240
+I'm not proud of what's under the hood.
+
+147
+0:08:00.240 --> 0:08:04.440
+And so I've been keen for a long time to fix the internals.
+
+148
+0:08:04.440 --> 0:08:10.840
+Also second way in which Armin kind of trolled me before my talk was talking about API compatibility.
+
+149
+0:08:10.840 --> 0:08:13.760
+We're going to have to break a lot of things in Pydantic v2 to get it right.
+
+150
+0:08:13.760 --> 0:08:18.680
+But that's the right thing to do, I think, to get the future API to be correct and stable
+
+151
+0:08:18.680 --> 0:08:21.960
+and not break again.
+
+152
+0:08:21.960 --> 0:08:26.560
+And while we're building v2, why don't we do some other stuff?
+
+153
+0:08:26.560 --> 0:08:27.560
+So make it even faster.
+
+154
+0:08:27.560 --> 0:08:28.680
+It's already quite fast.
+
+155
+0:08:28.680 --> 0:08:33.680
+But if you think about that number of downloads, you think about the number of CPU cycles globally
+
+156
+0:08:33.680 --> 0:08:38.200
+every day devoted to doing validation with Python.
+
+157
+0:08:38.200 --> 0:08:40.320
+That's currently in with Pydantic.
+
+158
+0:08:40.320 --> 0:08:42.080
+That's currently all in Python.
+
+159
+0:08:42.080 --> 0:08:46.000
+That's probably quite a lot of carbon dioxide that's being released effectively unnecessarily
+
+160
+0:08:46.000 --> 0:08:48.920
+because we could make Pydantic significantly faster.
+
+161
+0:08:48.920 --> 0:08:53.680
+Strict mode I already talked about because, well, often you don't need it.
+
+162
+0:08:53.680 --> 0:08:57.240
+There are legitimate cases where you want strict mode.
+
+163
+0:08:57.240 --> 0:09:01.960
+We have functional validators which is effectively running some Python code to validate a field.
+
+164
+0:09:01.960 --> 0:09:05.680
+They're useful, but they would be more useful if they could operate like an onion.
+
+165
+0:09:05.680 --> 0:09:10.720
+So like middleware where you take both a value and a handler and call the handler if you
+
+166
+0:09:10.720 --> 0:09:11.720
+want to.
+
+167
+0:09:11.720 --> 0:09:14.480
+Once you've done some processing of the value, that would be super valuable.
+
+168
+0:09:14.480 --> 0:09:16.880
+Another thing we could add, composability.
+
+169
+0:09:16.880 --> 0:09:21.000
+So Pydantic, as I showed you earlier, is based on a Pydantic model.
+
+170
+0:09:21.000 --> 0:09:24.760
+Often your root type doesn't need to be a Pydantic model or shouldn't be a Pydantic model.
+
+171
+0:09:24.760 --> 0:09:30.440
+It might be a list, might be a tuple, it might be a list of models, it might be a type dict
+
+172
+0:09:30.440 --> 0:09:33.800
+which is a common new type in Python.
+
+173
+0:09:33.800 --> 0:09:35.760
+And then lastly, maintainability.
+
+174
+0:09:35.760 --> 0:09:38.720
+Since I maintain Pydantic, I want maintaining it to be fun.
+
+175
+0:09:38.720 --> 0:09:44.720
+So about a year ago last March, I started as a kind of experiment, could I rebuild some
+
+176
+0:09:44.720 --> 0:09:46.440
+of it in Rust a year later?
+
+177
+0:09:46.440 --> 0:09:52.040
+I'm still working on it full time and we're nearly there.
+
+178
+0:09:52.040 --> 0:09:57.840
+So what does it mean to do some validation, to validate Python data in Rust?
+
+179
+0:09:57.840 --> 0:09:58.840
+What's the process?
+
+180
+0:09:58.840 --> 0:10:05.960
+Well, phase one, we need to take a Pydantic model and convert it to a Rust structure.
+
+181
+0:10:05.960 --> 0:10:14.680
+So unlike libraries like Curd, we're not compiling models in Rust.
+
+182
+0:10:14.680 --> 0:10:17.740
+The compiled Rust code doesn't know anything about the models it's going to receive because
+
+183
+0:10:17.740 --> 0:10:21.560
+obviously Python developers don't want to be compiling Rust code to get their model
+
+184
+0:10:21.560 --> 0:10:22.560
+to work.
+
+185
+0:10:22.560 --> 0:10:26.760
+So we have to have a, in Rust terms, dynamic definition of our schema which we could then
+
+186
+0:10:26.760 --> 0:10:29.160
+use for validation.
+
+187
+0:10:29.160 --> 0:10:34.600
+The way we build that is effectively these validators which are structs that contain
+
+188
+0:10:34.600 --> 0:10:40.800
+both characteristics of what they're going to validate but also other validators recursively
+
+189
+0:10:40.800 --> 0:10:43.480
+such that you can define complex structures.
+
+190
+0:10:43.480 --> 0:10:50.280
+So in this case, our outermost validator is a model validator which effectively just instantiates
+
+191
+0:10:50.280 --> 0:10:54.960
+an instance of talk and sets its attributes from a dictionary.
+
+192
+0:10:54.960 --> 0:11:00.840
+It contains another validator which is a typedict validator which contains the definition of
+
+193
+0:11:00.840 --> 0:11:05.680
+all the fields which have effectively the key that they're going to look for and then
+
+194
+0:11:05.680 --> 0:11:08.680
+a validator that they're going to run.
+
+195
+0:11:08.680 --> 0:11:10.240
+The first two are reasonably obvious.
+
+196
+0:11:10.240 --> 0:11:15.480
+I've added a few constraints to show how you would manage those constraints.
+
+197
+0:11:15.480 --> 0:11:21.160
+And then the third one, the when field is obviously a union which in turn contains a
+
+198
+0:11:21.160 --> 0:11:28.800
+vec of validators to run effectively in turn to try and find the value.
+
+199
+0:11:28.800 --> 0:11:33.040
+And then the last one which is the kind of more complex type contains this list validator
+
+200
+0:11:33.040 --> 0:11:37.040
+which contains two-pool validator which contains two more validators.
+
+201
+0:11:37.040 --> 0:11:43.080
+And we can build up effectively infinitely complex schemas from a relatively simple,
+
+202
+0:11:43.080 --> 0:11:47.960
+I say relatively simple, principle at the outset which is we have a validator, it's
+
+203
+0:11:47.960 --> 0:11:50.200
+going to contain some other stuff.
+
+204
+0:11:50.200 --> 0:11:54.600
+So what does that look like in code?
+
+205
+0:11:54.600 --> 0:11:56.080
+I said I was going to show you some Rust code.
+
+206
+0:11:56.080 --> 0:12:01.760
+I'm going to show you some Rust code because I think this is the most clear way of explaining
+
+207
+0:12:01.760 --> 0:12:03.240
+what it is that we do.
+
+208
+0:12:03.240 --> 0:12:08.320
+So the root of everything is this trait validator which contains effectively three things.
+
+209
+0:12:08.320 --> 0:12:14.240
+It contains a const, a static string which is used for defining, as I'll show you later,
+
+210
+0:12:14.240 --> 0:12:20.280
+which validator we're going to use for a given bit of data build which is a simple function
+
+211
+0:12:20.280 --> 0:12:24.120
+to construct an instance of itself in the generic sense.
+
+212
+0:12:24.120 --> 0:12:28.680
+And then the validate function that goes off and does the validation.
+
+213
+0:12:28.680 --> 0:12:34.400
+We then take all of those, well, we then implement that trait for all of the common types that
+
+214
+0:12:34.400 --> 0:12:35.400
+we want.
+
+215
+0:12:35.400 --> 0:12:39.800
+So I think we have 58, 48 or so different validators.
+
+216
+0:12:39.800 --> 0:12:43.240
+And then we bang all of them into one massive enum.
+
+217
+0:12:43.240 --> 0:12:49.640
+Then the magic bit which is provided by enum dispatch which is a Rust crate that effectively
+
+218
+0:12:49.640 --> 0:12:55.880
+implements a trait on an enum if every member of that enum implements that trait.
+
+219
+0:12:55.880 --> 0:13:02.600
+Effectively it goes and does a big procedural macro to create an implementation of the function
+
+220
+0:13:02.600 --> 0:13:07.200
+which is just a big match choosing which function to call.
+
+221
+0:13:07.200 --> 0:13:12.440
+But it's significantly faster than DINE.
+
+222
+0:13:12.440 --> 0:13:17.680
+And in fact in some cases it can abstract away everything and be as fast as just calling
+
+223
+0:13:17.680 --> 0:13:22.720
+the implementation directly.
+
+224
+0:13:22.720 --> 0:13:26.720
+So I said earlier that we needed to use this constant, the expected type.
+
+225
+0:13:26.720 --> 0:13:33.880
+We use that in another effectively big enum to go through and we take the type attribute
+
+226
+0:13:33.880 --> 0:13:38.160
+out of this schema which is a Python dictionary and we use that to effectively look up which
+
+227
+0:13:38.160 --> 0:13:40.120
+validator we're going to go and build.
+
+228
+0:13:40.120 --> 0:13:43.320
+And again, I've shown a few here but there's obviously a bunch more.
+
+229
+0:13:43.320 --> 0:13:48.240
+This in real life is not implemented as a big match statement like this.
+
+230
+0:13:48.240 --> 0:13:53.860
+It's a macro that builds this function but it's clearer here if you get the idea.
+
+231
+0:13:53.860 --> 0:13:58.940
+So I showed you earlier this validate function and I kind of skipped over the input argument.
+
+232
+0:13:58.940 --> 0:14:02.900
+So the input argument is just an implementation of a trait.
+
+233
+0:14:02.900 --> 0:14:08.880
+That trait input is like the beginnings of which are defined here.
+
+234
+0:14:08.880 --> 0:14:11.960
+And it effectively gives you all the things that the validation functions are going to
+
+235
+0:14:11.960 --> 0:14:13.040
+need on a value.
+
+236
+0:14:13.040 --> 0:14:20.160
+So is none, strict string, lack string, int, float, et cetera, et cetera, but also more
+
+237
+0:14:20.160 --> 0:14:25.920
+complex types like date, date time, dictionary, et cetera, et cetera.
+
+238
+0:14:25.920 --> 0:14:33.280
+And then we implement that trait on both a Python value and on a JSON value which means
+
+239
+0:14:33.280 --> 0:14:39.040
+that we can parse Rust directly without having to go via Python.
+
+240
+0:14:39.040 --> 0:14:41.440
+That's super valuable for two reasons.
+
+241
+0:14:41.440 --> 0:14:43.320
+One for performance reasons.
+
+242
+0:14:43.320 --> 0:14:49.960
+So if our input is a string and if we were to then parse it into Python objects and then
+
+243
+0:14:49.960 --> 0:14:54.600
+take that into our validator and run all of that, that would be much lower than parsing
+
+244
+0:14:54.600 --> 0:14:58.680
+in Rust and then running the validator in Rust straight away.
+
+245
+0:14:58.680 --> 0:15:02.120
+The other big advantage is to do with strict mode.
+
+246
+0:15:02.120 --> 0:15:05.560
+So I said earlier that people want strict mode but they say they want strict mode but
+
+247
+0:15:05.560 --> 0:15:06.560
+often they don't.
+
+248
+0:15:06.560 --> 0:15:11.760
+So what people will say is I want totally strict Python, why isn't it strict?
+
+249
+0:15:11.760 --> 0:15:15.280
+And then you'll say do you want to load data from JSON and they say of course I do.
+
+250
+0:15:15.280 --> 0:15:18.960
+And you say how are you going to define a date?
+
+251
+0:15:18.960 --> 0:15:22.560
+And they'll say I use a standard date format.
+
+252
+0:15:22.560 --> 0:15:23.560
+That's not strict then.
+
+253
+0:15:23.560 --> 0:15:24.560
+You're parsing a string.
+
+254
+0:15:24.560 --> 0:15:27.360
+And they're like oh, that's fine because it should know in that case it's coming from
+
+255
+0:15:27.360 --> 0:15:28.360
+JSON.
+
+256
+0:15:28.360 --> 0:15:30.600
+Well, obviously, how are we going to do that?
+
+257
+0:15:30.600 --> 0:15:37.440
+By parsing JSON directly and in future potentially other types, we can implement our strict date
+
+258
+0:15:37.440 --> 0:15:45.000
+method both on that JSON input, we can say well, we're in JSON, we don't have a date
+
+259
+0:15:45.000 --> 0:15:48.600
+type so we're going to have to do something so we're going to parse a string.
+
+260
+0:15:48.600 --> 0:15:53.760
+And the strict date implementation for JSON will parse a string.
+
+261
+0:15:53.760 --> 0:15:57.760
+And therefore we can have a strict mode that's actually useful which we wouldn't have had
+
+262
+0:15:57.760 --> 0:16:02.800
+if we couldn't have had in Python where the validation logic doesn't know anything about
+
+263
+0:16:02.800 --> 0:16:04.240
+where the data is coming from.
+
+264
+0:16:04.240 --> 0:16:09.040
+Even if we have a parse JSON function, all it's doing is parsing JSON to Python and then
+
+265
+0:16:09.040 --> 0:16:12.880
+doing validation.
+
+266
+0:16:12.880 --> 0:16:14.080
+So then that's all very well.
+
+267
+0:16:14.080 --> 0:16:16.160
+That defines effectively how we do our validation.
+
+268
+0:16:16.160 --> 0:16:17.680
+What's the interface to Python?
+
+269
+0:16:17.680 --> 0:16:26.360
+So that's where we have this schema validator Rust struct which using the PyClass decorator
+
+270
+0:16:26.360 --> 0:16:29.600
+is also available as a Python class.
+
+271
+0:16:29.600 --> 0:16:35.680
+And all it really contains is a validator which of course can in turn contain other
+
+272
+0:16:35.680 --> 0:16:38.120
+validators as I said earlier.
+
+273
+0:16:38.120 --> 0:16:43.840
+And it's implementation which are all then exposed as Python methods are new which just
+
+274
+0:16:43.840 --> 0:16:49.640
+construct it so we call the build validator and get back an instance of our validator
+
+275
+0:16:49.640 --> 0:16:53.280
+which we then store and return the type.
+
+276
+0:16:53.280 --> 0:16:55.120
+Actually this is much more complicated.
+
+277
+0:16:55.120 --> 0:17:01.440
+One of the cleverest and most infuriating bits of Python core is that we, as you can
+
+278
+0:17:01.440 --> 0:17:05.080
+imagine this schema for defining validation becomes quite complex.
+
+279
+0:17:05.080 --> 0:17:06.840
+It's very easy to make a mistake.
+
+280
+0:17:06.840 --> 0:17:11.800
+So we validate it using Python core itself.
+
+281
+0:17:11.800 --> 0:17:16.720
+Which when it works is magic and when it doesn't work leads to impossible errors because obviously
+
+282
+0:17:16.720 --> 0:17:22.360
+all of the things that you're looking at as members of dictionaries are in turn the names
+
+283
+0:17:22.360 --> 0:17:23.800
+of bits of validation.
+
+284
+0:17:23.800 --> 0:17:29.360
+So it's complete hell but it works and it makes it very hard to build an invalid or
+
+285
+0:17:29.360 --> 0:17:33.160
+not build the validator that you want.
+
+286
+0:17:33.160 --> 0:17:37.880
+And then we have these two implementations, two functions which do validate Python object
+
+287
+0:17:37.880 --> 0:17:43.200
+as I said earlier which core validate and same with JSON where we pass a JSON using
+
+288
+0:17:43.200 --> 0:17:48.860
+Serd to a JSON value and then call validate again with that input.
+
+289
+0:17:48.860 --> 0:17:51.720
+This code is obviously heavily simplified so that it fits.
+
+290
+0:17:51.720 --> 0:17:54.560
+It doesn't fit on the page but nearly fits on the page.
+
+291
+0:17:54.560 --> 0:17:58.520
+So not everything is exactly as it really is but I think that kind of gives you an idea
+
+292
+0:17:58.520 --> 0:18:02.240
+of how we build up these validators.
+
+293
+0:18:02.240 --> 0:18:06.280
+The other thing missed here, we also do the whole thing again for serialization.
+
+294
+0:18:06.280 --> 0:18:13.320
+So the serialization from both a Python model to a Python dictionary and from a Python model
+
+295
+0:18:13.320 --> 0:18:19.660
+straight to JSON is all written in Rust and it does useful things like filtering out elements
+
+296
+0:18:19.660 --> 0:18:26.320
+as you go along and it's effectively the same structure, uses the same schema but it's just
+
+297
+0:18:26.320 --> 0:18:32.760
+dedicated to serialization rather than rather than validation.
+
+298
+0:18:32.760 --> 0:18:35.520
+So what does the Python interface then look like?
+
+299
+0:18:35.520 --> 0:18:40.800
+So this is so what I didn't explain earlier is that Python v2 which is going to be released
+
+300
+0:18:40.800 --> 0:18:44.440
+fingers crossed in Q1 this year is made up of two packages.
+
+301
+0:18:44.440 --> 0:18:49.000
+We have Python itself which is a pure Python package and then we have Python core which
+
+302
+0:18:49.000 --> 0:18:51.040
+is almost all Rust code.
+
+303
+0:18:51.040 --> 0:18:55.400
+We have a little bit of a shim of Python to explain what's going on but it's really just
+
+304
+0:18:55.400 --> 0:18:57.280
+the Rust code I've been showing you.
+
+305
+0:18:57.280 --> 0:19:03.480
+So what Pydantic now does, all that Pydantic effectively takes care of is converting those
+
+306
+0:19:03.480 --> 0:19:09.440
+type annotations I showed you earlier into a Pydantic core schema and then building a
+
+307
+0:19:09.440 --> 0:19:10.440
+validator.
+
+308
+0:19:10.440 --> 0:19:15.120
+So looking at an example here, we obviously import schema validator which I just showed
+
+309
+0:19:15.120 --> 0:19:28.000
+you from, that's come up at the wrong time, from Pydantic core and then we, the base level,
+
+310
+0:19:28.000 --> 0:19:32.760
+the base validator which in turn, the schema for the base validator is model and it contains
+
+311
+0:19:32.760 --> 0:19:37.800
+as I said earlier a class which is the Python class to instantiate and another schema which
+
+312
+0:19:37.800 --> 0:19:48.040
+in turn defines the fields and that inner validator is then defined by a typedict validator
+
+313
+0:19:48.040 --> 0:19:49.640
+as I said earlier.
+
+314
+0:19:49.640 --> 0:19:54.120
+So this is completely valid Python code, this will run now.
+
+315
+0:19:54.120 --> 0:19:58.760
+So yeah, we have a typedict validator which contains fields which in turn are those fields
+
+316
+0:19:58.760 --> 0:20:00.320
+which I showed you earlier.
+
+317
+0:20:00.320 --> 0:20:04.280
+So title attendance is of type int.
+
+318
+0:20:04.280 --> 0:20:11.080
+The most interesting thing here is if you look at the when validator, it gets a bit
+
+319
+0:20:11.080 --> 0:20:12.080
+confusing.
+
+320
+0:20:12.080 --> 0:20:19.440
+It is, its schema is of type default which in turn contains another schema which is of
+
+321
+0:20:19.440 --> 0:20:24.680
+type nullable which is a kind of the simplest union, either a value or none.
+
+322
+0:20:24.680 --> 0:20:32.760
+The default validator contains another member which is the default value, in this case none.
+
+323
+0:20:32.760 --> 0:20:36.680
+The inner schema is then nullable which in turn contains another inner schema which is
+
+324
+0:20:36.680 --> 0:20:37.880
+then the date time.
+
+325
+0:20:37.880 --> 0:20:44.240
+So that's how we define effectively default values and null or nullable.
+
+326
+0:20:44.240 --> 0:20:49.160
+So one of the other mistakes in PyLantic in the past was that we kind of conflate, effectively
+
+327
+0:20:49.160 --> 0:20:54.600
+Python made a mistake about ten years ago where they used, they had a alias for union
+
+328
+0:20:54.600 --> 0:21:00.040
+of something and none that they called optional which then meant that I didn't want to have
+
+329
+0:21:00.040 --> 0:21:03.080
+a thing that was called optional but was not optional.
+
+330
+0:21:03.080 --> 0:21:10.160
+So we conflated nullable with optional in PyLantic and rightly it confused everyone.
+
+331
+0:21:10.160 --> 0:21:16.440
+So the solution from Python was to start using the pipe operator for unions and to basically
+
+332
+0:21:16.440 --> 0:21:17.440
+ignore optional.
+
+333
+0:21:17.440 --> 0:21:22.960
+They can't really get rid of it but they just pretend it didn't really happen.
+
+334
+0:21:22.960 --> 0:21:29.200
+My solution is to define default and nullable as completely separate things and we're not
+
+335
+0:21:29.200 --> 0:21:33.800
+going to use the optional type anywhere in our docs, we're just going to use union of
+
+336
+0:21:33.800 --> 0:21:39.120
+thing and none to avoid that confusion.
+
+337
+0:21:39.120 --> 0:21:41.600
+And then I think mistakes, I hope it kind of makes sense to you.
+
+338
+0:21:41.600 --> 0:21:45.480
+Again, it's this like schema within schema within schema which become validator within
+
+339
+0:21:45.480 --> 0:21:48.480
+validator.
+
+340
+0:21:48.480 --> 0:21:53.640
+And we take our code as I showed you earlier, run validation, in this case we call validate
+
+341
+0:21:53.640 --> 0:21:57.440
+Python because we've got some Python code but we could just as well have a JSON string
+
+342
+0:21:57.440 --> 0:22:02.800
+and call validate JSON and then we have a talk instance which lets us access the members
+
+343
+0:22:02.800 --> 0:22:08.560
+of it as you normally would.
+
+344
+0:22:08.560 --> 0:22:11.920
+So where does Rust excel in these applications?
+
+345
+0:22:11.920 --> 0:22:14.400
+Why build this in Rust?
+
+346
+0:22:14.400 --> 0:22:20.160
+There are a bunch of obvious reasons to use Rust, performance being the number one, multi-threading
+
+347
+0:22:20.160 --> 0:22:24.720
+and not having the global interpreter lock in Python is another one.
+
+348
+0:22:24.720 --> 0:22:30.800
+The third is using high quality existing Rust libraries to build libraries in Python instead
+
+349
+0:22:30.800 --> 0:22:32.280
+of implementing it yourself.
+
+350
+0:22:32.280 --> 0:22:37.960
+So I maintain two other Python libraries written in Rust watch files which uses the notify
+
+351
+0:22:37.960 --> 0:22:45.000
+crate to do file watching and then rtoml which as you can guess is a Toml parser using the
+
+352
+0:22:45.000 --> 0:22:47.640
+Toml library from Rust.
+
+353
+0:22:47.640 --> 0:22:57.360
+And the rtoml library is the fastest Python, well Python, Toml parser out there.
+
+354
+0:22:57.360 --> 0:22:59.840
+And actually watch files is becoming more and more popular, it's the default now with
+
+355
+0:22:59.840 --> 0:23:03.780
+uvehicle which is one of the web servers.
+
+356
+0:23:03.780 --> 0:23:07.960
+But perhaps less obviously in terms of where Rust fits in best.
+
+357
+0:23:07.960 --> 0:23:11.880
+Deeply recursive code as I've just showed you with these validators within validators,
+
+358
+0:23:11.880 --> 0:23:15.880
+there's no stack and so we don't have a penalty for recursion.
+
+359
+0:23:15.880 --> 0:23:20.160
+We do have to be very, very careful because as I'm sure you will know if you have recursion
+
+360
+0:23:20.160 --> 0:23:22.880
+in Rust and you don't catch it, you just get a segfault.
+
+361
+0:23:22.880 --> 0:23:26.600
+And that would be very, very upsetting to Python developers who have never seen one
+
+362
+0:23:26.600 --> 0:23:29.280
+before.
+
+363
+0:23:29.280 --> 0:23:34.640
+So there's an enormous amount of code in Python dedicated to catching recursion.
+
+364
+0:23:34.640 --> 0:23:39.680
+We have to have two or three different sorts of guard to protect against recursion in all
+
+365
+0:23:39.680 --> 0:23:43.800
+possible different situations because it's effectively the worst thing that we can have
+
+366
+0:23:43.800 --> 0:23:48.080
+is that there is some data structure that you can pass to Python which causes your entire
+
+367
+0:23:48.080 --> 0:23:54.000
+Python process to segfault and you wouldn't know where to even start looking.
+
+368
+0:23:54.000 --> 0:23:58.760
+So that's a blessing, the lack of a stack is a blessing and a curse.
+
+369
+0:23:58.760 --> 0:24:04.240
+And then the second big advantage I think of where Rust excels is in these small modular
+
+370
+0:24:04.240 --> 0:24:05.240
+components.
+
+371
+0:24:05.240 --> 0:24:11.080
+So where I was showing you before these relatively small in terms of code footprint validators
+
+372
+0:24:11.080 --> 0:24:17.080
+which in turn hold other ones, there's no performance penalty for having these functions
+
+373
+0:24:17.080 --> 0:24:18.080
+in Rust.
+
+374
+0:24:18.080 --> 0:24:23.320
+I say almost because we actually have to use box around validators because they hold themselves
+
+375
+0:24:23.320 --> 0:24:29.720
+so there is a bit of an overhead of going into the heap but it's relatively small particularly
+
+376
+0:24:29.720 --> 0:24:31.280
+compared to Python.
+
+377
+0:24:31.280 --> 0:24:35.080
+And then the lastly, complex error handling.
+
+378
+0:24:35.080 --> 0:24:38.280
+Obviously in Python you don't know what's going to error and what exceptions you're
+
+379
+0:24:38.280 --> 0:24:41.920
+going to get in Rust.
+
+380
+0:24:41.920 --> 0:24:45.320
+Putting to one side the comment about panic earlier, you can in general know what errors
+
+381
+0:24:45.320 --> 0:24:51.160
+you're going to get and catch them and construct validation errors in the case of pedantic
+
+382
+0:24:51.160 --> 0:24:57.440
+which is a great deal easier than it would ever have been to write that code in Python.
+
+383
+0:24:57.440 --> 0:25:03.080
+So the way I want to think about the future development of Python is not as Python versus
+
+384
+0:25:03.080 --> 0:25:08.920
+Rust but as Python as the user interface for Rust or the application developer interface
+
+385
+0:25:08.920 --> 0:25:11.040
+for Rust.
+
+386
+0:25:11.040 --> 0:25:13.840
+So I'd love to see more and more libraries do what we've done with pedantic core and
+
+387
+0:25:13.840 --> 0:25:20.160
+effectively implement their low level components in Rust.
+
+388
+0:25:20.160 --> 0:25:25.760
+So I kind of my dream is a world in which thinking about the life cycle of a HTTP request
+
+389
+0:25:25.760 --> 0:25:32.840
+but you could think the same about some NL pipeline or many other applications, we effectively
+
+390
+0:25:32.840 --> 0:25:39.440
+the vast majority of the execution is Rust or C but then all of the application logic
+
+391
+0:25:39.440 --> 0:25:40.440
+can be in Python.
+
+392
+0:25:40.440 --> 0:25:44.600
+So effectively we get to a point where we have 100% of developer time spent in high
+
+393
+0:25:44.600 --> 0:25:50.840
+level languages but only 1% of CPU dedicated to actually running Python code which is slower
+
+394
+0:25:50.840 --> 0:25:52.120
+and is always going to be slower.
+
+395
+0:25:52.120 --> 0:25:55.240
+I don't think there's ever a world in which someone's going to come up with a language
+
+396
+0:25:55.240 --> 0:25:59.920
+that is as fast and as safe as Rust but also as quick to write as Python.
+
+397
+0:25:59.920 --> 0:26:02.000
+So I don't think it should be one versus the other.
+
+398
+0:26:02.000 --> 0:26:06.600
+It should be building the low level, building the rails, perhaps a bad term but the rails
+
+399
+0:26:06.600 --> 0:26:12.200
+in Rust and building the train in Python.
+
+400
+0:26:12.200 --> 0:26:16.240
+It doesn't work but you get where I'm coming from.
+
+401
+0:26:16.240 --> 0:26:18.960
+On that note, thank you very much.
+
+402
+0:26:18.960 --> 0:26:24.160
+A few links there, particularly thanks to the PyO3 team who built the bindings for Rust
+
+403
+0:26:24.160 --> 0:26:29.080
+in Python which is amazing and if you want a laugh there's a very, very funny issue on
+
+404
+0:26:29.080 --> 0:26:33.520
+GitHub where a very angry man says why we should never use Rust.
+
+405
+0:26:33.520 --> 0:26:34.520
+So if you want to read that.
+
+406
+0:26:34.520 --> 0:26:38.560
+I then took some time to take them to pieces which was quite satisfying although a waste
+
+407
+0:26:38.560 --> 0:26:39.560
+of time.
+
+408
+0:26:39.560 --> 0:26:41.160
+So have a look at that.
+
+409
+0:26:41.160 --> 0:26:42.160
+Questions?
+
+410
+0:26:42.160 --> 0:27:08.200
+First, especially for the sanitation, are you thinking to publish a library of Rust?
+
+411
+0:27:08.200 --> 0:27:15.160
+The job is already done and you could have a public API in a library already to validate
+
+412
+0:27:15.160 --> 0:27:16.160
+Rust data.
+
+413
+0:27:16.160 --> 0:27:18.840
+I'm sorry, I don't understand quite what...
+
+414
+0:27:18.840 --> 0:27:19.840
+Sorry.
+
+415
+0:27:19.840 --> 0:27:27.120
+So you wrote the library in Rust so could you publish just an API to validate JSON for
+
+416
+0:27:27.120 --> 0:27:31.040
+example from Rust instead of through Python?
+
+417
+0:27:31.040 --> 0:27:36.520
+Absolutely you could and it would be useful if you wanted to somehow construct the schema
+
+418
+0:27:36.520 --> 0:27:43.480
+at runtime fast but it's never going to be anywhere near as performant as because you
+
+419
+0:27:43.480 --> 0:27:45.720
+were not compiling...
+
+420
+0:27:45.720 --> 0:27:47.640
+We can't do anything at compile time.
+
+421
+0:27:47.640 --> 0:27:52.600
+Secondly, it's currently all completely intertwined with the PyO3 library and the Python types.
+
+422
+0:27:52.600 --> 0:27:58.480
+So there is a future nascent possible project, Tydantic, which is Pydantic for TypeScript
+
+423
+0:27:58.480 --> 0:28:02.680
+where we take the PyO3 types, we effectively replace them with a new library which has
+
+424
+0:28:02.680 --> 0:28:08.200
+a compile time switch between the Python bindings and the JavaScript bindings or the Wasm bindings
+
+425
+0:28:08.200 --> 0:28:10.360
+and then we can build Tydantic.
+
+426
+0:28:10.360 --> 0:28:12.760
+That's a future plan but a long way off.
+
+427
+0:28:12.760 --> 0:28:15.640
+Right now it wouldn't really be worth it because you would get lots to slow down from Python
+
+428
+0:28:15.640 --> 0:28:17.080
+and from compile time.
+
+429
+0:28:17.080 --> 0:28:20.880
+So we really need a completely different library just for Rust like you're saying.
+
+430
+0:28:20.880 --> 0:28:22.240
+Yeah, CERT is amazing.
+
+431
+0:28:22.240 --> 0:28:25.600
+I don't think I'm going to go and try and compete with that.
+
+432
+0:28:25.600 --> 0:28:28.400
+At least it's great for that application.
+
+433
+0:28:28.400 --> 0:28:32.360
+Hi, thanks for the talk.
+
+434
+0:28:32.360 --> 0:28:37.560
+Personally I think the Python library cryptography introduced Rust and had some complaints from
+
+435
+0:28:37.560 --> 0:28:41.080
+people using obscure build processes where Rust didn't work.
+
+436
+0:28:41.080 --> 0:28:43.440
+Are you expecting anything from that?
+
+437
+0:28:43.440 --> 0:28:45.960
+So I will actually bring up now...
+
+438
+0:28:45.960 --> 0:28:47.920
+Now I'm going to get into how to...
+
+439
+0:28:47.920 --> 0:28:52.760
+Effectively go and read that issue where among other things I...
+
+440
+0:28:52.760 --> 0:28:58.680
+Oh, how do I get out of this mode?
+
+441
+0:28:58.680 --> 0:29:06.440
+So rant, rant, rant, rant from him, effectively I went through the just over a quarter of
+
+442
+0:29:06.440 --> 0:29:10.880
+a billion downloads over the last 12 months of Pydantic and I worked out looking at the
+
+443
+0:29:10.880 --> 0:29:19.120
+distribution of the different operating systems and libc implementations etcetera that 99.9859%
+
+444
+0:29:19.120 --> 0:29:23.240
+of people would have got a binary if they'd installed Pydantic core then.
+
+445
+0:29:23.240 --> 0:29:27.760
+That number will be higher now because there will be fewer esoteric operating systems.
+
+446
+0:29:27.760 --> 0:29:34.120
+Most of the failed ones if you look are actually installing, say they're installing Python
+
+447
+0:29:34.120 --> 0:29:35.440
+onto iOS.
+
+448
+0:29:35.440 --> 0:29:40.720
+I don't know what that means or whether it could ever work but...
+
+449
+0:29:40.720 --> 0:29:43.440
+The other thing I would say is Pydantic core is already compiled to WebAssembly so you
+
+450
+0:29:43.440 --> 0:29:45.120
+can already run it in the browser.
+
+451
+0:29:45.120 --> 0:29:49.360
+So I understand why people complained but I think it's not a concern.
+
+452
+0:29:49.360 --> 0:29:51.240
+It's a straw man for most people.
+
+453
+0:29:51.240 --> 0:29:55.040
+It's like satisfying slap down.
+
+454
+0:29:55.040 --> 0:29:59.600
+But again if there's another distribution that we don't, we currently release 60 different
+
+455
+0:29:59.600 --> 0:30:08.320
+binaries, if there's another one we'll try and compile for it and release the binary.
+
+456
+0:30:08.320 --> 0:30:12.720
+There's a question right at the back.
+
+457
+0:30:12.720 --> 0:30:23.720
+I'll get back to the talk rather than...
+
+458
+0:30:23.720 --> 0:30:32.680
+Is there a way to use the Django models as Pydantic models?
+
+459
+0:30:32.680 --> 0:30:33.680
+Say again?
+
+460
+0:30:33.680 --> 0:30:41.480
+To use the Django to have binding or to translate the Django model directly into a Pydantic model?
+
+461
+0:30:41.480 --> 0:30:42.760
+There's no way at the moment.
+
+462
+0:30:42.760 --> 0:30:47.280
+There's a number of different ORMs, six I know of, built on top of Pydantic which effectively
+
+463
+0:30:47.280 --> 0:30:48.600
+allow that.
+
+464
+0:30:48.600 --> 0:30:53.680
+If you were wanting specifically Django there's a project called Django Ninja that makes extensive
+
+465
+0:30:53.680 --> 0:30:55.040
+use of Pydantic.
+
+466
+0:30:55.040 --> 0:30:56.640
+I don't know that much about it.
+
+467
+0:30:56.640 --> 0:31:00.400
+But if you actually wanted Pydantic models you'd probably want some kind of code reformatter
+
+468
+0:31:00.400 --> 0:31:03.160
+to convert them.
+
+469
+0:31:03.160 --> 0:31:06.440
+So I look at Django Ninja, I'm sure what they're doing is the best of what's possible right
+
+470
+0:31:06.440 --> 0:31:13.960
+now.
+
+471
+0:31:13.960 --> 0:31:19.320
+If you had additional time, say after finishing Pydantic, are there any other projects where
+
+472
+0:31:19.320 --> 0:31:26.480
+you'd like to follow this vision of a Rust core with Python user space or API?
+
+473
+0:31:26.480 --> 0:31:29.240
+There are a number of ones.
+
+474
+0:31:29.240 --> 0:31:33.840
+There's already OR JSON which is a very, very fast if unsafe in the sense of listed with
+
+475
+0:31:33.840 --> 0:31:38.080
+unsafe JSON parser which is very, very fast.
+
+476
+0:31:38.080 --> 0:31:43.560
+There are the obvious one is a web framework where you do like I kind of showed here the
+
+477
+0:31:43.560 --> 0:31:48.200
+HTTP parsing, the routing all in Rust.
+
+478
+0:31:48.200 --> 0:31:51.960
+That's not very easy using ASGI.
+
+479
+0:31:51.960 --> 0:31:55.240
+There are already a few projects doing that.
+
+480
+0:31:55.240 --> 0:31:57.680
+So that would be the obvious one but there's no winner yet.
+
+481
+0:31:57.680 --> 0:32:03.200
+Currently the best low level web framework is Starlet which FastAPI is built on which
+
+482
+0:32:03.200 --> 0:32:10.280
+I think it does use Rust for, it uses a Rust library for HTTP parsing or a C library.
+
+483
+0:32:10.280 --> 0:32:16.480
+So some of it's already happening but no obvious candidate right now.
+
+484
+0:32:16.480 --> 0:32:21.600
+What I would say though is libraries like rich, no criticism of will but rich is incredibly
+
+485
+0:32:21.600 --> 0:32:25.760
+complicated, it's for terminal output, it's not so much performance critical but it's
+
+486
+0:32:25.760 --> 0:32:28.120
+really quite involved in complex logic.
+
+487
+0:32:28.120 --> 0:32:31.960
+I would much prefer to write that logic in Rust than Python.
+
+488
+0:32:31.960 --> 0:32:39.760
+I think there are lots of candidates.
+
+489
+0:32:39.760 --> 0:32:48.000
+Yeah, what do you mean by Python as the application layer?
+
+490
+0:32:48.000 --> 0:32:54.920
+I guess I could have added some example code here but you can imagine a Python function
+
+491
+0:32:54.920 --> 0:33:01.760
+which is a viewpoint in a web framework which takes in some validated arguments done by
+
+492
+0:33:01.760 --> 0:33:02.920
+Python.
+
+493
+0:33:02.920 --> 0:33:08.200
+You then decide in Python to make a query to the database to get back the user's name
+
+494
+0:33:08.200 --> 0:33:14.080
+from the ID and then you return the JSON object containing data about the user.
+
+495
+0:33:14.080 --> 0:33:19.840
+If you think about that, all of the code outside the Python functions could be written in a
+
+496
+0:33:19.840 --> 0:33:25.120
+faster language whether it be the database query accessing the database, TSL termination,
+
+497
+0:33:25.120 --> 0:33:31.840
+HTTP parsing, routing, validation but effectively using Python to define as a way to effectively
+
+498
+0:33:31.840 --> 0:33:47.400
+configure Rust code or configure compile code.
+
+499
+0:33:47.400 --> 0:33:48.400
+Yes hello.
+
+500
+0:33:48.400 --> 0:33:52.080
+I have a question, just a pedantic one.
+
+501
+0:33:52.080 --> 0:33:56.600
+Is there any support or are you planning any support for alternative schema types like
+
+502
+0:33:56.600 --> 0:34:00.760
+protobuf or gRPC or Avro?
+
+503
+0:34:00.760 --> 0:34:06.520
+In the future, what I have a plan for is I don't want to build them into pedantic.
+
+504
+0:34:06.520 --> 0:34:11.760
+Pedantic is already big but you can parse them to Python now and validate them as a
+
+505
+0:34:11.760 --> 0:34:13.000
+Python object.
+
+506
+0:34:13.000 --> 0:34:34.080
+There is a plan effectively to take the this value which you would then construct in Rust,
+
+507
+0:34:34.080 --> 0:34:38.760
+parse as a Python value into pedantic core which would then extract the raw underlying
+
+508
+0:34:38.760 --> 0:34:44.400
+Rust instance and then validate that and that would allow you to get basically zero Python
+
+509
+0:34:44.400 --> 0:34:46.920
+validation effectively.
+
+510
+0:34:46.920 --> 0:34:51.120
+But without having to us having to either have compile time dependencies or build it
+
+511
+0:34:51.120 --> 0:34:53.960
+all into pedantic core.
+
+512
+0:34:53.960 --> 0:34:57.160
+I think that's our last question that we have time for.
+
+513
+0:34:57.160 --> 0:35:05.400
+One comment we did get from matrix was that this code is a bit small on the display so
+
+514
+0:35:05.400 --> 0:35:06.400
+if you upload the.
+
+515
+0:35:06.400 --> 0:35:07.400
+I will do.
+
+516
+0:35:07.400 --> 0:35:08.400
+Yeah perfect.
+
+517
+0:35:08.400 --> 0:35:13.040
+So if you're watching the stream, slides will be uploaded and you can read the code.
+
+518
+0:35:13.040 --> 0:35:16.120
+Oh I'll put them on Twitter as well but yeah definitely I'll upload them as well.
+
+519
+0:35:16.120 --> 0:35:17.120
+Awesome.
+
+520
+0:35:17.120 --> 0:35:40.200
+Thank you very much.
+

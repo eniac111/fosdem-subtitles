@@ -1,0 +1,916 @@
+WEBVTT
+
+00:00.000 --> 00:18.760
+So now we've got Tommaso, he's going to tell us how to build a snake game.
+
+00:18.760 --> 00:21.680
+Are we going to build it together?
+
+00:21.680 --> 00:22.680
+Hopefully.
+
+00:22.680 --> 00:23.760
+Hi all.
+
+00:23.760 --> 00:30.600
+Today we are here to talk about snake, obviously, rust and wasm.
+
+00:30.600 --> 00:39.720
+In particular we will see how to build a snake game written in rust and shiphead has a wasm
+
+00:39.720 --> 00:41.720
+module.
+
+00:41.720 --> 00:45.080
+Before doing that, I would like to introduce myself.
+
+00:45.080 --> 00:48.240
+Hi, I'm Tommaso, I have two cats.
+
+00:48.240 --> 00:55.200
+And commonly I used to be a software architect in web application environment.
+
+00:55.200 --> 01:04.520
+So probably the games is not my best stuff I can do build, but I try.
+
+01:04.520 --> 01:09.800
+So let's start to talk about what wasm is.
+
+01:09.800 --> 01:18.200
+Nevertheless, is a stack based virtual machine that allows to be portable.
+
+01:18.200 --> 01:28.560
+So we can build the application and bring where you want mostly.
+
+01:28.560 --> 01:40.440
+And the main target is web, but not linked to the web only.
+
+01:40.440 --> 01:42.400
+We will see later.
+
+01:42.400 --> 01:46.800
+So we have four concepts, efficient and fast.
+
+01:46.800 --> 01:55.160
+Memory safety, open the bug able and part of the web platform.
+
+01:55.160 --> 01:59.440
+For this reason we have four parts.
+
+01:59.440 --> 02:06.080
+The core one, JavaScript API that allow us to interact with JavaScript worlds like browser
+
+02:06.080 --> 02:08.520
+nodes and so on.
+
+02:08.520 --> 02:14.880
+Web API that allow us to interact with DOM events and so on.
+
+02:14.880 --> 02:23.680
+And Wazi, this is a code for WebAssembly system integration if I remember correctly.
+
+02:23.680 --> 02:29.560
+That allow us to interact with file system, networking and so on.
+
+02:29.560 --> 02:39.600
+Obviously Wazi is not allowed in browser context for some reason.
+
+02:39.600 --> 02:43.880
+So how we can write a wasm module?
+
+02:43.880 --> 02:50.240
+But wasm actually supports two kinds of format, text and binary.
+
+02:50.240 --> 02:55.920
+But probably you don't want to write directly into wasm.
+
+02:55.920 --> 03:03.560
+For example, assembly probably in this year no one writes in assembly directly.
+
+03:03.560 --> 03:06.480
+But if you want you can do that.
+
+03:06.480 --> 03:10.640
+But probably you want leverage on different languages.
+
+03:10.640 --> 03:15.440
+For example, C, C++, Rust, Go and so on.
+
+03:15.440 --> 03:27.080
+But if you remember the previous slide we talked about the memory safe of the WebAssembly
+
+03:27.080 --> 03:34.240
+and which is the other language that remember has a similar capability.
+
+03:34.240 --> 03:39.200
+Rust because Rust guarantee memory safety.
+
+03:39.200 --> 03:46.400
+And this is why we are here to talk about Rust plus WebAssembly.
+
+03:46.400 --> 03:52.800
+So which is the constraint we have for building wasm in Rust?
+
+03:52.800 --> 03:57.920
+Unfortunately we are not so free to use what we want.
+
+03:57.920 --> 04:04.160
+We need to put an attribute wasm in gen in all type of export.
+
+04:04.160 --> 04:10.400
+So structure and so on, but not linked to that.
+
+04:10.400 --> 04:14.680
+Also the implementation block we need to treat like that.
+
+04:14.680 --> 04:23.000
+So put the same attribute on top of the implementation block.
+
+04:23.000 --> 04:29.600
+And unfortunately wasm doesn't understand all the types available in Rust.
+
+04:29.600 --> 04:37.560
+So by our integer but not all the integer supported 14 points and vector.
+
+04:37.560 --> 04:42.040
+We have some limitation about that.
+
+04:42.040 --> 04:49.640
+Has consequence, for example, enumeration need to be treated as a use 80.
+
+04:49.640 --> 05:07.760
+And all the values from methods need to be casted to some wasm types or it was in gen
+
+05:07.760 --> 05:10.800
+structure.
+
+05:10.800 --> 05:19.800
+So we are here to talk about snake.
+
+05:19.800 --> 05:22.160
+Who play at least one snake?
+
+05:22.160 --> 05:23.920
+At least one.
+
+05:23.920 --> 05:24.920
+Okay.
+
+05:24.920 --> 05:25.920
+Phew.
+
+05:25.920 --> 05:26.920
+Okay.
+
+05:26.920 --> 05:28.840
+For the other snake is a simplest game.
+
+05:28.840 --> 05:29.840
+Two grid.
+
+05:29.840 --> 05:34.320
+There is a two dimension grid.
+
+05:34.320 --> 05:46.120
+Your aim is to win for winning, avoiding the go through a wall and eat yourself.
+
+05:46.120 --> 05:52.120
+You are able to eat foods that give you scores and so on.
+
+05:52.120 --> 06:00.360
+Your aim is to drive the snake through walls and try to eat the food more or less.
+
+06:00.360 --> 06:02.680
+Anyway we will see you later.
+
+06:02.680 --> 06:05.920
+So our code is here.
+
+06:05.920 --> 06:12.480
+Is a cargo workspace with three members.
+
+06:12.480 --> 06:19.080
+The first one is just plain Rust implementation of game logic without wasm stuff, without
+
+06:19.080 --> 06:22.520
+any other part.
+
+06:22.520 --> 06:29.960
+The second one is handmade snake that is just a wrapper on the previous one in order to
+
+06:29.960 --> 06:35.800
+let a JavaScript world to import it and use it.
+
+06:35.800 --> 06:42.600
+So we implement the web interface manually through JavaScript and DOMS.
+
+06:42.600 --> 06:51.640
+And the last is a plugin that allows us to create a proficiency, more proficiency than
+
+06:51.640 --> 06:53.440
+manual ones.
+
+06:53.440 --> 06:56.640
+A game.
+
+06:56.640 --> 07:01.280
+The last two members use the first one.
+
+07:01.280 --> 07:04.660
+And we will see how.
+
+07:04.660 --> 07:09.000
+So conceptually we have a bunch of stuff.
+
+07:09.000 --> 07:15.840
+A direction that allows us to describe which is the direction the snake have.
+
+07:15.840 --> 07:21.060
+The point because we live inside a grid.
+
+07:21.060 --> 07:25.820
+So we have to somehow describe the point.
+
+07:25.820 --> 07:34.720
+The game itself, private stuff, but mainly we have two members.
+
+07:34.720 --> 07:38.520
+Tick and get the last snapshot.
+
+07:38.520 --> 07:46.480
+Tick allows us to move the snake in the direction specified there.
+
+07:46.480 --> 07:55.440
+And the last snapshot allows us to know what happened in the last tick.
+
+07:55.440 --> 08:02.840
+For example, I eat a food, I go through the wall, which is my score, which is the position,
+
+08:02.840 --> 08:06.880
+and last but not least, the period duration.
+
+08:06.880 --> 08:15.680
+Because you know in the game the interval between the ticks change accordingly with
+
+08:15.680 --> 08:16.680
+your score.
+
+08:16.680 --> 08:23.920
+So the game more go on than the period decrease.
+
+08:23.920 --> 08:32.480
+So how we can use hopefully you read the code.
+
+08:32.480 --> 08:33.480
+Cross the finger.
+
+08:33.480 --> 08:35.880
+Anyway, I describe it.
+
+08:35.880 --> 08:37.680
+We have a level.
+
+08:37.680 --> 08:45.120
+Describe it has a simple way through a string.
+
+08:45.120 --> 08:50.280
+We can parse it creating a game.
+
+08:50.280 --> 09:00.040
+We invoke a tick method on the game describing which is the direction we want to use.
+
+09:00.040 --> 09:04.040
+Get the last snapshot, check status.
+
+09:04.040 --> 09:14.600
+For example, in this case I eat a food because the age goes on the food.
+
+09:14.600 --> 09:20.960
+We are not yet on the wall and the game over is none.
+
+09:20.960 --> 09:27.000
+Instead the code below goes through the wall.
+
+09:27.000 --> 09:34.540
+So on the wall is true and the game over is some with the reason.
+
+09:34.540 --> 09:39.840
+And finally we have two public levels.
+
+09:39.840 --> 09:41.120
+Snake one is the two.
+
+09:41.120 --> 09:47.880
+The difference probably you know but for repeating the difference is the frame.
+
+09:47.880 --> 09:54.920
+So in snake one we have a frame with all the walls.
+
+09:54.920 --> 09:58.480
+Instead snake two is more like a toroid.
+
+09:58.480 --> 10:06.220
+So you can go left and appear on the right and appear on the ground.
+
+10:06.220 --> 10:09.960
+So how we can use this.
+
+10:09.960 --> 10:11.800
+We have snake core.
+
+10:11.800 --> 10:16.340
+Again, without any dependency.
+
+10:16.340 --> 10:23.080
+We need to repeat because we already seen.
+
+10:23.080 --> 10:27.360
+We have some deficit about that.
+
+10:27.360 --> 10:38.320
+We have some custom JavaScript code that interact with DOM in order to update the UI.
+
+10:38.320 --> 10:42.080
+Which is more like what happened.
+
+10:42.080 --> 10:48.520
+And at compilation time after the compilation actually we have a process for compilation.
+
+10:48.520 --> 10:55.840
+The last code into a wasm and this compilation generates two artifacts actually.
+
+10:55.840 --> 11:03.000
+The wasm itself and the auto generated JavaScript module that allows us to simplify the interaction
+
+11:03.000 --> 11:05.640
+with the wasm module.
+
+11:05.640 --> 11:10.240
+Remember that the same JavaScript code in the same DOM.
+
+11:10.240 --> 11:20.320
+So more or less what we have is wasm and auto generated JavaScript that allows us a lot.
+
+11:20.320 --> 11:24.760
+So shortly we need to wrap all the stuff.
+
+11:24.760 --> 11:25.720
+All the stuff.
+
+11:25.720 --> 11:33.360
+So the direction, the point, the game, the snapshot and so on.
+
+11:33.360 --> 11:38.920
+So definitely we are not able to do that for a large project.
+
+11:38.920 --> 11:46.000
+Obviously this works for a little once like snake but if you want to build a bigger one
+
+11:46.000 --> 11:48.960
+probably is not the best solution.
+
+11:48.960 --> 11:57.040
+But if you want instead create a cartographic library, hashing library, something like that,
+
+11:57.040 --> 11:58.720
+this is really amazing.
+
+11:58.720 --> 12:01.160
+It's sufficient.
+
+12:01.160 --> 12:04.880
+But for the gaming probably not so much.
+
+12:04.880 --> 12:21.740
+So before seeing which is our alternative we have a demo that you can find in the code.
+
+12:21.740 --> 12:32.920
+So let's see if it works properly.
+
+12:32.920 --> 12:39.440
+Obviously yes.
+
+12:39.440 --> 12:41.520
+Here.
+
+12:41.520 --> 12:51.720
+Because I haven't the framework that helped me to build a better UI, I choose this one
+
+12:51.720 --> 12:57.080
+sorry, I'm not a UI expert.
+
+12:57.080 --> 13:01.520
+So for our purpose is sufficient.
+
+13:01.520 --> 13:07.600
+As you can see here there is some bootstrap webpack blah blah blah, we don't care at all.
+
+13:07.600 --> 13:12.320
+But at the third point we download wasm.
+
+13:12.320 --> 13:18.520
+Wasm is a few kilobytes, so not so big.
+
+13:18.520 --> 13:26.160
+And the user is able to choose which the game he would like to play, click on here and move
+
+13:26.160 --> 13:28.560
+with the arrow key.
+
+13:28.560 --> 13:34.240
+Not whoa but why not whoa.
+
+13:34.240 --> 13:35.240
+Thanks.
+
+13:35.240 --> 13:36.240
+Okay.
+
+13:36.240 --> 13:44.880
+Obviously when I go through the wall the game is put on wall.
+
+13:44.880 --> 13:48.800
+And not the best user experience we have but sorry.
+
+13:48.800 --> 13:56.320
+So we will see the code together in the final Q&A session.
+
+13:56.320 --> 13:58.440
+So sorry.
+
+13:58.440 --> 14:00.840
+Time to strain it.
+
+14:00.840 --> 14:06.240
+So which is our alternative?
+
+14:06.240 --> 14:11.120
+Our alternative there are many alternatives obviously.
+
+14:11.120 --> 14:17.760
+I chose Bevy engine because I like it.
+
+14:17.760 --> 14:26.760
+I didn't find again I web developer so for gaming stuff I don't understand nothing.
+
+14:26.760 --> 14:35.720
+But Bevy engine allow me to put something in short time so good stuff guys, good stuff
+
+14:35.720 --> 14:37.240
+team.
+
+14:37.240 --> 14:41.800
+And support across platform as well.
+
+14:41.800 --> 14:47.640
+Windows Mac, Windows and obviously web.
+
+14:47.640 --> 14:52.160
+The pattern used is a CS, entity component system.
+
+14:52.160 --> 14:56.800
+Entity is just an ID that you can put on the wall.
+
+14:56.800 --> 15:02.080
+And the component is a tag, something you can attach to an entity like image, like a
+
+15:02.080 --> 15:05.920
+position, like something like that.
+
+15:05.920 --> 15:11.520
+And system is a function that work on those stuff.
+
+15:11.520 --> 15:17.840
+Can add the entity remove the component, remove a component, move existing component and so
+
+15:17.840 --> 15:19.240
+on.
+
+15:19.240 --> 15:34.640
+So more or less how Bevy works, each frame invokes Bevy runs our function called system.
+
+15:34.640 --> 15:43.560
+Let change add remove components and entities.
+
+15:43.560 --> 15:47.080
+That allow us to change our worlds.
+
+15:47.080 --> 15:54.640
+And finally Bevy render some of them obviously on the screen.
+
+15:54.640 --> 16:04.280
+So conceptually this is what I understand in two years at night obviously is not my
+
+16:04.280 --> 16:06.000
+job again.
+
+16:06.000 --> 16:12.920
+So it is almost simplest to understand.
+
+16:12.920 --> 16:20.640
+Last stuff to introduce of Bevy, we have another concept I need to introduce.
+
+16:20.640 --> 16:28.760
+Event is a plain object that allow us to be fired and to be listened.
+
+16:28.760 --> 16:37.200
+So we can inform other function, other systems that something happens.
+
+16:37.200 --> 16:43.960
+And the resources is just a global instance because system is allowed to access only on
+
+16:43.960 --> 16:47.820
+the world, not our custom objects.
+
+16:47.820 --> 16:56.360
+So you need to put your resources on the world and fetch it inside the system.
+
+16:56.360 --> 17:02.200
+And a nice feature, Bevy tracks when a resource changes.
+
+17:02.200 --> 17:04.040
+We will see later.
+
+17:04.040 --> 17:07.280
+So how can you them?
+
+17:07.280 --> 17:14.600
+A system for example firing events that is listened by system two that on that event
+
+17:14.600 --> 17:22.520
+change accordingly a resource A and the system three more or less react on that change.
+
+17:22.520 --> 17:28.840
+For example moving the snake.
+
+17:28.840 --> 17:39.720
+So let's have a look to a more detailed example on the code skipping the arguments because
+
+17:39.720 --> 17:45.640
+it is not important to understand better what I would like to show.
+
+17:45.640 --> 17:55.240
+Mostly because systems runs every frame, we don't want to tick on every frame.
+
+17:55.240 --> 17:59.520
+We want to wait a time here.
+
+17:59.520 --> 18:06.000
+So you know also for test proposing, this is nice.
+
+18:06.000 --> 18:10.320
+So we need to wait the tick event.
+
+18:10.320 --> 18:19.000
+So only when the tick event is fired, we call tick method on game.
+
+18:19.000 --> 18:28.360
+Game is on the third argument that the game resources obviously is the game we saw before.
+
+18:28.360 --> 18:37.080
+After that we get the snapshot to check if the game over is we are in game over.
+
+18:37.080 --> 18:43.520
+If yes, we send, we fire a game over event.
+
+18:43.520 --> 18:49.760
+After that we update the snake position, update the resource score, update the food and duration
+
+18:49.760 --> 18:56.280
+of the timer because you know the period can change.
+
+18:56.280 --> 19:04.440
+Nice stuff to be focused on is the if because we don't want to change if the real value
+
+19:04.440 --> 19:06.760
+is changed.
+
+19:06.760 --> 19:13.360
+Maybe leverage on the refmute.
+
+19:13.360 --> 19:21.120
+So it is important to not refmute before the real change.
+
+19:21.120 --> 19:25.320
+So have a look at a quick demo.
+
+19:25.320 --> 19:28.840
+After the demo we can see the code.
+
+19:28.840 --> 19:30.560
+I promise.
+
+19:30.560 --> 19:42.120
+So again, the demo, I propose you to show the native part.
+
+19:42.120 --> 19:55.800
+So this is our windows that is created natively.
+
+19:55.800 --> 20:03.920
+Again I can choose next one with button this time.
+
+20:03.920 --> 20:13.440
+And again, it is not my job but this is what I implemented.
+
+20:13.440 --> 20:20.760
+So as you can see under the hood there is some locks and in front of you should be at
+
+20:20.760 --> 20:28.760
+least the snake that runs through the table.
+
+20:28.760 --> 20:35.680
+And this is the way I handled the game over.
+
+20:35.680 --> 20:40.760
+And obviously quit closed the windows.
+
+20:40.760 --> 20:52.920
+So we have three different states in our game and in our code I treat these in three different
+
+20:52.920 --> 20:55.040
+packages, sub-packages.
+
+20:55.040 --> 20:57.600
+Choose game, play game and game over.
+
+20:57.600 --> 21:06.640
+And as you probably understand we can leverage on event system to bring the user from one
+
+21:06.640 --> 21:10.040
+state to another one.
+
+21:10.040 --> 21:12.560
+Also because it is written there.
+
+21:12.560 --> 21:18.880
+So let's focus on the play state because probably the most important one.
+
+21:18.880 --> 21:22.000
+So what we need to do in the play state?
+
+21:22.000 --> 21:29.800
+Probably we need to surely when we enter in that state we create the resource, the dedicated
+
+21:29.800 --> 21:35.600
+resource and make the initial draw.
+
+21:35.600 --> 21:41.360
+After that we already saw we need to wait the key event called game methods.
+
+21:41.360 --> 21:47.440
+Update the position, update the foot position and the square number.
+
+21:47.440 --> 21:58.480
+And surely we do not forget them handling the press key and the file the game tick.
+
+21:58.480 --> 22:03.760
+So this is the last slides.
+
+22:03.760 --> 22:09.480
+After that we can run in we will see the output and the code.
+
+22:09.480 --> 22:15.920
+So the graphical representation we have in red the system so the function.
+
+22:15.920 --> 22:20.960
+Handle keyboard input that update the direction resource.
+
+22:20.960 --> 22:30.760
+We will see it before when I press the key the direction resource change.
+
+22:30.760 --> 22:36.560
+And game tick is the function that wait six seconds.
+
+22:36.560 --> 22:48.240
+So after six seconds since game tick event, listen by tick system, that update after calling
+
+22:48.240 --> 22:53.480
+tick on the game all the resources.
+
+22:53.480 --> 23:04.480
+Because the resource change I can update accordingly the score of the snake and the food.
+
+23:04.480 --> 23:13.960
+Why I started like that because the last three systems I mentioned the score of the snake
+
+23:13.960 --> 23:24.960
+up the foods can be paralyzed by bevy, bevy has a system that allow you to automatically
+
+23:24.960 --> 23:27.400
+paralyze the system.
+
+23:27.400 --> 23:31.880
+If he understood that is paralyzable.
+
+23:31.880 --> 23:37.920
+For example, doesn't access immutable way on the same stuff.
+
+23:37.920 --> 23:44.680
+So show me the code but probably show me the result also.
+
+23:44.680 --> 23:45.680
+If you want.
+
+23:45.680 --> 23:46.680
+You want.
+
+23:46.680 --> 23:47.680
+Okay.
+
+23:47.680 --> 23:48.680
+Okay.
+
+23:48.680 --> 24:02.200
+So I built it in release mode.
+
+24:02.200 --> 24:05.160
+And this is important.
+
+24:05.160 --> 24:07.280
+Refresh the page.
+
+24:07.280 --> 24:08.280
+Okay.
+
+24:08.280 --> 24:13.560
+As you can see here we have 60 megabytes not kilo.
+
+24:13.560 --> 24:21.160
+But not in release mode this heavy up to 70 mega if I remember correctly.
+
+24:21.160 --> 24:28.000
+So crazy.
+
+24:28.000 --> 24:30.000
+Snake one.
+
+24:30.000 --> 24:34.360
+Obviously the same user experience, the same go.
+
+24:34.360 --> 24:35.360
+Yes.
+
+24:35.360 --> 24:36.360
+Sorry.
+
+24:36.360 --> 24:41.000
+The same user experience.
+
+24:41.000 --> 24:45.720
+And as you can see here there is the logs also.
+
+24:45.720 --> 24:57.120
+Nice feature is that he also link to the particular lines.
+
+24:57.120 --> 25:01.080
+And it is amazing at least from my point of view.
+
+25:01.080 --> 25:07.760
+So let's dig into the code.
+
+25:07.760 --> 25:11.640
+So we have time.
+
+25:11.640 --> 25:14.720
+Apparently, yes.
+
+25:14.720 --> 25:20.640
+So here we have the handmade snake.
+
+25:20.640 --> 25:27.480
+I remember that this is just a wrapper around our core implementation.
+
+25:27.480 --> 25:38.760
+As you can see here there is a JavaScript API from the WebAssembly package we described
+
+25:38.760 --> 25:39.760
+before.
+
+25:39.760 --> 25:46.200
+The other part is just the tracing, for example, a different allocation.
+
+25:46.200 --> 25:52.400
+The second dependency allows us to print a message on panic, for example.
+
+25:52.400 --> 25:56.120
+And the first is the was being done.
+
+25:56.120 --> 26:09.880
+So because I don't lie, not now, at least, here we have all the being done attributes
+
+26:09.880 --> 26:16.360
+with all the enumeration, the structures, and so on.
+
+26:16.360 --> 26:30.520
+And here under this folder we have the classic webpack frontend stuff.
+
+26:30.520 --> 26:35.440
+I really don't know what is this.
+
+26:35.440 --> 26:48.240
+So for building it, I use waspack that allows us to translate in wasm and used in the handmade
+
+26:48.240 --> 26:50.240
+package.
+
+26:50.240 --> 27:07.360
+Instead, the snake is built using track that allows us to somehow transform all the rest
+
+27:07.360 --> 27:15.040
+plus index.html into a web application directly.
+
+27:15.040 --> 27:29.240
+And if you are question how it works, why we made handmade snake and the baby snake,
+
+27:29.240 --> 27:36.040
+which is the main difference under the hood, the answer is this.
+
+27:36.040 --> 27:38.560
+Sorry.
+
+27:38.560 --> 27:40.080
+I can't.
+
+27:40.080 --> 27:41.080
+Okay.
+
+27:41.080 --> 27:47.040
+This is the public repository on GitHub.
+
+27:47.040 --> 27:53.760
+And here, as you can see, there is a web system, another API that allows us to interact with
+
+27:53.760 --> 27:54.960
+the DOM world.
+
+27:54.960 --> 28:07.080
+So at the last side, we can change the canvas because under the hood there is the canvas.
+
+28:07.080 --> 28:16.080
+So more or less, I have done.
+
+28:16.080 --> 28:17.080
+Thank you.
+
+28:17.080 --> 28:24.240
+If there is any questions, I will be happy.
+
+28:24.240 --> 28:25.240
+Be kind.
+
+28:25.240 --> 28:32.720
+So we have about five minutes for questions.
+
+28:32.720 --> 28:33.720
+Be kind.
+
+28:33.720 --> 28:49.040
+Can we have a show of hands for questions?
+
+28:49.040 --> 28:54.320
+Have you ever played around with much more entities than maybe like 100,000 or 1 million
+
+28:54.320 --> 28:57.040
+entities?
+
+28:57.040 --> 28:59.040
+Good question.
+
+28:59.040 --> 29:04.200
+No, I didn't.
+
+29:04.200 --> 29:08.360
+I know that the limitation here is the thread number.
+
+29:08.360 --> 29:12.200
+We have in JavaScript, we have in browser.
+
+29:12.200 --> 29:20.400
+If you don't use WebWorker, for example, you don't able to scale on this part.
+
+29:20.400 --> 29:25.880
+Bevy is not using WebWorker, at least for the time being.
+
+29:25.880 --> 29:28.920
+So he is not able to parallelize.
+
+29:28.920 --> 29:36.120
+And for this reason, probably you can find a limitation.
+
+29:36.120 --> 29:52.440
+There is no Internet, but in the Bevy engine website, there is a dedicated example.
+
+29:52.440 --> 30:12.440
+Also, ship has Wasm, so you can find it and give me the answer, please.
+
+30:12.440 --> 30:13.440
+Thanks.
+
+30:13.440 --> 30:14.440
+Thank you very much.
+
+30:14.440 --> 30:15.440
+How are you feeling?
+
+30:15.440 --> 30:26.280
+Seems to be good.

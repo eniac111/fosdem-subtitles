@@ -1,0 +1,1147 @@
+WEBVTT
+
+00:00.000 --> 00:10.960
+Welcome to this session about LKFT, the Linux Canal Functional Testing Project.
+
+00:10.960 --> 00:12.300
+My name is Remi Dureffot.
+
+00:12.300 --> 00:14.520
+I'm a principal technique at Linau.
+
+00:14.520 --> 00:20.120
+I've been working on open source projects since 2007 and I've been the lava architect
+
+00:20.120 --> 00:26.500
+and main developer since for eight years now, so quite some time now.
+
+00:26.500 --> 00:32.720
+So I will speak today about LKFT because it's a project I'm working with.
+
+00:32.720 --> 00:33.720
+So what is LKFT?
+
+00:33.720 --> 00:39.880
+So the goal of LKFT is to improve the Linux Canal quality on the ARM architecture by performing
+
+00:39.880 --> 00:44.120
+regression testing and reporting on selected Linux Canal branches and the Android command
+
+00:44.120 --> 00:46.760
+kernel in real time.
+
+00:46.760 --> 00:49.320
+That's what is written on the website.
+
+00:49.320 --> 00:52.400
+So it's a project that is led by Linau.
+
+00:52.400 --> 00:56.480
+The goal is to build and test a set of Linux Canal trees.
+
+00:56.480 --> 01:00.800
+So we care mainly about LTS trees, main line and next.
+
+01:00.800 --> 01:06.360
+For LTS in particular, we have a 48 hour SLA, which means that we have to provide a full
+
+01:06.360 --> 01:11.720
+report in less than 48 hours for any change on LTS.
+
+01:11.720 --> 01:19.600
+If you look at the numbers for 2023, we tested 465 RCs.
+
+01:19.600 --> 01:27.360
+As we test main line and next, we also build and tested 2628 different commit versions,
+
+01:27.360 --> 01:33.040
+which means that we built 1.6 million kernels and ran 200 million tests in a year.
+
+01:33.040 --> 01:34.040
+That's only for Linux.
+
+01:34.040 --> 01:41.320
+If you look at Android command kernel, only for the test that's 58 million tests, 580
+
+01:41.320 --> 01:42.320
+million tests.
+
+01:42.320 --> 01:44.080
+So VTS and CTS mainly.
+
+01:44.080 --> 01:47.920
+And this is all done by only three people.
+
+01:47.920 --> 01:52.800
+So the question is how do we do to build that many kernels and test that many kernels with
+
+01:52.800 --> 01:54.480
+only three people?
+
+01:54.480 --> 01:55.800
+Obviously automation.
+
+01:55.800 --> 02:00.820
+So my goal today is to show you the architecture of LTFT and to also show you the different
+
+02:00.820 --> 02:04.820
+tools that we created and maintain to make that possible.
+
+02:04.820 --> 02:08.800
+Because I'm sure that you can go back home with some of these tools and might be useful
+
+02:08.800 --> 02:10.520
+for you.
+
+02:10.520 --> 02:12.760
+So let's look at the architecture now.
+
+02:12.760 --> 02:14.040
+So this is a really simple view.
+
+02:14.040 --> 02:15.920
+We have a set of trees in GITLab.
+
+02:15.920 --> 02:21.240
+They are just simple mirrors in GITLab of the official trees.
+
+02:21.240 --> 02:23.960
+We just use GITLab for a scheduling mechanism.
+
+02:23.960 --> 02:28.640
+So it will pull the new changes and it will run a GITLab CI pipeline.
+
+02:28.640 --> 02:31.440
+But we won't do anything specific in GITLab CI pipeline.
+
+02:31.440 --> 02:33.280
+We won't do build or test inside it.
+
+02:33.280 --> 02:35.600
+It's too slow and costly.
+
+02:35.600 --> 02:41.200
+So we just use it for submitting a plan to our system that will do the build and test
+
+02:41.200 --> 02:42.200
+and reporting.
+
+02:42.200 --> 02:47.040
+And at the end we will just get a report that three engineers will look at and decide if
+
+02:47.040 --> 02:52.680
+we have to report something to the main developers or if we can just find a commit ourself and
+
+02:52.680 --> 02:54.800
+send a batch.
+
+02:54.800 --> 02:56.000
+Let's dig in a bit now.
+
+02:56.000 --> 02:59.080
+So as I said, we don't use GITLab CI for building.
+
+02:59.080 --> 03:03.040
+We submit only from GITLab CI, a build request to our system.
+
+03:03.040 --> 03:06.760
+So for building we created a tool which is called TextMake.
+
+03:06.760 --> 03:09.400
+I will explain the different tools later on.
+
+03:09.400 --> 03:11.280
+I'm just showing the architecture right now.
+
+03:11.280 --> 03:17.680
+So we use a tool called TextMake that allows for building the system with different combinations
+
+03:17.680 --> 03:19.080
+of options.
+
+03:19.080 --> 03:26.080
+And we created a software as a service that allows to use TextMake at a large scale in
+
+03:26.080 --> 03:27.080
+the cloud.
+
+03:27.080 --> 03:31.360
+So we can build something like 5,000 kernels in parallel in the cloud in some minutes.
+
+03:31.360 --> 03:37.320
+When one build is finished, so when TextMake finishes build, they are sent to a storage.
+
+03:37.320 --> 03:40.720
+It's an S3-like bucket somewhere.
+
+03:40.720 --> 03:46.600
+Once a result is sent to Squad, which is the second project that we also maintain, that
+
+03:46.600 --> 03:49.560
+will be what that is like where everything is stored.
+
+03:49.560 --> 03:54.200
+As we send results really early, if there is a build failure, a build regression, you
+
+03:54.200 --> 03:58.640
+will notice that in some minutes or hours depending on how long the build takes.
+
+03:58.640 --> 04:02.840
+Because for example, if you do an all-mode config build with Clang, it will take up
+
+04:02.840 --> 04:05.280
+to one or two hours easily.
+
+04:05.280 --> 04:10.760
+But this way we can have early regressions that we can send immediately to the main list,
+
+04:10.760 --> 04:17.320
+saying that it's failing to build on this architecture for this tool chain.
+
+04:17.320 --> 04:18.320
+That's for building.
+
+04:18.320 --> 04:21.560
+I will explain TextMake a bit later on.
+
+04:21.560 --> 04:27.400
+So as I said, when a TextMake build finishes, we send the result to Squad, we store it in
+
+04:27.400 --> 04:33.020
+the storage, and we also submit multiple test runs that will be done in the cloud.
+
+04:33.020 --> 04:36.600
+So we do tests in the cloud and on physical devices.
+
+04:36.600 --> 04:42.040
+For the cloud, we have a product called TextRun that will allow you to test on virtual devices,
+
+04:42.040 --> 04:43.920
+so QMU and a VP.
+
+04:43.920 --> 04:49.400
+And the same, we have a system that allows you to scale in the cloud the TextRun processes.
+
+04:49.400 --> 04:55.960
+So you can spawn the same thousands of processes of TextRun processes in parallel in the cloud.
+
+04:55.960 --> 05:00.200
+And they will send the result to Squad also.
+
+05:00.200 --> 05:01.600
+Testing in virtualization is nice.
+
+05:01.600 --> 05:05.160
+You find a lot of bugs because you can test a lot of different combinations.
+
+05:05.160 --> 05:06.160
+But that's not enough.
+
+05:06.160 --> 05:08.520
+You have to test on real devices.
+
+05:08.520 --> 05:13.560
+That's where a second software comes in, which is Lava, that will allow you to test on real
+
+05:13.560 --> 05:14.840
+devices.
+
+05:14.840 --> 05:16.960
+So the same when TextMake finishes to build.
+
+05:16.960 --> 05:23.000
+It will submit a set of test requests to Lava that will run on real hardware in this case.
+
+05:23.000 --> 05:27.960
+So obviously we run less tests on real devices and on virtual devices because we don't have
+
+05:27.960 --> 05:28.960
+enough board.
+
+05:28.960 --> 05:32.560
+That is the single point that you're missing.
+
+05:32.560 --> 05:35.200
+And the same results are sent to Squad.
+
+05:35.200 --> 05:39.360
+And then when everything is finished, we have a full report that we can provide to the developers
+
+05:39.360 --> 05:45.200
+that we test, we run something like thousands of tests, thousands of builds, and everything
+
+05:45.200 --> 05:47.880
+is working or we found some regressions.
+
+05:47.880 --> 05:49.440
+That's the overall architecture.
+
+05:49.440 --> 05:53.440
+I will now look at the different projects so you can know if something can be useful
+
+05:53.440 --> 05:55.240
+for you.
+
+05:55.240 --> 05:57.540
+So let's look at the build parts.
+
+05:57.540 --> 06:00.000
+So as I said before, we use TextMake.
+
+06:00.000 --> 06:04.820
+It's a project that we created to make building easy and repolucible.
+
+06:04.820 --> 06:06.680
+So it's an open source command line application.
+
+06:06.680 --> 06:10.700
+It allows for a portable and repeatable Linux-candled builds.
+
+06:10.700 --> 06:12.480
+So for that we use containers.
+
+06:12.480 --> 06:16.220
+We provide a set of containers with all the tools you need inside and everything is done
+
+06:16.220 --> 06:17.480
+inside a container.
+
+06:17.480 --> 06:20.200
+So it can be repolucible from one machine to another.
+
+06:20.200 --> 06:24.440
+So because that's often a problem when you report a build failure, it's always a nightmare
+
+06:24.440 --> 06:27.160
+to know the exact tools that you're using, everything.
+
+06:27.160 --> 06:32.840
+So as everything is inside a container, you can just repolucible it in another machine.
+
+06:32.840 --> 06:39.120
+So we support multiple toolchains, GTC from 8 to 12, client from 10 to 15.
+
+06:39.120 --> 06:41.640
+In fact, 16 has been added this week.
+
+06:41.640 --> 06:45.960
+We also have a Clang Android version and a Clang Nightly.
+
+06:45.960 --> 06:52.280
+Clang Nightly is specific because we rebuild the Clang toolchain every night and we push
+
+06:52.280 --> 06:56.680
+it to our system so we can just test with the latest Clang.
+
+06:56.680 --> 07:02.200
+We also support multiple target architectures, all the ARM versions, Intel AMDs, and then
+
+07:02.200 --> 07:10.080
+some MIPS, PowerPC, ResV5, and some exotic one like S390, SH4, things like that.
+
+07:10.080 --> 07:11.960
+So building is really simple.
+
+07:11.960 --> 07:16.680
+You just specify the target architecture, so x8664 in this case.
+
+07:16.680 --> 07:19.880
+You just specify the toolchain, so I want to use GTC12.
+
+07:19.880 --> 07:23.440
+You just need to have text make installed on your computer because everything will then
+
+07:23.440 --> 07:29.600
+be done inside a container where you will have GTC12 to chain for x8664.
+
+07:29.600 --> 07:34.640
+If you want to build with GTC13, just change toolchain to GTC13 and it will use another
+
+07:34.640 --> 07:36.040
+container to build it.
+
+07:36.040 --> 07:41.760
+And as I said before, we have a private software that allows to run text make at large scale
+
+07:41.760 --> 07:47.080
+in the cloud, but I'm not presenting that it's a close-up software.
+
+07:47.080 --> 07:51.560
+So just to explain how it's working, text make will pull the right container for you.
+
+07:51.560 --> 07:59.360
+So for this specific target arch toolchain couple, it will be x8664, GTC12 container.
+
+07:59.360 --> 08:01.880
+We have thousands of containers, hundreds of containers.
+
+08:01.880 --> 08:07.480
+It will create a unique build directory, so it's reproducible from one build to another.
+
+08:07.480 --> 08:11.320
+And then we just start a Pullman container, jump into it, and just build.
+
+08:11.320 --> 08:16.280
+We advise to use Pullman obviously and not Docker because it will be a rootless container,
+
+08:16.280 --> 08:20.480
+so you can at least don't run as a boot in your build.
+
+08:20.480 --> 08:24.440
+And then it will invoke a set of different make commands depending on what you want to
+
+08:24.440 --> 08:25.440
+build.
+
+08:25.440 --> 08:31.960
+And then it will move everything to a specific directory that will be kept on the machine,
+
+08:31.960 --> 08:34.680
+and it will have all the artifacts, kernel, adders, et cetera.
+
+08:34.680 --> 08:39.720
+And you also have metadata that will include a lot of metadata about your build, like version
+
+08:39.720 --> 08:46.440
+of your toolchain of different utilities on the machine, the time taken by different steps,
+
+08:46.440 --> 08:48.400
+the size of everything, et cetera.
+
+08:48.400 --> 08:54.280
+Very useful for debugging also what's going on if something breaks.
+
+08:54.280 --> 08:57.840
+We provide multiple containers that you can reuse.
+
+08:57.840 --> 09:01.760
+And it's an open sub-product, so you can contribute to it a few months, and you can just use it
+
+09:01.760 --> 09:02.760
+right now.
+
+09:02.760 --> 09:08.120
+And some kind of developer use it for reproducing build failures.
+
+09:08.120 --> 09:12.480
+And in fact, as I said, we have a client nightly toolchain that is rebuilt nightly.
+
+09:12.480 --> 09:18.280
+It's in fact because the client project asked us to do that because they use Tuxmake with
+
+09:18.280 --> 09:24.280
+client nightly for validating their client version against different kernel versions
+
+09:24.280 --> 09:27.960
+to see if clang is not regressing.
+
+09:27.960 --> 09:29.240
+That's for building.
+
+09:29.240 --> 09:30.680
+So now how do we test?
+
+09:30.680 --> 09:36.640
+So as I said, we test on virtual devices with Tux1 and on physical devices with Lava.
+
+09:36.640 --> 09:38.800
+So for Tux1, it's the same.
+
+09:38.800 --> 09:41.560
+It's an open source, a common-line application.
+
+09:41.560 --> 09:44.120
+It's the same for Tuxmake but for running.
+
+09:44.120 --> 09:47.660
+It allows for portable and repeatable kernel tests.
+
+09:47.660 --> 09:56.480
+We support multiple devices, FVP MVA, which is an ARMv9.3 emulator, a simulator.
+
+09:56.480 --> 09:59.560
+That's the latest version that you can try for ARM.
+
+09:59.560 --> 10:07.680
+And then multiple ARM versions with multiple QEMU devices, many ARM Intel MIPS in many
+
+10:07.680 --> 10:15.480
+different versions and PPC, et cetera, and multiple test suites, so LTP, K-Unit, K-S
+
+10:15.480 --> 10:18.160
+is not quite easy to do.
+
+10:18.160 --> 10:20.080
+The same, the common-line is quite simple.
+
+10:20.080 --> 10:24.840
+We also use Sponman for containerizing everything.
+
+10:24.840 --> 10:29.240
+You specify the device that you want to use, the kernel that you want, can be your URL,
+
+10:29.240 --> 10:32.160
+obviously, and root file system also if you want.
+
+10:32.160 --> 10:38.240
+And again, we have a SAS that allows to run that at large scale in the cloud.
+
+10:38.240 --> 10:42.880
+When you call that common-line, Tux1 will download all the artifacts that you need,
+
+10:42.880 --> 10:46.080
+so kernel, DTP, more root file system modules.
+
+10:46.080 --> 10:50.360
+It will inject the modules inside the root file system for you so that it will be used
+
+10:50.360 --> 10:52.400
+at boot time.
+
+10:52.400 --> 10:57.880
+And start the container, start QEMU system, so R64 in this case, look at the output, et
+
+10:57.880 --> 11:03.120
+cetera, et cetera, all the classical things, and store the results.
+
+11:03.120 --> 11:08.760
+As I said, we provide a lot of root file systems because we know it's painful to build your
+
+11:08.760 --> 11:11.280
+root file system for multiple architectures.
+
+11:11.280 --> 11:13.160
+So we do the work for that.
+
+11:13.160 --> 11:15.640
+We use Billroot and Debian.
+
+11:15.640 --> 11:21.080
+Billroot allows us to have the 19 supported architectures, one root file system for each.
+
+11:21.080 --> 11:25.400
+And for the main one, one supported by Debian, we do provide the Debian root file system that
+
+11:25.400 --> 11:26.640
+we build.
+
+11:26.640 --> 11:30.720
+And obviously, if you build your own one, you can use it if you want.
+
+11:30.720 --> 11:36.440
+And we will do the job of rebuilding the Billroot and Debian file systems regularly.
+
+11:36.440 --> 11:42.760
+And in fact, it's a fun thing, we've actually found bugs in QEMU before pushing the new
+
+11:42.760 --> 11:47.240
+file systems, we test in our system with the new root file systems.
+
+11:47.240 --> 11:52.600
+And the last time we did that, we found issues in QEMU 7.2 that are currently being fixed
+
+11:52.600 --> 11:57.400
+by QEMU developers.
+
+11:57.400 --> 12:00.500
+Something fun because Tuxmake and Tuxrun has been done by the same team.
+
+12:00.500 --> 12:05.040
+So we make the work to combine the two tools together.
+
+12:05.040 --> 12:11.280
+So obviously, you can, doing a bisection of a build failure is quite easy, you just need
+
+12:11.280 --> 12:13.920
+a lot of CPU time.
+
+12:13.920 --> 12:19.760
+Same for a runtime issue, which is you find a regression where a test fail on a specific
+
+12:19.760 --> 12:20.760
+architecture.
+
+12:20.760 --> 12:27.160
+For example, when you run an LTP test on QEMU ARM64, it's failing, and you want to bisect
+
+12:27.160 --> 12:28.160
+that.
+
+12:28.160 --> 12:29.160
+So find the faulty commit.
+
+12:29.160 --> 12:33.120
+You have a good commit and a bad commit, and you want to find the faulty commit.
+
+12:33.120 --> 12:38.640
+It allows to help you on that, but thanks to Tuxmake and Tuxrun, we can automate all
+
+12:38.640 --> 12:40.880
+that job of testing.
+
+12:40.880 --> 12:47.680
+So with this command line, Git will call Tuxmake on different commits to try to find the faulty
+
+12:47.680 --> 12:48.680
+one.
+
+12:48.680 --> 12:54.120
+And Tuxmake will just build, and at the end of the build, thanks to minus my result hook,
+
+12:54.120 --> 12:59.400
+it will exec the command that is behind that will run Tuxrun with the kernel that has been
+
+12:59.400 --> 13:00.400
+just built.
+
+13:00.400 --> 13:06.720
+So it will build with Tuxmake, and at the end run with Tuxrun the exact LTP test that
+
+13:06.720 --> 13:09.960
+fails, and if it's passing, it will return zero.
+
+13:09.960 --> 13:11.560
+If it's failing, it will return one.
+
+13:11.560 --> 13:16.060
+So based on that, Git will be able to find the faulty commit for you, which is quite...
+
+13:16.060 --> 13:19.920
+We found a lot of regression, or test regression, and found the faulty commit thanks to just
+
+13:19.920 --> 13:23.280
+that command line, which is really cool.
+
+13:23.280 --> 13:27.120
+Thanks to Endos for the idea.
+
+13:27.120 --> 13:33.760
+So that was all virtual built in containers, test on virtual devices, but as I said before,
+
+13:33.760 --> 13:39.760
+we have to test on physical devices, because multiple bugs are only found on physical devices,
+
+13:39.760 --> 13:44.040
+because they are based on drivers failing, and things like that.
+
+13:44.040 --> 13:48.540
+So for that, we use Lava, like some people in this room.
+
+13:48.540 --> 13:52.360
+So Lava stands for Linau Automated Validation Architecture.
+
+13:52.360 --> 13:54.220
+It's a text execution system.
+
+13:54.220 --> 13:58.740
+So it will allow it for testing software on real hardware, automatically for you.
+
+13:58.740 --> 14:03.720
+So it will automatically deploy, boot, and test your software on your hardware.
+
+14:03.720 --> 14:10.480
+So it's used by Kernel CI a lot, by LKFT obviously, and you can do system level testing,
+
+14:10.480 --> 14:11.480
+boot level testing.
+
+14:11.480 --> 14:13.120
+You can do boot loader also testing.
+
+14:13.120 --> 14:18.640
+You can test directly your boot loader on the firmware, and it currently supports 356
+
+14:18.640 --> 14:19.960
+different device types.
+
+14:19.960 --> 14:25.040
+So from IoT to phones, Raspberry Pi-like boards, and servers.
+
+14:25.040 --> 14:27.880
+So multiple different device types.
+
+14:27.880 --> 14:32.280
+So for example, if you want to test on a Raspberry Pi without Lava, you will have to pour on
+
+14:32.280 --> 14:39.160
+the board, download the artifacts, so kernel rootfs, files, dtbs, place them on a specific
+
+14:39.160 --> 14:49.240
+directory, like NFS or TFT directory, connect to the serial, type a lot of commands, boot
+
+14:49.240 --> 14:53.680
+boards, watch the boot outputs, type the logging prompt, et cetera, et cetera.
+
+14:53.680 --> 14:56.920
+So really painful to do that manually.
+
+14:56.920 --> 15:00.280
+Lava will just do exactly what I just listed automatically for you.
+
+15:00.280 --> 15:05.280
+It will just provide a job definition, which is a YAML file, with links to all the artifacts
+
+15:05.280 --> 15:07.520
+that you want to test.
+
+15:07.520 --> 15:09.280
+You specify the kind of board that you have.
+
+15:09.280 --> 15:14.960
+So it's a Raspberry Pi 4B, and Lava will know then how to interact with that board.
+
+15:14.960 --> 15:20.160
+And you will say that I have a U-Boot installed on it, and I have a TFTP server.
+
+15:20.160 --> 15:23.320
+Just use that and test what I want to test on it.
+
+15:23.320 --> 15:28.080
+And Lava will do that automatically for you.
+
+15:28.080 --> 15:31.500
+Obviously you can have multiple boards attached to the same worker, and you can have multiple
+
+15:31.500 --> 15:33.820
+workers on a Lava instance.
+
+15:33.820 --> 15:36.840
+So as a user, it's really an abstraction of the hardware.
+
+15:36.840 --> 15:40.760
+You just send a YAML file and you get results.
+
+15:40.760 --> 15:46.520
+And all the hardware part is done automatically by Lava for you.
+
+15:46.520 --> 15:52.600
+So as I said, maybe you remember the first LKFT diagram.
+
+15:52.600 --> 15:53.600
+I'm sure you don't.
+
+15:53.600 --> 15:56.720
+There was a small box called keyscash.
+
+15:56.720 --> 16:05.600
+So when we submit jobs to Lava, we submit multiple jobs for the same artifacts at the
+
+16:05.600 --> 16:06.760
+same time.
+
+16:06.760 --> 16:08.400
+We have multiple devices.
+
+16:08.400 --> 16:14.680
+So the scheduler will start the job for the same artifacts all at the same time.
+
+16:14.680 --> 16:19.180
+So it will download multiple times the same artifact at the same time, which just should
+
+16:19.180 --> 16:22.760
+be able to cache that and decrease network usage.
+
+16:22.760 --> 16:24.240
+So we tried squid.
+
+16:24.240 --> 16:28.240
+And the short answer is squid is not working for that use case for different reasons.
+
+16:28.240 --> 16:33.800
+The first one is that, as I said before, all the artifacts are stored in an S3-like bucket.
+
+16:33.800 --> 16:35.240
+So it's somewhere on internet.
+
+16:35.240 --> 16:40.000
+So obviously we use SSL, HTTPS to download it.
+
+16:40.000 --> 16:45.680
+And squid and HTTPS are not really working well together.
+
+16:45.680 --> 16:48.120
+You have to fake SSL certificates.
+
+16:48.120 --> 16:50.960
+It's all creepy things to do.
+
+16:50.960 --> 16:53.320
+And also a thing that, as I said, we download.
+
+16:53.320 --> 16:55.640
+Lava will start all the jobs at the same time.
+
+16:55.640 --> 17:00.080
+So they will more or less download all the same artifacts at exactly the same time.
+
+17:00.080 --> 17:05.200
+And if you do that with squid, squid will download if you ask for n times the same file
+
+17:05.200 --> 17:06.440
+to squid.
+
+17:06.440 --> 17:10.280
+If it's not already cached, squid will download it n times.
+
+17:10.280 --> 17:15.040
+And only when one is finished, or when download is finished, the next one will use a cached
+
+17:15.040 --> 17:16.040
+version.
+
+17:16.040 --> 17:17.040
+So it's just pointless for us.
+
+17:17.040 --> 17:18.600
+It's just not working.
+
+17:18.600 --> 17:21.800
+So we created a tool called keyscache.
+
+17:21.800 --> 17:24.400
+The keys is for keep it simple, stupid.
+
+17:24.400 --> 17:26.240
+It's a simple and stupid caching server.
+
+17:26.240 --> 17:27.240
+It's not a proxy.
+
+17:27.240 --> 17:31.320
+It's a service, which means that it can handle HTTPS.
+
+17:31.320 --> 17:34.880
+And it will only download once when you have multiple clients.
+
+17:34.880 --> 17:38.240
+And it will strain to the clients while downloading.
+
+17:38.240 --> 17:40.640
+It's not transparent because it's not a proxy.
+
+17:40.640 --> 17:43.960
+And because it's not transparent, it can do HTTPS.
+
+17:43.960 --> 17:48.120
+Because you will have to prefix your URL by the keyscache instance that you have.
+
+17:48.120 --> 17:52.720
+And you will talk to keyscache directly.
+
+17:52.720 --> 17:57.840
+It also automatically retries on failures because we found multiple failures that all
+
+17:57.840 --> 18:02.000
+the HTTP code that you can have when you request on an S3 like bucket.
+
+18:02.000 --> 18:03.280
+Just insane.
+
+18:03.280 --> 18:08.160
+And sometimes also you will get, the connection will finish like if everything was done correctly.
+
+18:08.160 --> 18:09.760
+And in fact the file is not complete.
+
+18:09.760 --> 18:10.760
+It's a partial download.
+
+18:10.760 --> 18:12.260
+And you don't get any errors.
+
+18:12.260 --> 18:14.040
+So keyscache will detect that for you.
+
+18:14.040 --> 18:15.680
+It will detect that it's a partial download.
+
+18:15.680 --> 18:19.040
+And it will retry and only the remaining things for you.
+
+18:19.040 --> 18:20.600
+And it's fully transparent as a user.
+
+18:20.600 --> 18:25.240
+It will do that in the background and still stream your data to you.
+
+18:25.240 --> 18:30.080
+So thanks to that, we've been using it for 2.5 years now.
+
+18:30.080 --> 18:33.400
+In the graph, in green is what we serve locally from keyscache.
+
+18:33.400 --> 18:36.480
+And in red is what we download from internet.
+
+18:36.480 --> 18:40.480
+So we downloaded 25 terabytes of data from internet.
+
+18:40.480 --> 18:47.840
+And we serve 1.3 petabytes of data in the local network, which is a 52 times expansion
+
+18:47.840 --> 18:49.240
+ratio.
+
+18:49.240 --> 18:50.240
+So it's quite useful.
+
+18:50.240 --> 18:52.680
+It improves stability also.
+
+18:52.680 --> 18:54.320
+So it's really cool.
+
+18:54.320 --> 18:58.440
+It's a good tool for your CI if you don't use it already.
+
+18:58.440 --> 19:05.040
+And last but not the least, we store all the job results in squad.
+
+19:05.040 --> 19:07.880
+So it's software quality dashboards.
+
+19:07.880 --> 19:09.480
+It will store, it's a data lake.
+
+19:09.480 --> 19:13.200
+It will store all the results for you in different categories.
+
+19:13.200 --> 19:16.560
+And it will allow you to create reports.
+
+19:16.560 --> 19:18.840
+So failures, regressions, et cetera.
+
+19:18.840 --> 19:20.360
+Everything is stored in this one.
+
+19:20.360 --> 19:25.960
+And then we extract data and make report based on squad.
+
+19:25.960 --> 19:28.240
+And that's all.
+
+19:28.240 --> 19:30.320
+That's what I just explained.
+
+19:30.320 --> 19:34.720
+If you have any questions, I have some time for questions.
+
+19:34.720 --> 19:35.720
+Five minutes, perfect.
+
+19:35.720 --> 19:36.720
+Oh, yeah.
+
+19:36.720 --> 19:37.720
+That's good.
+
+19:37.720 --> 20:02.320
+Testing methods, like which we use LTP, KUnit, KSelfSets, all the kernel test suites that
+
+20:02.320 --> 20:05.080
+we...
+
+20:05.080 --> 20:07.440
+We are not creating new test suites.
+
+20:07.440 --> 20:09.480
+We are using test suites that don't exist.
+
+20:09.480 --> 20:10.480
+And we run...
+
+20:10.480 --> 20:14.120
+We build for the community and we test for the community.
+
+20:14.120 --> 20:16.920
+And then we provide reports.
+
+20:16.920 --> 20:21.800
+We obviously interact a lot with the test suite maintainers because we found bugs in
+
+20:21.800 --> 20:23.080
+the test suite too.
+
+20:23.080 --> 20:24.480
+We have to report to them.
+
+20:24.480 --> 20:30.680
+And there's this reporting a lot to them.
+
+20:30.680 --> 20:37.000
+And one of our project is to test KSelfSets in advance, test KSelfSets master to find
+
+20:37.000 --> 20:40.840
+bugs in KSelfSets before they actually run in production after.
+
+20:40.840 --> 20:46.760
+If you find any problems and report them, are current developers actually looking at
+
+20:46.760 --> 21:00.240
+them or do you have to ping them and make sure they take care of the problem?
+
+21:00.240 --> 21:03.800
+Okay, so we have an SLA with Greg Krotman.
+
+21:03.800 --> 21:06.040
+So he's waiting for our results.
+
+21:06.040 --> 21:13.040
+So they will look at it for LTS and for mainline and next.
+
+21:13.040 --> 21:14.200
+We are used to reports.
+
+21:14.200 --> 21:15.360
+We report a lot of issues.
+
+21:15.360 --> 21:17.800
+So they know us.
+
+21:17.800 --> 21:25.120
+If you look at LWN articles about, they classify the different contributions to the kernel.
+
+21:25.120 --> 21:29.160
+And Linaro is in the tested by top, top in the tested by.
+
+21:29.160 --> 21:30.320
+So they know us a lot.
+
+21:30.320 --> 21:32.720
+So they know that we provide good results.
+
+21:32.720 --> 21:39.680
+And when we provide a mail, there is every tool they need for reproducible, reproducing
+
+21:39.680 --> 21:40.680
+a build.
+
+21:40.680 --> 21:44.000
+So we provide all the binaries that they need for reproducing it.
+
+21:44.000 --> 21:47.960
+If it's a big failure, we provide a tax make command line that they can use.
+
+21:47.960 --> 21:51.040
+And they are now used to use tax make for rebuilding things.
+
+21:51.040 --> 21:58.680
+And if it's a test failure, we provide the logs, obviously, the job definition and all
+
+21:58.680 --> 22:00.480
+the binaries they need for reproducing it.
+
+22:00.480 --> 22:05.440
+Do you actually check that every problem you found is actually fixed?
+
+22:05.440 --> 22:09.600
+And those are all the bugs that we found fixed.
+
+22:09.600 --> 22:10.600
+Not all of them.
+
+22:10.600 --> 22:14.600
+Some bugs that they don't care about.
+
+22:14.600 --> 22:15.600
+Yeah.
+
+22:15.600 --> 22:16.600
+Okay.
+
+22:16.600 --> 22:19.600
+Depends on the hard to fix it.
+
+22:19.600 --> 22:20.600
+Yeah.
+
+22:20.600 --> 22:27.080
+If you found some bugs on SH4, no one will care, for example.
+
+22:27.080 --> 22:36.200
+My QEMU 7.2 has been released recently, just not working on SH4.
+
+22:36.200 --> 22:45.640
+I cannot answer that.
+
+22:45.640 --> 22:46.640
+We use AWS.
+
+22:46.640 --> 22:50.040
+No, it's not that bad.
+
+22:50.040 --> 22:51.040
+No, not.
+
+22:51.040 --> 22:58.680
+As we have a dynamic system, which means we do not rent 5,000 machines.
+
+22:58.680 --> 22:59.680
+Obviously not.
+
+22:59.680 --> 23:00.680
+It's impossible for us.
+
+23:00.680 --> 23:03.040
+We are a small company.
+
+23:03.040 --> 23:04.040
+Everything is dynamic.
+
+23:04.040 --> 23:09.600
+So from one second to another, if you look at the graph of usage, when Anders submits
+
+23:09.600 --> 23:16.560
+a plan for testing, in one minute we will book 5,000 machines for building it.
+
+23:16.560 --> 23:19.320
+Likely more 1.5 thousand machines to build it.
+
+23:19.320 --> 23:26.680
+They will build and they will just stop at the end.
+
+23:26.680 --> 23:31.440
+So no, we don't have 5,000 machines.
+
+23:31.440 --> 23:42.960
+How many devices do you have in your Lava test rig?
+
+23:42.960 --> 23:49.680
+So we have multiple Lava instances in LKFT, how many devices?
+
+23:49.680 --> 23:51.680
+About 20.
+
+23:51.680 --> 23:55.680
+About 5 different device types.
+
+23:55.680 --> 23:57.680
+Dragon Balls.
+
+23:57.680 --> 23:59.680
+Junos.
+
+23:59.680 --> 24:01.680
+X15.
+
+24:01.680 --> 24:05.120
+Yeah, X15.
+
+24:05.120 --> 24:10.000
+But yeah, you can have really large labs in Lava.
+
+24:10.000 --> 24:13.800
+We have another one for just linear usage where we have something like 100 balls, I
+
+24:13.800 --> 24:14.800
+think.
+
+24:14.800 --> 24:15.800
+The main one.
+
+24:15.800 --> 24:16.800
+Yeah.
+
+24:16.800 --> 24:40.200
+Thanks.

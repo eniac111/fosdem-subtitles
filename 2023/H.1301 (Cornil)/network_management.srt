@@ -1,0 +1,1272 @@
+1
+0:00:00.000 --> 0:00:08.180
+Thank you.
+
+2
+0:00:08.180 --> 0:00:10.480
+So guys, there are some more seats.
+
+3
+0:00:10.480 --> 0:00:12.480
+Please have a seat.
+
+4
+0:00:12.480 --> 0:00:17.440
+And whenever you want, we can start.
+
+5
+0:00:17.440 --> 0:00:18.440
+Okay.
+
+6
+0:00:18.440 --> 0:00:19.440
+All right.
+
+7
+0:00:19.440 --> 0:00:20.440
+So let's start.
+
+8
+0:00:20.440 --> 0:00:21.440
+Welcome, everyone.
+
+9
+0:00:21.440 --> 0:00:22.440
+My name is Fernando.
+
+10
+0:00:22.440 --> 0:00:25.160
+I'm a senior software engineer at Red Hat.
+
+11
+0:00:25.160 --> 0:00:30.720
+I work on the networking services team, mainly focused on network management.
+
+12
+0:00:30.720 --> 0:00:40.960
+So today I'm going to talk how we can do networking management more simple and how we can make
+
+13
+0:00:40.960 --> 0:00:45.040
+the life of sysadmins a little bit better.
+
+14
+0:00:45.040 --> 0:00:50.720
+I know that network management can be complex, especially because most of the sysadmins
+
+15
+0:00:50.720 --> 0:00:56.720
+need to sometimes configure networking, and maybe they are not network experts.
+
+16
+0:00:56.720 --> 0:00:58.720
+So all right.
+
+17
+0:00:58.720 --> 0:01:01.240
+The first thing is what is network manager.
+
+18
+0:01:01.240 --> 0:01:07.320
+So network manager is the standard Linux network configuration tool suite.
+
+19
+0:01:07.320 --> 0:01:12.240
+Basically it's almost on every distribution, and it configures networking.
+
+20
+0:01:12.240 --> 0:01:13.520
+It's just like that.
+
+21
+0:01:13.520 --> 0:01:21.400
+It takes care of setting the IP address, all the properties, manage routes, manage DNS,
+
+22
+0:01:21.400 --> 0:01:27.440
+manage almost everything, and make sure that when other to modify the network configuration,
+
+23
+0:01:27.440 --> 0:01:32.600
+it will notify network manager, will update the status, et cetera, et cetera.
+
+24
+0:01:32.600 --> 0:01:37.960
+Network manager provides the bus API, and also they have their own library to communicate
+
+25
+0:01:37.960 --> 0:01:40.720
+with the daemon, which is libnm.
+
+26
+0:01:40.720 --> 0:01:44.480
+And this is why there are some tools built around network manager.
+
+27
+0:01:44.480 --> 0:01:50.680
+For example, I know that some of you know them, Nmappler, Nm2, Nmcli, or Nmcloud setup.
+
+28
+0:01:50.680 --> 0:01:54.560
+And there are more, and we are building more of them.
+
+29
+0:01:54.560 --> 0:02:00.040
+So as I said, the network manager daemon is the backend that we are going to use for the
+
+30
+0:02:00.040 --> 0:02:03.840
+new tool, NMS state.
+
+31
+0:02:03.840 --> 0:02:07.320
+And NMS state is a little bit special because it's declarative.
+
+32
+0:02:07.320 --> 0:02:12.720
+So the idea here is that as a user, you just need to define what do you want to configure,
+
+33
+0:02:12.720 --> 0:02:14.760
+and you don't need to care about the hope.
+
+34
+0:02:14.760 --> 0:02:20.880
+So you can define the state, you can define what IP address do you want, you can define
+
+35
+0:02:20.880 --> 0:02:26.600
+what properties, if it's a bond, the bond properties, if it's a bridge, whatever you
+
+36
+0:02:26.600 --> 0:02:32.240
+want, and NMS state will take care of it, and will do, will resolve all the interdependencies
+
+37
+0:02:32.240 --> 0:02:33.840
+between the interfaces.
+
+38
+0:02:33.840 --> 0:02:39.840
+We configure the routes, we configure everything that is needed to make it work.
+
+39
+0:02:39.840 --> 0:02:44.480
+And we use network manager as a backend, we communicate with network manager for applying
+
+40
+0:02:44.480 --> 0:02:50.360
+the configuration, but we perform some operations that we are going to talk later, and we needed
+
+41
+0:02:50.360 --> 0:02:53.920
+Nispor to communicate with Kana.
+
+42
+0:02:53.920 --> 0:03:00.240
+So we had a problem, initially we were using CFS, and it was not working well, and we decided
+
+43
+0:03:00.240 --> 0:03:05.080
+to create Nispor, which is another library, written in Rust, that allows you to communicate
+
+44
+0:03:05.080 --> 0:03:09.600
+with Kana and get real-time network configuration from Kana.
+
+45
+0:03:09.600 --> 0:03:14.440
+So the first question could be why Nell link, and why not CFS?
+
+46
+0:03:14.440 --> 0:03:16.160
+So CFS is not an API.
+
+47
+0:03:16.160 --> 0:03:21.080
+You need to understand that, because I know that a lot of people build their tools parsing
+
+48
+0:03:21.080 --> 0:03:28.200
+CFS, writing on CFS, using CFS everywhere, and this could be problematic, because CFS
+
+49
+0:03:28.200 --> 0:03:33.600
+is not an API, and if you read the documentation, it's not stable.
+
+50
+0:03:33.600 --> 0:03:36.680
+It can break between releases.
+
+51
+0:03:36.680 --> 0:03:39.040
+But Nell link is an API.
+
+52
+0:03:39.040 --> 0:03:47.320
+Nell link is stable, it's not deprecated, because CFS is deprecated, so most of the
+
+53
+0:03:47.320 --> 0:03:53.640
+new network options that they are adding into Kana, they are not providing a CFS interface.
+
+54
+0:03:53.640 --> 0:03:58.680
+And also, Nell link use sockets, and that's great, because you don't need to open a file,
+
+55
+0:03:58.680 --> 0:04:02.120
+read it, parse it, and then get the proper value.
+
+56
+0:04:02.120 --> 0:04:06.520
+Using sockets, you can get the attribute, you know the type, you communicate through
+
+57
+0:04:06.520 --> 0:04:11.320
+the Nell link sockets, you get the value, and you get proper errors, so everything is
+
+58
+0:04:11.320 --> 0:04:13.320
+better.
+
+59
+0:04:13.320 --> 0:04:18.400
+Okay, so then let's go to the important part.
+
+60
+0:04:18.400 --> 0:04:19.400
+So NMS.
+
+61
+0:04:19.400 --> 0:04:23.840
+NMS does everything, you don't need to do anything, you just need to define what do you want, and
+
+62
+0:04:23.840 --> 0:04:29.560
+ideally you will apply that state, and everything will be configured after some operations.
+
+63
+0:04:29.560 --> 0:04:33.600
+Sometimes it's not like that, so we have a lot of steps in the middle.
+
+64
+0:04:33.600 --> 0:04:39.120
+We do, for example, validation, we do normalization and verification, we are going to explain
+
+65
+0:04:39.120 --> 0:04:41.520
+them later.
+
+66
+0:04:41.520 --> 0:04:45.960
+And also, it will point you what is going wrong, so you can fix it.
+
+67
+0:04:45.960 --> 0:04:49.720
+So for example, if you are configuring a MAC address, and this MAC address is not being
+
+68
+0:04:49.720 --> 0:04:54.160
+configured correctly, it will point you which MAC address is configured on kener, and what
+
+69
+0:04:54.160 --> 0:04:56.320
+is the one that you wanted to configure.
+
+70
+0:04:56.320 --> 0:04:58.960
+And right, you need to solve that.
+
+71
+0:04:58.960 --> 0:05:05.240
+Also if you put invalid IP address, it will tell you this IP address is not valid, please
+
+72
+0:05:05.240 --> 0:05:06.240
+change it.
+
+73
+0:05:06.240 --> 0:05:11.640
+Okay, or for example, if you configure one great thing is that if you configure an MTU
+
+74
+0:05:11.640 --> 0:05:18.200
+that is bigger than the one supported by the driver, it will let you know about that.
+
+75
+0:05:18.200 --> 0:05:22.080
+Okay, so one thing is that, did you misconfigure something?
+
+76
+0:05:22.080 --> 0:05:23.920
+Good, we can do a rollback.
+
+77
+0:05:23.920 --> 0:05:26.640
+Let's talk a little bit about rollbacks.
+
+78
+0:05:26.640 --> 0:05:30.920
+So this is already supported in Node Manager, this is not new from NMS state, but it's a
+
+79
+0:05:30.920 --> 0:05:32.880
+little bit complex to use.
+
+80
+0:05:32.880 --> 0:05:35.880
+And in NMS state, we simplify it.
+
+81
+0:05:35.880 --> 0:05:43.000
+So basically all the time that you do an operation, and NMS state do the verification, and if
+
+82
+0:05:43.000 --> 0:05:47.800
+something goes wrong, it's rollback to the previous state.
+
+83
+0:05:47.800 --> 0:05:54.240
+But we can also, maybe nothing go wrong, but you lost connectivity because you removed
+
+84
+0:05:54.240 --> 0:06:00.800
+the IP address, and we cannot know if that is what you wanted or not, I mean, we as NMS
+
+85
+0:06:00.800 --> 0:06:01.800
+state.
+
+86
+0:06:01.800 --> 0:06:07.520
+So we allow you to define an option which is no commit, so you can say this simple command
+
+87
+0:06:07.520 --> 0:06:12.560
+NMS state CTL apply, the jammer file, we are going to see the format of the jammer file
+
+88
+0:06:12.560 --> 0:06:15.680
+later, then no commit and a timeout time.
+
+89
+0:06:15.680 --> 0:06:20.600
+If you don't specify a timeout, it's going to be 60 seconds by default.
+
+90
+0:06:20.600 --> 0:06:24.280
+So what happened if it went well?
+
+91
+0:06:24.280 --> 0:06:27.400
+It's what you wanted, you have connectivity, everything is good.
+
+92
+0:06:27.400 --> 0:06:33.600
+Okay, then NMS state CTL commit, and the configuration will be there permanently.
+
+93
+0:06:33.600 --> 0:06:36.200
+But what happens if you notice that you mess up?
+
+94
+0:06:36.200 --> 0:06:40.000
+All right, NMS state CTL rollback, and you're going to be on the previous state.
+
+95
+0:06:40.000 --> 0:06:46.120
+This is really great because it's really time when you misconfigure something and then you
+
+96
+0:06:46.120 --> 0:06:47.960
+need to undo it manually.
+
+97
+0:06:47.960 --> 0:06:54.520
+So this time you just do a rollback and everything will be like before.
+
+98
+0:06:54.520 --> 0:06:58.920
+And what happened when you are working on a remote on a server and you lose connectivity
+
+99
+0:06:58.920 --> 0:07:02.400
+and you end free travel to the data center?
+
+100
+0:07:02.400 --> 0:07:08.320
+Right, now with this tool you can, with a timeout, if you lose connectivity, you are
+
+101
+0:07:08.320 --> 0:07:12.840
+not going to be able to do the commit, so at some point it will rollback and you will
+
+102
+0:07:12.840 --> 0:07:16.320
+have your connectivity back, hopefully.
+
+103
+0:07:16.320 --> 0:07:21.040
+All right, and well, verification is optional.
+
+104
+0:07:21.040 --> 0:07:29.480
+But personally I like it a lot because what it does is NMS state gets the desired state
+
+105
+0:07:29.480 --> 0:07:35.600
+from the user, then apply it, and then get the current state that is applied to the system
+
+106
+0:07:35.600 --> 0:07:36.880
+and compare them.
+
+107
+0:07:36.880 --> 0:07:41.600
+And if they are not equals, then it's going to fail and it's going to rollback to the
+
+108
+0:07:41.600 --> 0:07:42.600
+previous state automatically.
+
+109
+0:07:42.600 --> 0:07:47.320
+That is great because sometimes you don't know about some options and there are some
+
+110
+0:07:47.320 --> 0:07:51.920
+requirements to set up these options on interface.
+
+111
+0:07:51.920 --> 0:07:58.800
+So what you can do is apply this if it goes wrong because kernel is not applying the option
+
+112
+0:07:58.800 --> 0:08:01.960
+correctly because they are incompatible, for example.
+
+113
+0:08:01.960 --> 0:08:07.120
+So it does a rollback automatically and you don't end up with a wrong configure interface.
+
+114
+0:08:07.120 --> 0:08:12.000
+But you can skip this using dash dash no verify.
+
+115
+0:08:12.000 --> 0:08:15.600
+Okay, so let's see some examples of YAML files.
+
+116
+0:08:15.600 --> 0:08:19.520
+These are a little bit simple but I think they are great examples.
+
+117
+0:08:19.520 --> 0:08:28.040
+Here, for example, we have a bond interface and you can just define the state, IPv4, the
+
+118
+0:08:28.040 --> 0:08:33.320
+link aggregation options, you can define the mode, the options of that mode, and then define
+
+119
+0:08:33.320 --> 0:08:34.320
+the board.
+
+120
+0:08:34.320 --> 0:08:37.480
+And one thing that is really, really useful is that we have partial editing.
+
+121
+0:08:37.480 --> 0:08:40.880
+So imagine that you want to change only the MAC address but you don't want to change the
+
+122
+0:08:40.880 --> 0:08:41.880
+IP address.
+
+123
+0:08:41.880 --> 0:08:48.000
+You don't need to define the IP address because you just define the interface and the type.
+
+124
+0:08:48.000 --> 0:08:50.160
+So this is just enough.
+
+125
+0:08:50.160 --> 0:08:52.680
+Then the MAC address and apply the state.
+
+126
+0:08:52.680 --> 0:08:57.120
+An NMS state will get the current status of the interface and will merge.
+
+127
+0:08:57.120 --> 0:08:59.720
+So you won't lose any property.
+
+128
+0:08:59.720 --> 0:09:05.640
+All right, so then we have, for example, another example in the middle is the Abilang interface
+
+129
+0:09:05.640 --> 0:09:12.160
+over adh1 interface and another great thing here, as I say, is that NMS state will solve
+
+130
+0:09:12.160 --> 0:09:14.400
+interdependencies automatically.
+
+131
+0:09:14.400 --> 0:09:20.560
+So basically you don't need to know if, in which state needs to be the adh1 when creating
+
+132
+0:09:20.560 --> 0:09:22.600
+the Abilang, needs to be up or down.
+
+133
+0:09:22.600 --> 0:09:23.600
+It doesn't matter.
+
+134
+0:09:23.600 --> 0:09:25.400
+We are going to handle it.
+
+135
+0:09:25.400 --> 0:09:28.120
+So you don't need to worry about it.
+
+136
+0:09:28.120 --> 0:09:33.720
+And then, for example, we have a Linux switch with the port and some options on the port.
+
+137
+0:09:33.720 --> 0:09:37.280
+And also one great thing here is that you don't need to care about the state of the
+
+138
+0:09:37.280 --> 0:09:38.280
+port.
+
+139
+0:09:38.280 --> 0:09:43.120
+NMS state will solve the dependencies and will bring the port up if needed or will configure
+
+140
+0:09:43.120 --> 0:09:46.360
+as needed.
+
+141
+0:09:46.360 --> 0:09:52.760
+Some more examples because, as I say, NMS state is not only focused on interfaces.
+
+142
+0:09:52.760 --> 0:10:02.200
+It's also focused on DNS, root configuration, and also some other interfaces like OBS and
+
+143
+0:10:02.200 --> 0:10:03.960
+OBS dpdk.
+
+144
+0:10:03.960 --> 0:10:09.440
+So for example, here we have our interface adh1 configure with a static IP address.
+
+145
+0:10:09.440 --> 0:10:12.040
+And then we have the adroot.
+
+146
+0:10:12.040 --> 0:10:15.840
+So you can define adroot and it will be applied to KANA.
+
+147
+0:10:15.840 --> 0:10:17.440
+The same for root in policy.
+
+148
+0:10:17.440 --> 0:10:18.700
+It's also supported.
+
+149
+0:10:18.700 --> 0:10:22.120
+You can define from IP2 and IP4.
+
+150
+0:10:22.120 --> 0:10:24.600
+It will be for one mask.
+
+151
+0:10:24.600 --> 0:10:26.080
+It will be applied.
+
+152
+0:10:26.080 --> 0:10:29.080
+The same thing for DNS solver.
+
+153
+0:10:29.080 --> 0:10:35.560
+As you can see there, the last example, it's an OBS interface with an OBS reach.
+
+154
+0:10:35.560 --> 0:10:36.560
+So you can define it.
+
+155
+0:10:36.560 --> 0:10:40.140
+And then the great thing is that you don't need always to define the OBS interface.
+
+156
+0:10:40.140 --> 0:10:45.320
+You can define only the OBS reach and add ports or delete ports from it.
+
+157
+0:10:45.320 --> 0:10:47.920
+So it's quite great.
+
+158
+0:10:47.920 --> 0:10:49.200
+All right.
+
+159
+0:10:49.200 --> 0:10:53.880
+So having seen these examples, I would like to do a demo.
+
+160
+0:10:53.880 --> 0:10:54.880
+Sorry if it doesn't work.
+
+161
+0:10:54.880 --> 0:10:56.360
+I hope it will.
+
+162
+0:10:56.360 --> 0:10:57.920
+I have an environment.
+
+163
+0:10:57.920 --> 0:11:03.960
+So let's try it out.
+
+164
+0:11:03.960 --> 0:11:04.960
+All right.
+
+165
+0:11:04.960 --> 0:11:05.960
+So it's big enough.
+
+166
+0:11:05.960 --> 0:11:06.960
+I can make it bigger.
+
+167
+0:11:06.960 --> 0:11:07.960
+Yeah?
+
+168
+0:11:07.960 --> 0:11:08.960
+Okay.
+
+169
+0:11:08.960 --> 0:11:09.960
+Right.
+
+170
+0:11:09.960 --> 0:11:10.960
+So okay.
+
+171
+0:11:10.960 --> 0:11:17.600
+I'm using the main branch belchion, which is 2.2.6.
+
+172
+0:11:17.600 --> 0:11:21.080
+And here we have, this is really great.
+
+173
+0:11:21.080 --> 0:11:25.640
+We have an example base.
+
+174
+0:11:25.640 --> 0:11:28.880
+So you can, if you are learning how to use nmsday, this is quite good.
+
+175
+0:11:28.880 --> 0:11:32.760
+You can go here and see different examples of how you should do it.
+
+176
+0:11:32.760 --> 0:11:42.440
+So one that is really simple is, for example, this one.
+
+177
+0:11:42.440 --> 0:11:44.440
+Right.
+
+178
+0:11:44.440 --> 0:11:48.640
+So this one, one similar to what I showed before.
+
+179
+0:11:48.640 --> 0:11:56.400
+So this is an adh1, and then you have the config, a root config for the adh1.
+
+180
+0:11:56.400 --> 0:11:59.360
+So let's check before the state that we have already.
+
+181
+0:11:59.360 --> 0:12:00.360
+Okay.
+
+182
+0:12:00.360 --> 0:12:03.520
+This is the IP address that we have.
+
+183
+0:12:03.520 --> 0:12:04.520
+Here we have adh1.
+
+184
+0:12:04.520 --> 0:12:10.140
+adh1 is a base, but it's defined as an definite.
+
+185
+0:12:10.140 --> 0:12:13.800
+So according to us, it will behave as an definite.
+
+186
+0:12:13.800 --> 0:12:16.400
+So let's apply the state.
+
+187
+0:12:16.400 --> 0:12:25.520
+This, set the attachment and add root.
+
+188
+0:12:25.520 --> 0:12:26.520
+That's it.
+
+189
+0:12:26.520 --> 0:12:27.520
+It's done.
+
+190
+0:12:27.520 --> 0:12:33.520
+If we go to IPA and we go to adh1, we can see the IP address configured here.
+
+191
+0:12:33.520 --> 0:12:35.080
+Right.
+
+192
+0:12:35.080 --> 0:12:41.920
+Then if we do IPR, we are going to see the root here.
+
+193
+0:12:41.920 --> 0:12:46.120
+One for the IP address and the other one, the root that we set.
+
+194
+0:12:46.120 --> 0:12:50.640
+And also if you are willing to check what happened in the one manner here, you can do
+
+195
+0:12:50.640 --> 0:12:51.640
+this.
+
+196
+0:12:51.640 --> 0:12:52.640
+Whoops.
+
+197
+0:12:52.640 --> 0:12:53.640
+Okay.
+
+198
+0:12:53.640 --> 0:12:54.640
+Sorry.
+
+199
+0:12:54.640 --> 0:12:57.640
+All right.
+
+200
+0:12:57.640 --> 0:13:00.880
+You can do this.
+
+201
+0:13:00.880 --> 0:13:05.400
+You will notice that the device is up, and we can check the connection that we generated.
+
+202
+0:13:05.400 --> 0:13:12.280
+But let's go to a, sorry.
+
+203
+0:13:12.280 --> 0:13:15.660
+Let's check a more complex sample.
+
+204
+0:13:15.660 --> 0:13:17.660
+What we need first to clean up the state.
+
+205
+0:13:17.660 --> 0:13:20.160
+So I'm going to show you how we clean up the state.
+
+206
+0:13:20.160 --> 0:13:23.600
+We have adh1, then all roots.
+
+207
+0:13:23.600 --> 0:13:25.600
+All right.
+
+208
+0:13:25.600 --> 0:13:32.000
+So here, for example, we just need to define the adh1 and then define the roots with the
+
+209
+0:13:32.000 --> 0:13:34.680
+nethup interface and state absent.
+
+210
+0:13:34.680 --> 0:13:39.080
+And this will clear all the roots that are defined for that interface, which is very
+
+211
+0:13:39.080 --> 0:13:42.200
+great because when removing something, you don't need to define everything.
+
+212
+0:13:42.200 --> 0:13:47.320
+You just need to define the properties that you want to match and then state absent, and
+
+213
+0:13:47.320 --> 0:13:50.320
+it will clear them.
+
+214
+0:13:50.320 --> 0:13:55.640
+All right.
+
+215
+0:13:55.640 --> 0:14:02.680
+That's fine.
+
+216
+0:14:02.680 --> 0:14:05.200
+So it's applied.
+
+217
+0:14:05.200 --> 0:14:06.360
+Let's check it.
+
+218
+0:14:06.360 --> 0:14:07.360
+Okay.
+
+219
+0:14:07.360 --> 0:14:09.880
+And then we can, oh, it's active.
+
+220
+0:14:09.880 --> 0:14:13.560
+Right, because we didn't bring down the adh1 interface.
+
+221
+0:14:13.560 --> 0:14:16.160
+That's fine, but we dropped the root.
+
+222
+0:14:16.160 --> 0:14:19.720
+So let's create a more complex one.
+
+223
+0:14:19.720 --> 0:14:21.240
+One that I especially like.
+
+224
+0:14:21.240 --> 0:14:22.240
+It's this one.
+
+225
+0:14:22.240 --> 0:14:27.540
+This is going to be the last one.
+
+226
+0:14:27.540 --> 0:14:30.920
+So here we are going to define this.
+
+227
+0:14:30.920 --> 0:14:36.920
+We have two Ethernet interfaces that are connected to a boy interface, which has also another
+
+228
+0:14:36.920 --> 0:14:42.080
+port which is going to be a bridge and a B-land over another bridge.
+
+229
+0:14:42.080 --> 0:14:43.080
+So all right.
+
+230
+0:14:43.080 --> 0:14:45.080
+This is the state.
+
+231
+0:14:45.080 --> 0:14:51.240
+We define the B-land interfaces with the IV, the Linux bridge, which the board is the B-land,
+
+232
+0:14:51.240 --> 0:14:56.680
+and then another Linux bridge up, and the board is going to be the bond.
+
+233
+0:14:56.680 --> 0:15:03.120
+And then for the bond, we have the two Ethernet interfaces, adh1 and adh2, and we have adh1
+
+234
+0:15:03.120 --> 0:15:05.000
+and adh2 defined.
+
+235
+0:15:05.000 --> 0:15:08.000
+So let's apply it.
+
+236
+0:15:08.000 --> 0:15:11.000
+All right.
+
+237
+0:15:11.000 --> 0:15:15.720
+This will do a little bit more.
+
+238
+0:15:15.720 --> 0:15:17.280
+That's fine.
+
+239
+0:15:17.280 --> 0:15:18.280
+Right.
+
+240
+0:15:18.280 --> 0:15:22.800
+So in the board manager, everything seems set.
+
+241
+0:15:22.800 --> 0:15:24.240
+Then we can do IPA.
+
+242
+0:15:24.240 --> 0:15:26.760
+Plenty of things.
+
+243
+0:15:26.760 --> 0:15:29.680
+Let me, this is the B-land.
+
+244
+0:15:29.680 --> 0:15:34.280
+Then we have here the bond with the other's configure.
+
+245
+0:15:34.280 --> 0:15:36.600
+No, sorry.
+
+246
+0:15:36.600 --> 0:15:41.560
+We have the bond here and the bridge, 29.
+
+247
+0:15:41.560 --> 0:15:47.320
+We can also remove them as we did with the other example.
+
+248
+0:15:47.320 --> 0:15:49.720
+And let me show you how it looks.
+
+249
+0:15:49.720 --> 0:15:50.720
+Right.
+
+250
+0:15:50.720 --> 0:15:52.400
+So this is quite simple.
+
+251
+0:15:52.400 --> 0:15:57.760
+You just need to define adh1, adh2 as down because adh1 is an Ethernet.
+
+252
+0:15:57.760 --> 0:16:01.640
+It's a, well, it's a mutlating Ethernet, but it's a physical device.
+
+253
+0:16:01.640 --> 0:16:04.880
+So you cannot remove it completely.
+
+254
+0:16:04.880 --> 0:16:12.120
+And then you have the bond, which can be dropped, the bridge, the B-land, and the other bridge.
+
+255
+0:16:12.120 --> 0:16:14.280
+So that's it.
+
+256
+0:16:14.280 --> 0:16:20.840
+If you apply it, it will be gone.
+
+257
+0:16:20.840 --> 0:16:23.360
+Check.
+
+258
+0:16:23.360 --> 0:16:24.360
+All right.
+
+259
+0:16:24.360 --> 0:16:25.360
+So it should be done.
+
+260
+0:16:25.360 --> 0:16:30.000
+But first, as you can see, they are not anymore.
+
+261
+0:16:30.000 --> 0:16:38.200
+You cannot see any more of the link, nor the roots, nor the connections because we didn't,
+
+262
+0:16:38.200 --> 0:16:42.520
+we removed also the network manager connection files.
+
+263
+0:16:42.520 --> 0:16:43.520
+So I think that's it.
+
+264
+0:16:43.520 --> 0:16:48.440
+It was a little bit, a little demo about how it works.
+
+265
+0:16:48.440 --> 0:16:50.960
+I really encourage you to try it out.
+
+266
+0:16:50.960 --> 0:16:51.960
+It's really simple.
+
+267
+0:16:51.960 --> 0:16:57.200
+If you're already using network manager, you basically do not need to do anything else
+
+268
+0:16:57.200 --> 0:17:01.360
+because installing NMS state will be enough.
+
+269
+0:17:01.360 --> 0:17:05.960
+NMS state is packaged basically on Fedora, CentOS, and rel.
+
+270
+0:17:05.960 --> 0:17:15.520
+And, well, if you use the Rust library, you can also use the create to use it whenever
+
+271
+0:17:15.520 --> 0:17:16.520
+you want.
+
+272
+0:17:16.520 --> 0:17:17.840
+All right.
+
+273
+0:17:17.840 --> 0:17:20.120
+So that will be all.
+
+274
+0:17:20.120 --> 0:17:22.920
+And now some questions.
+
+275
+0:17:22.920 --> 0:17:23.920
+Thank you.
+
+276
+0:17:23.920 --> 0:17:38.360
+So you basically use network manager to do all the settings and everything.
+
+277
+0:17:38.360 --> 0:17:40.760
+But you also use Netlink.
+
+278
+0:17:40.760 --> 0:17:44.040
+Why is it necessary?
+
+279
+0:17:44.040 --> 0:17:46.360
+Don't you get all the information from network manager?
+
+280
+0:17:46.360 --> 0:17:47.360
+No.
+
+281
+0:17:47.360 --> 0:17:51.720
+Because Nebo Manajer is not getting real-time information from Kana all the time.
+
+282
+0:17:51.720 --> 0:17:53.240
+He's not updating it directly.
+
+283
+0:17:53.240 --> 0:17:58.040
+If you look to the devices, the devices doesn't have all the properties.
+
+284
+0:17:58.040 --> 0:18:03.120
+And in Nispo, we care about all the properties that are defined on Kana.
+
+285
+0:18:03.120 --> 0:18:04.120
+So this is the main reason.
+
+286
+0:18:04.120 --> 0:18:08.040
+Are there settings that you need to do the Netlink as well?
+
+287
+0:18:08.040 --> 0:18:09.040
+No, no.
+
+288
+0:18:09.040 --> 0:18:10.160
+We don't do the settings through Netlink.
+
+289
+0:18:10.160 --> 0:18:11.760
+We just get them to compare.
+
+290
+0:18:11.760 --> 0:18:18.480
+We found out the problem that as network manager is a service and is listening on events of
+
+291
+0:18:18.480 --> 0:18:24.720
+Netlink, sometimes takes some time to update the device cache.
+
+292
+0:18:24.720 --> 0:18:28.840
+And that's a problem because when you do an operation, you want the result immediately.
+
+293
+0:18:28.840 --> 0:18:31.000
+Isn't that the bug in network manager?
+
+294
+0:18:31.000 --> 0:18:32.000
+Well, it isn't.
+
+295
+0:18:32.000 --> 0:18:35.720
+In the end, you have a very good cache.
+
+296
+0:18:35.720 --> 0:18:37.840
+And it's hard to keep everything updated.
+
+297
+0:18:37.840 --> 0:18:39.640
+So they perform a lot of operations.
+
+298
+0:18:39.640 --> 0:18:42.600
+Obviously, it could be improved.
+
+299
+0:18:42.600 --> 0:18:47.720
+But right now, this is the solution that we thought about.
+
+300
+0:18:47.720 --> 0:18:52.560
+Nispo can apply settings to Kana, but we don't use it on NMS.
+
+301
+0:18:52.560 --> 0:18:57.480
+This is like an extra feature that we work on it from time to time.
+
+302
+0:18:57.480 --> 0:18:58.480
+Hello.
+
+303
+0:18:58.480 --> 0:19:01.800
+I would like to ask if dummy interfaces are supported?
+
+304
+0:19:01.800 --> 0:19:05.280
+And if not, are they planned to be supported?
+
+305
+0:19:05.280 --> 0:19:06.280
+Dummy interfaces?
+
+306
+0:19:06.280 --> 0:19:07.280
+Yes.
+
+307
+0:19:07.280 --> 0:19:08.280
+Dummy interfaces are supported.
+
+308
+0:19:08.280 --> 0:19:09.280
+And that's it.
+
+309
+0:19:09.280 --> 0:19:11.720
+You can check the documentation.
+
+310
+0:19:11.720 --> 0:19:14.280
+I think everything is supported for them.
+
+311
+0:19:14.280 --> 0:19:16.080
+Thank you.
+
+312
+0:19:16.080 --> 0:19:19.400
+Any more questions?
+
+313
+0:19:19.400 --> 0:19:22.720
+All right.
+
+314
+0:19:22.720 --> 0:19:28.360
+I think we're good.
+
+315
+0:19:28.360 --> 0:19:30.360
+Yeah, we are good.
+
+316
+0:19:30.360 --> 0:19:31.360
+Thank you very much.
+
+317
+0:19:31.360 --> 0:19:32.360
+Thank you very much for attending.
+
+318
+0:19:32.360 --> 0:19:46.800
+Thank you very much.
+

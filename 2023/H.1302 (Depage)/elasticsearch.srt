@@ -1,0 +1,1784 @@
+1
+0:00:00.000 --> 0:00:10.280
+So, before we go on with the next security related topic, we're going to talk about something
+
+2
+0:00:10.280 --> 0:00:12.440
+completely different.
+
+3
+0:00:12.440 --> 0:00:17.520
+And that is about elastic surge internals by Martin from the Bulgaria JAG.
+
+4
+0:00:17.520 --> 0:00:20.520
+And maybe also about security in this context.
+
+5
+0:00:20.520 --> 0:00:32.520
+So, we're going to put this side and this side.
+
+6
+0:00:32.520 --> 0:01:01.520
+So, we're going to put this side and this side.
+
+7
+0:01:01.520 --> 0:01:13.520
+Test, test, test.
+
+8
+0:01:13.520 --> 0:01:31.520
+Thank you.
+
+9
+0:01:31.520 --> 0:01:49.520
+There's lots of people coming in.
+
+10
+0:01:49.520 --> 0:01:54.520
+Please move to the middle of your row so that there's space on the sides so people can sit
+
+11
+0:01:54.520 --> 0:02:06.520
+and sit.
+
+12
+0:02:06.520 --> 0:02:11.520
+We're working in Sisko together.
+
+13
+0:02:11.520 --> 0:02:12.520
+A lot of people coming.
+
+14
+0:02:12.520 --> 0:02:15.520
+So, we can start.
+
+15
+0:02:15.520 --> 0:02:17.520
+All right.
+
+16
+0:02:17.520 --> 0:02:44.520
+If you're standing along the side, please take a seat.
+
+17
+0:02:44.520 --> 0:02:48.520
+All right.
+
+18
+0:02:48.520 --> 0:02:50.520
+Hello, everyone.
+
+19
+0:02:50.520 --> 0:02:55.520
+My name is Martin and I'm a consulting architect at European Patient Office.
+
+20
+0:02:55.520 --> 0:03:02.520
+I've been also doing a lot of consultancy on elastic surge in the past two to three years.
+
+21
+0:03:02.520 --> 0:03:06.520
+So, just before we start with this session, how many of you are using or have used elastic
+
+22
+0:03:06.520 --> 0:03:08.520
+surge in a project?
+
+23
+0:03:08.520 --> 0:03:09.520
+Okay.
+
+24
+0:03:09.520 --> 0:03:11.520
+More than half of the people.
+
+25
+0:03:11.520 --> 0:03:14.520
+So, why this talk has forced them?
+
+26
+0:03:14.520 --> 0:03:16.520
+So, multiple reasons, in fact.
+
+27
+0:03:16.520 --> 0:03:21.520
+When I've worked with elastic surge, I realized that even though it has quite a good documentation,
+
+28
+0:03:21.520 --> 0:03:26.520
+in many cases, you need to go into the public code base and see what's in there and to understand
+
+29
+0:03:26.520 --> 0:03:27.520
+how it works.
+
+30
+0:03:27.520 --> 0:03:32.520
+I've had questions from many people how this functionality works or how can I achieve something
+
+31
+0:03:32.520 --> 0:03:33.520
+with elastic surge.
+
+32
+0:03:33.520 --> 0:03:39.520
+And not always it's clear from documentation or blocks over the internet what we can achieve
+
+33
+0:03:39.520 --> 0:03:40.520
+with elastic surge.
+
+34
+0:03:40.520 --> 0:03:46.520
+So, in this short session, I'll try to show you how this elastic surge work internally
+
+35
+0:03:46.520 --> 0:03:49.520
+and I'll talk about the elastic surge architecture.
+
+36
+0:03:49.520 --> 0:03:56.520
+So, first of all, we'll do a 360 degrees overview of the elastic surge stack, which I believe
+
+37
+0:03:56.520 --> 0:03:58.520
+most of you are familiar with.
+
+38
+0:03:58.520 --> 0:04:02.520
+Then I'll go into the elastic surge architecture and at the end of this short session, I'll
+
+39
+0:04:02.520 --> 0:04:05.520
+show you how you can write a very simple elastic surge plugin.
+
+40
+0:04:05.520 --> 0:04:10.520
+In most cases, you won't need to write an elastic surge plugin because there is quite
+
+41
+0:04:10.520 --> 0:04:13.520
+a rich ecosystem of elastic surge plugins that you can use.
+
+42
+0:04:13.520 --> 0:04:16.520
+But many companies find that that's not always the case.
+
+43
+0:04:16.520 --> 0:04:20.520
+So, sometimes you need to either customize something in elastic surge or write your own
+
+44
+0:04:20.520 --> 0:04:23.520
+plugin to achieve something.
+
+45
+0:04:23.520 --> 0:04:24.520
+All right.
+
+46
+0:04:24.520 --> 0:04:27.520
+So, let's talk briefly about the elastic surge stack.
+
+47
+0:04:27.520 --> 0:04:31.520
+In the middle, we have elastic surge, which is a Java application.
+
+48
+0:04:31.520 --> 0:04:34.520
+It's being updated quite often.
+
+49
+0:04:34.520 --> 0:04:38.520
+There are a lot of features being implemented in elastic surge, especially in the latest
+
+50
+0:04:38.520 --> 0:04:39.520
+few releases.
+
+51
+0:04:39.520 --> 0:04:44.520
+And around the elastic surge server application, there are different applications that are
+
+52
+0:04:44.520 --> 0:04:49.520
+being built to allow it to work more easily with elastic surge, such as Kibana.
+
+53
+0:04:49.520 --> 0:04:53.520
+Kibana is a user-rich user interface for elastic surge that allows you to achieve multiple
+
+54
+0:04:53.520 --> 0:04:54.520
+things.
+
+55
+0:04:54.520 --> 0:04:59.520
+So, not only querying elastic surge, but Kibana allows you to also visualize data that's already
+
+56
+0:04:59.520 --> 0:05:05.520
+in elastic surge or build different dashboards that are quite nice, especially for management.
+
+57
+0:05:05.520 --> 0:05:09.520
+Also, if you want to put different data from a variety of sources in elastic surge, you
+
+58
+0:05:09.520 --> 0:05:10.520
+can use lock stash.
+
+59
+0:05:10.520 --> 0:05:15.520
+So, originally lock stash was implemented to provide a way to aggregate locks into elastic
+
+60
+0:05:15.520 --> 0:05:16.520
+surge.
+
+61
+0:05:16.520 --> 0:05:21.520
+But over time, lock stash evolves to an application that is used to integrate data in elastic
+
+62
+0:05:21.520 --> 0:05:24.520
+surge, not only lock data, but any kind of data.
+
+63
+0:05:24.520 --> 0:05:31.520
+So, you can think of lock stash as a log aggregation pipeline that allows you to put data in elastic
+
+64
+0:05:31.520 --> 0:05:32.520
+surge.
+
+65
+0:05:32.520 --> 0:05:37.520
+And on top of that, we also have a different set of so-called bits applications that are
+
+66
+0:05:37.520 --> 0:05:43.520
+lightweight lock shippers that allow you to collect data and put it either directly into
+
+67
+0:05:43.520 --> 0:05:50.520
+elastic surge or through lock stash into elastic surge or different other data sources.
+
+68
+0:05:50.520 --> 0:05:54.520
+The specific thing about the bit applications is that they are lightweight in nature, so
+
+69
+0:05:54.520 --> 0:05:59.520
+they are supposed to not consume a lot of resources, such as CPU and memory.
+
+70
+0:05:59.520 --> 0:06:06.520
+And in that reason, they allow you to collect lock data or other data and put it into elastic
+
+71
+0:06:06.520 --> 0:06:07.520
+surge.
+
+72
+0:06:07.520 --> 0:06:13.520
+Now, you can think of elastic surge as a web server built on top of the Apache Lucine Library.
+
+73
+0:06:13.520 --> 0:06:19.520
+So, the Apache Lucine Library is an actively developed Java library that is used by different
+
+74
+0:06:19.520 --> 0:06:24.520
+applications that want to implement some kind of search functionality.
+
+75
+0:06:24.520 --> 0:06:26.520
+And elastic surge is one of them.
+
+76
+0:06:26.520 --> 0:06:30.520
+So, I'll show you briefly in a few slides how elastic surge interacts with the Apache
+
+77
+0:06:30.520 --> 0:06:31.520
+Lucine Library.
+
+78
+0:06:31.520 --> 0:06:36.520
+And another way to describe elastic surge is a document-oriented database.
+
+79
+0:06:36.520 --> 0:06:42.520
+So, elastic surge is used by different projects, not only for searching, but also as a NoSQL
+
+80
+0:06:42.520 --> 0:06:43.520
+database.
+
+81
+0:06:43.520 --> 0:06:48.520
+So, I had a few projects where elastic surge was used purely as a NoSQL database, not as
+
+82
+0:06:48.520 --> 0:06:50.520
+a search engine.
+
+83
+0:06:50.520 --> 0:06:54.520
+And one can think, okay, elastic surge is a Java application.
+
+84
+0:06:54.520 --> 0:06:55.520
+Why?
+
+85
+0:06:55.520 --> 0:06:57.520
+I cannot use Apache Lucine directly.
+
+86
+0:06:57.520 --> 0:07:02.520
+And the reason is that elastic surge provides a number of features that are missing in the
+
+87
+0:07:02.520 --> 0:07:09.520
+Apache Lucine Library that allow you to implement search in your project way more easily than
+
+88
+0:07:09.520 --> 0:07:10.520
+using directly Apache Lucine.
+
+89
+0:07:10.520 --> 0:07:16.520
+Some of these features are, for example, JSON-based REST API, which is quite easy to use, quite
+
+90
+0:07:16.520 --> 0:07:20.520
+easy to write search queries to index data into elastic surge, and so on.
+
+91
+0:07:20.520 --> 0:07:25.520
+There is also a really nice clustering mechanism implemented in elastic surge that allows you
+
+92
+0:07:25.520 --> 0:07:30.520
+to bring and scale your elastic surge cluster quite easily, something that's not possible
+
+93
+0:07:30.520 --> 0:07:35.520
+if you use directly Apache Lucine in your project directly.
+
+94
+0:07:35.520 --> 0:07:39.520
+And also, it has a number of other features, such as, for example, caching, that allow you
+
+95
+0:07:39.520 --> 0:07:43.520
+to improve the performance of your search queries, and so on.
+
+96
+0:07:43.520 --> 0:07:50.520
+Now, the basic data structure used by elastic surge is the so-called inverted index, and
+
+97
+0:07:50.520 --> 0:07:55.520
+indexes are stored on disk in separate files or Lucine segments.
+
+98
+0:07:55.520 --> 0:07:58.520
+Search can be performed on multiple indexes at a time.
+
+99
+0:07:58.520 --> 0:08:00.520
+That's one of the capabilities of elastic surge.
+
+100
+0:08:00.520 --> 0:08:06.520
+And in earlier versions of elastic surge, documents were logically grouped by types.
+
+101
+0:08:06.520 --> 0:08:12.520
+That was effectively deprecated as a version 7 of elastic surge, and it's expected to be
+
+102
+0:08:12.520 --> 0:08:15.520
+dropped.
+
+103
+0:08:15.520 --> 0:08:21.520
+In order to ensure score relevance when you search for some data in elastic surge, elastic
+
+104
+0:08:21.520 --> 0:08:28.520
+surge uses a set of different algorithms to score results relevance.
+
+105
+0:08:28.520 --> 0:08:32.520
+In the later versions of elastic surge, this algorithm is BM25.
+
+106
+0:08:32.520 --> 0:08:38.520
+In earlier versions of elastic surge, this was a simpler algorithm, which is called TFIDF.
+
+107
+0:08:38.520 --> 0:08:43.520
+At the base of those algorithms is the fact how many times does a term occur in a document,
+
+108
+0:08:43.520 --> 0:08:48.520
+and how many times does this term occur across all documents that are currently indexed in
+
+109
+0:08:48.520 --> 0:08:49.520
+elastic surge.
+
+110
+0:08:49.520 --> 0:08:55.520
+Based on that, by default, elastic surge scores every result that gets returned by your search
+
+111
+0:08:55.520 --> 0:09:02.520
+query, and by default, it returns results sorted by relevance score.
+
+112
+0:09:02.520 --> 0:09:07.520
+Now, why would you use elastic surge in favor, for example, of a relational database?
+
+113
+0:09:07.520 --> 0:09:14.520
+Well, it provides faster retrieval for documents in way more scenarios than a traditional relational
+
+114
+0:09:14.520 --> 0:09:15.520
+database can do.
+
+115
+0:09:15.520 --> 0:09:22.520
+So, as you know, traditional relational databases provide faster searches through indexes.
+
+116
+0:09:22.520 --> 0:09:27.520
+However, indexes in relational databases have many limitations based on the type of SQL
+
+117
+0:09:27.520 --> 0:09:28.520
+queries that you write.
+
+118
+0:09:28.520 --> 0:09:33.520
+In an elastic surge, the inverted index data structure provides you with the capability
+
+119
+0:09:33.520 --> 0:09:39.520
+to cover way more scenarios for searching using more complex queries.
+
+120
+0:09:39.520 --> 0:09:45.520
+For that reason, many projects choose to use elastic surge as a search engine.
+
+121
+0:09:45.520 --> 0:09:51.520
+Now, documents also in elastic surge might not have an explicit schema, as you have in
+
+122
+0:09:51.520 --> 0:09:55.520
+a relational database, and that's typical for many NoSQL databases.
+
+123
+0:09:55.520 --> 0:10:00.520
+An explicit schema, however, can be defined on the fields, and certain fields can even
+
+124
+0:10:00.520 --> 0:10:04.520
+have different types mapped to them.
+
+125
+0:10:04.520 --> 0:10:10.520
+This is needed because sometimes you need to use different kinds of search queries based
+
+126
+0:10:10.520 --> 0:10:14.520
+on the field type, and some field types pose limitations.
+
+127
+0:10:14.520 --> 0:10:20.520
+So, that's why you might need to have multiple types on a single field in elastic surge.
+
+128
+0:10:20.520 --> 0:10:23.520
+Now, this was brief about what is elastic surge and how it works.
+
+129
+0:10:23.520 --> 0:10:26.520
+Now, let's see what the architecture of elastic surge.
+
+130
+0:10:26.520 --> 0:10:31.520
+Elastic surge, as I mentioned to you, is designed with clustering in mind.
+
+131
+0:10:31.520 --> 0:10:38.520
+By default, in later versions of elastic surge, if you create an index, it has one primary
+
+132
+0:10:38.520 --> 0:10:41.520
+chart and one replica chart.
+
+133
+0:10:41.520 --> 0:10:43.520
+So, what is a chart?
+
+134
+0:10:43.520 --> 0:10:49.520
+Now, an elastic surge index contains one or more primary charts that distribute the data
+
+135
+0:10:49.520 --> 0:10:51.520
+in the elastic surge cluster.
+
+136
+0:10:51.520 --> 0:10:57.520
+Below that, an elastic surge chart is in fact a Lucene index, and a Lucene index is, in
+
+137
+0:10:57.520 --> 0:11:02.520
+fact, the data structure that stores the data on disk in terms of Lucene segments.
+
+138
+0:11:02.520 --> 0:11:07.520
+Lucene segments are the physical files that store data on the disk.
+
+139
+0:11:07.520 --> 0:11:12.520
+Now, when you index data in elastic surge, you might have also replica charts.
+
+140
+0:11:12.520 --> 0:11:17.520
+Replica charts provide you with the possibility to enable high availability and data replication
+
+141
+0:11:17.520 --> 0:11:20.520
+at the level of the elastic surge cluster.
+
+142
+0:11:20.520 --> 0:11:27.520
+So, two types of charts, primary and replica charts.
+
+143
+0:11:27.520 --> 0:11:32.520
+The more nodes you add to the elastic surge cluster, the more data gets distributed among
+
+144
+0:11:32.520 --> 0:11:33.520
+charts.
+
+145
+0:11:33.520 --> 0:11:38.520
+Now, it's very important that upfront you plan the number of primary charts based on
+
+146
+0:11:38.520 --> 0:11:40.520
+the data growth that you have.
+
+147
+0:11:40.520 --> 0:11:45.520
+It's very difficult to change later in your project life cycle the number of primary charts.
+
+148
+0:11:45.520 --> 0:11:47.520
+You need to re-index data.
+
+149
+0:11:47.520 --> 0:11:51.520
+However, if you want to change the number of replica charts, that's more easy to do
+
+150
+0:11:51.520 --> 0:11:52.520
+later in time.
+
+151
+0:11:52.520 --> 0:11:55.520
+So, it's very important that you plan upfront what's the number of primary charts on an
+
+152
+0:11:55.520 --> 0:11:57.520
+index that you create.
+
+153
+0:11:57.520 --> 0:12:01.520
+Now, by default, elastic surge tries to balance the number of charts across the nodes that
+
+154
+0:12:01.520 --> 0:12:03.520
+you have.
+
+155
+0:12:03.520 --> 0:12:07.520
+And one of the other capabilities that elastic surge provides you is that if a node fails,
+
+156
+0:12:07.520 --> 0:12:13.520
+you still can get search results, or so-called partial results can be returned, even if some
+
+157
+0:12:13.520 --> 0:12:17.520
+of the nodes in the cluster are not available.
+
+158
+0:12:17.520 --> 0:12:22.520
+Now, by default, elastic surge determines the chart where a document is indexed based
+
+159
+0:12:22.520 --> 0:12:24.520
+on a relatively simple formula.
+
+160
+0:12:24.520 --> 0:12:28.520
+You get the hash key of the routing, key of the document.
+
+161
+0:12:28.520 --> 0:12:32.520
+This is the document ID, which can be generated in different ways.
+
+162
+0:12:32.520 --> 0:12:34.520
+You can generate it from elastic surge.
+
+163
+0:12:34.520 --> 0:12:39.520
+If you don't specify it, your application can supply the document ID, so on and so forth.
+
+164
+0:12:39.520 --> 0:12:43.520
+And you'll take the modules, the number of primary charts that you have defined on the
+
+165
+0:12:43.520 --> 0:12:46.520
+index where you index the document.
+
+166
+0:12:46.520 --> 0:12:50.520
+Now, as I mentioned, by default, the routing key is the document ID, but you can also use
+
+167
+0:12:50.520 --> 0:12:53.520
+a different routing key.
+
+168
+0:12:53.520 --> 0:13:02.520
+And one interesting technique that some people use to enable distribution of data in the
+
+169
+0:13:02.520 --> 0:13:08.520
+elastic surge cluster is by specifying a custom routing key that allows you to enable
+
+170
+0:13:08.520 --> 0:13:10.520
+so-called chart routing.
+
+171
+0:13:10.520 --> 0:13:15.520
+This is a technique that allows you to specify at which particular chart you want to send
+
+172
+0:13:15.520 --> 0:13:17.520
+the document to be indexed.
+
+173
+0:13:17.520 --> 0:13:20.520
+But that's a case that's used in some specific scenarios.
+
+174
+0:13:20.520 --> 0:13:27.520
+In most cases, people rely on the default mechanism that elastic surge uses to distribute
+
+175
+0:13:27.520 --> 0:13:30.520
+data in the cluster.
+
+176
+0:13:30.520 --> 0:13:35.520
+Now, by default, new nodes are discovered via multicast.
+
+177
+0:13:35.520 --> 0:13:41.520
+If a cluster is discovered, a new node joins the cluster if it has the same cluster name.
+
+178
+0:13:41.520 --> 0:13:46.520
+If a node on the same instance already runs on a specified port, and if you try to run
+
+179
+0:13:46.520 --> 0:13:52.520
+another node on that instance, elastic surge automatically gives you the next available port.
+
+180
+0:13:52.520 --> 0:13:59.520
+Now, however, in some cases, in some companies, multicast addresses are disabled for security
+
+181
+0:13:59.520 --> 0:14:00.520
+reasons.
+
+182
+0:14:00.520 --> 0:14:04.520
+And that's why the preferred mechanism to join new nodes in an elastic surge cluster
+
+183
+0:14:04.520 --> 0:14:06.520
+is by using unicast addresses.
+
+184
+0:14:06.520 --> 0:14:11.520
+In the Elasticsearch YAML configuration, you just need to specify one or more existing
+
+185
+0:14:11.520 --> 0:14:16.520
+nodes from the elastic surge cluster so that they can join that existing cluster.
+
+186
+0:14:16.520 --> 0:14:21.520
+And in that list of unicast nodes, you don't need to specify all the nodes in the elastic
+
+187
+0:14:21.520 --> 0:14:22.520
+surge cluster.
+
+188
+0:14:22.520 --> 0:14:30.520
+You just need to specify at least one node that has already joined the cluster.
+
+189
+0:14:30.520 --> 0:14:36.520
+Now, when you bring up an elastic surge cluster, there are some considerations that you need
+
+190
+0:14:36.520 --> 0:14:37.520
+to take.
+
+191
+0:14:37.520 --> 0:14:42.520
+First of all, as I mentioned, sharding is very important for you to consider what should
+
+192
+0:14:42.520 --> 0:14:46.520
+be the number of primary shards that you define on the elastic surge index, and the number
+
+193
+0:14:46.520 --> 0:14:49.520
+of replica shards which is more easy to change over time.
+
+194
+0:14:49.520 --> 0:14:54.520
+You also need to consider how much data you store in an elastic surge index.
+
+195
+0:14:54.520 --> 0:14:59.520
+Indexes with too small amount of data are not good, because that implies a lot of major
+
+196
+0:14:59.520 --> 0:15:04.520
+overhead, and the same is for indexes with too many amounts of data.
+
+197
+0:15:04.520 --> 0:15:08.520
+I've seen some cases where people store, let's say, more than 2, 300 gigabytes of data in
+
+198
+0:15:08.520 --> 0:15:14.520
+an elastic surge index, and that really slows down search operations and other operations
+
+199
+0:15:14.520 --> 0:15:15.520
+of that index.
+
+200
+0:15:15.520 --> 0:15:18.520
+And people start wondering, okay, why is my indexing slow?
+
+201
+0:15:18.520 --> 0:15:20.520
+Why are my search queries slow?
+
+202
+0:15:20.520 --> 0:15:24.520
+And in many cases, the reason is that because data is not distributed properly in the elastic
+
+203
+0:15:24.520 --> 0:15:31.520
+surge index, the preferred amount of data that you should keep in an elastic surge shard
+
+204
+0:15:31.520 --> 0:15:34.520
+is between 5 and 10 gigabytes, roughly speaking.
+
+205
+0:15:34.520 --> 0:15:39.520
+So if you have more data that you want to put on a shard, you should consider splitting
+
+206
+0:15:39.520 --> 0:15:40.520
+that data.
+
+207
+0:15:40.520 --> 0:15:47.520
+So you either use more shards in the cluster, or you split the data into so-called sequential
+
+208
+0:15:47.520 --> 0:15:48.520
+indexes.
+
+209
+0:15:48.520 --> 0:15:53.520
+So for example, you might have daily, weekly, or monthly indexes.
+
+210
+0:15:53.520 --> 0:15:54.520
+Yeah.
+
+211
+0:15:54.520 --> 0:15:58.760
+Now, this is what I mentioned.
+
+212
+0:15:58.760 --> 0:16:02.840
+So you should avoid putting too less data in the elastic surge cluster.
+
+213
+0:16:02.840 --> 0:16:08.720
+Also, if you have too many shards defined on an index that also introduces performance
+
+214
+0:16:08.720 --> 0:16:10.680
+and management overhead.
+
+215
+0:16:10.680 --> 0:16:14.440
+So you should consider rather splitting the data in the index rather than bringing too
+
+216
+0:16:14.440 --> 0:16:20.480
+many shards on a single index, and determining the number of shards should be a matter of
+
+217
+0:16:20.480 --> 0:16:23.760
+a prompt planning.
+
+218
+0:16:23.760 --> 0:16:28.840
+Now apart from putting the fact that you need to avoid putting large amounts of data in
+
+219
+0:16:28.840 --> 0:16:36.080
+a single index, the main strategy that people use is to use, for example, prefix when they
+
+220
+0:16:36.080 --> 0:16:37.440
+split data into indexes.
+
+221
+0:16:37.440 --> 0:16:41.120
+For example, you can put prefix for daily, weekly, or yearly indexes.
+
+222
+0:16:41.120 --> 0:16:46.120
+And if you do that, it's a good practice that also use aliases to reference data, not directly
+
+223
+0:16:46.120 --> 0:16:53.060
+reference a particular index in your application, but rather use aliases.
+
+224
+0:16:53.060 --> 0:16:58.280
+In terms of concurrency control, elastic search does not provide pessimistic locking, like,
+
+225
+0:16:58.280 --> 0:17:00.720
+for example, you have in relational databases.
+
+226
+0:17:00.720 --> 0:17:04.480
+If you want to establish some form of concurrency control in elastic search in order to make
+
+227
+0:17:04.480 --> 0:17:11.160
+sure that you don't have unexpected race conditions, so elastic search uses optimistic
+
+228
+0:17:11.160 --> 0:17:13.520
+locking for concurrency control.
+
+229
+0:17:13.520 --> 0:17:20.440
+The way this works is when you index a document, there is a version attribute that can be specified.
+
+230
+0:17:20.440 --> 0:17:24.880
+And if there is already a document indexed with that version, then the operation is rejected
+
+231
+0:17:24.880 --> 0:17:27.540
+from elastic search.
+
+232
+0:17:27.540 --> 0:17:31.680
+Concurrency control can also be achieved with the two fields that can be specified when
+
+233
+0:17:31.680 --> 0:17:33.600
+you index a document.
+
+234
+0:17:33.600 --> 0:17:38.480
+If sequence number and if primary term parameters, if they already match the document that's
+
+235
+0:17:38.480 --> 0:17:40.600
+indexed, then this operation gets rejected.
+
+236
+0:17:40.600 --> 0:17:46.200
+So if you want to establish some form of concurrency control in elastic search, you can use this
+
+237
+0:17:46.200 --> 0:17:49.800
+optimistic locking provided by elastic search.
+
+238
+0:17:49.800 --> 0:17:55.120
+In terms of high availability, you can create one or more copies or so-called replicas of
+
+239
+0:17:55.120 --> 0:17:57.320
+an existing index.
+
+240
+0:17:57.320 --> 0:18:02.120
+The number of primary charts is specified when you define the index mapping, or you
+
+241
+0:18:02.120 --> 0:18:04.040
+can change it later.
+
+242
+0:18:04.040 --> 0:18:08.080
+Once an index request is sent to a particular chart, determined based on the hash of the
+
+243
+0:18:08.080 --> 0:18:12.040
+root ID, the document is also sent to the chart replicas.
+
+244
+0:18:12.040 --> 0:18:16.280
+And one interesting property in elastic search is that the replicas are not used only for
+
+245
+0:18:16.280 --> 0:18:20.880
+high availability, but also used for searching purposes to improve performance.
+
+246
+0:18:20.880 --> 0:18:25.400
+So when you have replica charts, they also participate in the search request that you
+
+247
+0:18:25.400 --> 0:18:30.480
+have for elastic search.
+
+248
+0:18:30.480 --> 0:18:36.680
+Now this mechanism for improving performance is really nice, but this doesn't mean that
+
+249
+0:18:36.680 --> 0:18:41.280
+you need to supply to increase the number of replicas because, of course, that increases
+
+250
+0:18:41.280 --> 0:18:43.160
+management overhead.
+
+251
+0:18:43.160 --> 0:18:47.160
+So it's also a matter of determining how many replicas up front you would need.
+
+252
+0:18:47.160 --> 0:18:52.040
+And later on, if you plan to scale your cluster, you can also increase the amount of replicas.
+
+253
+0:18:52.040 --> 0:18:56.240
+So you should not put a lot of replica charts also at the beginning when you define your
+
+254
+0:18:56.240 --> 0:18:58.400
+indexes.
+
+255
+0:18:58.400 --> 0:19:00.720
+Now how is a chart request processed?
+
+256
+0:19:00.720 --> 0:19:03.840
+Now if we want to index a document in elastic search, what happens?
+
+257
+0:19:03.840 --> 0:19:06.680
+We send the request to a coordinating node.
+
+258
+0:19:06.680 --> 0:19:09.440
+This is one of the nodes in the elastic search cluster.
+
+259
+0:19:09.440 --> 0:19:14.560
+And this coordinating node sends the request to the chart, to the node in the cluster where
+
+260
+0:19:14.560 --> 0:19:19.320
+the document needs to be indexed and stored in loose in segments.
+
+261
+0:19:19.320 --> 0:19:24.880
+When the document reaches the elastic search node in the cluster, the particular chart,
+
+262
+0:19:24.880 --> 0:19:29.000
+it gets sent not directly to the disk, but to two in memory areas.
+
+263
+0:19:29.000 --> 0:19:32.200
+This is the memory buffer and the transaction lock.
+
+264
+0:19:32.200 --> 0:19:35.400
+Now the memory buffer gets flushed every second to the disk.
+
+265
+0:19:35.400 --> 0:19:39.240
+So when you index a document in elastic search, you cannot expect it to be available right
+
+266
+0:19:39.240 --> 0:19:41.400
+away for searching purposes.
+
+267
+0:19:41.400 --> 0:19:44.640
+But there is also a parameter that you can use to enforce it to be written to disk right
+
+268
+0:19:44.640 --> 0:19:49.000
+away before waiting for this one second to be flushed on disk.
+
+269
+0:19:49.000 --> 0:19:53.520
+There is also another area, which is called the transaction lock, where it gets flushed
+
+270
+0:19:53.520 --> 0:19:54.520
+not so often.
+
+271
+0:19:54.520 --> 0:19:58.400
+It gets flushed every 30 minutes or when it gets full.
+
+272
+0:19:58.400 --> 0:20:03.320
+So the important take over from this is that when you index a document, you should not
+
+273
+0:20:03.320 --> 0:20:07.080
+expect it to be available right away for searching.
+
+274
+0:20:07.080 --> 0:20:09.800
+But you can force it too.
+
+275
+0:20:09.800 --> 0:20:15.440
+What happens if you send a search query to elastic search?
+
+276
+0:20:15.440 --> 0:20:19.400
+First the search request gets sent to one of the nodes in the elastic search cluster,
+
+277
+0:20:19.400 --> 0:20:21.880
+the so-called coordinating node.
+
+278
+0:20:21.880 --> 0:20:23.140
+Then we have two phases.
+
+279
+0:20:23.140 --> 0:20:24.140
+First is the query phase.
+
+280
+0:20:24.140 --> 0:20:28.600
+The query phase asks all the shots, primary and replica shots, hey, do you contain some
+
+281
+0:20:28.600 --> 0:20:30.720
+data for that search query?
+
+282
+0:20:30.720 --> 0:20:33.960
+And this information gets returned to the coordinating node.
+
+283
+0:20:33.960 --> 0:20:38.640
+Based on that information, the coordinating node determines which nodes it needs to query.
+
+284
+0:20:38.640 --> 0:20:42.280
+And on the second fetch phase, it sends the request to the shots that have some data for
+
+285
+0:20:42.280 --> 0:20:48.040
+that search query and return it back to the client.
+
+286
+0:20:48.040 --> 0:20:53.440
+Now in terms of how is the elastic search code-based structured, this is a snapshot
+
+287
+0:20:53.440 --> 0:20:57.360
+from the GitHub code base of Elasticsearch from the public code base.
+
+288
+0:20:57.360 --> 0:21:01.440
+Now what I'm speaking about in this presentation applies for the public code base in Elasticsearch
+
+289
+0:21:01.440 --> 0:21:04.840
+because of version 7.16, there was a licensing change.
+
+290
+0:21:04.840 --> 0:21:09.480
+And there is a lot of controversy in the open source communities whether Elasticsearch is
+
+291
+0:21:09.480 --> 0:21:11.200
+still open source or not.
+
+292
+0:21:11.200 --> 0:21:13.360
+So we can have a discussion about that after the session.
+
+293
+0:21:13.360 --> 0:21:14.960
+I'm not going to go into the details.
+
+294
+0:21:14.960 --> 0:21:19.840
+But the main thing about this licensing change is to protect Elasticsearch from other vendors
+
+295
+0:21:19.840 --> 0:21:24.960
+willing to provide Elasticsearch as a service, not from people willing to customize Elasticsearch
+
+296
+0:21:24.960 --> 0:21:28.760
+or to use it for their in-house projects and so on.
+
+297
+0:21:28.760 --> 0:21:33.920
+So this is the structure of the Elasticsearch code base that has been like this since the
+
+298
+0:21:33.920 --> 0:21:36.080
+Apache license code base.
+
+299
+0:21:36.080 --> 0:21:40.000
+So Elasticsearch gets built with GitHub actions.
+
+300
+0:21:40.000 --> 0:21:43.280
+You can see what's the definition in the.github folder.
+
+301
+0:21:43.280 --> 0:21:46.520
+The main server application is in the server folder.
+
+302
+0:21:46.520 --> 0:21:50.400
+The documentation that gets generated on the official Elasticsearch website is in the
+
+303
+0:21:50.400 --> 0:21:51.840
+docs folder.
+
+304
+0:21:51.840 --> 0:21:55.880
+We have the main modules for the Elasticsearch server application in the modules folder and
+
+305
+0:21:55.880 --> 0:21:59.280
+the internal plugins in the plugins folder.
+
+306
+0:21:59.280 --> 0:22:03.640
+An implementation of the REST-based Java client for Elasticsearch, the high level and
+
+307
+0:22:03.640 --> 0:22:06.520
+the low level REST plans are in the client folder.
+
+308
+0:22:06.520 --> 0:22:09.920
+And the distribution folder, you can find the Gradle scripts that allow you to build
+
+309
+0:22:09.920 --> 0:22:15.080
+different distributions of Elasticsearch for Linux, Windows, and so on.
+
+310
+0:22:15.080 --> 0:22:19.240
+Now I would say the structure of the code repository is very logical.
+
+311
+0:22:19.240 --> 0:22:21.300
+It's easy to navigate.
+
+312
+0:22:21.300 --> 0:22:26.200
+So you can just go into GitHub and if you need to see, for example, how is a particular
+
+313
+0:22:26.200 --> 0:22:31.560
+plugin or module implemented, you can just go to GitHub and check it out.
+
+314
+0:22:31.560 --> 0:22:35.280
+Now internal Elasticsearch is comprised of different modules.
+
+315
+0:22:35.280 --> 0:22:40.040
+And in earlier versions Elasticsearch used a modified version of Google GIS for module
+
+316
+0:22:40.040 --> 0:22:41.040
+binding.
+
+317
+0:22:41.040 --> 0:22:45.800
+They are slowly shifting away from Google GIS in favor of their own internal module
+
+318
+0:22:45.800 --> 0:22:47.160
+system.
+
+319
+0:22:47.160 --> 0:22:52.240
+So modules are loaded on startup when the Elasticsearch server starts up.
+
+320
+0:22:52.240 --> 0:22:58.360
+And in this simple example I've shown an example of how modules were bound internally when
+
+321
+0:22:58.360 --> 0:22:59.760
+the node starts up.
+
+322
+0:22:59.760 --> 0:23:01.120
+So we use a module binder.
+
+323
+0:23:01.120 --> 0:23:04.320
+The earlier versions B was a Google GIS binder.
+
+324
+0:23:04.320 --> 0:23:08.880
+And then we bind particular module classes to their implementation.
+
+325
+0:23:08.880 --> 0:23:14.400
+And then whenever you need them, you can reference them in the Elasticsearch code base.
+
+326
+0:23:14.400 --> 0:23:18.160
+It's a very simple dependency injection mechanism.
+
+327
+0:23:18.160 --> 0:23:23.360
+Now when Elasticsearch starts up, you can imagine it's a simple Java application.
+
+328
+0:23:23.360 --> 0:23:27.240
+The main class is Oracle Elasticsearch, Boost.App Elasticsearch.
+
+329
+0:23:27.240 --> 0:23:30.840
+It boils down to calling the start method of the node class.
+
+330
+0:23:30.840 --> 0:23:37.120
+And the start method, in fact, loads up all the modules of the Elasticsearch node.
+
+331
+0:23:37.120 --> 0:23:48.560
+Now some of these core modules are, for example, modules that provide the REST API for Elasticsearch,
+
+332
+0:23:48.560 --> 0:23:54.520
+module that allows you to establish clustering in Elasticsearch, or so-called transport module.
+
+333
+0:23:54.520 --> 0:23:59.040
+There is a module that allows you to build plugins for Elasticsearch, and so on and
+
+334
+0:23:59.040 --> 0:24:02.400
+so forth.
+
+335
+0:24:02.400 --> 0:24:06.240
+Now how does Elasticsearch internally interact with Lucene?
+
+336
+0:24:06.240 --> 0:24:11.520
+When you start up the node, the node also exposes, provides different services that
+
+337
+0:24:11.520 --> 0:24:15.120
+are used by the modules of Elasticsearch.
+
+338
+0:24:15.120 --> 0:24:21.160
+And for example, if you want to, when you start up a node, there is a createShart method
+
+339
+0:24:21.160 --> 0:24:27.640
+that gets called indexService createShart to create and initialize the chart that is part
+
+340
+0:24:27.640 --> 0:24:29.560
+of this Elasticsearch node.
+
+341
+0:24:29.560 --> 0:24:35.600
+Then if you want to index a new document, it boils down to calling indexShart apply
+
+342
+0:24:35.600 --> 0:24:38.760
+indexOperation on primary.
+
+343
+0:24:38.760 --> 0:24:43.560
+Then this boils down to calling the index method on the indexShart class.
+
+344
+0:24:43.560 --> 0:24:51.040
+And the indexShart class goes down to an internal engine class that calls indexIntoLucene, then
+
+345
+0:24:51.040 --> 0:24:53.000
+that calls internalEngine.addocs.
+
+346
+0:24:53.000 --> 0:24:57.720
+And at the end, we just call indexWriter, which is a class from the Apache Lucene library,
+
+347
+0:24:57.720 --> 0:24:58.920
+add documents.
+
+348
+0:24:58.920 --> 0:25:03.200
+So it boils down to calling different methods from the Lucene API.
+
+349
+0:25:03.200 --> 0:25:07.840
+And on top of that, we have a lot of initialization and services happening.
+
+350
+0:25:07.840 --> 0:25:13.240
+So in a way, you can think that apart from all the functionality that Elasticsearch provides,
+
+351
+0:25:13.240 --> 0:25:18.240
+the integration with the Apache Lucene library just boils down to calling the different APIs
+
+352
+0:25:18.240 --> 0:25:23.360
+that Apache Lucene provides.
+
+353
+0:25:23.360 --> 0:25:29.040
+And last but not least, I'll show how you can build a very simple Elasticsearch plugin.
+
+354
+0:25:29.040 --> 0:25:33.480
+Now if you see the Elasticsearch code base, it already has some built-in plugins that
+
+355
+0:25:33.480 --> 0:25:34.760
+you can use.
+
+356
+0:25:34.760 --> 0:25:38.840
+And there is a very nice Elasticsearch plugin utility that you can use to manage plugins,
+
+357
+0:25:38.840 --> 0:25:41.480
+to install them, remove them, and so on and so forth.
+
+358
+0:25:41.480 --> 0:25:45.560
+If you build your own plugin, you can use the same utility to install the plugin, and
+
+359
+0:25:45.560 --> 0:25:48.480
+it gets placed in a folder in your node installation.
+
+360
+0:25:48.480 --> 0:25:52.600
+So if you install a plugin, you need to make sure that it's installed on all the nodes
+
+361
+0:25:52.600 --> 0:25:54.600
+in your cluster.
+
+362
+0:25:54.600 --> 0:25:58.160
+Because many plugins are cluster aware, and it needs to be installed on every node in
+
+363
+0:25:58.160 --> 0:26:01.440
+the cluster.
+
+364
+0:26:01.440 --> 0:26:06.240
+Elasticsearch plugins are bundled in zip archives, along with their dependencies, and all of
+
+365
+0:26:06.240 --> 0:26:11.000
+them must have a class that implements Oracle Elasticsearch plugins plugin class.
+
+366
+0:26:11.000 --> 0:26:16.800
+There is a plugin service which is responsible to load the plugins in Elasticsearch.
+
+367
+0:26:16.800 --> 0:26:22.160
+Now let's see how we can create a very simple ingest plugin that allows you to filter words
+
+368
+0:26:22.160 --> 0:26:24.280
+from a field of an index document.
+
+369
+0:26:24.280 --> 0:26:28.960
+So if you index a document, you can specify from which field which words you want to filter
+
+370
+0:26:28.960 --> 0:26:29.960
+out.
+
+371
+0:26:29.960 --> 0:26:33.720
+This is a very common scenario, for example, if you want, for example, to implement that
+
+372
+0:26:33.720 --> 0:26:39.120
+allows you to clear contents from documents, and so on and so forth.
+
+373
+0:26:39.120 --> 0:26:41.600
+It's probably one of the simplest plugins you might have.
+
+374
+0:26:41.600 --> 0:26:45.680
+So first we have a filter ingest plugin class that extends the plugin class and implements
+
+375
+0:26:45.680 --> 0:26:46.840
+ingest plugin.
+
+376
+0:26:46.840 --> 0:26:51.640
+We have different interfaces for the different types of plugins you might have for Elasticsearch,
+
+377
+0:26:51.640 --> 0:26:55.160
+and ingest plugin is one of these types of interfaces.
+
+378
+0:26:55.160 --> 0:27:02.360
+Then you specify, you implement the get processors method because an ingest plugin needs to have
+
+379
+0:27:02.360 --> 0:27:07.400
+processors that you can define that do something on the documents before they are indexed.
+
+380
+0:27:07.400 --> 0:27:14.400
+And the get processors method, what we do, we get a filter word from the parameters that
+
+381
+0:27:14.400 --> 0:27:18.640
+we supply on the ingest processor that we define in Elasticsearch.
+
+382
+0:27:18.640 --> 0:27:19.960
+And then we get the filter field.
+
+383
+0:27:19.960 --> 0:27:23.920
+So we have two parameters, the word that we want to filter out and from which field of
+
+384
+0:27:23.920 --> 0:27:27.080
+the document we want to filter it out.
+
+385
+0:27:27.080 --> 0:27:29.840
+Then we create a map of processors.
+
+386
+0:27:29.840 --> 0:27:36.280
+And in that map, we put the filter word processor that we create from this class and return
+
+387
+0:27:36.280 --> 0:27:37.280
+it.
+
+388
+0:27:37.280 --> 0:27:41.160
+You can also have multiple processors defined in that plugin.
+
+389
+0:27:41.160 --> 0:27:44.960
+Now what does the filter word processor look like?
+
+390
+0:27:44.960 --> 0:27:48.680
+The filter word processor extends abstract processor from Elasticsearch.
+
+391
+0:27:48.680 --> 0:27:52.440
+It again comes from the core class of Elasticsearch.
+
+392
+0:27:52.440 --> 0:27:53.600
+And we have an execute method.
+
+393
+0:27:53.600 --> 0:27:57.680
+In the execute method, we get the document that we want to index.
+
+394
+0:27:57.680 --> 0:27:59.200
+This is the ingest document.
+
+395
+0:27:59.200 --> 0:28:03.600
+We get the value from the particular field that we want to filter out.
+
+396
+0:28:03.600 --> 0:28:06.280
+And then we replace that value with the empty string.
+
+397
+0:28:06.280 --> 0:28:11.040
+And then we set back the value on top of that field and return the document.
+
+398
+0:28:11.040 --> 0:28:15.840
+This when you index a document and you specify that ingest processor applies the filtering
+
+399
+0:28:15.840 --> 0:28:19.000
+on that document before it gets indexed into Elasticsearch.
+
+400
+0:28:19.000 --> 0:28:22.680
+Now those two classes, if you want to build a plugin, you also need to supply some simple
+
+401
+0:28:22.680 --> 0:28:25.280
+plugin metadata.
+
+402
+0:28:25.280 --> 0:28:28.560
+Then build it, for example, with Maven or with Gradle.
+
+403
+0:28:28.560 --> 0:28:32.080
+And then you can install it with the Elasticsearch plugin utility.
+
+404
+0:28:32.080 --> 0:28:37.680
+And in that manner, you can build any plugin you would like for Elasticsearch.
+
+405
+0:28:37.680 --> 0:28:41.720
+And since we are running out of time, I'm not sure if we have some time for one or two
+
+406
+0:28:41.720 --> 0:28:42.720
+questions maybe.
+
+407
+0:28:42.720 --> 0:28:47.720
+Okay.
+
+408
+0:28:47.720 --> 0:28:50.960
+Do you have time for?
+
+409
+0:28:50.960 --> 0:28:51.960
+Yes, of course.
+
+410
+0:28:51.960 --> 0:28:52.960
+Okay.
+
+411
+0:28:52.960 --> 0:28:53.960
+So if anybody, yeah.
+
+412
+0:28:53.960 --> 0:29:02.960
+Hey, actually, in size, you saw how too many charts can go out of the form of the new.
+
+413
+0:29:02.960 --> 0:29:03.960
+Yes.
+
+414
+0:29:03.960 --> 0:29:04.960
+Yes.
+
+415
+0:29:04.960 --> 0:29:05.960
+I was curious how did one know how many charts are too many charts?
+
+416
+0:29:05.960 --> 0:29:11.920
+Well, I would say it depends on upfront estimation of how much data do you expect to put in that
+
+417
+0:29:11.920 --> 0:29:12.920
+index.
+
+418
+0:29:12.920 --> 0:29:14.840
+So we need to do an upfront planning.
+
+419
+0:29:14.840 --> 0:29:15.840
+Okay.
+
+420
+0:29:15.840 --> 0:29:21.080
+In the first phase of my project, how many, let's say, gigabytes of data I would have?
+
+421
+0:29:21.080 --> 0:29:24.800
+And based on that, you determine how many initial set of charts do you put.
+
+422
+0:29:24.800 --> 0:29:29.320
+And if those charts still have a lot of data, then you consider partitioning the index.
+
+423
+0:29:29.320 --> 0:29:33.200
+So it's a matter of upfront planning to determine that.
+
+424
+0:29:33.200 --> 0:29:35.200
+Okay.
+
+425
+0:29:35.200 --> 0:29:36.200
+Yeah.
+
+426
+0:29:36.200 --> 0:29:41.440
+What structure is used for indexes and data?
+
+427
+0:29:41.440 --> 0:29:42.440
+It's inverted index.
+
+428
+0:29:42.440 --> 0:29:43.440
+This is data structure.
+
+429
+0:29:43.440 --> 0:29:44.440
+Yeah.
+
+430
+0:29:44.440 --> 0:29:45.440
+Inverted index.
+
+431
+0:29:45.440 --> 0:29:52.280
+It's just called an inverted index because it's an upper between terms.
+
+432
+0:29:52.280 --> 0:29:56.360
+And for each term, you have a pointer to the document that contains that term.
+
+433
+0:29:56.360 --> 0:29:57.880
+So it's called inverted index.
+
+434
+0:29:57.880 --> 0:29:58.880
+Yeah.
+
+435
+0:29:58.880 --> 0:29:59.880
+Okay.
+
+436
+0:29:59.880 --> 0:30:00.880
+Okay.
+
+437
+0:30:00.880 --> 0:30:01.880
+Okay.
+
+438
+0:30:01.880 --> 0:30:02.880
+Okay.
+
+439
+0:30:02.880 --> 0:30:03.880
+Okay.
+
+440
+0:30:03.880 --> 0:30:04.880
+Okay.
+
+441
+0:30:04.880 --> 0:30:05.880
+Okay.
+
+442
+0:30:05.880 --> 0:30:06.880
+Okay.
+
+443
+0:30:06.880 --> 0:30:07.880
+Okay.
+
+444
+0:30:07.880 --> 0:30:08.880
+Okay.
+
+445
+0:30:08.880 --> 0:30:09.880
+Okay.
+
+446
+0:30:09.880 --> 0:30:10.880
+Okay.
+

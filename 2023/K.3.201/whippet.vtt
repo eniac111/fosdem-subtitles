@@ -1,0 +1,1234 @@
+WEBVTT
+
+00:00.000 --> 00:07.000
+Okay, we are recording.
+
+00:07.000 --> 00:09.000
+Yeah?
+
+00:09.000 --> 00:13.000
+All right.
+
+00:13.000 --> 00:16.000
+All right.
+
+00:16.000 --> 00:20.000
+We're starting.
+
+00:20.000 --> 00:25.000
+My name is Andy and I'm here to say we're talking garbage collectors in a really great way.
+
+00:25.000 --> 00:30.000
+Anyway, this is my talk about WIPIT, which is a new garbage collector for a guile.
+
+00:30.000 --> 00:33.000
+So guile is an imitation scheme, as most people know.
+
+00:33.000 --> 00:37.000
+But if you looked at it and, like, you know, you tried to determine its composition,
+
+00:37.000 --> 00:41.000
+you would notice that there's a big C library that's part of it.
+
+00:41.000 --> 00:43.000
+And it has an API.
+
+00:43.000 --> 00:47.000
+Like we show, like there is a cons function, which is defined as like cons,
+
+00:47.000 --> 00:50.000
+and it takes some arguments and it returns a value.
+
+00:50.000 --> 00:55.000
+And there's a lot of code inside guile that uses this API and a lot of code and external projects
+
+00:55.000 --> 00:58.000
+and files that also use this API.
+
+00:58.000 --> 01:03.000
+So it's exposed to third-party users.
+
+01:03.000 --> 01:07.000
+And guile is a garbage collected language.
+
+01:07.000 --> 01:13.000
+Data is allocated by the garbage collector, and the garbage collector takes responsibility for freeing it.
+
+01:13.000 --> 01:15.000
+And how is this going to work?
+
+01:15.000 --> 01:17.000
+So let's say I cons a value.
+
+01:17.000 --> 01:18.000
+I'm making a new object.
+
+01:18.000 --> 01:21.000
+I need to include it in the set of live data, right?
+
+01:21.000 --> 01:23.000
+So what's a live object?
+
+01:23.000 --> 01:27.000
+A live object is one of the roots or anything referred to by a live object.
+
+01:27.000 --> 01:29.000
+So it's a circular definition.
+
+01:29.000 --> 01:33.000
+You compute the fixed point of this computation.
+
+01:33.000 --> 01:36.000
+And how are we going to do this?
+
+01:36.000 --> 01:38.000
+I'm sorry. I'm getting on to the next slide.
+
+01:38.000 --> 01:40.000
+So there are actually three strategies we can use here.
+
+01:40.000 --> 01:43.000
+One, we can ref count values.
+
+01:43.000 --> 01:47.000
+And, you know, we used to laugh at this, but it's coming back into style, actually.
+
+01:47.000 --> 01:52.000
+Another, you could register the location of this value with the runtime
+
+01:52.000 --> 01:56.000
+and unregister it at some point when it goes out of scope.
+
+01:56.000 --> 02:02.000
+And another way we could find this value would be what is called conservative root scanning.
+
+02:02.000 --> 02:06.000
+And that's what guile has done for many, many years now.
+
+02:06.000 --> 02:11.000
+And the idea, I don't know, if this is the first time you're hearing this, this is going to be wild.
+
+02:11.000 --> 02:16.000
+You know, your brain is just going to go, whoosh, because you take the stack, right, the machine stack,
+
+02:16.000 --> 02:19.000
+and you treat every word on it as if, like, it's an integer, you know,
+
+02:19.000 --> 02:23.000
+but if it's an integer, which is within the range of the objects managed by the heap,
+
+02:23.000 --> 02:27.000
+then we consider this maybe a pointer, and then we keep those objects alive.
+
+02:27.000 --> 02:32.000
+So it's conservative in the sense that it doesn't compute the minimal set of live objects.
+
+02:32.000 --> 02:35.000
+It's an over approximation of the live objects.
+
+02:35.000 --> 02:37.000
+It seems to work, though, historically.
+
+02:37.000 --> 02:39.000
+It's not one of those things you have guarantees on.
+
+02:39.000 --> 02:41.000
+It's very strange.
+
+02:41.000 --> 02:44.000
+And guile's very old, 30 years old, I think, today.
+
+02:44.000 --> 02:48.000
+Or not today, but like this year, I think, something like that.
+
+02:48.000 --> 02:51.000
+We're getting older also.
+
+02:51.000 --> 02:55.000
+And since its very beginning, it had a custom GC,
+
+02:55.000 --> 02:59.000
+which we inherited from a previous limitation that guile was based on, SCM.
+
+02:59.000 --> 03:03.000
+And then in the mid-2000s, we added support for proper P threads.
+
+03:03.000 --> 03:05.000
+We had other things before.
+
+03:05.000 --> 03:09.000
+It was a kind of buggy time because threads and garbage collectors,
+
+03:09.000 --> 03:13.000
+it's a very tricky thing to get right, and if you just haphazardly add them together
+
+03:13.000 --> 03:15.000
+without understanding what you're doing, you can make some bugs.
+
+03:15.000 --> 03:20.000
+When we switched to a third-party collector called the Bohum-Demers-Wiser collector,
+
+03:20.000 --> 03:24.000
+I should have spelled it out here, a lot of these bugs went away, actually,
+
+03:24.000 --> 03:28.000
+because it takes threads more into account.
+
+03:28.000 --> 03:30.000
+It's better designed in some ways.
+
+03:30.000 --> 03:34.000
+And a nice thing when we switched to the Bohum collector is it scans not only stacks,
+
+03:34.000 --> 03:38.000
+but also static data segments, P thread keys.
+
+03:38.000 --> 03:41.000
+It tries to find all the routes that it might possibly find.
+
+03:41.000 --> 03:46.000
+It grovels your system for special magic integers.
+
+03:46.000 --> 03:49.000
+And actually, with conservative collection, there are some advantages,
+
+03:49.000 --> 03:51.000
+and some real advantages.
+
+03:51.000 --> 03:54.000
+It is very nice to program with a conservative garbage collector.
+
+03:54.000 --> 03:56.000
+I work on web browsers.
+
+03:56.000 --> 04:00.000
+They all have, well, two of the three major ones have precise routes,
+
+04:00.000 --> 04:02.000
+and it's a pain getting the handles right.
+
+04:02.000 --> 04:06.000
+And I've had bugs, you know, where you forget to register the location of a value,
+
+04:06.000 --> 04:08.000
+and everything blows up, but only sometimes.
+
+04:08.000 --> 04:10.000
+It depends on when the garbage collector runs.
+
+04:10.000 --> 04:14.000
+And it doesn't constrain the compiler, because the compiler doesn't have to keep track.
+
+04:14.000 --> 04:20.000
+You don't have to make the compiler tell the system about where the values are.
+
+04:20.000 --> 04:22.000
+And, yeah.
+
+04:22.000 --> 04:25.000
+But on the other side, you might leak values.
+
+04:25.000 --> 04:28.000
+We don't know to what extent this is a thing.
+
+04:28.000 --> 04:31.000
+It appears to be fine in practice.
+
+04:31.000 --> 04:33.000
+We actually don't have a lot of data there.
+
+04:33.000 --> 04:38.000
+With the advent of 64-bit address spaces, I think it is less of a problem, though.
+
+04:38.000 --> 04:41.000
+Another issue is we can't move values.
+
+04:41.000 --> 04:46.000
+If any integer that we ever find during the whole trace of the heap
+
+04:46.000 --> 04:50.000
+might be a pointer to a value, we can never compact the heap.
+
+04:50.000 --> 04:56.000
+And this is actually a real limitation for us,
+
+04:56.000 --> 05:02.000
+in the sense that we can't use some of the newer, better-performing garbage collecting algorithms.
+
+05:02.000 --> 05:09.000
+And as a technical constraint, it also constrains the garbage collector from changing.
+
+05:09.000 --> 05:12.000
+It's very difficult to change to one of those garbage collector algorithms now,
+
+05:12.000 --> 05:16.000
+because we have so much user code, we have so much implementation, it will be hard.
+
+05:16.000 --> 05:19.000
+But what have I told you?
+
+05:19.000 --> 05:21.000
+There is actually a better way.
+
+05:21.000 --> 05:23.000
+Because we thought we were at a local maximum.
+
+05:23.000 --> 05:27.000
+We couldn't get any better without getting worse for a while.
+
+05:27.000 --> 05:31.000
+We wouldn't reach that mountain top without having to descend into the valley.
+
+05:31.000 --> 05:38.000
+But it turns out that you can have conservative roots and move objects and compact the heap.
+
+05:38.000 --> 05:43.000
+You can have conservative roots and do bump pointer allocation,
+
+05:43.000 --> 05:44.000
+which we'll get to in a minute.
+
+05:44.000 --> 05:50.000
+And you can have conservative roots and eventually, possibly, add more precision to your scan.
+
+05:50.000 --> 05:55.000
+And the thing that came along that allowed me to know this was something called IMIX.
+
+05:55.000 --> 06:01.000
+This is a paper that was published in 2008 by Steve Blackburn, his group.
+
+06:01.000 --> 06:09.000
+And it is a new... well, he characterizes in that paper a new class of fundamental GC algorithms.
+
+06:09.000 --> 06:14.000
+So you have basically four things you can do when you're doing a GC.
+
+06:14.000 --> 06:18.000
+You can have what's called Mark-compact, meaning find the live objects,
+
+06:18.000 --> 06:21.000
+and then slide them all to one side of the same space.
+
+06:21.000 --> 06:25.000
+So within the space that you found the objects in, you slide them all to one side.
+
+06:25.000 --> 06:31.000
+You have Mark-sweep, find all the objects, and then collect all the holes into...
+
+06:31.000 --> 06:34.000
+These are the holes that are two words long, these are the holes that are three words long,
+
+06:34.000 --> 06:35.000
+these are the holes... like that.
+
+06:35.000 --> 06:37.000
+Into free lists, is what it's called.
+
+06:37.000 --> 06:39.000
+You sweep to a free list, Mark-sweep.
+
+06:39.000 --> 06:44.000
+Evacuation, find all the live objects, and as you find them, you copy them somewhere else.
+
+06:44.000 --> 06:48.000
+So instead of sliding to part of one space, you get them out of the space entirely.
+
+06:48.000 --> 06:54.000
+And that's a semi-space, for example, that's a number of different Java collection algorithms.
+
+06:54.000 --> 06:57.000
+And this other new algorithm is Mark-region.
+
+06:57.000 --> 07:01.000
+Find all the holes and bump-pointer allocate into them.
+
+07:01.000 --> 07:05.000
+As you allocate, you sort of sweep across the space,
+
+07:05.000 --> 07:09.000
+and you allocate in a bump-pointer fashion into this hole, and then to that hole,
+
+07:09.000 --> 07:12.000
+and then to that hole, instead of collecting free lists.
+
+07:12.000 --> 07:14.000
+And Imix is one of these new kind of collectors.
+
+07:14.000 --> 07:18.000
+This is a diagram from the paper, the 2008 paper.
+
+07:18.000 --> 07:22.000
+Imix organizes the heap into blocks and lines.
+
+07:22.000 --> 07:27.000
+Blocks are about 64 kilobytes in size, should be a multiple of the page size.
+
+07:27.000 --> 07:31.000
+And lines for Imix are 128 bytes.
+
+07:31.000 --> 07:38.000
+And as you allocate, here in this diagram we can see that there are some blocks that are all full.
+
+07:38.000 --> 07:40.000
+Full block, we don't have to do anything about it.
+
+07:40.000 --> 07:44.000
+There are some blocks that have some lines which were marked in the previous collection,
+
+07:44.000 --> 07:48.000
+and some lines that were not marked in the previous collection.
+
+07:48.000 --> 07:51.000
+The lines that are not marked, a set of contiguous lines, is a hole.
+
+07:51.000 --> 07:53.000
+You can bump-pointer allocate into the holes.
+
+07:53.000 --> 07:58.000
+Objects can be part of a line, in which case maybe many objects fit in a line.
+
+07:58.000 --> 08:01.000
+They can span multiple lines, but they can't span blocks.
+
+08:01.000 --> 08:05.000
+When you allocate, you bump-pointer allocate,
+
+08:05.000 --> 08:09.000
+and you sweep through all the blocks in the system in the course of that GC cycle.
+
+08:09.000 --> 08:14.000
+When you trace, you mark objects in the same way as a mark sweep collector.
+
+08:14.000 --> 08:18.000
+So there's a marked bit associated with every object, possibly in the object's header,
+
+08:18.000 --> 08:19.000
+possibly in a side table.
+
+08:19.000 --> 08:24.000
+But as you mark them, you also mark lines, the lines that they're on, using address math.
+
+08:24.000 --> 08:30.000
+Typically the way this is embedded is all these blocks are allocated as part of a line,
+
+08:30.000 --> 08:35.000
+two megabyte slabs, basically, and you can use address arithmetic
+
+08:35.000 --> 08:39.000
+to get to a side table of marked bytes for the line.
+
+08:39.000 --> 08:44.000
+And when you sweep, you do, at the end of collection,
+
+08:44.000 --> 08:49.000
+it's an eager sweep over all of the line marked bytes,
+
+08:49.000 --> 08:52.000
+so the contiguous array of marked bytes for lines,
+
+08:52.000 --> 08:56.000
+to identify which blocks are full, which are completely empty,
+
+08:56.000 --> 08:59.000
+and which are recycled, containing some old data,
+
+08:59.000 --> 09:02.000
+and those you would bump-pointer allocate into the holes.
+
+09:02.000 --> 09:09.000
+Right. And the cool thing about it is that iMIX does opportunistic evacuation,
+
+09:09.000 --> 09:12.000
+so it's not simply leaving these objects in place.
+
+09:12.000 --> 09:15.000
+If it determines that your system needs to be defragmented,
+
+09:15.000 --> 09:19.000
+then it can choose some set of blocks to evacuate,
+
+09:19.000 --> 09:23.000
+and choose some other set of blocks which are already empty to be evacuation targets.
+
+09:23.000 --> 09:26.000
+So it's still a one-pass algorithm over the heap,
+
+09:26.000 --> 09:30.000
+but instead of marking objects in place, it tries to put them into an empty block.
+
+09:30.000 --> 09:34.000
+And if you do this a couple times, you'll completely defragment the heap.
+
+09:34.000 --> 09:42.000
+And it can fail because parallel markers and ordering and alignment issues,
+
+09:42.000 --> 09:46.000
+and that's okay if the evacuation fails, you just mark in place.
+
+09:46.000 --> 09:50.000
+It's always okay to mark in place, and it's always okay to try to evacuate.
+
+09:50.000 --> 09:53.000
+Evacuation may or may not succeed.
+
+09:53.000 --> 09:57.000
+So, when I realize this, that you can mark in place or evacuate,
+
+09:57.000 --> 10:00.000
+this is something that is compatible with Guile.
+
+10:00.000 --> 10:05.000
+We can do bump-point allocation now instead of allocating from free lists,
+
+10:05.000 --> 10:08.000
+which would improve throughput in Guile programs.
+
+10:08.000 --> 10:14.000
+We can compact the heap, which is, I mean, I know there are many Gix users here,
+
+10:14.000 --> 10:20.000
+and python-xyz.scm is one of the files you have. Yes.
+
+10:20.000 --> 10:22.000
+I say no more.
+
+10:22.000 --> 10:27.000
+So, I started a year on this, on this work-in-progress WIP GC implementation.
+
+10:27.000 --> 10:29.000
+Hence where the name comes from.
+
+10:29.000 --> 10:31.000
+There are a couple differences from Imx.
+
+10:31.000 --> 10:37.000
+Imx has these 128-byte lines, and if just one object on a line is left over,
+
+10:37.000 --> 10:40.000
+then the line is kept live, right?
+
+10:40.000 --> 10:46.000
+In the next collection, nobody will allocate, nobody will put an object in that line.
+
+10:46.000 --> 10:49.000
+It's not a hole, basically.
+
+10:49.000 --> 10:52.000
+And for various reasons, I didn't make sense to me.
+
+10:52.000 --> 10:56.000
+So, instead in WIP it, we have 16-byte lines.
+
+10:56.000 --> 11:01.000
+So, effectively, the line mark table is the object mark table.
+
+11:01.000 --> 11:04.000
+You only have one mark byte.
+
+11:04.000 --> 11:07.000
+It's a byte because of parallel markers.
+
+11:07.000 --> 11:10.000
+And it's a bit more overhead in terms of space,
+
+11:10.000 --> 11:13.000
+but maybe it's a bit more parsimonious with memory.
+
+11:13.000 --> 11:17.000
+Well, we'll see how it works out. It's an open question here.
+
+11:17.000 --> 11:22.000
+And additionally, with these line mark bytes being more fine-grained,
+
+11:22.000 --> 11:25.000
+it's a lose to do an eager sweep over the heap, so we do lazy sweeping.
+
+11:25.000 --> 11:29.000
+So, as you allocate, you just sweep one block, and then sweep another block,
+
+11:29.000 --> 11:31.000
+and then sweep another block like that.
+
+11:31.000 --> 11:34.000
+And the good thing about that is it parallelizes things.
+
+11:34.000 --> 11:38.000
+The bad thing is that you don't know how much data was live at the previous collection
+
+11:38.000 --> 11:41.000
+right after your collection because you haven't swept yet.
+
+11:41.000 --> 11:43.000
+Yeah, okay.
+
+11:43.000 --> 11:47.000
+So, some comparisons with WIP it compared to the bone collector.
+
+11:47.000 --> 11:50.000
+And there are a number of different points here.
+
+11:50.000 --> 11:52.000
+So, one of them is you can move values.
+
+11:52.000 --> 11:58.000
+If every edge in your graph is potentially conservative,
+
+11:58.000 --> 12:04.000
+then you can't move anything because you could find an edge that keeps an object live
+
+12:04.000 --> 12:07.000
+and doesn't allow moving late in the trace.
+
+12:07.000 --> 12:10.000
+But if you can partition your edges into a set that's conservative
+
+12:10.000 --> 12:12.000
+and a set that's not conservative, a set that's precise,
+
+12:12.000 --> 12:14.000
+you do the conservative ones first,
+
+12:14.000 --> 12:18.000
+and any object which isn't reached in that conservative trace is then movable.
+
+12:18.000 --> 12:21.000
+So, what happens is you mark the stack first, and you mark in place.
+
+12:21.000 --> 12:22.000
+You don't evacuate.
+
+12:22.000 --> 12:25.000
+That is an implicit pin on every object that you mark.
+
+12:25.000 --> 12:27.000
+And then you go and you mark the heap.
+
+12:27.000 --> 12:32.000
+And if you find another object there, you can evacuate at that point.
+
+12:32.000 --> 12:35.000
+And then in WIP it, if we see that the heap is fragmented,
+
+12:35.000 --> 12:38.000
+we can turn evacuation on.
+
+12:38.000 --> 12:40.000
+And if we see the heap is not fragmented,
+
+12:40.000 --> 12:47.000
+we can always mark in place and not incur the overhead of copying.
+
+12:47.000 --> 12:51.000
+There is also explicit pinning for various reasons.
+
+12:51.000 --> 12:58.000
+We can shrink the heap, which is nice because these blocks are multiples of the OS page size.
+
+12:58.000 --> 13:03.000
+They're easy to return to the OS whenever we find that a block is empty.
+
+13:03.000 --> 13:08.000
+And you can just mark it as being empty and m-advised, mav don't need it.
+
+13:08.000 --> 13:10.000
+And if you ever need it again, you can pull it right back in.
+
+13:10.000 --> 13:13.000
+It's zeroed by the OS.
+
+13:13.000 --> 13:20.000
+And additionally, there's a possibility to use adaptive heap sizing techniques,
+
+13:20.000 --> 13:22.000
+such as the one that I link here.
+
+13:22.000 --> 13:28.000
+It's an online algorithm that depends on what's your current cost of GC
+
+13:28.000 --> 13:30.000
+and how fast are you allocating.
+
+13:30.000 --> 13:32.000
+So, a process which sort of stops and goes quiet,
+
+13:32.000 --> 13:35.000
+gets its memory slowly reduced to the minimum.
+
+13:35.000 --> 13:37.000
+You can fit more on a system.
+
+13:37.000 --> 13:41.000
+And we can also do generational collection if we want to,
+
+13:41.000 --> 13:44.000
+using the sticky mark byte algorithm, which I link to here.
+
+13:44.000 --> 13:48.000
+It's described more in that post.
+
+13:48.000 --> 13:52.000
+For some programs, it doesn't make a difference because some data isn't very generation friendly.
+
+13:52.000 --> 13:56.000
+This is the case of the first MTGC bench pair over there,
+
+13:56.000 --> 14:01.000
+where the first bar is whip it without generational collection and the second is width.
+
+14:01.000 --> 14:06.000
+But in some cases, it's very effective, like in this, I'm making a bunch of quad trees.
+
+14:06.000 --> 14:12.000
+And it pretty much doubles the throughput of the system.
+
+14:12.000 --> 14:17.000
+Additionally, with whip it, we scale a lot better for multiple allocator threads.
+
+14:17.000 --> 14:23.000
+In BDW, you have the size segregated free lists, the free lists of size two, three, four,
+
+14:23.000 --> 14:25.000
+and that sort of thing.
+
+14:25.000 --> 14:29.000
+And you need to lock the heap to sweep and find more and fill those free lists.
+
+14:29.000 --> 14:35.000
+In whip it, you use uncontended atomic ops to obtain the next block,
+
+14:35.000 --> 14:40.000
+just basically incrementing a counter because the blocks are contiguous in these two megabyte slabs.
+
+14:40.000 --> 14:44.000
+And you sweep without contention.
+
+14:44.000 --> 14:51.000
+So these are two graphs showing the time it takes as problem size increases and number of mutator threads increases.
+
+14:51.000 --> 14:59.000
+So at each step, I'm adding on an additional mutator, an additional thread, doing the same amount of work.
+
+14:59.000 --> 15:03.000
+So with two mutator threads, the heap is twice as big as it was with one.
+
+15:03.000 --> 15:06.000
+And with eight, it's eight times as big as it was with one.
+
+15:06.000 --> 15:08.000
+So we do expect to see some increase.
+
+15:08.000 --> 15:14.000
+What we see is that BDW takes more time.
+
+15:14.000 --> 15:20.000
+Ultimately, it's at nine seconds with an eight thread mutator, whereas we're only at three and a half with whip it.
+
+15:20.000 --> 15:22.000
+It scales much better when you're adding allocators.
+
+15:22.000 --> 15:24.000
+And this is with a single marker thread.
+
+15:24.000 --> 15:30.000
+So we expect to see some increase as the problem size gets larger.
+
+15:30.000 --> 15:33.000
+This is what do you call that?
+
+15:33.000 --> 15:41.000
+It's like when you make a quilt, apparently you're supposed to put a part in it that's incorrect because you don't want to show too much pride in the face of God.
+
+15:41.000 --> 15:43.000
+It's like a touch of the hand sort of thing.
+
+15:43.000 --> 15:49.000
+This is my humility slide showing whip it being slower than BDWGC on this one machine.
+
+15:49.000 --> 15:52.000
+I have no idea what's going on with this because I remeasured it on my other machine.
+
+15:52.000 --> 15:54.000
+It looks much better.
+
+15:54.000 --> 16:01.000
+It does point that like as you add on marker threads things things improve, although I don't understand the relative BDW whip it thing right there.
+
+16:01.000 --> 16:03.000
+So that's a question.
+
+16:03.000 --> 16:12.000
+So with with the heap with a with twice as much memory as the problem takes as we add markers, things get better for both BDW and whip it.
+
+16:12.000 --> 16:15.000
+But a little bit better for with it.
+
+16:15.000 --> 16:17.000
+Right. So ephemerons.
+
+16:17.000 --> 16:18.000
+This is weak maps.
+
+16:18.000 --> 16:24.000
+And like you have in JavaScript where you have like keys associated with value. But what value references key.
+
+16:24.000 --> 16:25.000
+I think you have a circular reference.
+
+16:25.000 --> 16:30.000
+Like could the could the weak reference to the does it leak memory?
+
+16:30.000 --> 16:32.000
+I don't know. You people have heard about ephemerons.
+
+16:32.000 --> 16:36.000
+I would imagine you cannot do them in the boom collector.
+
+16:36.000 --> 16:37.000
+It's impossible.
+
+16:37.000 --> 16:38.000
+Right.
+
+16:38.000 --> 16:40.000
+I've tried a lot and thought about this.
+
+16:40.000 --> 16:41.000
+But with it we have them.
+
+16:41.000 --> 16:45.000
+You really need deep GC integration to implement ephemerons.
+
+16:45.000 --> 16:47.000
+Right. And precision.
+
+16:47.000 --> 16:49.000
+So with B.D.W. you're always that conservative.
+
+16:49.000 --> 16:55.000
+You're always getting the heap the stack for smelly pointers.
+
+16:55.000 --> 16:56.000
+Right.
+
+16:56.000 --> 16:57.000
+Smelly integers.
+
+16:57.000 --> 16:59.000
+Integers that could point to the heap.
+
+16:59.000 --> 17:05.000
+And it's often configured in such a way that every edge on the heap also is is conservative.
+
+17:05.000 --> 17:08.000
+And with whip it we can configure it in a number of different ways.
+
+17:08.000 --> 17:16.000
+And probably we're heading down in the mid near term is this conservative scan of the C stack precise scan of the scheme stack.
+
+17:16.000 --> 17:19.000
+And a precise scan of the heap.
+
+17:19.000 --> 17:22.000
+So we will be able to get the advantages of motion compaction all that.
+
+17:22.000 --> 17:26.000
+But we could move to a fully precise stack as well.
+
+17:26.000 --> 17:28.000
+And potentially things get better.
+
+17:28.000 --> 17:30.000
+B.D.W. GC is terrible to hack on.
+
+17:30.000 --> 17:35.000
+I just counted it's like 15 or 16 percent CP processor directives.
+
+17:35.000 --> 17:39.000
+You can imagine it's probably 90 percent of the code is covered by if def.
+
+17:39.000 --> 17:41.000
+It's really really hard.
+
+17:41.000 --> 17:48.000
+Right. So some some more words about how it is that we are we are royal we.
+
+17:48.000 --> 17:51.000
+OK.
+
+17:51.000 --> 17:58.000
+Working on getting whip it implemented in such a way that it could land in guile and not break the world.
+
+17:58.000 --> 18:02.000
+Because.
+
+18:02.000 --> 18:05.000
+I'm going to make a confession.
+
+18:05.000 --> 18:08.000
+I don't maintain software.
+
+18:08.000 --> 18:10.000
+I develop software.
+
+18:10.000 --> 18:12.000
+And I throw it over the wall and I forget about it.
+
+18:12.000 --> 18:20.000
+So if I'm going to get bugs in the garbage collector that's not a better not start because you know I'm not going to fix them.
+
+18:20.000 --> 18:34.000
+So so the repositories here it is designed to be an embed only library kind of like an include style library but you can actually do separate compilation.
+
+18:34.000 --> 18:43.000
+But it's something that you include in your source tree because it needs to be specialized with respect to the program that's using it in the case of guile.
+
+18:43.000 --> 18:52.000
+And I will tell whip it how to put a forwarding pointer in an object for example how to do a precise trace of the heap.
+
+18:52.000 --> 18:57.000
+And then we also specify whip it with respect to the domain.
+
+18:57.000 --> 19:03.000
+So what should we scan conservatively what should we scan precisely that sort of thing.
+
+19:03.000 --> 19:06.000
+There is.
+
+19:06.000 --> 19:12.000
+We use LTO and it appears to remove the overhead of the separate compilation.
+
+19:12.000 --> 19:14.000
+Link time optimization.
+
+19:14.000 --> 19:20.000
+I'm actually expecting LTO for that that other graph that I showed you but.
+
+19:20.000 --> 19:29.000
+So we we actually managed to get performance and abstraction at the same time by being inspired by MMTK and the case of memory management toolkit.
+
+19:29.000 --> 19:39.000
+It's fantastic. It's a library of garbage collectors and technique and experience and knowledge currently written in Rust.
+
+19:39.000 --> 19:49.000
+Formally part of the Jikes research JVM but now retargeting to open JDK and V8 and a number of other systems.
+
+19:49.000 --> 19:53.000
+We could actually slot this in the guile if we wanted to at some point.
+
+19:53.000 --> 20:05.000
+But we have enough information exposed in the API to allow a jet to use that exposed information and generate machine code for the fast path for allocation for example.
+
+20:05.000 --> 20:14.000
+And by having like a real abstract barrier between the two sides we allow both sides to evolve at their own pace.
+
+20:14.000 --> 20:20.000
+And when we think about migrating guile to whip it which is kind of where I want to go here.
+
+20:20.000 --> 20:27.000
+I know in the top description it kind of oversold the item right is like now we have a new production garbage collector in God.
+
+20:27.000 --> 20:29.000
+It's not there yet.
+
+20:29.000 --> 20:36.000
+So this abstract API can be implemented by the current garbage collector being used by God by the bone collector by the BDW collector.
+
+20:36.000 --> 20:43.000
+And so that's going to be the first step is to switch guile over to use the new API but still use the old collector implementation.
+
+20:43.000 --> 20:49.000
+And then we can look at switching to whip it but that wouldn't require any code changes ideally in God.
+
+20:49.000 --> 20:58.000
+I mean so you have the whip it API but then you have the whip it garbage implementation algorithm we were talking about.
+
+20:58.000 --> 21:06.000
+There are a lot of variants on the algorithm incidentally that you can these are different ways you can configure with it on two different tests.
+
+21:06.000 --> 21:13.000
+One there's an MTGC bench when there's there's quads here and going across we can first see serial with it.
+
+21:13.000 --> 21:21.000
+One marker one marking thread it's not it's not going to be parallel marking. That's the first light blue bar in both of those sides.
+
+21:21.000 --> 21:27.000
+And then we have parallel whip it for markers in this case is what I was measuring.
+
+21:27.000 --> 21:39.000
+It improves things in some cases a little bit in other cases minor improvements generational whip it collect more recently allocate objects more frequently than older objects.
+
+21:39.000 --> 21:50.000
+Parallel generational whip it for markers and generational and then after that there's four more bars which are the same thing but collecting stack roots conservatively.
+
+21:50.000 --> 22:01.000
+The previous one is a precise scan of the stack previous four bars and then the next four bars are conservative scan and as you'll note it actually performs better.
+
+22:01.000 --> 22:04.000
+And there are two reasons for this.
+
+22:04.000 --> 22:17.000
+One conservative scanning can actually reduce the lifetime of objects if the compiler determines that an object isn't needed at any given point they can reuse its register stack slot or what have you.
+
+22:17.000 --> 22:24.000
+Whereas you have to wait for the unregistered part of a registration deregistration API if you're using precise roots.
+
+22:24.000 --> 22:34.000
+And the other thing is that when using this API from C I don't actually have cooperation from the compiler where it's going to write out a table of where all the values are.
+
+22:34.000 --> 22:41.000
+I have to explicitly say and now remember this one. OK now forget it and now remember this one and now forget it and that's overhead right.
+
+22:41.000 --> 22:46.000
+And by doing a conservative scan I remove that overhead.
+
+22:46.000 --> 22:53.000
+And then the final two bars I didn't include generational because it doesn't really make sense in this context is a fully conservative scan.
+
+22:53.000 --> 23:03.000
+We increase a lot on this empty G.C. benchmark because there's it allocates a very big array and I don't have the equivalent of pointless allocation that the B.D.W. API gives you.
+
+23:03.000 --> 23:13.000
+So we end up tracing all the elements of that really big array which gives a big spike over there in the case of quads we never have large objects were always tracing everything anyway and it doesn't really matter.
+
+23:13.000 --> 23:18.000
+But he conservative does slow you down relative to just having stack conservative.
+
+23:18.000 --> 23:34.000
+Right. And then as a project it's written C which I know is a sin. But you know guile has this sort of odd place in the supply chain of geeks and it's useful to depend on a more minimal set of things rather than using rust for example.
+
+23:34.000 --> 23:45.000
+But it's a relatively modern C you know uses state atomic it uses things in a way that are context expert ish in the way that you know that the compiler the compiler is going to reduce them down.
+
+23:45.000 --> 24:01.000
+It avoids void pointers completely using instead structs containing a single member which gets boiled away by the compiler as well which can't be cast to each other you need explicit conversions that way you won't confuse a conservative reference with a precise reference and things like that.
+
+24:01.000 --> 24:06.000
+And we don't actually have any API API or API concern at all because it's an embed only library.
+
+24:06.000 --> 24:16.000
+If something breaks don't update it. And it does have a bit of an abstraction for how do you find conservative roots on whatever your platform is.
+
+24:16.000 --> 24:18.000
+It's not so bad it turns out.
+
+24:18.000 --> 24:28.000
+So if we think about when it is that this might reach Kyle then we are it is when we can write you know in the end.
+
+24:28.000 --> 24:36.000
+This is kind of a side project for me. I have other side projects children you know so.
+
+24:36.000 --> 24:52.000
+So I can't really give a can really give a ETA here but I would mention that there are a few things to do and what we might end up with is that we could get a new release series for guy which is I think is what would be required for this.
+
+24:52.000 --> 25:05.000
+Maybe starting in six months or so just switching over to the API and staying with the bomb collector and maybe we could release a new stable version in another six months or realistically a bit more.
+
+25:05.000 --> 25:13.000
+But we'd have to do a few things for their whip it is done mostly with the exception of actually growing and shrieking the heap.
+
+25:13.000 --> 25:33.000
+Implementing finalizers and having a API for checking in with whip it checking in with the GC as to when a mutator should stop because that's one other thing that the BDW collector does is it uses signals to stop all the threads whereas whip it relies on periodic safe points.
+
+25:33.000 --> 25:42.000
+There are tradeoffs and golly would have to switch over to these say points I think it's possible and and I think we would start with a heap conservative whip it.
+
+25:42.000 --> 25:52.000
+Just because it's the same thing that we do in in what with the BDW collector and then we move over to a precise candidate heap.
+
+25:52.000 --> 25:58.000
+When we get to a precise candidate heap we have to implement a few things on the guy outside.
+
+25:58.000 --> 26:11.000
+There are some hazards about current uses of the API in particular if a third party user ever allocates an object and then stuffs something in it that gal doesn't know about.
+
+26:11.000 --> 26:28.000
+Is it an integer or is it a pointer to the heap and there are a couple of places that people can do that that are unclear and we can allow this if we want to trace the heap precisely and move objects.
+
+26:28.000 --> 26:43.000
+So this might require some small API changes and API breaks because it's a new series around this area it might be actually time to remove smobs entirely possibly.
+
+26:43.000 --> 26:47.000
+Yeah so that's what's actually pushing us to a new major release.
+
+26:47.000 --> 27:02.000
+So in summary whip it is a new GC replacement for BDW GC it has the potential to reach a new local maximum the better than BDW and I think we can get in gal 3.2.
+
+27:02.000 --> 27:14.000
+I would like to thank particularly the MMTK people for inspiration and discussions because it's been really helpful to be able to properly learn about garbage collection over the last year or so.
+
+27:14.000 --> 27:23.000
+I'll leave you with one slide when you evaluate a GC you need to do so with a space time diagram because GC is a function it's a trade off between space and time.
+
+27:23.000 --> 27:29.000
+So on the x axis you should have your heap size as a function of what is the minimum heap size.
+
+27:29.000 --> 27:37.000
+Here I measured some algorithms at 1.3x 1.5x 1.75x 2 2.5 3 4 5 and 6 or just a 5.
+
+27:37.000 --> 27:52.000
+I don't know on the y axis you should have whatever you're measuring being be it like instructions retired or you know wall clock time or memory or something like that because the heap size is one of the and the response to heap size is one of the fundamental trade offs in GC.
+
+27:52.000 --> 28:13.000
+Here we show that actually we show the BDW collector a semi space collector which is also implemented behind the whip it API and the whip it algorithm serial one marker one one mutator on this benchmark and we see performance as we as we change heap size whip it is the only one that gets to 1.3.
+
+28:13.000 --> 28:24.000
+This is a analytical calculation of how big the heap should be it's not measured as to how small I can get anything to run but it's like what I think the heap should take.
+
+28:24.000 --> 28:30.000
+So it might not precisely be one that three it might be one or you know it's a it's a number in that range.
+
+28:30.000 --> 28:38.000
+It can get to the smallest it takes a bit of effort to do so as as you become more parsimonious with your heap you end up tracing it more.
+
+28:38.000 --> 28:49.000
+So the curve goes up on that side but it's the only one that actually gets that X axis point of view and then it quickly passes and you want these these numbers to be low.
+
+28:49.000 --> 28:51.000
+That's what you want.
+
+28:51.000 --> 29:00.000
+It quickly passes BDW GC is only one point where it takes more time than BDW GC and and that's concerning I need to need to fix that one.
+
+29:00.000 --> 29:07.000
+Let me see the green line is a semi space collector semi space as you add memory it gets easier and easier and easier right because it depends only on the size of the heap.
+
+29:07.000 --> 29:13.000
+It's only on the size of the live data whereas WIPIT and BDW need to sweep the heap.
+
+29:13.000 --> 29:18.000
+So as you add memory it it sort of plateaus it doesn't keep on going down.
+
+29:18.000 --> 29:20.000
+I don't know why it goes up at the end.
+
+29:20.000 --> 29:25.000
+This is my other little touch the hand like I don't know what's this is that looks like a bug to me.
+
+29:25.000 --> 29:28.000
+So that's something to fix anyway.
+
+29:28.000 --> 29:29.000
+There's WIPIT.
+
+29:29.000 --> 29:36.000
+Thank you for enduring this blathering and good luck everybody in about 18 months and this starts rolling out to geeks.
+
+29:36.000 --> 29:41.000
+This shows because I won't be around.
+
+29:41.000 --> 29:50.000
+So I'll take any questions even.
+
+29:50.000 --> 29:51.000
+Even dumb questions.
+
+29:51.000 --> 29:53.000
+That's okay.
+
+29:53.000 --> 29:54.000
+Yes.
+
+29:54.000 --> 30:09.000
+It seems to me like conservative tax scanning is incompatible with address and either from.
+
+30:09.000 --> 30:17.000
+Oh, so the question is conservative tax scanning seems to be incompatible with address sanitizer from LVM GCC.
+
+30:17.000 --> 30:19.000
+I'm making fashion here.
+
+30:19.000 --> 30:23.000
+I'm a professional C++ developer and I work on web browsers.
+
+30:23.000 --> 30:26.000
+I don't know what address sanitizer does.
+
+30:26.000 --> 30:32.000
+You know I know it gives me bugs sometimes and tells me things that have to fix but I don't know what's going on there and I should know.
+
+30:32.000 --> 30:35.000
+Can you tell us like why is it incompatible.
+
+30:35.000 --> 30:41.000
+Every time you access something that wasn't registered properly.
+
+30:41.000 --> 30:54.000
+It tells you you're in the red zone or you're in something.
+
+30:54.000 --> 31:04.000
+So the answer was that it only signals warnings if you ever access a value after it's been freed.
+
+31:04.000 --> 31:05.000
+Is that right or.
+
+31:05.000 --> 31:09.000
+For example you are in a function and you access something that wasn't.
+
+31:09.000 --> 31:15.000
+I think it's actually not a problem because we're not we don't trigger the malic free detection at all.
+
+31:15.000 --> 31:25.000
+It's a complete third party allocators as if you map the page and we're just reading values from that page and so it doesn't trigger the particular logic there.
+
+31:25.000 --> 31:32.000
+Which also means you have no tool support right there is wild west and you know with the bugs that may go with it.
+
+31:32.000 --> 31:36.000
+So yeah I guess that's the answer there.
+
+31:36.000 --> 31:37.000
+Yes.
+
+31:37.000 --> 31:58.000
+Well this will affect geeks users in the sense that one I hope that when you rebuild the system geeks launches multiple threads to compile things and as we see there's contention and be w g c it doesn't actually scale very well as you add threads if you have an allocation heavy workload.
+
+31:58.000 --> 32:27.000
+And so I think that when girl incorporates with it geeks with multiple threads should scale better and it should we will be able to have better tooling for how understanding the heap and heap usage and ideally be able to place ourselves better on the kind of space time trade off if you need more throughput give it a bigger heap also let it shrink and that can affect also longer running demons like the shadows.
+
+32:27.000 --> 32:33.000
+Longer running demons like the shepherd and things like that so it should should yield a more robust system.
+
+32:33.000 --> 32:45.000
+Yes.
+
+32:45.000 --> 33:08.000
+There are actually 64 kilobyte blocks so I think I chose like the least common multiple or whatever it's it's configurable but I think the default size is such that they are large enough for any common architecture that the question was about page size is 16 kilobytes big enough for blocks but it's actually 64 kilobytes.
+
+33:08.000 --> 33:10.000
+Yes.
+
+33:10.000 --> 33:32.000
+Yeah, yeah, that's a very good question I didn't mention this so this is a stop the world collector is not a concurrent collector with the exception of threads mark their own stacks while other threads are running so there's a little bit of concurrency there.
+
+33:32.000 --> 33:40.000
+We may add concurrent marking at some point, but you need right barriers for that to work.
+
+33:40.000 --> 33:47.000
+And so that would be something to add once generational collection is working because you've proven that you have all the right barriers in the right place.
+
+33:47.000 --> 33:54.000
+Then right barriers is just like a little piece of code that runs when whenever you update a value in a whenever you store pointer.
+
+33:54.000 --> 34:11.000
+And if you write barriers can be used to indicate pointers from old objects to new objects helping you do generational collection. They can also be used to mark an object as being allocated after the concurrent marker has already marked it in that cycle.
+
+34:11.000 --> 34:23.000
+I'm not explaining myself very well, but basically need right barriers to be able to have to be able to minimize the stop the world component of the mark phase.
+
+34:23.000 --> 34:26.000
+Does that answer the question?
+
+34:26.000 --> 34:33.000
+Yes.
+
+34:33.000 --> 34:38.000
+Oh yeah, it's a good question. So there's a project to compile a Gauss WebAssembly.
+
+34:38.000 --> 34:53.000
+I think initially this will probably start by having a guy library produce WebAssembly that has its own runtime and this could grow to a whole program standalone compiler in which guy has a library.
+
+34:53.000 --> 35:06.000
+It takes your guy program and spits out a native binary. And in that case, that native binary would include whip it embedded in it instead of having that native binary then link to the B.W. collector.
+
+35:06.000 --> 35:12.000
+So the goal would be to produce one binary that it's all finished. Thank you. Thank you very much.

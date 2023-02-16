@@ -1,0 +1,1376 @@
+1
+0:00:00.000 --> 0:00:15.280
+Let's write in. We don't have much time. My name is Paul Mazurel. I go by the name of
+
+2
+0:00:15.280 --> 0:00:22.800
+Phil Micoton, on Mastonon, on Twitter. I've been a REST developer since 2016. I spent
+
+3
+0:00:22.800 --> 0:00:28.780
+most of my career as a third developer, so it was only natural for me as my first project
+
+4
+0:00:28.780 --> 0:00:33.600
+to develop a library to build search engines. So if you're familiar with Lucene, that's
+
+5
+0:00:33.600 --> 0:00:39.480
+kind of like Lucene, but for the rest of the world. That was my first pet project. It grew.
+
+6
+0:00:39.480 --> 0:00:49.160
+And two years ago, I co-founded a startup called QuickQuit that is about building a
+
+7
+0:00:49.160 --> 0:00:56.680
+search engine that is specialized for logs. But just a word about QuickQuit. I'm not here
+
+8
+0:00:56.680 --> 0:01:01.600
+to do an advertisement. It's not a commercial, but it's related to the talk, so I need to
+
+9
+0:01:01.600 --> 0:01:06.080
+explain to you what's the problem, which is the problem that we are trying to solve.
+
+10
+0:01:06.080 --> 0:01:12.320
+QuickQuit is a REST project. It's under the AGPL license. It's open source. You can find
+
+11
+0:01:12.320 --> 0:01:20.360
+the source code on GitHub. And so we specialize on log search. So what's specific about log
+
+12
+0:01:20.360 --> 0:01:26.840
+search compared to, let's say, an e-commerce search engine is that the data that we get
+
+13
+0:01:26.840 --> 0:01:32.680
+is more or less immutable. So we assume that people will want to ingest documents into
+
+14
+0:01:32.680 --> 0:01:39.680
+our search engine and won't modify it too much. So after ingestion, the document stays
+
+15
+0:01:39.680 --> 0:01:45.520
+there until it goes out of its retention period, at which point we will delete it. Or maybe
+
+16
+0:01:45.520 --> 0:01:51.960
+you might want to delete it if you have a request to comply to GDPR with hundreds of
+
+17
+0:01:51.960 --> 0:01:58.480
+kind of stuff, but you cannot modify it like you would do for an e-commerce website.
+
+18
+0:01:58.480 --> 0:02:04.720
+And so one of the big differences in terms of efficiency is that when you deal with log
+
+19
+0:02:04.720 --> 0:02:10.640
+search, the volume that you have to deal with has no limits. The scale is the limit. The
+
+20
+0:02:10.640 --> 0:02:18.520
+largest amount that we've seen so far is people indexing 100 terabytes a day. So that's the
+
+21
+0:02:18.520 --> 0:02:24.200
+volume of data. Imagine if it was actually generated not by machine, but by humans. You
+
+22
+0:02:24.200 --> 0:02:29.400
+will have to have a lot of people typing grief as to deal with that kind of volume. So that's
+
+23
+0:02:29.400 --> 0:02:35.720
+something that you will only get if you're doing log search. And compared to an e-commerce
+
+24
+0:02:35.720 --> 0:02:40.280
+website, most of the CPU is actually spent indexing and not searching because you have
+
+25
+0:02:40.280 --> 0:02:46.000
+comparatively way less search and way more documents. So indexing is actually crucial
+
+26
+0:02:46.000 --> 0:02:53.160
+to our problems, and that's very different from usual search engines.
+
+27
+0:02:53.160 --> 0:02:59.520
+Indexing, what does it look like? That's the point that we are trying to solve. Super oversimplified.
+
+28
+0:02:59.520 --> 0:03:04.440
+We get, as I input, a stream of documents. It's interesting to have another idea. For
+
+29
+0:03:04.440 --> 0:03:13.040
+one pipeline of indexing, we have to deal with around 40 megabytes per second. And as
+
+30
+0:03:13.040 --> 0:03:22.320
+an output, every 30 seconds we write a file. We put it somewhere. And usually we register
+
+31
+0:03:22.320 --> 0:03:33.680
+it on some metadata back end. And at this point, the file is searchable.
+
+32
+0:03:33.680 --> 0:03:38.640
+And the rules of the game here is we want to have the highest possible throughput. And
+
+33
+0:03:38.640 --> 0:03:44.880
+we want to keep what we call time to search as low as possible. So time to search is at
+
+34
+0:03:44.880 --> 0:03:52.160
+the moment when JSON file is entering the system, we start the clock and we measure
+
+35
+0:03:52.160 --> 0:03:56.160
+how long it takes for it to go out of the system in the form of one of those files at
+
+36
+0:03:56.160 --> 0:04:01.080
+which point it is searchable. We need that to be as low as possible. And we need, it's
+
+37
+0:04:01.080 --> 0:04:06.120
+very important to keep it very stable. We don't want to have like a period of time
+
+38
+0:04:06.120 --> 0:04:12.680
+where it goes through the roof. So that's the whole game.
+
+39
+0:04:12.680 --> 0:04:17.600
+And in that black box, we do a lot of stuff. It was very simple. I won't go through all
+
+40
+0:04:17.600 --> 0:04:23.560
+of the stuff that we do. But the important part here is every single of the steps is
+
+41
+0:04:23.560 --> 0:04:27.880
+using different resources. The time is spent on different stuff. So for instance, when
+
+42
+0:04:27.880 --> 0:04:33.280
+we index things, when we build our in-memory index, we are spending CPU. When we are writing
+
+43
+0:04:33.280 --> 0:04:38.320
+the file, we use IO. When we upload, we use network. And sometimes we are waiting for
+
+44
+0:04:38.320 --> 0:04:44.200
+something that is outside of the system. We spend no resource at all except we wait.
+
+45
+0:04:44.200 --> 0:04:49.760
+So you might think that, let me tell you, it's obvious. We have one function for all
+
+46
+0:04:49.760 --> 0:04:55.440
+of those steps and we call them sequentially. But if you do that, you are wasting the resources
+
+47
+0:04:55.440 --> 0:05:00.760
+of our system, of course. For instance, when you are uploading, you are spending your network
+
+48
+0:05:00.760 --> 0:05:07.200
+resource. But your CPU is not doing anything. So you're wasting money.
+
+49
+0:05:07.200 --> 0:05:12.040
+The solution to this problem is relatively simple. But it's not that simple to implement.
+
+50
+0:05:12.040 --> 0:05:16.640
+You want to streamline your pipeline. What I mean by streamlining in a very concrete
+
+51
+0:05:16.640 --> 0:05:25.920
+way is you might have two steps, like indexing, spending CPU, upload, spending network. They
+
+52
+0:05:25.920 --> 0:05:30.720
+go sequentially. But what you want is you want indexing to work on building the first
+
+53
+0:05:30.720 --> 0:05:36.200
+file. And when it has finished, you start uploading, of course. But as you upload, you
+
+54
+0:05:36.200 --> 0:05:41.760
+want to stop working on the second file so that you are spending CPU while you are doing
+
+55
+0:05:41.760 --> 0:05:47.720
+your network stuff. That's the kind of behavior that we want.
+
+56
+0:05:47.720 --> 0:05:51.080
+And of course, this example is a little bit too simple because the second step here is
+
+57
+0:05:51.080 --> 0:05:56.880
+shorter than the first one. It's a nice case. But if you don't see the other way around,
+
+58
+0:05:56.880 --> 0:06:04.480
+we would have to have some kind of mechanism to deal with, to have back pressure. And in
+
+59
+0:06:04.480 --> 0:06:08.400
+my experience, a lot of very good engineers are not familiar with the concept of back
+
+60
+0:06:08.400 --> 0:06:14.400
+pressure. So let me explain what it is about. If you already know what it is, bear with
+
+61
+0:06:14.400 --> 0:06:20.960
+me and enjoy the fine artworks that we have here.
+
+62
+0:06:20.960 --> 0:06:29.240
+So the idea of back pressure is imagine you are cleaning dishes with a friend. One of
+
+63
+0:06:29.240 --> 0:06:35.960
+you is cleaning the plates and the other one is wiping them dry. And the person wiping
+
+64
+0:06:35.960 --> 0:06:42.000
+the dishes dry is a little bit too slow compared to the person cleaning the dishes. What's
+
+65
+0:06:42.000 --> 0:06:47.640
+going to happen is that your plates will accumulate like forever. And in the computer system,
+
+66
+0:06:47.640 --> 0:06:52.360
+it's a very common problem. And that's how you get out of memory hours.
+
+67
+0:06:52.360 --> 0:06:56.080
+So the solution is rather simple. You need back pressure, which means you need some way
+
+68
+0:06:56.080 --> 0:07:02.360
+to signal the person who is cleaning too fast that they should slow down. And the simplest
+
+69
+0:07:02.360 --> 0:07:09.440
+mechanism to do this is you need to have some kind of limit on your stack of plates or your
+
+70
+0:07:09.440 --> 0:07:14.840
+work queue or whatever you are using in your system. And then they stop once they reach
+
+71
+0:07:14.840 --> 0:07:19.440
+the limit. So there's a simplest way you could have back pressure.
+
+72
+0:07:19.440 --> 0:07:28.640
+So with all this said, the game here is how would you implement that? What would be your
+
+73
+0:07:28.640 --> 0:07:36.880
+goal? Go to implementation if you had to have such a system in one hour. And ping Rust developers,
+
+74
+0:07:36.880 --> 0:07:42.000
+I think that most of the people in this room will come with the following solution. So
+
+75
+0:07:42.000 --> 0:07:50.640
+the upload part, it's not CPU, it's just dealing with networks. So it's very natural to think,
+
+76
+0:07:50.640 --> 0:07:58.040
+okay, I'm going to do that in a Tokyo task. And back pressure, let's see. I already know
+
+77
+0:07:58.040 --> 0:08:03.240
+what I'm going to use. I feel that a good solution is I'm going to have a channel with
+
+78
+0:08:03.240 --> 0:08:09.040
+some capacity. And once it reaches capacity, of course, people sending work to my task,
+
+79
+0:08:09.040 --> 0:08:16.060
+they will have to wait. And it's going to be very nice and natural.
+
+80
+0:08:16.060 --> 0:08:22.280
+And then on the indexing part, we will have the same mechanism. Only right now, we will
+
+81
+0:08:22.280 --> 0:08:29.680
+have to actually do a lot of CPU heavy work. So maybe we won't run that in a Tokyo task.
+
+82
+0:08:29.680 --> 0:08:34.640
+And we will spawn our own thread or maybe we will use a thread pool to do that work.
+
+83
+0:08:34.640 --> 0:08:38.480
+It would be better, right? And we use the same mechanism. We will have a channel to
+
+84
+0:08:38.480 --> 0:08:42.960
+receive the work. The capacity here is much larger because the type of stuff that we put
+
+85
+0:08:42.960 --> 0:08:48.280
+in the channel is very different. For the uploader, we are getting files. They can be
+
+86
+0:08:48.280 --> 0:08:53.720
+large like 100 megabytes. So it makes sense to have it as small as possible. Here it's
+
+87
+0:08:53.720 --> 0:09:00.520
+documents. So it's for many documents, you will emit one file. You won't probably get
+
+88
+0:09:00.520 --> 0:09:13.480
+a series that is larger than three. And yeah, everything is fine and dandy. It's quite natural.
+
+89
+0:09:13.480 --> 0:09:25.680
+And we just reinvented actors. That's basically what actors are. So actors is a programming
+
+90
+0:09:25.680 --> 0:09:32.200
+paradigm that has been invented in the 70s by a researcher called Karli Witt that has
+
+91
+0:09:32.200 --> 0:09:39.760
+been popularized more recently with Erlang. And the actual formal definition is here.
+
+92
+0:09:39.760 --> 0:09:47.360
+It's from Karli Witt himself. And I'm going to read it. Even if it's a bit weird to read
+
+93
+0:09:47.360 --> 0:09:52.460
+slides out loud, this one is important. So an actor is a computational entity that in
+
+94
+0:09:52.460 --> 0:09:59.720
+response to a message it receives can concurrently, A, send a finite number of messages to the
+
+95
+0:09:59.720 --> 0:10:08.320
+actors. We've done that. B, create a finite number of new actors. We haven't been spawning
+
+96
+0:10:08.320 --> 0:10:11.960
+any actors in our example yet, but we do that in quick reads. That's something that we do,
+
+97
+0:10:11.960 --> 0:10:20.480
+especially for supervision or spawning a pipeline or stuff like that. So we do that. C, designate
+
+98
+0:10:20.480 --> 0:10:27.600
+behavior to be used for the next message it receives. That one is a little bit fuzzy.
+
+99
+0:10:27.600 --> 0:10:34.320
+Do we do this? No, we definitely don't. But if you water it down and you squint a little,
+
+100
+0:10:34.320 --> 0:10:42.480
+the fact that the actor has actually a state and the whole point of having this actor running
+
+101
+0:10:42.480 --> 0:10:50.920
+on a specific thread is that it will be possible to handle message and mutate our state. And
+
+102
+0:10:50.920 --> 0:10:57.720
+mutating our state is a bit like designating the behavior that will be able to use for
+
+103
+0:10:57.720 --> 0:11:09.680
+the next message. So we ended up building our own actor framework. So to be honest, I'm not
+
+104
+0:11:09.680 --> 0:11:14.800
+trying to advertise for this framework. It's another ADPL license, so you can use it. You're
+
+105
+0:11:14.800 --> 0:11:20.800
+free to use it. If you want to take over it for kids and make it better, I'd be happy for us to
+
+106
+0:11:20.800 --> 0:11:26.680
+use it. If you want to use it as is and you would like to have it as a MIT license, I'm perfectly
+
+107
+0:11:26.680 --> 0:11:33.840
+happy to put it under MIT license as well, actually. But right now it's not designed to be
+
+108
+0:11:33.840 --> 0:11:40.280
+reused by other people. But I think I might be able to tell you about our journey and maybe
+
+109
+0:11:40.280 --> 0:11:48.480
+could inspire other people to write our framework. There are actually a lot of actor frameworks in
+
+110
+0:11:48.480 --> 0:12:00.920
+Rust. The most famous one is Actix. So under our actor framework, what does an actor look like
+
+111
+0:12:00.920 --> 0:12:11.920
+compared to our original snippets? Yeah, it looks like this. So I implemented the uploader there. So
+
+112
+0:12:11.920 --> 0:12:18.080
+you have to implement first a trait called actor where you will define a bunch of small property
+
+113
+0:12:18.080 --> 0:12:22.280
+about your actor, especially the capacity that we have seen before. So it would be like the
+
+114
+0:12:22.280 --> 0:12:28.920
+capacity of the channels that we described before. And then you will have to implement a
+
+115
+0:12:28.920 --> 0:12:36.480
+handler trait for each type of message that you deal with. So contrary to our example, now we can
+
+116
+0:12:36.480 --> 0:12:42.680
+deal with several types of messages. Same actor can receive different kind of requests, if you will.
+
+117
+0:12:42.680 --> 0:12:50.840
+Another difference is most of the time you want to communicate with an actor in an asynchronous
+
+118
+0:12:50.840 --> 0:12:57.360
+way. That's how the actor pattern is working usually. But sometimes it's handy to actually
+
+119
+0:12:57.360 --> 0:13:03.920
+have some kind of reply when you do a request. It's a bummer because if you really want a reply,
+
+120
+0:13:03.920 --> 0:13:10.600
+that means that you will be waiting for the actor to process its entire queue and execute your
+
+121
+0:13:10.600 --> 0:13:17.880
+command and then return the result. But you don't have to use it. Most of our messages don't
+
+122
+0:13:17.880 --> 0:13:27.800
+choose it, but when we need it, it's handy. And our indexer, it's about the same. The one thing that
+
+123
+0:13:27.800 --> 0:13:37.880
+I want to point out is this thing on the actor trait where we specialized what should be returned
+
+124
+0:13:37.880 --> 0:13:44.640
+on the method runtime handler. So you remember that in our example, we said that an indexer spends
+
+125
+0:13:44.640 --> 0:13:51.160
+a lot of CPU. We wanted to run it on a dedicated thread. We don't do that here. What we do is we
+
+126
+0:13:51.160 --> 0:13:58.400
+target a specific Tokyo runtime, which is weird. So that's an implementation shortcut that we used
+
+127
+0:13:58.400 --> 0:14:06.400
+instead of running stuff on a thread pool. What we do is that we have several Tokyo runtime and we
+
+128
+0:14:06.400 --> 0:14:15.640
+have a Tokyo runtime that is dedicated to act as a thread pool. The benefit of this is this
+
+129
+0:14:15.640 --> 0:14:22.400
+implementation shortcut gives us a possibility to write exactly the same code for an async actor
+
+130
+0:14:22.400 --> 0:14:29.080
+or async actor, which is neat. And by the way, we're not the only one to use that trick. In
+
+131
+0:14:29.080 --> 0:14:38.160
+fact, the bear actually wrote a blog post about this a little bit of time ago. Now that we have a
+
+132
+0:14:38.160 --> 0:14:43.640
+framework, you might have noticed that the code was not even shorter. We have seen a couple of
+
+133
+0:14:43.640 --> 0:14:50.640
+features that we got from the framework, but what can we get like more? And within QuickWit, we have
+
+134
+0:14:50.640 --> 0:14:56.720
+25 different actors. What's cool when you have a framework is that you code stuff once and the
+
+135
+0:14:56.720 --> 0:15:04.200
+benefit is multiplied by 25. What could be the benefit? So hopefully, we get better structure
+
+136
+0:15:04.200 --> 0:15:10.120
+and code that is a little bit more readable. People open a file and they know what to expect. I want
+
+137
+0:15:10.120 --> 0:15:14.760
+to know what is the capacity. I set up the queue of this actor. Where should I look? That's something
+
+138
+0:15:14.760 --> 0:15:22.440
+that you get from having a framework. But also, we will talk a little bit about that, but we get
+
+139
+0:15:22.440 --> 0:15:30.040
+supervision from the framework. We get a neat solution to deal with time, which is probably the
+
+140
+0:15:30.040 --> 0:15:36.880
+main reason why we don't use tactics today. And then we have a bunch of recipes to write
+
+141
+0:15:36.880 --> 0:15:46.000
+unique tests, which is very important. We also have some stuff to be able to see what our actors
+
+142
+0:15:46.000 --> 0:15:53.600
+are doing and we have a solution for discovery. But we won't talk about this in this talk.
+
+143
+0:15:53.600 --> 0:16:03.280
+Supervision. Of course, I would like to tell you our code is perfect and perfect code is especially
+
+144
+0:16:03.280 --> 0:16:12.120
+for tenure-rasp. It never fails. In a sense, we don't expand spannics or stuff like that,
+
+145
+0:16:12.120 --> 0:16:24.680
+but we have to run our code, so party code, user-defined code. User, they can write a VR script to
+
+146
+0:16:24.680 --> 0:16:31.720
+transform their documents in the pipeline and that's running on our indexing pipeline. We have
+
+147
+0:16:31.720 --> 0:16:38.120
+to do IO. We have to interact with different systems. For instance, we get our documents from
+
+148
+0:16:38.120 --> 0:16:44.120
+a source. It's running in the pipeline. We send them to a storage. We have different storage that
+
+149
+0:16:44.120 --> 0:16:50.640
+are implemented. There's a lot of components and any one of them can fail and we want a very large
+
+150
+0:16:50.640 --> 0:16:58.280
+runtime. So one solution to this, it's not super-burly. It's not like it works all of the time, but just
+
+151
+0:16:58.280 --> 0:17:07.000
+try to turn it off and on again. It feels a little bit stupid, but you just restart everything from a
+
+152
+0:17:07.000 --> 0:17:18.040
+blank state or blank slate and sometimes things work that way. So the supervision works as follows.
+
+153
+0:17:18.040 --> 0:17:25.320
+We have an actor that is in charge of supervising all of the actors that are in the pipeline. What
+
+154
+0:17:25.320 --> 0:17:30.120
+it's doing is that it's pulling actors and when it detects that they failed, it will kill everyone
+
+155
+0:17:30.120 --> 0:17:39.000
+and restart everyone. The definition of failure is a little bit sophisticated in our case. It could be
+
+156
+0:17:39.000 --> 0:17:47.480
+an actor that has returned an error from a handler or it panicked or we have some system to detect if
+
+157
+0:17:47.480 --> 0:17:54.520
+an actor has not been progressing for three seconds. We have a notion of progression in our framework
+
+158
+0:17:54.520 --> 0:18:03.960
+that's an original way to do stuff. And we use one-fold supervision which means that if one actor
+
+159
+0:18:03.960 --> 0:18:15.320
+failed, we restart everyone. Okay, that was for supervision. Now we're about handling time which is
+
+160
+0:18:15.320 --> 0:18:24.680
+probably the most interesting part of our framework. So we need to be able to deal with the idea that
+
+161
+0:18:25.480 --> 0:18:32.040
+for instance in our indexer, we want to emit a file after 30 seconds has passed. So we have a
+
+162
+0:18:32.040 --> 0:18:40.280
+condition like this. 30 seconds after the first document was added in that batch. And we cannot
+
+163
+0:18:40.280 --> 0:18:45.320
+do like a time.sleep in the handler because it will block the entire processing of documents.
+
+164
+0:18:45.320 --> 0:18:52.280
+So the solution for this is rather simple. We have a method so that actors can ask the framework to
+
+165
+0:18:52.280 --> 0:19:01.000
+send back a message to themselves after a given amount of time. So 30 seconds here. And it seems
+
+166
+0:19:01.000 --> 0:19:06.920
+like a very simple solution but it has a problem. So here I showed how it worked. So actor is sending
+
+167
+0:19:06.920 --> 0:19:11.400
+a message to the scheduler. It says what is happening under the hood. It's sending a message
+
+168
+0:19:11.400 --> 0:19:17.800
+to actually an actor that is run by the framework called the scheduler actor. And 30 seconds later,
+
+169
+0:19:17.800 --> 0:19:24.920
+the scheduler will stack a message into the queue of the actor. The trouble there is imagine that
+
+170
+0:19:24.920 --> 0:19:30.120
+you already had a lot of messages in the queue of the actor. Then where are your 30 seconds? Maybe
+
+171
+0:19:30.120 --> 0:19:39.320
+we have one minute worth of messages in the queue. And then our entire contract of I want to emit a
+
+172
+0:19:39.320 --> 0:19:47.880
+file every 30 seconds, it's broken. We cannot do that. So the solution we went for is actually
+
+173
+0:19:47.880 --> 0:19:52.200
+mailbox are a tiny bit more complicated. They have two queues. One is a low priority queue,
+
+174
+0:19:52.200 --> 0:19:57.720
+the usual one. And we have a high priority queue. And the scheduler will put that in the high
+
+175
+0:19:57.720 --> 0:20:03.400
+priority queue. So as soon as the actor has finished dealing with a message that it was processing at
+
+176
+0:20:03.400 --> 0:20:11.400
+the time, it will jump on this scheduled message. And we will get our nice 30 seconds callback.
+
+177
+0:20:15.640 --> 0:20:23.320
+Testability, we let me check the time to know if I'm good or not. 20 minutes, perfect.
+
+178
+0:20:23.320 --> 0:20:32.040
+Testability, we have a bunch of solutions to write tests. Let's go through code to see
+
+179
+0:20:33.240 --> 0:20:39.720
+actual elastic codes, see how we can implement complicated real-life stuff and unit tests it.
+
+180
+0:20:41.160 --> 0:20:48.600
+So the code that we look at is a batch builder that is mimicking pretty much what we're doing
+
+181
+0:20:48.600 --> 0:20:58.040
+in indexing. So we have two possible conditions. We emit a file either because we have enough data
+
+182
+0:20:58.760 --> 0:21:05.800
+and it's enough to get a file. So let's say if you have 100 messages, it's not 100 in reality,
+
+183
+0:21:05.800 --> 0:21:13.880
+but if you have 100 messages, you emit a file. Or if 30 seconds has elapsed in the reception of the
+
+184
+0:21:13.880 --> 0:21:27.240
+first document of the batch. So it starts slow and easy. So we have our actor here.
+
+185
+0:21:28.680 --> 0:21:37.400
+So this is the state of the actor, but this is the actor as well. So something that is obvious
+
+186
+0:21:37.400 --> 0:21:43.640
+is it will have to have some mailbox to push the speed that it produced to. It will have a
+
+187
+0:21:43.640 --> 0:21:49.320
+document batch which will be a vector string. So the document will be just string. It will happen,
+
+188
+0:21:49.320 --> 0:21:54.200
+document to that. When it's big enough, it's going to flush it and send it to the mailbox of the
+
+189
+0:21:54.200 --> 0:22:02.440
+consumer. And one thing that is new here is we added some counters and we will be able in the
+
+190
+0:22:02.440 --> 0:22:16.200
+unit test to do some assets on this internal state. I didn't talk about it, but the actor trait
+
+191
+0:22:16.200 --> 0:22:22.120
+actually has an associated type which is called observer state. Of course, the whole idea of
+
+192
+0:22:22.120 --> 0:22:28.040
+actors is to encapsulate your state into your thread or your toker task and you're not supposed
+
+193
+0:22:28.040 --> 0:22:35.800
+to be able to mutate it or even read it from the external world. But we have some things that
+
+194
+0:22:35.800 --> 0:22:44.920
+makes it possible to ask from outside the actor, what is your observable state? And it will send
+
+195
+0:22:44.920 --> 0:22:51.080
+a message to the actor and the actor will send back the result of the observable state method here,
+
+196
+0:22:51.080 --> 0:23:00.120
+which is nifty for observability and for unit test. And then here is our handler. So we will have two
+
+197
+0:23:00.120 --> 0:23:06.360
+messages. One message will be receiving a document. Here, it was just a string as I told you. I wanted
+
+198
+0:23:06.360 --> 0:23:14.360
+to keep stuff simple. And we will do several things. So the first thing that we do is if this
+
+199
+0:23:14.360 --> 0:23:21.480
+was the first document in the batch, we need to register our callback message using the schedule
+
+200
+0:23:21.480 --> 0:23:30.760
+self message. We will append this document to our batch and then we check for the condition. We have
+
+201
+0:23:30.760 --> 0:23:41.160
+enough documents in the batch that we emit a batch using our second batch emission condition.
+
+202
+0:23:41.160 --> 0:23:47.160
+And in that case, we call emit batch. I didn't put the code of emit batch because it was too easy.
+
+203
+0:23:47.800 --> 0:23:50.680
+Not very interesting. And then
+
+204
+0:23:56.200 --> 0:24:04.360
+and then I didn't put the handler of the timeout message, but you can guess it basically is
+
+205
+0:24:04.360 --> 0:24:14.600
+emitting the batch. And then when we want to unit that stuff, we write things like this.
+
+206
+0:24:14.600 --> 0:24:21.640
+So we have a universe in our unit tests. It's a very important thing. We want to isolate our
+
+207
+0:24:21.640 --> 0:24:28.360
+unit tests, one from each other. The universe is in charge of this. So all of the actors of your
+
+208
+0:24:28.360 --> 0:24:33.000
+program have to belong to the same universe. Otherwise, they're not supposed to communicate
+
+209
+0:24:33.000 --> 0:24:38.760
+together. And we will see that this isolation will make it possible to do something really
+
+210
+0:24:38.760 --> 0:24:45.000
+cool in the next slide. And so this universe makes it possible to make a fake mailbox.
+
+211
+0:24:45.000 --> 0:24:52.680
+But we create the consumer side of things. We can create our batch builder and it's alone.
+
+212
+0:24:52.680 --> 0:24:59.160
+And you can send a message to it. That's what we do there. So I usually like to jump and point at
+
+213
+0:24:59.160 --> 0:25:09.640
+the screen, but I've been told that I cannot cross a white line. So yeah. And then what we do
+
+214
+0:25:10.360 --> 0:25:15.080
+when we want to create an asset is that we call this function called process pending and observe,
+
+215
+0:25:15.080 --> 0:25:21.320
+which just means that we wait for all of the messages that are currently in the queue of the
+
+216
+0:25:21.320 --> 0:25:28.040
+actor. We have all of those processed and then we call observe and we get a snapshot of what is
+
+217
+0:25:28.040 --> 0:25:35.000
+the observable state of the actor. And here's the observable state with a counter, which is equal to
+
+218
+0:25:35.000 --> 0:25:43.640
+the number of documents that we wanted. And then we check that the consumer mailbox does contain
+
+219
+0:25:43.640 --> 0:25:53.240
+our two batch, because 250 is 100 and 100 two batch. And we also want to be able to check the
+
+220
+0:25:53.240 --> 0:26:00.040
+time out that the time out counter is working well. So here, what is interesting is we created
+
+221
+0:26:00.040 --> 0:26:07.640
+our universe, but with a method with accelerated time and we will be marking time at this point.
+
+222
+0:26:07.640 --> 0:26:15.080
+So you won't have to wait 30 seconds to have your unit test run for 30 seconds. It will do magics
+
+223
+0:26:15.800 --> 0:26:21.800
+and the result will be exactly the same as if you were not accelerating time, but it will just be
+
+224
+0:26:21.800 --> 0:26:30.680
+faster and I will explain a little bit how it works. And so to further unit test, obviously we
+
+225
+0:26:30.680 --> 0:26:39.560
+have to call some way to wait and we call universe.sleep to do that. And it's important to
+
+226
+0:26:40.600 --> 0:26:45.160
+use the universe.sleep and time.sleep because we are mocking stuff, obviously.
+
+227
+0:26:45.160 --> 0:26:51.960
+So we cannot choose the mocking facilities that we are in Tokyo because we use several runtimes.
+
+228
+0:26:52.760 --> 0:27:00.120
+And also what we do is similar in semantics as pose and auto advance if you're familiar with it,
+
+229
+0:27:00.120 --> 0:27:06.840
+except we never freeze time. We keep time flowing, but what we do is tiny bit different. So you can
+
+230
+0:27:06.840 --> 0:27:13.240
+imagine that if you are not accelerating time, your outer execution would look like this. So
+
+231
+0:27:13.240 --> 0:27:19.240
+actors are processing stuff and sometimes you don't have any message in any queue or actors
+
+232
+0:27:19.240 --> 0:27:26.520
+either. And the only thing that will resume the processing is some time out to happen and the
+
+233
+0:27:26.520 --> 0:27:31.560
+scheduler saying, okay, I have a message for you. You asked for a self-scheduled message.
+
+234
+0:27:33.160 --> 0:27:38.040
+It's happening now. So our framework detects that we are in a phase where no one is working
+
+235
+0:27:38.040 --> 0:27:43.240
+and waiting for the scheduler. And in that case, and only in that case, we accelerate time. And
+
+236
+0:27:43.240 --> 0:27:49.640
+that's why we get a result that is exactly the same as if we didn't accelerate time,
+
+237
+0:27:49.640 --> 0:27:56.840
+but just faster. So we compress our execution before, after. That's how it works.
+
+238
+0:27:56.840 --> 0:28:08.440
+So that's, I wanted to show you the actual indexing pipeline in full complexity. I said
+
+239
+0:28:08.440 --> 0:28:13.960
+25 actors, it's not 25 actors here, but we have other actors in other parts of the code because
+
+240
+0:28:13.960 --> 0:28:22.920
+the pattern got quite popular. It's quite complex, but it makes me extremely good. It makes me feel
+
+241
+0:28:22.920 --> 0:28:29.800
+good to be able to show that when we have to explain like a new developer what the indexing is.
+
+242
+0:28:30.680 --> 0:28:36.680
+Thank you. What the indexing is doing. We can point at things. Everything on one of these
+
+243
+0:28:36.680 --> 0:28:43.000
+box is doing one very simple thing. It has its own file. It has its own unit test. It makes me happy
+
+244
+0:28:44.040 --> 0:28:52.680
+to have this very simple figure that we can discuss around. One thing that I need to talk
+
+245
+0:28:52.680 --> 0:29:04.360
+to you about is one problem with actors is if you have cycles in your actor network,
+
+246
+0:29:05.000 --> 0:29:09.560
+you might experience deadlock. And it's a pretty terrible thing that kind of deadlock because
+
+247
+0:29:09.560 --> 0:29:15.080
+it can happen at any time in production. Like it can work for one week and then you
+
+248
+0:29:15.080 --> 0:29:23.880
+experience the deadlock. It's a scary thing. There's a sufficient condition to overlooks
+
+249
+0:29:23.880 --> 0:29:29.800
+if you don't have any cycles. Usually, that's the case when you are writing a pipeline.
+
+250
+0:29:30.440 --> 0:29:35.000
+In the graph before, there was actually a cycle. We will have a look at it in a second.
+
+251
+0:29:35.000 --> 0:29:45.800
+There is a nicer condition to overlooks. It's if the graph of your actors where you removed
+
+252
+0:29:45.800 --> 0:29:52.200
+all of the Q where you had an infinite capacity. If that one is a tag, then you won't have deadlocks.
+
+253
+0:29:52.200 --> 0:29:59.800
+And that's what we are doing here. So the loop, the cycle that we had was due to the fact that
+
+254
+0:29:59.800 --> 0:30:08.760
+we have an auxiliary pipeline that is merging the file together. And there is an arrow over there.
+
+255
+0:30:09.960 --> 0:30:19.000
+I'm going to cross the line. I did it. I apologize. If you remove this arrow, then it's a tag. And
+
+256
+0:30:19.000 --> 0:30:27.560
+that's sufficient condition to never experience deadlock. It helps me sleep at night. And we have
+
+257
+0:30:27.560 --> 0:30:33.240
+a bunch of other features. The most important one I think I want to tell you about is we measure
+
+258
+0:30:33.240 --> 0:30:40.280
+back pressure. So the framework is automatically measuring back pressure and expose it as a
+
+259
+0:30:40.280 --> 0:31:02.840
+primitive counter. That's very neat. Very useful for us. And let's use the rest of the time for question.
+
+260
+0:31:02.840 --> 0:31:10.040
+So are there any questions in the room? Yes. The last slide of the previous slide was you didn't need
+
+261
+0:31:10.040 --> 0:31:15.480
+parallel actors. What do you need like Fanny and Kanna out for heavy parallel work?
+
+262
+0:31:18.920 --> 0:31:24.520
+Oh yes. So there is something that I didn't read, but she's going to read really fast.
+
+263
+0:31:24.520 --> 0:31:33.400
+And notice that we don't have anything to be able to have several actors work on the same queue or
+
+264
+0:31:33.400 --> 0:31:43.720
+like work concurrently to process the faster. So yes, we haven't needed that strongly enough to
+
+265
+0:31:43.720 --> 0:31:48.840
+actually implement it. I wrote an implementation and never merged it because we didn't really need
+
+266
+0:31:48.840 --> 0:31:57.800
+it. So indexing, we just put several pipelines on the same machine, not too much. So that part,
+
+267
+0:31:57.800 --> 0:32:08.760
+it's unpal. But yeah, we just never need, we haven't needed it yet. I can't read the way.
+
+268
+0:32:08.760 --> 0:32:15.160
+Parallel behavior happens at the pipeline level and the actor level, right? Yes, exactly. So the parallel
+
+269
+0:32:15.160 --> 0:32:28.520
+behavior... Sorry, you want me to repeat. Okay. So the, we use more than one core,
+
+270
+0:32:28.520 --> 0:32:33.560
+just because within the pipeline we do the streamlining thing. So we may have different actors
+
+271
+0:32:33.560 --> 0:32:38.040
+that are consuming the CPU at the same time, but we don't have one actor going, oh,
+
+272
+0:32:38.040 --> 0:32:43.640
+I, so it's actually five instance objector and we are doing the work five times faster.
+
+273
+0:32:45.480 --> 0:32:52.760
+We didn't need that. Any more questions? Yes. Do you have the fairness system so that one actor
+
+274
+0:32:52.760 --> 0:32:58.280
+doesn't keep on processing the system, allow others to be processed?
+
+275
+0:32:58.280 --> 0:33:07.880
+Yes. So no, we don't have that. So one thing that we have, actually we don't want, we have the
+
+276
+0:33:07.880 --> 0:33:15.560
+opposite problem. We don't want fairness. So there is one, so if you look at our pipeline,
+
+277
+0:33:17.240 --> 0:33:23.240
+the stuff that is taking a lot of CPU would be the indexer, it takes, the server would take a lot of
+
+278
+0:33:23.240 --> 0:33:31.880
+IO and we want to give it priority because it's the thing that we want it to use as much as CPU
+
+279
+0:33:31.880 --> 0:33:37.160
+as it can. So we want to give it one core and we want it to use as much IO as it needs.
+
+280
+0:33:39.480 --> 0:33:44.600
+And we would like to give it priority. So the way we do that is that we run it on a specific
+
+281
+0:33:45.320 --> 0:33:51.400
+runtime and over there it has its dedicated core. For IO, the framework is actually not really
+
+282
+0:33:51.400 --> 0:33:58.040
+helping. So what we do is that we have some IO struggling that makes it so that those actors
+
+283
+0:33:58.040 --> 0:34:05.240
+are not able to actually write on disk faster than, and you can configure that. And there is some
+
+284
+0:34:06.520 --> 0:34:09.560
+corner of the table computation to compute what you should do. But
+
+285
+0:34:10.840 --> 0:34:15.320
+yeah, other actors will not be able to write on disk faster than let's say 80 megabytes per
+
+286
+0:34:15.320 --> 0:34:22.920
+someone or such other. And the merge that you have below, it's okay if it lags a little bit.
+
+287
+0:34:22.920 --> 0:34:30.200
+So that's the part that we want to be low priority and the part on the top we want to be high priority.
+
+288
+0:34:30.200 --> 0:34:34.040
+So we don't have any fairness and we don't want any fairness.
+
+289
+0:34:36.920 --> 0:34:41.800
+Yes? So I guess your supervisor actually has a higher priority than anything because otherwise
+
+290
+0:34:41.800 --> 0:34:48.840
+those timeouts may also be delayed. So the supervisor is running on, it's very fast,
+
+291
+0:34:48.840 --> 0:34:55.880
+it doesn't do much. So it's running on a Tokyo runtime that has a dedicated core and those runs
+
+292
+0:34:55.880 --> 0:35:00.200
+one bazillion actors, but they're all very light so it doesn't matter at all.
+
+293
+0:35:00.200 --> 0:35:20.920
+Yeah, absolutely. You're absolutely right. But the thing is it's running on its specific
+
+294
+0:35:20.920 --> 0:35:31.320
+runtime and it's not CPU AV so there's plenty of core to work with. Yes? When you accelerate time
+
+295
+0:35:31.320 --> 0:35:38.200
+in the testing universe, do you have to specify the steps in time you take? You mean the number of times?
+
+296
+0:35:39.080 --> 0:35:44.120
+I assume that when you accelerate time basically when nothing is happening, you take a time step
+
+297
+0:35:44.120 --> 0:35:47.880
+and then see if something would have happened at that time point. Does that mean that you have to
+
+298
+0:35:47.880 --> 0:35:54.600
+specify we take steps of 100 milliseconds and then test every time if something would be happening now?
+
+299
+0:35:55.400 --> 0:36:01.880
+No, it's not. We don't need to say how many steps we take, we don't need to say
+
+300
+0:36:03.560 --> 0:36:08.040
+what is the resolution of the steps that we take. The only thing that we do is that the scheduler,
+
+301
+0:36:09.000 --> 0:36:14.760
+when it detects, it needs to accelerate time. It has some kind of heap that says, okay,
+
+302
+0:36:14.760 --> 0:36:21.240
+the next event is actually in 70 milliseconds. So it has jumped 70 milliseconds in the future
+
+303
+0:36:21.240 --> 0:36:28.840
+and it triggers that event and then the execution of the actor that was supposed to receive this
+
+304
+0:36:28.840 --> 0:36:35.480
+message will go and if no actor is working anymore, then we re-accelerate them again.
+
+305
+0:36:36.440 --> 0:36:40.040
+So it's no steps, no resolution, no nothing.
+
+306
+0:36:40.040 --> 0:36:43.400
+Yes?
+
+307
+0:36:43.400 --> 0:36:48.600
+How about reliability if you want to be sure that the log line will make it to the index?
+
+308
+0:36:48.600 --> 0:36:51.480
+Do you count them or how do you know they made it through?
+
+309
+0:36:53.000 --> 0:37:02.680
+So, yeah, it should be the subject of another talk because now that's a super interesting question.
+
+310
+0:37:02.680 --> 0:37:10.200
+So the pipeline, you want to know, to have an idea of what kind of semantics,
+
+311
+0:37:10.200 --> 0:37:16.040
+deliver a semantics that you want to have. We actually offer exactly one semantics
+
+312
+0:37:16.040 --> 0:37:22.040
+and the way we deal with that is, so we didn't talk about that, but we have the
+
+313
+0:37:23.160 --> 0:37:29.000
+documents that are coming from a source actor and the source actor when we spun it with
+
+314
+0:37:29.000 --> 0:37:37.640
+tell it, okay, you need to stream messages from this specific checkpoint and when we publish stuff
+
+315
+0:37:39.080 --> 0:37:47.480
+like downstream, we publish stuff by running a transaction on our metadata store backend
+
+316
+0:37:48.680 --> 0:37:55.640
+and that transaction updates the checkpoint of the stuff that we have published and it publishes
+
+317
+0:37:55.640 --> 0:38:02.120
+speed as well. So that's when we restart everything, we can check in the metadata store
+
+318
+0:38:02.120 --> 0:38:07.720
+what is the last checkpoint and it starts from there. And if there is an error, the metadata store
+
+319
+0:38:07.720 --> 0:38:12.520
+will just yell at us and return an error. It will say, okay, no, something weird has been happening,
+
+320
+0:38:12.520 --> 0:38:19.400
+maybe we all had two pipelines working at the same time and your checkpoints are overlapping
+
+321
+0:38:19.400 --> 0:38:26.840
+and you have a problem. That's the way we work with this problem. Yes? At universe, is that a
+
+322
+0:38:26.840 --> 0:38:33.160
+special grade or is it in the standard library? No, it's the universe thing is something within
+
+323
+0:38:33.160 --> 0:38:38.920
+our framework and that's what we use to be able to isolate typically different programs or different
+
+324
+0:38:38.920 --> 0:38:44.120
+unit tests or different systems. Yeah, it's within our framework.
+
+325
+0:38:44.120 --> 0:38:47.480
+Okay. It is.
+
+326
+0:38:51.640 --> 0:38:57.320
+Do we still have time or? I think we have one more question or one more minute.
+
+327
+0:38:57.320 --> 0:39:03.640
+I think there was a, yeah. I understand that this dropped the numbers on the numbers indicate
+
+328
+0:39:06.200 --> 0:39:11.160
+the capacity of the computer, right? The capacity of the channel between the actors, right?
+
+329
+0:39:11.160 --> 0:39:17.640
+The numbers, yes. Yes. So we have a lot of tuning points in the system, right? Yes.
+
+330
+0:39:19.400 --> 0:39:25.160
+So the question is, from your experience, how sensitive the performance of the system
+
+331
+0:39:25.160 --> 0:39:32.760
+is to the tuning of the pressure on the channels? And maybe you have some kind of advice or a rule
+
+332
+0:39:32.760 --> 0:39:39.320
+of thumb for what you choose for best performance as the third guest for the channel. Yes, so the
+
+333
+0:39:39.320 --> 0:39:45.560
+question was on this slide, all of the little numbers that we have on the arrow is the capacity
+
+334
+0:39:45.560 --> 0:39:50.600
+of the different cues between actors. That's a lot of parameters to tune. They probably have
+
+335
+0:39:50.600 --> 0:39:56.840
+an impact on performance. Is there a cool recipe to that? So the first question was how much do
+
+336
+0:39:56.840 --> 0:40:02.520
+they impact performance? And the second one is do we have a nice recipe to be able to tune them
+
+337
+0:40:02.520 --> 0:40:10.600
+maybe automatically? I'll go first because there is no more time. So they don't impact
+
+338
+0:40:11.400 --> 0:40:16.440
+performance all that much as long as you got them a little bit correct.
+
+339
+0:40:19.080 --> 0:40:26.600
+So usually, you need to identify the stuff that should be at one, and then you put it at one,
+
+340
+0:40:26.600 --> 0:40:32.920
+and where you want a little bit of capacity. It should be quite obvious if you know your system.
+
+341
+0:40:33.480 --> 0:40:39.800
+I'm sure that there is a nice recipe to auto-detect that. I haven't found it, so if you have ideas,
+
+342
+0:40:39.800 --> 0:40:44.440
+I'd love to. Usually, that kind of question is someone was thinking about something.
+
+343
+0:40:45.640 --> 0:40:50.600
+So please come to me. I'll tell you the truth. I'd love to hear your thoughts.
+
+344
+0:40:50.600 --> 0:40:58.440
+Thank you everyone. Time is up. I send the webinars.
+

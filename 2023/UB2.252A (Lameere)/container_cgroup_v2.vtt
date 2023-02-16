@@ -1,0 +1,1051 @@
+WEBVTT
+
+00:00.000 --> 00:14.160
+Okay. I think we're ready to start. Oh, excellent. This time it worked perfectly. Thank you
+
+00:14.160 --> 00:20.800
+so much. Yeah. Chris is going to talk about C Group V2, seven years of C Group V2 in the
+
+00:20.800 --> 00:26.480
+kernel, very exciting time, and the future of Linux resource control. Take it away.
+
+00:26.480 --> 00:35.760
+Hello, everybody. Oh, yes, please go on. Thank you. That's it. I'm done. Good boy. Hello. I'm
+
+00:35.760 --> 00:40.560
+Chris Down. I work as a kernel engineer at Meta. I work on the kernels memory management
+
+00:40.560 --> 00:45.040
+subsystem, especially I'm a contributor to C Groups, which are one of the things which
+
+00:45.040 --> 00:49.240
+underpins our modern love of containers. I'm also a maintainer of the system D project.
+
+00:49.240 --> 00:53.120
+So there's two things on this slide, which you can hate me for. Most of the time I'm
+
+00:53.120 --> 00:56.560
+thinking about how we can make Linux just a little bit more reliable, just a little bit
+
+00:56.560 --> 01:00.720
+more usable at scale. We have a million plus machines. We can't just buy more RAM. It's
+
+01:00.720 --> 01:04.800
+not really a thing we can do. So we need to extract the absolute maximum from every single
+
+01:04.800 --> 01:08.360
+machine. Otherwise, there's a huge loss of capacity that could result. So that's the
+
+01:08.360 --> 01:11.720
+kind of thing I want to talk to you about today. However, the last seven years we have
+
+01:11.720 --> 01:15.600
+done this at Meta, how we've improved the reliability and capacity and extracted more
+
+01:15.600 --> 01:23.400
+efficiency. At Meta and in industry, we are increasingly facing this kind of problem where
+
+01:23.400 --> 01:26.520
+we can't effectively solve scaling problems just by throwing hardware at the problem.
+
+01:26.520 --> 01:31.360
+We can't construct data centers fast enough. We can't source clean power fast enough. We
+
+01:31.360 --> 01:34.960
+have hundreds of thousands of machines and we just can't afford to waste capacity because
+
+01:34.960 --> 01:40.320
+any small loss in capacity on a single machine translates to a very large amount at scale.
+
+01:40.320 --> 01:43.800
+Ultimately what we need to do is use resources more efficiently and we need to build the
+
+01:43.800 --> 01:49.640
+kernel infrastructure in order to do that. Another challenge that we have is that many
+
+01:49.640 --> 01:53.920
+huge site incidents for companies like us and companies of our size are caused by lacking
+
+01:53.920 --> 01:58.960
+resource control. Not being able to control things like CPU, IO memory and the like is
+
+01:58.960 --> 02:03.320
+one of the most pervasive causes of incidents and outages across our industry. And we need
+
+02:03.320 --> 02:09.600
+to sustain an initiative industry-wide in order to fix this. So how does all of this
+
+02:09.600 --> 02:14.840
+relate to this C-groups thing in the title? So C-groups are a kernel mechanism to balance
+
+02:14.840 --> 02:20.120
+and control and isolate things like memory, CPU, IO, things that you share across a machine,
+
+02:20.120 --> 02:23.920
+things that processes share. And I'm sure if you've operated containers before, which
+
+02:23.920 --> 02:27.880
+I'm going to assume that you have, judging by the fact you're in this room, otherwise
+
+02:27.880 --> 02:33.240
+you may be lost in looking for the AI room, you know, every single modern container runtime
+
+02:33.240 --> 02:38.360
+uses this. Stalker uses it, CoreS uses it, Kubernetes uses it, SystemD uses it. The reason
+
+02:38.360 --> 02:43.000
+they use it is because it's the most mature platform to do this work and it solves a lot
+
+02:43.000 --> 02:46.520
+of the long-standing problems which we had with kind of classic resource control in the
+
+02:46.520 --> 02:52.360
+form of U-limits and things like that. C-groups have existed for about 14 years now and they
+
+02:52.360 --> 02:56.800
+have changed a lot in that time. Most notably, seven years ago in kernel 4.5 we released
+
+02:56.800 --> 03:02.400
+C-group 2. I gave a whole talk around the time when that happened, why we were moving
+
+03:02.400 --> 03:05.400
+to a totally new interface, why we weren't just iterating on the old interface. And if
+
+03:05.400 --> 03:09.480
+you're interested in a really in-depth look at that, then here's a talk which you can
+
+03:09.480 --> 03:14.120
+go and take a look at. But the most fundamental change really is that in C-group 2 what happens
+
+03:14.120 --> 03:20.880
+is that you enable or disable resources in the context of a particular C-group. In C-group
+
+03:20.880 --> 03:25.840
+1 what you have is a hierarchy for memory, a hierarchy for CPU and the two will never
+
+03:25.840 --> 03:30.720
+meet. Those two things are completely independent. SystemD, when it creates things in C-group
+
+03:30.720 --> 03:35.720
+2.0, it will name them the same. They get called something.slice or something.service
+
+03:35.720 --> 03:40.280
+but they have no relation to each other across resources. But in C-group 2 you have just
+
+03:40.280 --> 03:44.240
+a single C-group and you enable or disable resources in the context of that particular
+
+03:44.240 --> 03:51.800
+C-group so you can enable, say, memory control and IO control together. That might seem like
+
+03:51.800 --> 03:57.040
+an aesthetic kind of concern but it's really not. Without this major API change we simply
+
+03:57.040 --> 04:02.240
+cannot use C-groups to do complex resource control. Take the following scenario. Memory
+
+04:02.240 --> 04:07.360
+starts to run out on your machine. So when we start to run out of memory on pretty much
+
+04:07.360 --> 04:11.720
+any modern operating system what do you do? Well you try and go and free some up. So we
+
+04:11.720 --> 04:16.080
+start to reclaim some page caches. We start to reclaim maybe some anonymous pages if we
+
+04:16.080 --> 04:22.760
+have swap. And this results in disk IO. And if we're particularly memory bound and it's
+
+04:22.760 --> 04:27.160
+really hard to free pages and we're having to walk the pages over and over and over to
+
+04:27.160 --> 04:31.080
+try and find stuff to free then it's going to cost a non-travel amount of CPU cycles
+
+04:31.080 --> 04:35.600
+to do so. Looking through available memory to find pages which can be free can be extremely
+
+04:35.600 --> 04:40.720
+expensive on memory bound workloads. On some highly loaded or memory bound systems it can
+
+04:40.720 --> 04:45.520
+take a double digit amount of CPU from the machine just to do this walking. It's a highly
+
+04:45.520 --> 04:50.760
+expensive process. And without having the single resource hierarchy we cannot take into account
+
+04:50.760 --> 04:55.200
+these transfers between the different resources how one leads to another because they're all
+
+04:55.200 --> 04:59.800
+completely independent. If you've been in the containers to everyone before you've probably
+
+04:59.800 --> 05:03.640
+thinking I've seen this guy before and I think he's given this exact talk about three years
+
+05:03.640 --> 05:07.080
+ago. I'm sure some of you think that already. Well the company name isn't the only thing
+
+05:07.080 --> 05:12.240
+which has changed since 2020. Also some C-groups things have changed since 2020 and obviously
+
+05:12.240 --> 05:15.640
+I don't want to rehash the same things over and over. I don't want to bore you. So this
+
+05:15.640 --> 05:19.640
+talk will mostly be about the changes since the last time I was here in 2020. We're just
+
+05:19.640 --> 05:23.560
+a little bit of context setting just a little bit. This talk is really about the process
+
+05:23.560 --> 05:28.760
+of getting resource isolation working at scale. It's what it needs to happen in production
+
+05:28.760 --> 05:36.280
+not just in a theoretical concern. The elephant in the room of course is COVID. The last three
+
+05:36.280 --> 05:40.840
+years have seen pretty significant changes in behavior due to COVID especially for a
+
+05:40.840 --> 05:46.080
+platform like Facebook which we own of course. This was by about 27% over what you would
+
+05:46.080 --> 05:51.120
+usually expect and this came at a time where not only you're seeing increased demand but
+
+05:51.120 --> 05:55.640
+you literally can't go out and buy memory. You can't go out and buy more CPUs. You can't
+
+05:55.640 --> 05:59.280
+go out and buy more disks because there's a shortage because there's COVID. So what we
+
+05:59.280 --> 06:03.520
+really needed was to make more efficient use of the existing resources on the machine.
+
+06:03.520 --> 06:07.840
+We need to have an acceleration or existing efforts around resource control in order to
+
+06:07.840 --> 06:13.920
+do that to make things more efficient. Now almost every single time that I give this
+
+06:13.920 --> 06:17.840
+sounds like a personal point of concern. Every time I give this talk somebody on Hacker News
+
+06:17.840 --> 06:22.560
+comments, why don't you just get some more memory? Now I don't know how trivial people
+
+06:22.560 --> 06:25.760
+in this room think that is when you've got several million servers but it is slightly
+
+06:25.760 --> 06:30.480
+difficult sometimes. For example there's a huge amount of cost involved there and not
+
+06:30.480 --> 06:33.680
+just the money which is indeed substantial and I'm very glad it's not coming out of my
+
+06:33.680 --> 06:38.240
+bank account but also in things like power draw, in things like thermals, in things like
+
+06:38.240 --> 06:42.720
+hardware design trade-offs. Not to mention during COVID you just couldn't get these
+
+06:42.720 --> 06:46.880
+kind of, you couldn't get a hard drive, you couldn't get some memory. You'd go down to
+
+06:46.880 --> 06:53.440
+your local Best Buy and do it but that's about it. So not really an option. So here's a simple
+
+06:53.440 --> 06:58.240
+little proposition for you, for anyone in the room who wants to be brave. How do you view
+
+06:58.240 --> 07:07.120
+memory usage for a process in Linux? Oh come on. Free! My man said free. Oh lord.
+
+07:07.120 --> 07:16.560
+This was a trap. So, alright. I appreciate it though. Big up about that. So yeah, so free and
+
+07:16.560 --> 07:20.880
+the like really only measure like one type of memory. They do have caches and buffers in the
+
+07:20.880 --> 07:25.840
+side but the thing is, okay so for free or for PS which were shut at the back, you know you do
+
+07:25.840 --> 07:30.320
+see something like the resident set size and you see some other details and you might be thinking
+
+07:30.320 --> 07:34.480
+hey you know that's fine like I don't really care about some of the other things. That's the bit
+
+07:34.480 --> 07:38.320
+which my application is really using. For example, we don't necessarily think that our programs
+
+07:38.320 --> 07:43.680
+rely on caches and buffers to operate in any sustainable way but the problem is the answer
+
+07:43.680 --> 07:48.400
+for any sufficiently complex system is almost certainly that a lot of those caches and buffers
+
+07:48.400 --> 07:54.560
+are not optional. They are basically essential. Let's take Chrome just as a facile example.
+
+07:54.560 --> 08:01.840
+The Chrome Binary Code segment is over 130 megs. He's a chunky boy. He is. He's a big boy. We load
+
+08:01.840 --> 08:06.160
+this code into memory. We do it gradually. We're not maniacs. We do it gradually but you know we
+
+08:06.160 --> 08:10.960
+do it as part of the page cache. But if we want to execute some particular part of Chrome, you know
+
+08:10.960 --> 08:15.840
+this cache isn't just nice to have the cache that has the code in it that runs this particular part
+
+08:15.840 --> 08:20.960
+of Chrome. We literally cannot make any forward progress without that part of the cache and the
+
+08:20.960 --> 08:24.480
+same goes for caches for the files you're loading especially for something like Chrome. You probably
+
+08:24.480 --> 08:28.880
+do have a lot of caches so eventually those pages are going to have to make their way into the
+
+08:28.880 --> 08:33.040
+working set. They're going to have to make their way into main memory. In another particularly
+
+08:33.040 --> 08:38.640
+egregious case, we have a demon at Matter and this demon aggregates metrics across a machine.
+
+08:38.640 --> 08:43.040
+It sends them to centralized storage. As part of this, what it does is it runs a whole bunch of
+
+08:43.040 --> 08:47.520
+junky scripts and these junky scripts go and collect things across the machine. I mean we've
+
+08:47.520 --> 08:51.280
+all got one. We've all got this kind of demon where you collect all kind of junky stuff and you
+
+08:51.280 --> 08:55.920
+don't really know what it does but it sends some nice metrics and it looks nice. One of the things
+
+08:55.920 --> 09:01.440
+we were able to demonstrate is while the team had this demon thought that it took about 100 to
+
+09:01.440 --> 09:06.720
+150 megabytes to run using the things that we'll talk about in this talk, it actually was more
+
+09:06.720 --> 09:14.080
+like two gigabytes. So the difference is quite substantial on some things. You could be quite
+
+09:14.080 --> 09:20.320
+mis-underestimating what is taking memory on your machine. In Seagrory 2, we have this file called
+
+09:20.320 --> 09:24.640
+memory.current that measures the current memory usage for the C group including everything
+
+09:24.640 --> 09:32.720
+like caches, buffers, kernel objects, so on. So job done, right? Well no. The problem is here that
+
+09:32.720 --> 09:37.600
+whenever somebody comes to these talks and I say something like don't use RSS to measure your
+
+09:37.600 --> 09:42.240
+application, they go and say oh we've added a new thing called memory.current and it measures
+
+09:42.240 --> 09:48.720
+everything. Great, I'm just going to put some metrics based on that. But it's quite important
+
+09:48.720 --> 09:52.960
+to understand what that actually means to have everything here, right? The very fact that we
+
+09:52.960 --> 09:58.480
+are not talking about just the resident set size anymore means the ramifications are fundamentally
+
+09:58.480 --> 10:04.480
+different. We have caches, buffers, socket memory, TCP memory, kernel objects, all kind of stuff in
+
+10:04.480 --> 10:09.040
+here and that's exactly how it should be because we need that to prevent abuse of these resources,
+
+10:09.040 --> 10:12.320
+which are valid resources across the system. They are things we actually need to run.
+
+10:13.760 --> 10:18.960
+So understanding why reasoning about memory.current might be more complicated than it seems comes
+
+10:18.960 --> 10:25.280
+down to why as an industry we tended to gravitate towards measuring RSS in the first place. We
+
+10:25.280 --> 10:29.520
+don't measure RSS because it measures anything useful. We measure it because it's really fucking
+
+10:29.520 --> 10:33.360
+easy to measure. That's the reason we measure RSS. There's no other reason. It doesn't measure
+
+10:33.360 --> 10:38.320
+anything very useful. It kind of tells you vaguely maybe what your application might be doing kind
+
+10:38.320 --> 10:43.200
+of, but it doesn't tell you anything of any of the actually interesting parts of your application.
+
+10:43.200 --> 10:49.120
+Only the bits you pretty much already knew. So memory.current suffers from pretty much exactly
+
+10:49.120 --> 10:54.080
+the opposite problem, which is it tells you the truth and don't really know how to deal with it.
+
+10:54.640 --> 10:58.560
+Don't really know how to deal with being told how much memory application is using. For example,
+
+10:58.560 --> 11:05.360
+if you set an 8 gigabyte memory limit in CROOPy2, how big is memory.current going to be on a machine
+
+11:05.360 --> 11:09.600
+which has no other thing running on it? It's probably going to be 8 gigabytes because we've
+
+11:09.600 --> 11:13.440
+decided that we're going to fill it with all kind of nice stuff. There's no reason we should
+
+11:13.440 --> 11:17.520
+evict that. There's no reason we should take away these nice K-mem caches. There's no reason we
+
+11:17.520 --> 11:22.160
+should take away these slabs because we have free memory. So why not? Why not keep them around?
+
+11:23.200 --> 11:28.080
+So if there was no pressure for this to shrink from any outside scope, then the slack is just
+
+11:28.080 --> 11:32.720
+going to expand until it reaches your limit. So what should we do? How should we know what the real
+
+11:32.720 --> 11:38.880
+needed amount of memory is at a given time? So let's take an example, Linux kernel build,
+
+11:38.880 --> 11:44.160
+for example, which with no limits has a peak memory.current of just over 800 megabytes. In
+
+11:44.160 --> 11:49.040
+CROOPy2, we have this tunable called memory.high. This tunable reclaims memory from the CROOP
+
+11:49.600 --> 11:53.200
+until it goes back under some threshold. It just keeps on reclaiming and reclaiming and
+
+11:53.200 --> 11:58.960
+reclaiming and throttling until you reach back under. So right now, things take about four minutes
+
+11:58.960 --> 12:04.000
+with no limits. This is about how long it takes to build the kernel. And when I apply a throttling
+
+12:04.000 --> 12:09.600
+like a reclaim threshold of 600 megabytes, actually, you know the job finishes roughly
+
+12:09.600 --> 12:13.680
+about the same amount of time, maybe a second more, with about 25% less available memory at peak.
+
+12:14.240 --> 12:18.080
+And the same even happens when we go down to 400 megabytes. Now we're using half the memory that
+
+12:18.080 --> 12:21.920
+we originally used with only a few seconds more wall time. It's a pretty good trade-off.
+
+12:22.720 --> 12:27.520
+However, if we just go just a little bit further, then things just never even complete. We have to
+
+12:27.520 --> 12:31.840
+control see the build, right? And this is nine minutes in. It still ain't done. So we know that
+
+12:31.840 --> 12:37.760
+the process needs somewhere between 300 and 400 megabytes of memory, but it's pretty error prone
+
+12:37.760 --> 12:42.560
+to try and work out what the exact value is. So to get an accurate number for services at scale,
+
+12:42.560 --> 12:46.560
+which are even more difficult than this because they dynamically shrink and expand depending on
+
+12:46.560 --> 12:54.080
+load, we need a better automated way to do that. So determining the exact amount of memory required
+
+12:54.080 --> 12:59.280
+by an application is a really, really difficult and error prone task, right? So SEMPY is this
+
+12:59.280 --> 13:05.120
+kind of simple self-contained tool to continually poll what's called pressure-stall information,
+
+13:05.120 --> 13:10.720
+or PSI. Pressure-stall information is essentially a new thing we've added in Cigar2 to determine
+
+13:10.720 --> 13:14.880
+whether a particular resource is oversaturated. And we've never really had a metric like this
+
+13:14.880 --> 13:20.080
+in the learnings kernel before. We've had many related metrics. For example, for memory, we have
+
+13:20.080 --> 13:26.960
+things like page caches and buffer usage and so on. But we don't really know how to tell pressure
+
+13:26.960 --> 13:32.640
+or over-subscription from an efficient use of the system. Those two are very difficult to tell apart,
+
+13:32.640 --> 13:38.400
+even with using things like page scans or so on. It's pretty difficult. So in SEMPY, what we do is
+
+13:38.400 --> 13:44.720
+we use these PSI pressure-stall metrics to measure the amount of time which threads in a particular
+
+13:44.720 --> 13:50.160
+C group were stuck doing, in this case, memory work. So this pressure equals 0.16, then kind of
+
+13:50.160 --> 13:56.000
+halfway down the slide, means that 0.16 percent of the time I could have been doing more productive
+
+13:56.000 --> 14:01.520
+work, but I've been stuck doing memory work. This could be things like waiting for a kernel memory
+
+14:01.520 --> 14:04.800
+log. It could be things like being throttled. It could be waiting for a reclaim to finish.
+
+14:05.360 --> 14:10.000
+Even more than that, it could be memory-related IO, which can also dominate, to be honest. Things
+
+14:10.000 --> 14:15.200
+like refolking file content into the page cache or swapping in. And pressure is essentially saying,
+
+14:15.200 --> 14:22.800
+if I had a bit more memory, I would be able to run so much faster, 0.16 percent faster.
+
+14:22.800 --> 14:29.440
+So using PSI and memory.high, what SEMPY does is adjust enough memory pressure on a C group to
+
+14:29.440 --> 14:34.000
+evict cold memory pages that aren't essential for workload performance. It's an integral controller
+
+14:34.000 --> 14:38.960
+which dynamically adapts these memory peaks and troughs. An example case being something like
+
+14:38.960 --> 14:42.720
+a web server, which is somewhere where we have used it. When more requests come, we see that the
+
+14:42.720 --> 14:47.760
+pressure is growing and we expand the memory.high limit. When fewer requests are coming, we see
+
+14:47.760 --> 14:52.240
+that and we start to decrease the amount of working set which we give again. So it can be used to
+
+14:52.240 --> 14:56.960
+answer the question, how much memory does my application actually use over time? And in this
+
+14:56.960 --> 15:01.680
+case we find for the compulgial, the answer is about like 340 megabytes or so and that's fine.
+
+15:02.960 --> 15:06.880
+You might be asking yourself, what are the benefits of this shrinking? Why does this even matter
+
+15:06.880 --> 15:10.880
+to be honest? Surely when you are starting to run out of memory, Linux is going to do it anyway.
+
+15:10.880 --> 15:17.600
+And you're not wrong. That's true. But the thing is, what we kind of need here is to get ahead
+
+15:17.600 --> 15:23.360
+of memory shortages which could be bad and amortize the work ahead of time. When your machine is
+
+15:23.360 --> 15:27.040
+already highly contended, it's already being driven into the ground and going towards the
+
+15:27.040 --> 15:31.840
+umkiller, it's pretty hard to say, hey bro, could you just like give me some pages right now?
+
+15:32.960 --> 15:37.680
+It's not exactly like what's on its mind. It's probably desperately trying to keep the atomic
+
+15:37.680 --> 15:42.080
+pool going. So there's another thing as well which is, it's pretty good for determining
+
+15:42.080 --> 15:49.680
+regressions which is what a lot of people use for RSS4. This is the way we found out that
+
+15:49.680 --> 15:55.440
+that demon was using 2 gigabytes of memory instead of 150 megabytes of memory. So it's pretty good
+
+15:55.440 --> 15:59.920
+for finding out, hey, how much does my application actually need to run? So the combination of these
+
+15:59.920 --> 16:03.600
+things means that Senpai is an essential part of how we do workload stacking on matter. And it not
+
+16:03.600 --> 16:08.000
+only gives us an accurate read on what the demand is right now but allows us to adjust
+
+16:08.000 --> 16:13.920
+stacking expectations depending on what the workload is doing. This feeds into another one
+
+16:13.920 --> 16:17.600
+of our efforts around efficiency which is improving memory offloading. So traditionally on most
+
+16:17.600 --> 16:23.920
+operating systems you have only one real memory offloading location which is Yadisk. Even if you
+
+16:23.920 --> 16:28.320
+don't have swap that's true because you do things like demand paging, right? You page things in
+
+16:28.320 --> 16:33.600
+gradually and you also have to you know evict and get things in the file cache. So we're talking
+
+16:33.600 --> 16:38.480
+also here about like a lot of granular intermediate areas that could be considered for some page
+
+16:38.480 --> 16:42.160
+offloading for infrequently accessed pages but they're not really so frequently used.
+
+16:43.840 --> 16:49.440
+Getting this data into main memory again though can be very different in terms of how difficult it
+
+16:49.440 --> 16:54.880
+is depending on how far up the triangle you go, right? For example it's much easier to do it on
+
+16:54.880 --> 16:58.880
+an SSD than a hard drive because hard drives don't, well they're slow and they also don't
+
+16:58.880 --> 17:04.800
+tolerate random headseeking very well. But there are more granular gradual things that we can do
+
+17:04.800 --> 17:11.440
+as well. For example one thing we can do is to start look at strategies outside of hardware.
+
+17:11.440 --> 17:16.320
+One of the problems with the duality of either being in RAM or on the disk is that even your disk
+
+17:16.320 --> 17:21.600
+even if it's quite fast, even if it's flash, it tends to be quite a few orders of magnitude slower
+
+17:21.600 --> 17:26.960
+than your main memory is. So one area which we have been heavily invested in is looking at what
+
+17:26.960 --> 17:32.080
+one might term warm pages. In Linux we have talked a lot about hot pages and cold pages if you look
+
+17:32.080 --> 17:36.160
+in the memory management code but there is like this kind of part of the working set which yes
+
+17:36.160 --> 17:41.040
+I do need it relatively frequently but I don't need it to make forward progress all the time. So
+
+17:41.760 --> 17:47.040
+Zswap is one of these things we can use for that. It's essentially a feature of the Linux kernel
+
+17:47.040 --> 17:52.720
+which compresses pages which looks like they will compress well and are not too hot into a separate
+
+17:52.720 --> 17:58.320
+pool in main memory. We do have to page fold them back in into main memory again if we actually
+
+17:58.320 --> 18:02.480
+want to use them of course but it's several orders of magnitude faster than trying to get it off the
+
+18:02.480 --> 18:08.800
+disk. We still do have this swap for infrequently access pages that tends to be quite a bit cold
+
+18:08.800 --> 18:14.800
+working set as well but you know this is kind of like this tiered hierarchy where we want to have
+
+18:15.360 --> 18:21.360
+warm pages in Zswap, hot pages in main memory and kind of cold pages in swap. One problem we had
+
+18:21.360 --> 18:26.240
+here was that even when we configured the kernel to swap as aggressively as possible it still wouldn't
+
+18:26.240 --> 18:30.880
+do it. If you've actually looked at the swap code and I've had the unfortunate misery of working on
+
+18:30.880 --> 18:37.200
+it, you'll learn that swap code was implemented a very long time ago by the people who knew what
+
+18:37.200 --> 18:42.240
+swap did and how things worked but none of them are around to tell us what the hell anything means
+
+18:42.240 --> 18:46.640
+anymore and it's very confusing. So I can't even describe to you how the old algorithm works because
+
+18:46.640 --> 18:52.240
+it has about 500 heuristics and I don't know why any of them are there. So for this reason you know
+
+18:52.240 --> 18:56.720
+we try to think how can we make this a little bit more efficient. We are using non-rotational
+
+18:56.720 --> 19:02.240
+disks now. We have Zswap, we have flash disks, we have SSDs, we want to make an algorithm which
+
+19:02.240 --> 19:07.280
+can handle this better. So from kernel 5.8 we have been working on a new algorithm which has already
+
+19:07.280 --> 19:13.120
+landed. So first we have code to track all swap ins and cache misses across the system. So for every
+
+19:13.120 --> 19:17.120
+cache page we're having to page fault and evict and page fault and evict and page fault and evict
+
+19:17.120 --> 19:24.000
+over and over again. What we want to do is try and page out a heap page instead. If we're unlucky
+
+19:24.000 --> 19:29.520
+and this heap page actually it turns out to be hot then you know no biggie like we we've made a
+
+19:29.520 --> 19:33.280
+mistake but we'll try a different one next time. We do have some heuristics to try and work out which
+
+19:33.280 --> 19:39.840
+one is hot and which one is not but they are kind of expensive so we don't use a lot of them. However
+
+19:39.840 --> 19:44.480
+you know if if we are lucky and the heap page does stay swapped out then that's one more page
+
+19:44.480 --> 19:49.360
+which we can use for file caches and we can use it for other processes and this means that we can
+
+19:49.360 --> 19:55.680
+engage swap a lot more readily in most scenarios. Importantly though we are not adding ioload,
+
+19:55.680 --> 20:00.800
+this doesn't increase ioload or decrease endurance of the disk. We are just more intentional about
+
+20:00.800 --> 20:06.160
+in choosing how to apply the ioload, it doesn't double up. We only trade one type of paging for
+
+20:06.160 --> 20:10.960
+another and our goal here is to reach an optimal state where the optimal state is doing the minimum
+
+20:10.960 --> 20:16.720
+amount of iO in order to sustain workload performance. So ideally what we do is have this tiered model
+
+20:16.720 --> 20:22.800
+of you know like I said main memory, Zswap and swap on disk. This is super simple idea compared
+
+20:22.800 --> 20:28.080
+to the old model. The old algorithm has a lot of kind of weird heuristics as I mentioned, a lot of
+
+20:28.080 --> 20:33.520
+penalties, a lot of kind of strange things. In general it was not really written for an era where
+
+20:33.520 --> 20:38.560
+SSDs exist or where Zswap exists so it's understandable that it needed some some care and attention.
+
+20:40.000 --> 20:45.120
+So what were the effects of this change in prod? Like what actually happened? So on web servers
+
+20:45.120 --> 20:50.080
+we not only noticed like an increase in performance but we also noticed a decrease in heat memory by
+
+20:50.080 --> 20:56.720
+about two gigabytes or so out of about 16 gigabytes total. The cache grew to fill this newly freed
+
+20:56.720 --> 21:01.840
+space and it grew by about two gigabytes. From about two gigabytes of cache to four gigabytes of cache
+
+21:01.840 --> 21:06.000
+we also observed a measurable increase in web server performance from this change which is deeply
+
+21:06.000 --> 21:10.480
+encouraging and these are all indications that you know we are now starting to reclaim the right
+
+21:10.480 --> 21:13.760
+things. Actually we are making better decisions because things are looking pretty positive here.
+
+21:13.760 --> 21:18.640
+So not only that but you see a decrease in disk iO because we are actually doing things correctly.
+
+21:18.640 --> 21:24.160
+We are making the correct decisions and it's not really that often that you get a benefit in
+
+21:24.160 --> 21:29.360
+performance disk iO memory usage instead of having to trade off between them right. So it probably
+
+21:29.360 --> 21:34.320
+indicates that this is the better solution for this kind of era. This also meant that on some
+
+21:34.320 --> 21:39.840
+workloads we now had opportunities to stack where we did not have opportunities to stack before
+
+21:39.840 --> 21:44.080
+like running say multiple kinds of ads jobs or multiple kinds of web servers on top of each other.
+
+21:44.080 --> 21:49.600
+Many machines don't use up all of their resources but they use up just enough that it's pretty hard
+
+21:49.600 --> 21:54.560
+to stack something else on top of it because you're using just enough that it's not actually enough
+
+21:54.560 --> 21:59.760
+to sustainably run to workload side by side. So this is another thing where we've managed to kind
+
+21:59.760 --> 22:04.160
+of push the needle just a little bit so that you can make quite a bit more use efficiency out of the
+
+22:04.160 --> 22:10.160
+servers that exist. The combination of changes to the swap algorithm using Z swap and squeezing
+
+22:10.160 --> 22:14.320
+workloads using senpai was a huge part of our operation during COVID. All of these things
+
+22:14.320 --> 22:19.200
+acting together we termed TMO which stands for transparent memory offloading and you can see
+
+22:19.200 --> 22:24.320
+some of the results we've had in production here. In some cases we were able to save up to 20%
+
+22:24.320 --> 22:29.280
+of critical fleet-wide workloads memory with either neutral or even in some cases positive
+
+22:29.280 --> 22:33.760
+effects on workload performance. So this opens up a lot of opportunities obviously in terms of
+
+22:33.760 --> 22:38.880
+reliability, stacking and future growth. This whole topic has a huge amount of cover I really
+
+22:38.880 --> 22:43.280
+could just do an entire talk on this. If you want to learn more I do recommend the post which is
+
+22:43.280 --> 22:47.200
+linked at the bottom my colleagues Johannes and Dan wrote an article with a lot more depth on you
+
+22:47.200 --> 22:53.040
+know how we achieve what we achieved and on things like CXL memory as well. So let's come back to
+
+22:53.040 --> 22:59.040
+this this slide from earlier. We briefly touched on the fact that if bounded one resource can just
+
+22:59.040 --> 23:03.840
+turn into another a particularly egregious case being memory turning into IO when it gets bounded.
+
+23:04.640 --> 23:09.440
+For this reason it might seem counterintuitive but we always need controls on IO when we have
+
+23:09.440 --> 23:14.640
+controls on memory otherwise memory pressure will always just directly translate to disk IO.
+
+23:16.080 --> 23:22.400
+Probably the most attuned way to solve this is to try to limit disk bandwidth or disk IOPS.
+
+23:22.400 --> 23:25.840
+However this doesn't really manifest usually very well in reality. If you think about any
+
+23:25.840 --> 23:30.320
+modern storage device they tend to be quite complex they're queue devices you can throw a lot of
+
+23:30.320 --> 23:34.800
+commands at them in parallel and when you do that you often find that hey you know magically it can
+
+23:34.800 --> 23:39.280
+do more things. The same reason we have IO schedulers because we can optimize what we do inside the
+
+23:39.280 --> 23:44.960
+disk. Also the mixture of IO really matters like reads versus writes sequential versus random even
+
+23:44.960 --> 23:52.320
+on SSDs these things tend to matter and it's really hard to determine a single metric for loadedness
+
+23:52.320 --> 23:56.800
+for a storage device because the cost of one IO operation or one block of data
+
+23:56.800 --> 24:02.960
+is extremely variable depending on the wider context. So it's also really punitive to just
+
+24:02.960 --> 24:08.080
+have a limit on you know how much can I write how many IOPS can I do because even if nobody
+
+24:08.080 --> 24:12.560
+else is using the disk you're still slowed down to this level there's no opportunity to make the
+
+24:12.560 --> 24:16.400
+most of the disk when nobody else is doing anything right. So it's not really good for this kind of
+
+24:16.400 --> 24:23.280
+best effort bursty work on a machine which we would like to do. So the first way that we try to
+
+24:23.280 --> 24:28.080
+avoid this problem is by using latency as a metric for workload health. So what we might try and do
+
+24:28.080 --> 24:32.960
+is apply a maximal target latency for IO completions on the main workload and if we exceed that we
+
+24:32.960 --> 24:37.200
+start dialing back other C groups with lucid latency requirements back to their own configured
+
+24:37.200 --> 24:41.280
+thresholds. What this does is this prevents an application from thrashing on memory so much
+
+24:41.280 --> 24:46.400
+that it just kills IO across the system. This actually works really well for systems where there's
+
+24:46.400 --> 24:51.200
+only one workload but the problem comes when you have a multi workload stacked case like this.
+
+24:51.200 --> 24:55.520
+Here we have two high priority workloads which are stacked on a single machine. One has an IO
+
+24:55.520 --> 25:00.320
+dot latency of 10 milliseconds the other has 30 milliseconds but the problem here is as soon as
+
+25:00.320 --> 25:04.720
+workload one gets into trouble everyone else is going to suffer and there's no way around that.
+
+25:04.720 --> 25:09.360
+We're just going to penalize them and there's no way to say you know how bad is the situation
+
+25:09.360 --> 25:14.160
+really and is it really them causing the problem. This is fine if you know the thing you're throttling
+
+25:14.160 --> 25:20.320
+is just best effort but here we have two important workloads right so how can we solve this? So our
+
+25:20.320 --> 25:25.680
+solution is this thing called IO dot cost which might look very similar at first but notice the
+
+25:25.680 --> 25:29.360
+omission of the units. These are not units in milliseconds these are weights in a similar way
+
+25:29.360 --> 25:34.800
+to how we do CPU scheduling. So how do we know what 40, 60 or 100 mean in this context? Well they
+
+25:34.800 --> 25:40.960
+add up to 200 so the idea is if you are saturating your disk you know best effort will get 40 will
+
+25:40.960 --> 25:47.760
+get I guess 20 percent of the work it'll workload one will get 50 and workload two will get 30.
+
+25:47.760 --> 25:53.680
+So it balances out based on this kind of shares or weights like model. How do we know when we
+
+25:53.680 --> 25:58.560
+reach this 100 percent of saturation though? So what IO dot cost does is build a linear model
+
+25:58.560 --> 26:02.800
+of your disk over time it sees how the disk responds to these variable loads passively
+
+26:02.800 --> 26:07.120
+and it works based on things like you know read or write IO whether it's random or sequential the
+
+26:07.120 --> 26:12.080
+size of the IO. So it boils down this quite complex operation of you know how much can my disk actually
+
+26:12.080 --> 26:19.040
+do into a linear model which it which it handles itself. It has a kind of a QOS model you can
+
+26:19.040 --> 26:23.360
+implement but there's also a basic on-the-fly model using Q-depth so you can read more about in the
+
+26:23.360 --> 26:27.040
+links at the bottom I won't waffle on too much but it is something which you can use to do kind of
+
+26:27.040 --> 26:33.120
+effective IO control. In the old days I came to this room and talked about C-group B2 and the
+
+26:33.120 --> 26:36.720
+historical response was basically that's nice Docker doesn't support it though so please leave.
+
+26:38.480 --> 26:43.360
+I've had a nice chat with some Docker lads. No the Docker people are very nice and so are all the
+
+26:43.360 --> 26:47.920
+other container people and what's happened is we have it almost everywhere almost everywhere C-group
+
+26:47.920 --> 26:51.600
+B2 is a thing we have quite a diversity of container run times and police report is basically
+
+26:51.600 --> 26:56.080
+supported everywhere. So even if nothing changes from your side moving to C-group B2 means that you
+
+26:56.080 --> 27:00.880
+know you get significantly more reliable accounting for free. We spent quite a while working with
+
+27:00.880 --> 27:05.600
+Docker and system defoaks and so on and so forth to get things working and we're also really thankful
+
+27:05.600 --> 27:11.200
+to Fedora for making C-group B2 the default since Fedora 32 as well as making things more reliable
+
+27:11.200 --> 27:15.680
+behind the scenes for users this also you know got some people's ass into gear when they had an
+
+27:15.680 --> 27:19.920
+issue on their GitHub on their GitHub that says it doesn't work in Fedora so cheers Fedora people.
+
+27:20.800 --> 27:24.560
+It was kind of a good signal that you know this is what we are actually doing this is what we as
+
+27:24.560 --> 27:29.280
+an industry as a technology community are actually doing and that was quite helpful.
+
+27:30.640 --> 27:35.360
+The KDE in Genome folks have also been busy using C-groups to give a better management of that
+
+27:35.360 --> 27:39.760
+kind of desktop handling. David Edmondson and Henry Chain from KDE in particular gave this talk at
+
+27:39.760 --> 27:45.120
+KDE Academy. The title of the talk was using C-groups to make everything amazing. Now I'm not
+
+27:45.120 --> 27:49.520
+brazen enough to title my talk that but I'll just let it speak for itself for that one.
+
+27:49.520 --> 27:54.480
+It basically goes over the use of C-groups and C-group B2 for resource control and for interactive
+
+27:54.480 --> 27:58.640
+responsiveness on the desktop so this is definitely kind of a developing space obviously there's been
+
+27:58.640 --> 28:02.640
+a lot of work on the server side here but if you're interested in that I definitely recommend
+
+28:02.640 --> 28:07.040
+you know giving the talk a watch. It really goes into challenges they had and a unique feature
+
+28:07.040 --> 28:12.880
+C-group B2 has to solve those. Finally Android is also using the metrics exported by the PSI
+
+28:12.880 --> 28:17.280
+project in order to detect and prevent memory pressure events which affect the user experience
+
+28:17.280 --> 28:23.040
+as you can imagine on Android interactive latency is extremely important. It would really suck if
+
+28:23.040 --> 28:26.160
+you're about to click a button and then you click it and that requires allocating memory and the
+
+28:26.160 --> 28:30.560
+whole phone freezes. I mean it does still happen sometimes but obviously this is something which
+
+28:30.560 --> 28:34.160
+they're trying to work on and we've been working quite closely with them to integrate the PSI
+
+28:34.800 --> 28:40.800
+project into the Android. Hopefully this talk gave you some ideas about things you'd like to try
+
+28:40.800 --> 28:45.360
+out for yourself. We're still very actively improving kernel resource control. It might have
+
+28:45.360 --> 28:49.280
+been seven years since we started but you know we still have plenty of things we want to do
+
+28:49.280 --> 28:53.600
+and what we really need is your feedback. What we really need is more examples of
+
+28:53.600 --> 28:58.240
+how the community is using C-group B2 and problems and issues you've encountered. Obviously everyone's
+
+28:58.240 --> 29:02.080
+needs are quite different and I and others are quite eager to know what we could be doing to help
+
+29:02.080 --> 29:06.000
+you, what we could be doing to make things better, what we could be doing to make things more intuitive
+
+29:06.000 --> 29:08.960
+because there's definitely work to be done there and I'll be around after the talk if you want to
+
+29:08.960 --> 29:13.520
+chat but feel free to drop me an email message me on master.com always happy to hear feedback or
+
+29:13.520 --> 29:18.960
+suggestions. I've been Chris Down and this has been seven years of C-group B2, future of Linux
+
+29:18.960 --> 29:44.320
+resource control. Thank you very much.

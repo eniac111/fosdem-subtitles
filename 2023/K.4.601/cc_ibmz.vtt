@@ -1,0 +1,1375 @@
+WEBVTT
+
+00:00.000 --> 00:07.000
+Yeah.
+
+00:07.000 --> 00:08.000
+Yes.
+
+00:08.000 --> 00:11.000
+And they will talk about
+
+00:11.000 --> 00:14.000
+computing on IBM actually.
+
+00:14.000 --> 00:17.000
+We have heard a lot about AMD and Intel and even
+
+00:17.000 --> 00:20.000
+these five now, but let's see what IBM guys
+
+00:20.000 --> 00:23.000
+have out here as well.
+
+00:23.000 --> 00:25.000
+Yeah.
+
+00:25.000 --> 00:27.000
+Hi. My name is Claudio Imbrenda.
+
+00:27.000 --> 00:32.000
+I am one of the maintainers for KVM on S390.
+
+00:32.000 --> 00:36.000
+I'm Stefan. I'm contributor to the kernel on S390
+
+00:36.000 --> 00:39.000
+and also maintainer of the S390 tools.
+
+00:39.000 --> 00:42.000
+Yes. And we are here to talk about the same thing
+
+00:42.000 --> 00:47.000
+that the previous person talked about, but for S390.
+
+00:47.000 --> 00:52.000
+So a few months ago, a colleague passed from my office
+
+00:52.000 --> 00:55.000
+and said, hey, there's a confidential computed track at
+
+00:55.000 --> 00:57.000
+first time. Maybe you should submit something.
+
+00:57.000 --> 01:00.000
+By the way, the deadline is tomorrow. So I did.
+
+01:00.000 --> 01:03.000
+I went to the website and this was the call for paper
+
+01:03.000 --> 01:08.000
+and it says, all my major process vendors and there's
+
+01:08.000 --> 01:16.000
+Intel, AMD, ARM, ARM, power, and like,
+
+01:16.000 --> 01:21.000
+so we are here to fix that.
+
+01:21.000 --> 01:25.000
+The, how are we going to do it? Overview.
+
+01:25.000 --> 01:28.000
+First of all, an overview of how the whole secure
+
+01:28.000 --> 01:32.000
+execution works.
+
+01:32.000 --> 01:38.000
+The life cycle, a small glimpse into how we handle
+
+01:38.000 --> 01:41.000
+swapping and then Stefan will talk about attestation
+
+01:41.000 --> 01:46.000
+and confidential dump. So let's get started.
+
+01:46.000 --> 01:48.000
+So what it does, confidential virtual machines,
+
+01:48.000 --> 01:51.000
+prevents the untrusted hypervisor or host from
+
+01:51.000 --> 01:54.000
+looking into the guest or touching things into the guest.
+
+01:54.000 --> 01:57.000
+It does not protect the guest and either service attacks.
+
+01:57.000 --> 02:00.000
+It does not protect the guest from doing stupid things
+
+02:00.000 --> 02:03.000
+because we want to protect maybe the machine from
+
+02:03.000 --> 02:07.000
+malicious operators, hypervisors, compliance.
+
+02:07.000 --> 02:09.000
+If you're here, you know what I'm talking about.
+
+02:09.000 --> 02:15.000
+Right. So yeah, this is the grand scheme of thing,
+
+02:15.000 --> 02:19.000
+which I think looks like most of confidential
+
+02:19.000 --> 02:21.000
+computer solutions because, well, yes.
+
+02:21.000 --> 02:24.000
+So we have the, what we call, Ultravisor.
+
+02:24.000 --> 02:27.000
+Everyone has a different name, so we call it Ultravisor.
+
+02:27.000 --> 02:32.000
+It's the, the trusted entity in the whole system.
+
+02:32.000 --> 02:35.000
+It's the only entity that has complete access to
+
+02:35.000 --> 02:39.000
+the whole system and it's implemented partially in
+
+02:39.000 --> 02:42.000
+hardware and partially in firmware.
+
+02:42.000 --> 02:47.000
+Then we have the guests, which are trusted for themselves,
+
+02:47.000 --> 02:52.000
+as in they can shoot themselves in the foot if they so want,
+
+02:52.000 --> 02:55.000
+but otherwise they are, if they don't do stupid things,
+
+02:55.000 --> 02:58.000
+they can, they will be secure.
+
+02:58.000 --> 03:02.000
+Notice that a secure guest can only access its own memory
+
+03:02.000 --> 03:07.000
+and the hypervisor can not access the guest memory
+
+03:07.000 --> 03:10.000
+or Ultravisor memory. Nobody can access Ultravisor memory.
+
+03:10.000 --> 03:14.000
+In fact, the line is dotted because memory can be shared,
+
+03:14.000 --> 03:18.000
+but this will be seen now because of course IO,
+
+03:18.000 --> 03:24.000
+surprise, and non-secure guest is non-trusted like the hypervisor.
+
+03:24.000 --> 03:31.000
+So yeah. So this is not news.
+
+03:31.000 --> 03:33.000
+So again, Ultravisor memory is inaccessible.
+
+03:33.000 --> 03:37.000
+The guest memory is not accessible unless shared and
+
+03:37.000 --> 03:41.000
+attempting to access guest memory or hypervisor,
+
+03:41.000 --> 03:44.000
+Ultravisor memory will just result in an exception.
+
+03:44.000 --> 03:49.000
+So there is no memory encryption like in MDS, CV involved.
+
+03:49.000 --> 03:53.000
+It's just that the page will become inaccessible and in any
+
+03:53.000 --> 03:55.000
+way, shape, or form, not even IO or stuff like that,
+
+03:55.000 --> 03:57.000
+would be able to access the page.
+
+03:57.000 --> 04:01.000
+Which is like basically, yeah.
+
+04:01.000 --> 04:04.000
+The guest decides which pages to share.
+
+04:04.000 --> 04:07.000
+So it's the guest that decides, for example,
+
+04:07.000 --> 04:09.000
+a bunch of pages at the end for bounce buffers,
+
+04:09.000 --> 04:13.000
+which were mentioned earlier. Yes.
+
+04:13.000 --> 04:18.000
+And for everything else, there is direct interaction with the
+
+04:18.000 --> 04:24.000
+Ultravisor. So the guest host mappings are also secured
+
+04:24.000 --> 04:26.000
+and enforced by hardware because of course this is also
+
+04:26.000 --> 04:29.000
+important if everything is secure,
+
+04:29.000 --> 04:31.000
+but then the host could like swap the mappings for some
+
+04:31.000 --> 04:36.000
+pages at runtime and things could break in the guest
+
+04:36.000 --> 04:37.000
+and we don't want it.
+
+04:37.000 --> 04:40.000
+So the host can change the mappings,
+
+04:40.000 --> 04:42.000
+but then it will crash basically the guest.
+
+04:42.000 --> 04:44.000
+So it's fine.
+
+04:44.000 --> 04:46.000
+And for everything else, it goes to the Ultravisor.
+
+04:46.000 --> 04:49.000
+So all the other interactions that go from the hypervisor to
+
+04:49.000 --> 04:54.000
+the guest or from the guest to the hypervisor,
+
+04:54.000 --> 04:57.000
+they go through the Ultravisor and the Ultravisor will check
+
+04:57.000 --> 04:59.000
+and proxy the interactions.
+
+04:59.000 --> 05:02.000
+So make sure that, for example, in some cases,
+
+05:02.000 --> 05:04.000
+some instructions are only allowed to return specific
+
+05:04.000 --> 05:05.000
+return codes.
+
+05:05.000 --> 05:08.000
+If the hypervisor is returning something that is not supposed
+
+05:08.000 --> 05:12.000
+to be returned, that will not be allowed.
+
+05:12.000 --> 05:14.000
+The hypervisor still has lots of things to do,
+
+05:14.000 --> 05:17.000
+like the actual I.O. device models handling some of
+
+05:17.000 --> 05:19.000
+the instructions, like I said, I.O. some other instructions
+
+05:19.000 --> 05:21.000
+that are actually not handled by the hypervisor,
+
+05:21.000 --> 05:25.000
+but the hypervisor need to be notified that the instruction
+
+05:25.000 --> 05:28.000
+happened because otherwise the guest will not be able to be
+
+05:28.000 --> 05:32.000
+executed correctly, then scheduling a memory management
+
+05:32.000 --> 05:35.000
+of the usual stuff that is still there.
+
+05:35.000 --> 05:38.000
+So what can we build with this?
+
+05:38.000 --> 05:41.000
+We have basically an almost unlimited number of secure
+
+05:41.000 --> 05:42.000
+guests at the same time.
+
+05:42.000 --> 05:45.000
+It's not unlimited, but you will run out of memory before
+
+05:45.000 --> 05:46.000
+you run out of guests.
+
+05:46.000 --> 05:48.000
+We're talking millions.
+
+05:48.000 --> 05:50.000
+This is very important.
+
+05:50.000 --> 05:54.000
+The boot image is encrypted and it can contain secrets.
+
+05:54.000 --> 05:57.000
+So the boot image is encrypted.
+
+05:57.000 --> 05:59.000
+We can swap.
+
+05:59.000 --> 06:01.000
+We can have remote attestation, although it's not needed
+
+06:01.000 --> 06:03.000
+because the boot image is encrypted.
+
+06:03.000 --> 06:06.000
+But we still have it because there are some cases where it
+
+06:06.000 --> 06:10.000
+can be useful and host initiated dumps.
+
+06:10.000 --> 06:12.000
+We do not have line migration.
+
+06:12.000 --> 06:13.000
+We do not have device pass-through.
+
+06:13.000 --> 06:16.000
+We do not have huge pages packing and we do not have
+
+06:16.000 --> 06:18.000
+nested secure guests.
+
+06:18.000 --> 06:20.000
+Eh.
+
+06:20.000 --> 06:22.000
+Maybe one day.
+
+06:22.000 --> 06:27.000
+So what happens when the host starts?
+
+06:27.000 --> 06:30.000
+The first thing that the host does is to check if the
+
+06:30.000 --> 06:33.000
+ultravisor is available and if so to query the ultravisor to
+
+06:33.000 --> 06:38.000
+know specific parameters, like how much memory needs to be
+
+06:38.000 --> 06:42.000
+donated, for example, and then donate a bunch of memory to
+
+06:42.000 --> 06:48.000
+the ultravisor where a bunch of information and details and
+
+06:48.000 --> 06:52.000
+metadata about the pages are kept, which rings a bell.
+
+06:52.000 --> 06:55.000
+It's from the previous talk, maybe.
+
+06:55.000 --> 06:56.000
+Yes.
+
+06:56.000 --> 07:00.000
+That memory now belongs to the ultravisor and it cannot be
+
+07:00.000 --> 07:04.000
+touched again ever until the host reboots, basically.
+
+07:04.000 --> 07:06.000
+So it's gone forever.
+
+07:06.000 --> 07:09.000
+I mean, forever, relatively speaking.
+
+07:09.000 --> 07:16.000
+So the boot blob is encrypted.
+
+07:16.000 --> 07:19.000
+So you can either have a custom image for a specific guest or
+
+07:19.000 --> 07:22.000
+you have your image and you put, I don't know, the looks keys,
+
+07:22.000 --> 07:26.000
+for example, inside the E30 and then you just boot it and it
+
+07:26.000 --> 07:31.000
+will boot safely or maybe you have a generic image because of
+
+07:31.000 --> 07:34.000
+some kind of orchestration that you're using or because it's a
+
+07:34.000 --> 07:37.000
+vendor image and you don't want to touch it and then in that
+
+07:37.000 --> 07:40.000
+case you will need remote attestation.
+
+07:40.000 --> 07:44.000
+The boot image is encrypted using a public key.
+
+07:44.000 --> 07:50.000
+The private key is inside the hardware safely embedded and
+
+07:50.000 --> 07:55.000
+so nobody can decrypt the boot image except the hardware.
+
+07:55.000 --> 07:59.000
+The boot blob contains the kernel in E30, the kernel
+
+07:59.000 --> 08:03.000
+command line, some more keys provided by the owner, which
+
+08:03.000 --> 08:07.000
+can be used later for other purposes, for example, dumping.
+
+08:07.000 --> 08:14.000
+And, yeah, so let's see, as a simplified view of the guest
+
+08:14.000 --> 08:23.000
+lifecycle, the host creates a guest or the host asks the
+
+08:23.000 --> 08:27.000
+Ultravisor to create a secure guest and by doing so also
+
+08:27.000 --> 08:32.000
+donates a bunch more memory to keep some more hostkeeping and
+
+08:32.000 --> 08:35.000
+more metadata about guest pages.
+
+08:35.000 --> 08:39.000
+The Ultravisor will at this point create the secure guest
+
+08:39.000 --> 08:43.000
+and then the boot blob is passed to the Ultravisor which
+
+08:43.000 --> 08:47.000
+will then make the pages inaccessible, decrypt it, verify
+
+08:47.000 --> 08:52.000
+the H mark, verify the hash and if everything is all right,
+
+08:52.000 --> 08:56.000
+if the image is correct and has not been tampered with, then
+
+08:56.000 --> 09:00.000
+it can be finally run by the host.
+
+09:00.000 --> 09:04.000
+Now this is a slightly less simplified view which if you're
+
+09:04.000 --> 09:07.000
+watching the stream or if you watch it later, you can pause
+
+09:07.000 --> 09:08.000
+and have a look at it.
+
+09:08.000 --> 09:12.000
+I will not explain it now, but it's just for convenience,
+
+09:12.000 --> 09:14.000
+for reference.
+
+09:14.000 --> 09:17.000
+So memory donation, I talked about memory donation, so we
+
+09:17.000 --> 09:22.000
+have the UV based storage which is that big chunk of memory
+
+09:22.000 --> 09:26.000
+which is donated by the host to the Ultravisor at very early
+
+09:26.000 --> 09:30.000
+the boot, in the boot process and can be big and it's
+
+09:30.000 --> 09:33.000
+absolute memory which we call absolute means physical
+
+09:33.000 --> 09:36.000
+memory basically, so it needs to be done very early at boot
+
+09:36.000 --> 09:39.000
+because otherwise you will not find a very large block of
+
+09:39.000 --> 09:42.000
+physical memory, a contiguous physical memory.
+
+09:42.000 --> 09:47.000
+Configuration based storage and CPU based storage configuration
+
+09:47.000 --> 09:53.000
+means guest in S390 speak, storage means memory in S390
+
+09:53.000 --> 09:59.000
+speak, so those are small pieces of physically contiguous
+
+09:59.000 --> 10:03.000
+memory, so it's not a problem to find a few pages.
+
+10:03.000 --> 10:06.000
+Configuration virtual storage can be big, it depends on the
+
+10:06.000 --> 10:09.000
+size of the guest and this needs to be contiguous but can
+
+10:09.000 --> 10:14.000
+be contiguous in virtual memory, host virtual as in kernel
+
+10:14.000 --> 10:17.000
+space, kernel outer space virtual memory, so it's also
+
+10:17.000 --> 10:22.000
+not a problem, you can just do VMALOC and you go.
+
+10:22.000 --> 10:27.000
+The configuration and CPU memory that is donated will be
+
+10:27.000 --> 10:32.000
+taken away basically until the guest is destroyed, once the
+
+10:32.000 --> 10:36.000
+guest is destroyed the memory can be used again by the host.
+
+10:36.000 --> 10:41.000
+Swapping, let's have a look at how swapping works.
+
+10:41.000 --> 10:47.000
+So when the host wants to swap a page, is this readable?
+
+10:47.000 --> 10:49.000
+Oh, actually yes, cool.
+
+10:49.000 --> 10:54.000
+When the host wants to swap a page it will do an export
+
+10:54.000 --> 10:57.000
+page, basically asking the ultraviolet to please make the
+
+10:57.000 --> 10:58.000
+page accessible.
+
+10:58.000 --> 11:02.000
+The ultraviolet will first encrypt and save the hash
+
+11:02.000 --> 11:04.000
+somewhere, somewhere means one of these regions that have
+
+11:04.000 --> 11:08.000
+been donated when the guest was created.
+
+11:08.000 --> 11:11.000
+Once the page is encrypted and hashed then it's made
+
+11:11.000 --> 11:15.000
+accessible which means that it's not usable by the guest
+
+11:15.000 --> 11:20.000
+anymore at this point because it's not secure anymore.
+
+11:20.000 --> 11:24.000
+The host can then unmap the page, swap it to normal stuff.
+
+11:24.000 --> 11:27.000
+When the guest tries to use it again the host will get the
+
+11:27.000 --> 11:30.000
+usual page fault, you unswap the page, you map it back, you
+
+11:30.000 --> 11:34.000
+run the guest again but the page is there but it's not secure,
+
+11:34.000 --> 11:36.000
+it's still encrypted.
+
+11:36.000 --> 11:40.000
+So the guest tries to use the page, the host will get a
+
+11:40.000 --> 11:45.000
+fault again, a different type of fault and this fault will
+
+11:45.000 --> 11:46.000
+trigger an import.
+
+11:46.000 --> 11:51.000
+Import means the ultraviolet will make the page accessible,
+
+11:51.000 --> 11:56.000
+decrypt it, check the integrity that if everything is all
+
+11:56.000 --> 12:01.000
+right then the page will be accepted and the host can run
+
+12:01.000 --> 12:05.000
+the guest again and the guest finally will be able to run.
+
+12:05.000 --> 12:08.000
+Yes.
+
+12:08.000 --> 12:12.000
+Next is the station.
+
+12:12.000 --> 12:16.000
+So let's talk about our station.
+
+12:16.000 --> 12:20.000
+Give me a sec.
+
+12:20.000 --> 12:25.000
+So Claudia just said it's optional, then why should we use
+
+12:25.000 --> 12:26.000
+it?
+
+12:26.000 --> 12:32.000
+So for IBM secure execution we do not require the explicit or
+
+12:32.000 --> 12:36.000
+external attestation to prove that the guest is secure as in.
+
+12:36.000 --> 12:40.000
+We encrypt the image, we verify the integrity and if your image
+
+12:40.000 --> 12:43.000
+contains a unique secret and if you want to use a stock kernel
+
+12:43.000 --> 12:48.000
+and a stock image you can use a unique public SSH key and if
+
+12:48.000 --> 12:52.000
+you can connect to that image using your fitting private key
+
+12:52.000 --> 12:56.000
+your successor logon will attest that is your secure execution
+
+12:56.000 --> 12:58.000
+image.
+
+12:58.000 --> 13:02.000
+But there are some cases where you might not want or cannot do
+
+13:02.000 --> 13:03.000
+this.
+
+13:03.000 --> 13:07.000
+For example, the explicit attestation is useful when you
+
+13:07.000 --> 13:11.000
+want to provide to a third party that you're running on secure
+
+13:11.000 --> 13:16.000
+execution without passing that private key to that other
+
+13:16.000 --> 13:21.000
+party or you want to verify that you're not only running a
+
+13:21.000 --> 13:25.000
+specific image but the specific image instance.
+
+13:25.000 --> 13:28.000
+So if you have your image multiple times you want to differ
+
+13:28.000 --> 13:31.000
+between those probably.
+
+13:31.000 --> 13:35.000
+Or to be more general if you want to have trusted information
+
+13:35.000 --> 13:39.000
+about your secure execution guest or the execution environment
+
+13:39.000 --> 13:40.000
+it's running in.
+
+13:40.000 --> 13:44.000
+Also another point would be if you have a generic image from
+
+13:44.000 --> 13:51.000
+a generic stock from your supplier probably you want to
+
+13:51.000 --> 13:55.000
+first prove that this image is really secure and then deploy
+
+13:55.000 --> 14:00.000
+your instance dependency.
+
+14:00.000 --> 14:05.000
+And the workflow, the first three steps are as Claudia
+
+14:05.000 --> 14:10.000
+talked before we start the host will start the secure
+
+14:10.000 --> 14:13.000
+execution image, the altruizer will verify the hashes and
+
+14:13.000 --> 14:16.000
+start the image and the guest transition into secure
+
+14:16.000 --> 14:19.000
+execution mode.
+
+14:19.000 --> 14:23.000
+And we have a trusted system on the left and on this trusted
+
+14:23.000 --> 14:27.000
+system we will generate a request, attestation request,
+
+14:27.000 --> 14:31.000
+and this request will contain a public ECTH key and an
+
+14:31.000 --> 14:33.000
+encrypted measurement key.
+
+14:33.000 --> 14:37.000
+We do a measurement with that encrypted key later.
+
+14:37.000 --> 14:40.000
+This request is also encrypted with the public key of the
+
+14:40.000 --> 14:43.000
+altruizer similar to the image.
+
+14:43.000 --> 14:46.000
+Then the request will be sent to the secure execution guest
+
+14:46.000 --> 14:50.000
+and it will trigger an altruizer call to the altruizer.
+
+14:50.000 --> 14:52.000
+The altruizer will do a measurement.
+
+14:52.000 --> 14:55.000
+That measurement mostly contains the hashes used to verify
+
+14:55.000 --> 14:59.000
+the image and a configuration unique ID, unique for that
+
+14:59.000 --> 15:01.000
+instance.
+
+15:01.000 --> 15:05.000
+Then the response travels back to our trusted system and
+
+15:05.000 --> 15:09.000
+the trusted system we can redo the HMAC and if they are the
+
+15:09.000 --> 15:13.000
+same we can be sure that this image is tested and running
+
+15:13.000 --> 15:16.000
+on a secure execution.
+
+15:16.000 --> 15:23.000
+If they are not the same something went wrong.
+
+15:23.000 --> 15:28.000
+So for dumping, we are here talking about hypervisor
+
+15:28.000 --> 15:29.000
+initiated dump.
+
+15:29.000 --> 15:31.000
+So there are two types of dumping.
+
+15:31.000 --> 15:34.000
+The guest can dump itself.
+
+15:34.000 --> 15:39.000
+It has a pro of that you do not need interaction between the
+
+15:39.000 --> 15:41.000
+guest and the hypervisor.
+
+15:41.000 --> 15:50.000
+However, you have to provide memory in the guest beforehand
+
+15:50.000 --> 15:53.000
+so that is not always possible.
+
+15:53.000 --> 15:56.000
+In that case if you do not want to know the memory or if your
+
+15:56.000 --> 16:02.000
+guest is in a very badly crashed state and also the dumping of
+
+16:02.000 --> 16:05.000
+yourself modifies your memory.
+
+16:05.000 --> 16:09.000
+The other way, the host initiated dumping is that it
+
+16:09.000 --> 16:11.000
+works regardless of your guest state.
+
+16:11.000 --> 16:13.000
+It can be very badly crashed.
+
+16:13.000 --> 16:16.000
+It will not modify your guest state and the guest does not
+
+16:16.000 --> 16:17.000
+change during dumping.
+
+16:17.000 --> 16:20.000
+However, you need access to the guest state and we promise
+
+16:20.000 --> 16:23.000
+that the hypervisor never has access to the guest state.
+
+16:23.000 --> 16:26.000
+So how do we do it?
+
+16:26.000 --> 16:30.000
+First of all, confidential dumping is an opt-in by the
+
+16:30.000 --> 16:32.000
+guest owner.
+
+16:32.000 --> 16:34.000
+So if you want to be very paranoid you can just say I
+
+16:34.000 --> 16:38.000
+don't want my image to ever be dumped.
+
+16:38.000 --> 16:43.000
+But it is a reliable and secure way for hypervisor initiated
+
+16:43.000 --> 16:44.000
+dumping.
+
+16:44.000 --> 16:48.000
+Every guest state the hypervisor receives is encrypted.
+
+16:48.000 --> 16:54.000
+Also, no QM API changes so you can just issue your
+
+16:54.000 --> 16:56.000
+version dump as normal.
+
+16:56.000 --> 17:01.000
+And the S390 tools contains a tool, set get dump, that will
+
+17:01.000 --> 17:07.000
+handle the decryption later.
+
+17:07.000 --> 17:13.000
+And then the decrypted dump can be used as normal using
+
+17:13.000 --> 17:23.000
+crash for example to analyze the dump.
+
+17:23.000 --> 17:30.000
+So for a hypervisor perspective, if the dump was requested,
+
+17:30.000 --> 17:35.000
+the hypervisor stops all vCPUs and then import all guest
+
+17:35.000 --> 17:38.000
+pages, export it to different ways.
+
+17:38.000 --> 17:42.000
+So we will export all our guest pages.
+
+17:42.000 --> 17:45.000
+And then, so the guest has no access to the pages anymore
+
+17:45.000 --> 17:48.000
+but they are encrypted.
+
+17:48.000 --> 17:51.000
+It will call the initiate configuration dump
+
+17:51.000 --> 17:52.000
+hypervisor call.
+
+17:52.000 --> 17:56.000
+It will initiate the dumping process and set up some states
+
+17:56.000 --> 17:58.000
+in the hypervisor.
+
+17:58.000 --> 18:00.000
+And then we need the state for each CPU.
+
+18:00.000 --> 18:04.000
+We'll dump the CPU state for each vCPU.
+
+18:04.000 --> 18:08.000
+We'll get this encrypted CPU state.
+
+18:08.000 --> 18:11.000
+And then we need a metadata for the memory to encrypt it
+
+18:11.000 --> 18:12.000
+later.
+
+18:12.000 --> 18:19.000
+So we have isxts tweaks for the decryption later.
+
+18:19.000 --> 18:23.000
+And in the end, we just need some bunch of keys and
+
+18:23.000 --> 18:28.000
+initialization vectors and seats and nonsense to decrypt
+
+18:28.000 --> 18:30.000
+the memory later.
+
+18:30.000 --> 18:34.000
+And that's all written into an VM core else file
+
+18:34.000 --> 18:39.000
+with some extensions.
+
+18:39.000 --> 18:43.000
+So we zoom out a little bit.
+
+18:43.000 --> 18:47.000
+During the generation of the secure execution image,
+
+18:47.000 --> 18:51.000
+the user or the image owner has to first opt into the
+
+18:51.000 --> 18:54.000
+dumping and then provide a customer communication key,
+
+18:54.000 --> 18:56.000
+we CCK.
+
+18:56.000 --> 19:01.000
+That key is later used to decrypt the image.
+
+19:01.000 --> 19:03.000
+After the generation of the image, the guest owner
+
+19:03.000 --> 19:07.000
+transfers the image to its cloud provider or to the host.
+
+19:07.000 --> 19:12.000
+And we'll start the image and verify the image using the
+
+19:12.000 --> 19:15.000
+altruizer and the image will be started as a secure
+
+19:15.000 --> 19:16.000
+execution guest.
+
+19:16.000 --> 19:19.000
+At some point, someone will request a dump.
+
+19:19.000 --> 19:27.000
+It can be by the guest image owner or by the hypervisor.
+
+19:27.000 --> 19:29.000
+Doesn't matter.
+
+19:29.000 --> 19:32.000
+The key will trigger the confidential dump
+
+19:32.000 --> 19:37.000
+and the hypervisor calls I had in the slide before and
+
+19:37.000 --> 19:39.000
+the hypervisor will create the confidential dump
+
+19:39.000 --> 19:42.000
+encrypted with CCK.
+
+19:42.000 --> 19:46.000
+The encrypted dump data in the VM core else file is
+
+19:46.000 --> 19:51.000
+transported back to the trusted system and then in the
+
+19:51.000 --> 19:55.000
+trusted system, you can decrypt the image using the get dump
+
+19:55.000 --> 19:58.000
+and your secret customer communication key and then you
+
+19:58.000 --> 20:05.000
+can use a decrypted normal looking dump to analyze.
+
+20:05.000 --> 20:08.000
+So just a quick summary.
+
+20:08.000 --> 20:11.000
+The current status that you require an IBM Z15 for that,
+
+20:11.000 --> 20:14.000
+for secure execution and if you want to use
+
+20:14.000 --> 20:17.000
+adaptation or dumping you need a Z16.
+
+20:17.000 --> 20:23.000
+And from a software perspective, everything is upstream.
+
+20:23.000 --> 20:27.000
+Just to summarize the content of our talk, confidential
+
+20:27.000 --> 20:31.000
+accounts for S390X is we create a secure image that can
+
+20:31.000 --> 20:33.000
+have secrets in it.
+
+20:33.000 --> 20:36.000
+We support swapping, implicit and explicit attestation
+
+20:36.000 --> 20:39.000
+and also a host and actually dumping.
+
+20:39.000 --> 20:42.000
+And now we have a bonus slide.
+
+20:42.000 --> 20:44.000
+Yes, bonus slide.
+
+20:44.000 --> 20:46.000
+We are working on confidential containers based on
+
+20:46.000 --> 20:48.000
+secure execution.
+
+20:48.000 --> 20:52.000
+There is a pipeline kind of working including attestation
+
+20:52.000 --> 20:55.000
+and everything except for the secure part.
+
+20:55.000 --> 20:58.000
+But the secure part itself works.
+
+20:58.000 --> 21:00.000
+It's just a matter of putting these together.
+
+21:00.000 --> 21:03.000
+So that's coming soon hopefully.
+
+21:03.000 --> 21:05.000
+Yep.
+
+21:05.000 --> 21:30.000
+So the question is about how to build basically the boot image.
+
+21:30.000 --> 21:35.000
+So you need the public key of the machine you want to run
+
+21:35.000 --> 21:38.000
+or the machines you want to run the image on.
+
+21:38.000 --> 21:44.000
+So if I have 5,000 SE machines.
+
+21:44.000 --> 21:49.000
+If you have 5,000 SE machines you need 5,000 keys but you
+
+21:49.000 --> 21:53.000
+probably will not have 5,000 SE machines.
+
+21:53.000 --> 21:56.000
+But then you need...
+
+21:56.000 --> 21:58.000
+You probably hope so.
+
+21:58.000 --> 22:01.000
+By all means buy 5,000 SE machines.
+
+22:01.000 --> 22:06.000
+But in that case, yes, you will need 5,000 keys.
+
+22:06.000 --> 22:11.000
+But you can encrypt the image I think with multiple keys.
+
+22:11.000 --> 22:14.000
+So you don't have to have 5,000 images.
+
+22:14.000 --> 22:17.000
+So I can have one image signed by multiple keys?
+
+22:17.000 --> 22:20.000
+Yes, you can have one image signed by multiple keys.
+
+22:20.000 --> 22:22.000
+I mean encrypted with...
+
+22:22.000 --> 22:24.000
+Yes?
+
+22:24.000 --> 22:27.000
+Could you elaborate on what the endorsement mechanism for
+
+22:27.000 --> 22:29.000
+the software is all about?
+
+22:29.000 --> 22:33.000
+So how do I actually obtain the public key for a particular machine?
+
+22:33.000 --> 22:35.000
+How do I know that I'm using the right key?
+
+22:35.000 --> 22:43.000
+So the keys are signed by an IBM MasterKey which is published somewhere.
+
+22:43.000 --> 22:46.000
+I don't exactly know the details about that.
+
+22:46.000 --> 22:48.000
+But somewhere there is a way.
+
+22:48.000 --> 22:54.000
+There's a certification authority and you can know that there is a...
+
+22:54.000 --> 23:04.000
+The keys you're getting are real keys for an IBM Z15 or Z16 machine.
+
+23:04.000 --> 23:07.000
+So to be more specific, during the image generation or the
+
+23:07.000 --> 23:11.000
+administration request generation, you provide the IBM signing key
+
+23:11.000 --> 23:18.000
+that's signed by a DigiCERT CA signing key that's signed by some root key.
+
+23:18.000 --> 23:21.000
+And we also have obviously a relocation list for that.
+
+23:21.000 --> 23:27.000
+So you can be trusted that you're really signing with a hardware key.
+
+23:27.000 --> 23:30.000
+Maybe one question from my side.
+
+23:30.000 --> 23:34.000
+One of the things that have been very useful in technology like SGX is
+
+23:34.000 --> 23:36.000
+TCP recovery, right?
+
+23:36.000 --> 23:37.000
+These are bugs.
+
+23:37.000 --> 23:39.000
+You've seen that they can recover from that.
+
+23:39.000 --> 23:42.000
+And I'm wondering with the type of other station that you have here with a
+
+23:42.000 --> 23:48.000
+hard coded private key, there's no real way of knowing that I'm running even on a patch.
+
+23:48.000 --> 23:52.000
+We have some sort of micro code patch or something like Meltdown Foreshadow.
+
+23:52.000 --> 23:54.000
+Can you go forward from that?
+
+23:54.000 --> 24:08.000
+So I think we do support some versioning so that you can refuse your image to be run on an older machine, for example.
+
+24:08.000 --> 24:13.000
+I'm not sure about the rest.
+
+24:13.000 --> 24:23.000
+But I mean, there is a revocation list if a machine gets compromised.
+
+24:23.000 --> 24:25.000
+It's on a per machine base.
+
+24:25.000 --> 24:31.000
+There is no notion of a machine can be in a compromised state if it loads an older micro code version.
+
+24:31.000 --> 24:34.000
+You cannot roll back, I think.
+
+24:34.000 --> 24:39.000
+So the firmware is per machine and controlled more or less by IBM.
+
+24:39.000 --> 24:44.000
+So either the whole machine is compromised or nothing.
+
+24:44.000 --> 24:46.000
+So that's not per guest.
+
+24:46.000 --> 24:49.000
+We have no firmware per guest.
+
+24:49.000 --> 24:59.000
+So if you notice that there's a bug or whatever, you just relocate the whole key, so the whole host key,
+
+24:59.000 --> 25:03.000
+and update your firmware with a new key.
+
+25:03.000 --> 25:05.000
+Or you generate a new key.
+
+25:05.000 --> 25:12.000
+It depends where you have the key, because you mentioned in the slides that it's in hardware.
+
+25:12.000 --> 25:16.000
+No, the private key is in hardware.
+
+25:16.000 --> 25:23.000
+So it's not, a firmware will have to read it, obviously, to process it, though.
+
+25:23.000 --> 25:25.000
+So if that one is leaked, it's game over?
+
+25:25.000 --> 25:26.000
+For that machine.
+
+25:26.000 --> 25:27.000
+For that machine, it's game over.
+
+25:27.000 --> 25:31.000
+If that is leaked, for that machine, it's game over until the machine gets patched.
+
+25:31.000 --> 25:35.000
+Okay, but you can decrypt the damage, right?
+
+25:35.000 --> 25:41.000
+With the key, you can decrypt the boot image.
+
+25:41.000 --> 25:49.000
+But if you didn't have secrets in the boot image, then you're safer, I guess.
+
+25:49.000 --> 25:51.000
+Excuse me, I didn't get the details.
+
+25:51.000 --> 25:56.000
+How it's possible that the key, private key is in hardware, but are they taking a fearwater?
+
+25:56.000 --> 25:57.000
+Is that the key?
+
+25:57.000 --> 25:59.000
+No, no, you don't change the key.
+
+25:59.000 --> 26:08.000
+In that case, if the key is compromised, you need to change the hardware as well.
+
+26:08.000 --> 26:13.000
+You update the firmware to get rid of the bug, but the key is compromised, you need a new key.
+
+26:13.000 --> 26:20.000
+You send us the hardware, and then we'll basically give a new key, basically.
+
+26:20.000 --> 26:21.000
+Yes?
+
+26:21.000 --> 26:29.000
+So we have a bit of a break, so if you'll go around, I still have some questions, so if you don't mind.
+
+26:29.000 --> 26:30.000
+By all means.
+
+26:30.000 --> 26:33.000
+There's a bit from the audience, so.
+
+26:33.000 --> 26:37.000
+So when doing logic, you mentioned there are two exceptions in a row.
+
+26:37.000 --> 26:40.000
+So the code don't have a participation fold?
+
+26:40.000 --> 26:42.000
+Yes, the first is a page fold.
+
+26:42.000 --> 26:50.000
+So when VM notices that the page is not properly secured, why do you have two exceptions for that,
+
+26:50.000 --> 26:51.000
+and why do we not do it?
+
+26:51.000 --> 26:54.000
+Okay, so the question, I don't know if the stream is just going, but I still repeat the question.
+
+26:54.000 --> 26:55.000
+Okay, then I repeat the question.
+
+26:55.000 --> 27:03.000
+So the question is why do we have, by swapping, we have two different, here, we have a page fold,
+
+27:03.000 --> 27:05.000
+and then we have the other fold.
+
+27:05.000 --> 27:07.000
+Couldn't we just have one fold?
+
+27:07.000 --> 27:08.000
+In theory, yes.
+
+27:08.000 --> 27:15.000
+It could be like, you mentioned there's an import, but it also does come from it, and immediately import a page?
+
+27:15.000 --> 27:19.000
+You can export it and import it immediately, but I don't know.
+
+27:19.000 --> 27:22.000
+Wait, okay, first, let me answer the first part first.
+
+27:22.000 --> 27:30.000
+So, yes, we could have skipped the second fold by exporting the page directly, by importing the page directly.
+
+27:30.000 --> 27:37.000
+The point is that when the page fold happens, we don't know if that is for a secure guest or not.
+
+27:37.000 --> 27:44.000
+The page fold handler would need to be so much more complicated, unnecessarily complicated,
+
+27:44.000 --> 27:51.000
+and importing a page takes time anyway, and the overhead of having an extra exception is not so big,
+
+27:51.000 --> 27:53.000
+compared to the amount of code we needed to write.
+
+27:53.000 --> 27:55.000
+So what was the second question?
+
+27:55.000 --> 27:57.000
+Okay, okay.
+
+27:57.000 --> 28:05.000
+Okay, sorry, another question here?
+
+28:05.000 --> 28:07.000
+Oh, sorry, I thought it was.
+
+28:07.000 --> 28:15.000
+There's also a question from the online stream, so I'm going to read it to you guys, and then you can handle it.
+
+28:15.000 --> 28:22.000
+So, Muhammad is asking, in the flow shown, can you explain why is the measurement key a part of the evidence?
+
+28:22.000 --> 28:23.000
+Why is it needed?
+
+28:23.000 --> 28:26.000
+Is the attestation flow specified somewhere?
+
+28:26.000 --> 28:28.000
+Maybe, Stefan.
+
+28:28.000 --> 28:44.000
+So, the measurement key is generated by the trusted system owner, and then encrypted with the public key of the firmware or the hardware.
+
+28:44.000 --> 28:50.000
+We needed to do an HMAC, so it's a signed authentication.
+
+28:50.000 --> 28:57.000
+And only the person who has the key or the machine who has that measurement key can reliably create the HMAC.
+
+28:57.000 --> 28:58.000
+Okay.

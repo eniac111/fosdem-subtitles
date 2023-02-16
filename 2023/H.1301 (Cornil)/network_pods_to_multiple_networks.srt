@@ -1,0 +1,1124 @@
+1
+0:00:00.000 --> 0:00:08.640
+Hi everyone.
+
+2
+0:00:08.640 --> 0:00:12.760
+So that's the last speaker of the day.
+
+3
+0:00:12.760 --> 0:00:18.640
+So I'm going to talk about a cumulative spot connecting to multiple networks.
+
+4
+0:00:18.640 --> 0:00:22.440
+So Doug already spoke about this in a slightly different way.
+
+5
+0:00:22.440 --> 0:00:26.360
+We all want to take a slightly different approach.
+
+6
+0:00:26.360 --> 0:00:28.480
+So first a few things about myself.
+
+7
+0:00:28.480 --> 0:00:33.120
+I'm a software engineer at Cisco working on continuing networking things.
+
+8
+0:00:33.120 --> 0:00:39.560
+And I'm a maintainer of Calico VPP, which is going to be the topic of this talk.
+
+9
+0:00:39.560 --> 0:00:40.960
+This talk is also a bit particular.
+
+10
+0:00:40.960 --> 0:00:28.480
+It's a result of a collaboration effort with many awesome people like I
+
+11
+0:00:45.360 --> 0:00:51.680
+mostly in Cisco and direct collaboration with Mitika Ganguly, which is a P at Intel.
+
+12
+0:00:51.680 --> 0:00:58.240
+But she sadly couldn't be here today because it's quite far from the US where she lives.
+
+13
+0:00:58.240 --> 0:01:02.920
+But I'll do my best to present her work.
+
+14
+0:01:02.920 --> 0:01:06.160
+So first a bit of a background story of this work.
+
+15
+0:01:06.160 --> 0:01:13.160
+So in the world of endpoint applications, Kubernetes has really become the solution
+
+16
+0:01:13.160 --> 0:01:18.440
+of choice when it comes to deploying large scale services in various environments because
+
+17
+0:01:18.440 --> 0:01:25.920
+it provides the primitives for scalability, so Metal-LB that we saw in previous talk,
+
+18
+0:01:25.920 --> 0:01:28.360
+services, house checks and so on.
+
+19
+0:01:28.360 --> 0:01:31.880
+It also provides the uniformity of deployment.
+
+20
+0:01:31.880 --> 0:01:36.880
+And it's also far from the second, so you don't need to know what you're running on.
+
+21
+0:01:36.880 --> 0:01:42.680
+But coming from the CNF land, so trying to deploy network function in this environment,
+
+22
+0:01:42.680 --> 0:01:44.320
+the story is not the same.
+
+23
+0:01:44.320 --> 0:01:49.720
+So I'll define a bit more what I mean by CNF because it's a bit different between the standard
+
+24
+0:01:49.720 --> 0:01:54.240
+CNF use case, the 5G one.
+
+25
+0:01:54.240 --> 0:01:59.640
+What I mean by that is, so I'll take an example for the sake of this presentation.
+
+26
+0:01:59.640 --> 0:02:02.640
+So typically what I mean by that is the WireGuard head end.
+
+27
+0:02:02.640 --> 0:02:07.000
+For example, you have a customer and you want to deploy a fleet of WireGuard head ends to
+
+28
+0:02:07.000 --> 0:02:12.000
+give that user access to a resource in a company network.
+
+29
+0:02:12.000 --> 0:02:19.000
+So typically a very private printer that everybody wants to access to because people like to
+
+30
+0:02:19.000 --> 0:02:21.640
+print.
+
+31
+0:02:21.640 --> 0:02:27.000
+So the particularity of this use case is that it's dynamic enough to benefit from the abstraction
+
+32
+0:02:27.000 --> 0:02:28.000
+that Kubernetes brings.
+
+33
+0:02:28.000 --> 0:02:31.400
+And I've lost my mouse.
+
+34
+0:02:31.400 --> 0:02:37.040
+So typically load balancing, scheduling and those kinds of things.
+
+35
+0:02:37.040 --> 0:02:39.760
+But it has a lot of specific needs.
+
+36
+0:02:39.760 --> 0:02:44.440
+For example, Ingress has to be done in a peculiar way because you have a WireGuard encrypted
+
+37
+0:02:44.440 --> 0:02:49.880
+traffic, so typically you want to see which IP it's coming from.
+
+38
+0:02:49.880 --> 0:02:53.720
+You also constraint on how you receive traffic because typically, and that's the place where
+
+39
+0:02:53.720 --> 0:02:56.940
+you need multiple interfaces to go into your pod.
+
+40
+0:02:56.940 --> 0:03:02.920
+And you also require high performance because encrypted traffic, so typically you want those
+
+41
+0:03:02.920 --> 0:03:06.920
+things to run faster and you have a lot of users using them.
+
+42
+0:03:06.920 --> 0:03:13.420
+So not for that printer, but assuming it's a bigger use case.
+
+43
+0:03:13.420 --> 0:03:15.880
+So we tried to design a solution for that.
+
+44
+0:03:15.880 --> 0:03:18.760
+So there are lots of components at play.
+
+45
+0:03:18.760 --> 0:03:22.360
+I'll try to go quickly into them.
+
+46
+0:03:22.360 --> 0:03:24.040
+So in the top we have our application.
+
+47
+0:03:24.040 --> 0:03:28.160
+So here are the WireGuard VPN head end.
+
+48
+0:03:28.160 --> 0:03:31.300
+We want to deploy it on top of Kubernetes, so we had to choose a CNI.
+
+49
+0:03:31.300 --> 0:03:36.840
+So we want to work with Calico mainly because of the cuteness of their cats, but also because
+
+50
+0:03:36.840 --> 0:03:45.040
+it provides a really nice interface into supporting multiple data planes and also a nice BGP integration
+
+51
+0:03:45.040 --> 0:03:52.520
+that allows us to tweak the way we process packets.
+
+52
+0:03:52.520 --> 0:03:57.240
+And for carrying packets, we used the FDIO's DPP as a data plane.
+
+53
+0:03:57.240 --> 0:04:01.920
+That gave us more control on how packets are processed.
+
+54
+0:04:01.920 --> 0:04:09.280
+And so that allowed us to go deeper into the way networks actually managed at a really
+
+55
+0:04:09.280 --> 0:04:10.880
+low level.
+
+56
+0:04:10.880 --> 0:04:16.840
+And there are also other components that are going to play, but more on this later.
+
+57
+0:04:16.840 --> 0:04:22.480
+So I'm going to go quickly over Calico and VPP because they have been presented many
+
+58
+0:04:22.480 --> 0:04:23.480
+times.
+
+59
+0:04:23.480 --> 0:04:29.360
+So in short, Calico is a community CNI providing a lot of great features, policies, BGP, support
+
+60
+0:04:29.360 --> 0:04:31.640
+for really huge clusters.
+
+61
+0:04:31.640 --> 0:04:36.360
+And the point that's important for this presentation is that it has a very well-defined control
+
+62
+0:04:36.360 --> 0:04:41.440
+plane, data plane interface, allowing to plug new performance-oriented software underneath
+
+63
+0:04:41.440 --> 0:04:42.760
+it without much hassle.
+
+64
+0:04:42.760 --> 0:04:46.880
+And that's what we are going to leverage.
+
+65
+0:04:46.880 --> 0:04:53.580
+So we choose to slip VPP underneath Calico first because we were originally contributors
+
+66
+0:04:53.580 --> 0:04:56.560
+in this open-source user space networking data plane.
+
+67
+0:04:56.560 --> 0:04:59.520
+So it was a solution of choice.
+
+68
+0:04:59.520 --> 0:05:06.480
+But also it has a lot of cool functional ITs that are built in, and it's extensible.
+
+69
+0:05:06.480 --> 0:05:13.200
+So I am doing a bit of publicity for the software I'm coming from, but it was a good tool for
+
+70
+0:05:13.200 --> 0:05:14.200
+this use case.
+
+71
+0:05:14.200 --> 0:05:21.080
+And also it's quite fast, so it really fits the needs for this application.
+
+72
+0:05:21.080 --> 0:05:23.760
+So how did we bind it together?
+
+73
+0:05:23.760 --> 0:05:27.680
+What we do is we built an agent running in a demand set on every node.
+
+74
+0:05:27.680 --> 0:05:33.460
+So deployment is the same as a simple pod, just with more privileges.
+
+75
+0:05:33.460 --> 0:05:40.200
+We registered this agent in Calico as a Calico data plane and used their JRPC interface and
+
+76
+0:05:40.200 --> 0:05:45.600
+their APIs that they exposed to decouple control data plane.
+
+77
+0:05:45.600 --> 0:05:50.200
+That agent listens for Calico events, and then programs with VPP accordingly.
+
+78
+0:05:50.200 --> 0:05:55.000
+And we also built a series of custom plugins for handling NAT, service, top balancing,
+
+79
+0:05:55.000 --> 0:05:56.040
+and so on.
+
+80
+0:05:56.040 --> 0:06:01.840
+And we tweaked the configuration so that things behave nicely in a container-oriented environment.
+
+81
+0:06:01.840 --> 0:06:08.200
+And with all this, we have every break to bring VPP into the clusters, and so to have
+
+82
+0:06:08.200 --> 0:06:15.240
+really control on everything that happens in the Kubernetes networking.
+
+83
+0:06:15.240 --> 0:06:17.240
+How does that happen under the...
+
+84
+0:06:17.240 --> 0:06:20.600
+So what happens exactly under the hood?
+
+85
+0:06:20.600 --> 0:06:26.520
+What we do is we swap all the network logic that was happening in Linux to VPP.
+
+86
+0:06:26.520 --> 0:06:31.240
+So from this configuration to there.
+
+87
+0:06:31.240 --> 0:06:33.240
+In order to...
+
+88
+0:06:33.240 --> 0:06:40.480
+So, yeah, the thing is, as VPP is a user space stack, we have to do a few things a bit differently
+
+89
+0:06:40.480 --> 0:06:43.480
+compared to what was previously done in Linux.
+
+90
+0:06:43.480 --> 0:06:49.120
+So in order to insert VPP between the host and the network, we will grab the host interface,
+
+91
+0:06:49.120 --> 0:06:54.280
+the app link, and consume it in VPP with the appropriate driver.
+
+92
+0:06:54.280 --> 0:06:58.160
+And then we restore the host connectivity by creating a turn interface in the host root
+
+93
+0:06:58.160 --> 0:06:59.320
+network namespace.
+
+94
+0:06:59.320 --> 0:07:01.840
+So that's the turn tab here.
+
+95
+0:07:01.840 --> 0:07:05.800
+And we replicate everything on that interface, the resist the routes.
+
+96
+0:07:05.800 --> 0:07:09.400
+So basically we insert ourselves as a bump in the wire on the app link.
+
+97
+0:07:09.400 --> 0:07:15.080
+It's not very network-ish, but it works pretty well in that configuration.
+
+98
+0:07:15.080 --> 0:07:22.760
+And that way we restore pod connectivity as before with turn tabs instead of a leaf.
+
+99
+0:07:22.760 --> 0:07:27.400
+We create an interface in every pod.
+
+100
+0:07:27.400 --> 0:07:28.640
+And then everything runs normally.
+
+101
+0:07:28.640 --> 0:07:30.920
+The calico control plane is running normally on the host.
+
+102
+0:07:30.920 --> 0:07:38.160
+And it configures the data plane functions in VPP via the agent.
+
+103
+0:07:38.160 --> 0:07:40.360
+So now we have the green part covered.
+
+104
+0:07:40.360 --> 0:07:42.080
+So all those components run neatly.
+
+105
+0:07:42.080 --> 0:07:47.640
+And what we achieve with that is that when we create a pod, Kubernetes will call calico,
+
+106
+0:07:47.640 --> 0:07:49.360
+calico will call VPP.
+
+107
+0:07:49.360 --> 0:07:55.840
+And we can provide an interface that we fully handled on a network layer directly in VPP.
+
+108
+0:07:55.840 --> 0:08:02.160
+But for this specific way we got an application, we need a bit more than that.
+
+109
+0:08:02.160 --> 0:08:03.800
+We need multiple interfaces.
+
+110
+0:08:03.800 --> 0:08:08.200
+And we also potentially have overlapping addresses.
+
+111
+0:08:08.200 --> 0:08:13.840
+So we don't fully manage where the IPs are going to end.
+
+112
+0:08:13.840 --> 0:08:20.040
+So for the multiple interface part, all we got to show was to go with Moltus that provides
+
+113
+0:08:20.040 --> 0:08:21.040
+multiplexing.
+
+114
+0:08:21.040 --> 0:08:26.520
+And we showed you also a dedicated IPAM that we patched, which we were about because it
+
+115
+0:08:26.520 --> 0:08:30.320
+was quite simple to patch and brought those two pieces in.
+
+116
+0:08:30.320 --> 0:08:39.400
+But so when I mean multiple interfaces, what does that exactly contain?
+
+117
+0:08:39.400 --> 0:08:47.760
+So the thing is, the typical Kubernetes deployment looks like this.
+
+118
+0:08:47.760 --> 0:08:51.920
+So each pod has a single interface.
+
+119
+0:08:51.920 --> 0:08:57.320
+And the CNI provides a port-to-port connectivity, typically with an encapsulation from node
+
+120
+0:08:57.320 --> 0:08:58.320
+to node.
+
+121
+0:08:58.320 --> 0:09:03.680
+But in our application, we want to differentiate the encrypted traffic from the clear text
+
+122
+0:09:03.680 --> 0:09:07.840
+traffic, so before and after the head end.
+
+123
+0:09:07.840 --> 0:09:10.840
+But we still want Kubernetes as the end to operate.
+
+124
+0:09:10.840 --> 0:09:15.320
+So we still want the nice things about Kubernetes, so service IPs and everything.
+
+125
+0:09:15.320 --> 0:09:16.880
+So it's not only multiple interfaces.
+
+126
+0:09:16.880 --> 0:09:20.880
+It's really multiple interfaces wired into Kubernetes.
+
+127
+0:09:20.880 --> 0:09:24.040
+So it's more multiple isolated networks.
+
+128
+0:09:24.040 --> 0:09:31.400
+So conceptually, what we needed was the ability to create multiple Kubernetes networks.
+
+129
+0:09:31.400 --> 0:09:35.720
+And each network behaving a bit like a standalone cluster stacked on top of each other.
+
+130
+0:09:35.720 --> 0:09:43.760
+So with this, we request networks that provide complete resolution between each other, meaning
+
+131
+0:09:43.760 --> 0:09:48.400
+that traffic cannot cross from a network to another without going from to the outside
+
+132
+0:09:48.400 --> 0:09:50.600
+world.
+
+133
+0:09:50.600 --> 0:09:56.360
+And so that means that we are to bind Calico, VPP, so on, integration, and Moltus together
+
+134
+0:09:56.360 --> 0:10:03.040
+to create a model where everybody is aware of that definition of networks, have a catalog
+
+135
+0:10:03.040 --> 0:10:07.000
+of isolated network, specify the way they are going to communicate from node to node
+
+136
+0:10:07.000 --> 0:10:13.360
+via VIX and encapsulations, and have a way for pods to attach to those networks with
+
+137
+0:10:13.360 --> 0:10:14.360
+annotations.
+
+138
+0:10:14.360 --> 0:10:17.720
+And so that, in the end, Kubernetes is aware of these networks.
+
+139
+0:10:17.720 --> 0:10:23.640
+And we can still maintain the SDN part of the logic.
+
+140
+0:10:23.640 --> 0:10:33.400
+So the way this works quickly is that the CNI interface will call Calico once per pod.
+
+141
+0:10:33.400 --> 0:10:35.400
+So once per pod.
+
+142
+0:10:35.400 --> 0:10:40.240
+So the thing is Moltus will call the CNI Calico once per top-all pod interface.
+
+143
+0:10:40.240 --> 0:10:43.560
+And we will in turn receive in our agent those calls.
+
+144
+0:10:43.560 --> 0:10:50.440
+And we can map those with annotations and do our magics to provide the logic.
+
+145
+0:10:50.440 --> 0:10:54.760
+And having also the IPAM patch allows us to support multiple IPs and to have different
+
+146
+0:10:54.760 --> 0:10:59.600
+realms where the IP lives and gets located from.
+
+147
+0:10:59.600 --> 0:11:04.400
+So from a user's perspective, what we expose is a network catalog where networks are defining
+
+148
+0:11:04.400 --> 0:11:06.200
+CRDs for now.
+
+149
+0:11:06.200 --> 0:11:10.640
+We are starting a standardization effort to bring that into Kubernetes, but that will
+
+150
+0:11:10.640 --> 0:11:12.600
+probably take time.
+
+151
+0:11:12.600 --> 0:11:15.360
+So right now we kept it that simple.
+
+152
+0:11:15.360 --> 0:11:19.980
+We've just specified a VNI using VXLAN by default, just passing a range.
+
+153
+0:11:19.980 --> 0:11:25.240
+And we also keep a network attachment definition from Moltus with one-to-one mapping to network
+
+154
+0:11:25.240 --> 0:11:30.640
+so that things, we don't change too many things at once.
+
+155
+0:11:30.640 --> 0:11:34.920
+And then we use those networks into the pod definitions.
+
+156
+0:11:34.920 --> 0:11:39.440
+So we reference them the Moltus way.
+
+157
+0:11:39.440 --> 0:11:44.720
+We can reference them as well in services with dedicated annotations.
+
+158
+0:11:44.720 --> 0:11:50.480
+And so that way we tell all agents to program IP in a way where the services apply only
+
+159
+0:11:50.480 --> 0:11:52.600
+in a specific network.
+
+160
+0:11:52.600 --> 0:11:54.220
+The policy is the same way.
+
+161
+0:11:54.220 --> 0:12:01.880
+And also that gives us the ability for pods to have a bit more tweaking on parameters
+
+162
+0:12:01.880 --> 0:12:03.240
+exposed on the interface.
+
+163
+0:12:03.240 --> 0:12:09.520
+So specify the number of queues we want, the queue depth, and also support multiple types.
+
+164
+0:12:09.520 --> 0:12:15.120
+So that gives a lot of flexibility to get the performance right and to get, so first
+
+165
+0:12:15.120 --> 0:12:16.800
+to get the functionalities.
+
+166
+0:12:16.800 --> 0:12:21.520
+So the fact that we have multiple interfaces and so also size them so that the performance
+
+167
+0:12:21.520 --> 0:12:28.600
+is appropriate for the use case that we want to achieve.
+
+168
+0:12:28.600 --> 0:12:33.480
+Last nice feature of this is that as we have GobiGP support, we can pair those networks
+
+169
+0:12:33.480 --> 0:12:39.680
+with the outside world if we have a fabric that's VXLAN and if GobiGP supports it.
+
+170
+0:12:39.680 --> 0:12:43.960
+So that part is still a bit work in progress and there are a lot of things to get right.
+
+171
+0:12:43.960 --> 0:12:49.280
+But that's the end picture we want to go.
+
+172
+0:12:49.280 --> 0:12:57.040
+And this could, so if we put everything together, we would get probably something like that,
+
+173
+0:12:57.040 --> 0:12:58.480
+that looks like that.
+
+174
+0:12:58.480 --> 0:13:04.240
+So basically when the users want to connect to this hypothetical VPN and that hypothetical
+
+175
+0:13:04.240 --> 0:13:12.080
+printer, it would get into the cluster via GobiGP peering, so traffic is going to be
+
+176
+0:13:12.080 --> 0:13:18.720
+attracted to the green network, hit service IP in that network, so get some load balancing
+
+177
+0:13:18.720 --> 0:13:21.360
+across the node.
+
+178
+0:13:21.360 --> 0:13:27.600
+Then it's going to be deciphered in a pod that then encapsulates traffic and passes
+
+179
+0:13:27.600 --> 0:13:31.280
+for example to a NAT pod running in user space.
+
+180
+0:13:31.280 --> 0:13:38.200
+So here I put another type of interface that is more performance oriented and then exit
+
+181
+0:13:38.200 --> 0:13:43.800
+the cluster on a different VLAN paired with the outside world.
+
+182
+0:13:43.800 --> 0:13:48.560
+So some parts still need to be done but the general internal logic of the cluster is still
+
+183
+0:13:48.560 --> 0:13:56.600
+something that works and that brings the ability for container networking functions to run
+
+184
+0:13:56.600 --> 0:14:07.560
+unmodified with their multiple interfaces directly in a somewhat regular cluster.
+
+185
+0:14:07.560 --> 0:14:18.280
+So we spoke about improving performance of the network, of the underlying interface,
+
+186
+0:14:18.280 --> 0:14:27.720
+but we can also improve the performance with which the application in the pod consumes
+
+187
+0:14:27.720 --> 0:14:29.120
+their own interfaces.
+
+188
+0:14:29.120 --> 0:14:36.400
+So the standard way applications usually consume packets within pods is via socket APIs, so
+
+189
+0:14:36.400 --> 0:14:41.080
+it's really standard but you have to go through the kernel and it's a code path that wasn't
+
+190
+0:14:41.080 --> 0:14:46.120
+designed for the performance levels of modern apps, so that's why GSO came up as a network
+
+191
+0:14:46.120 --> 0:14:47.120
+cycle organization.
+
+192
+0:14:47.120 --> 0:14:53.240
+But here with VPP running, it would be nice to be able to bypass the network stack and
+
+193
+0:14:53.240 --> 0:14:57.160
+pass the packets directly from VPP and not touching the kernel.
+
+194
+0:14:57.160 --> 0:15:04.320
+So fortunately VPP exposes two different ways to consume those interfaces.
+
+195
+0:15:04.320 --> 0:15:09.840
+We'll mostly go into the first one which is the memory interface.
+
+196
+0:15:09.840 --> 0:15:16.680
+So basically it's a packet oriented interface standard relying on memory segment for speed
+
+197
+0:15:16.680 --> 0:15:23.080
+and this can be leveraged by an application via a simple library, so either GOMEMIF, LIMEMIF
+
+198
+0:15:23.080 --> 0:15:35.160
+in C or DPDK or even VPP and so provide a really high speed way of consuming that extra
+
+199
+0:15:35.160 --> 0:15:37.920
+interface in the pod.
+
+200
+0:15:37.920 --> 0:15:44.240
+And the really nice thing about this is that it brings also the connection between the
+
+201
+0:15:44.240 --> 0:15:51.480
+Kubernetes network, Kubernetes SDN and the pod into user space, meaning that now that
+
+202
+0:15:51.480 --> 0:15:57.800
+that connection lives in a regular C program, we can also leverage...
+
+203
+0:15:57.800 --> 0:16:04.800
+So it's easier to leverage CPU optimizations and new features and that's where the silicon
+
+204
+0:16:04.800 --> 0:16:12.160
+reenters the picture and the work from Mritika from Intel and their team.
+
+205
+0:16:12.160 --> 0:16:20.820
+So they benchmarked this kind of setup and also introduced an optimization that's coming
+
+206
+0:16:20.820 --> 0:16:27.320
+into the fourth generation Intel Exeons that's called Data Streaming Accelerator.
+
+207
+0:16:27.320 --> 0:16:33.840
+Basically it's a way to optimize copies between processes on some CPUs.
+
+208
+0:16:33.840 --> 0:16:39.080
+And so what they did is compare the performance that we get with Kubernetes clusters, multiple
+
+209
+0:16:39.080 --> 0:16:49.720
+interfaces and a simple pod, so not bringing the old VPN logic, just doing L3 patch and
+
+210
+0:16:49.720 --> 0:16:58.920
+seeing how fast things could go between regular kernel interfaces, the turn, the memory interfaces
+
+211
+0:16:58.920 --> 0:17:07.400
+and the memory interfaces leveraging those optimizations in the CPU.
+
+212
+0:17:07.400 --> 0:17:12.360
+So that gives those graphs that are really...
+
+213
+0:17:12.360 --> 0:17:14.760
+So that have a lot of numbers in them.
+
+214
+0:17:14.760 --> 0:17:21.280
+But basically I tried to sum up quite quickly what this gives.
+
+215
+0:17:21.280 --> 0:17:27.120
+There are two MTUs, 1500 bytes and 9000 bytes here.
+
+216
+0:17:27.120 --> 0:17:30.880
+The performance for turn interfaces in dark blue.
+
+217
+0:17:30.880 --> 0:17:36.920
+Blue is the first memif and the DSA optimized memif is in yellow.
+
+218
+0:17:36.920 --> 0:17:44.240
+And basically what this gives is that with...
+
+219
+0:17:44.240 --> 0:17:48.160
+The performance is really...
+
+220
+0:17:48.160 --> 0:17:53.840
+So it brings really a huge difference between...
+
+221
+0:17:53.840 --> 0:17:58.480
+So sorry.
+
+222
+0:17:58.480 --> 0:18:09.080
+Vote with DSA is 2.3 times faster than with regular memif for the 1500 byte packets.
+
+223
+0:18:09.080 --> 0:18:14.640
+And if you go with DSA enabled, it's 23 times faster than turn tap.
+
+224
+0:18:14.640 --> 0:18:22.880
+And with a 9000 byte MTU, basically you get more than 60 times faster with the memif that's
+
+225
+0:18:22.880 --> 0:18:26.200
+optimized with DSA.
+
+226
+0:18:26.200 --> 0:18:33.880
+Basically the digits, so the number that's really interesting is that bar, is that with
+
+227
+0:18:33.880 --> 0:18:36.240
+200,000...
+
+228
+0:18:36.240 --> 0:18:40.600
+So basically you get a single call doing 100Gs with that.
+
+229
+0:18:40.600 --> 0:18:45.000
+And that without too much modifications of the applications.
+
+230
+0:18:45.000 --> 0:18:47.920
+So basically you just spin a regular cluster.
+
+231
+0:18:47.920 --> 0:18:52.760
+If the CPU supports it, you use a regular library and you're able to consume packets
+
+232
+0:18:52.760 --> 0:18:59.960
+at really huge speeds without modifying the application too much.
+
+233
+0:18:59.960 --> 0:19:09.200
+So there is another graph looking into the scaling with numnor calls.
+
+234
+0:19:09.200 --> 0:19:13.520
+Both with small MTUs and large MTUs.
+
+235
+0:19:13.520 --> 0:19:17.540
+Basically that shows that we can spare calls when going...
+
+236
+0:19:17.540 --> 0:19:20.780
+So turn tap does not scale very well.
+
+237
+0:19:20.780 --> 0:19:27.000
+So for a memif scales with one, two, six calls.
+
+238
+0:19:27.000 --> 0:19:37.820
+And DSA achieves the same results with two to three less calls than its regular memif
+
+239
+0:19:37.820 --> 0:19:38.820
+counterpart.
+
+240
+0:19:38.820 --> 0:19:44.840
+So basically you achieve 100Gs which was the limit of the setup with a single call in the
+
+241
+0:19:44.840 --> 0:19:53.600
+case of large MTUs and three calls in the case of smaller MTUs.
+
+242
+0:19:53.600 --> 0:19:56.120
+So that's all for the talk.
+
+243
+0:19:56.120 --> 0:20:01.280
+Sorry I went into a variety of different subjects because that topic is quite...
+
+244
+0:20:01.280 --> 0:20:04.560
+It goes into a lot of different directions.
+
+245
+0:20:04.560 --> 0:20:10.800
+Basically that was to give you another view of the direction we are trying to go.
+
+246
+0:20:10.800 --> 0:20:14.960
+Trying to bring all those pieces together in a framework that allows us to make those
+
+247
+0:20:14.960 --> 0:20:19.560
+CNFs run into a community environment.
+
+248
+0:20:19.560 --> 0:20:21.480
+This work is open source.
+
+249
+0:20:21.480 --> 0:20:27.520
+There are the details of the test that were done in the following slides.
+
+250
+0:20:27.520 --> 0:20:33.720
+You can find us on GitHub and there is also a Slack channel open where you can ask questions.
+
+251
+0:20:33.720 --> 0:20:39.320
+And we have a new release coming up in beta aiming for GA that's going without soon.
+
+252
+0:20:39.320 --> 0:20:42.240
+So thanks a lot for listening.
+
+253
+0:20:42.240 --> 0:20:45.240
+So here are the details.
+
+254
+0:20:45.240 --> 0:21:00.760
+And I'm open to questions if you have any.
+
+255
+0:21:00.760 --> 0:21:02.920
+Just one question for the sake of it.
+
+256
+0:21:02.920 --> 0:21:09.480
+Have you ever thought about some shared memory between the different parts to eliminate the
+
+257
+0:21:09.480 --> 0:21:13.680
+needing to copy over the packets?
+
+258
+0:21:13.680 --> 0:21:18.440
+So we thought of this.
+
+259
+0:21:18.440 --> 0:21:22.760
+So there are different ways to do that.
+
+260
+0:21:22.760 --> 0:21:24.760
+If you use...
+
+261
+0:21:24.760 --> 0:21:30.320
+So there is the VCR which I haven't spoken about.
+
+262
+0:21:30.320 --> 0:21:33.920
+Which is a way of opening the sockets directly in VPP.
+
+263
+0:21:33.920 --> 0:21:39.160
+So basically you do a listen in VPP, 40 CPE, UDP or a given protocol.
+
+264
+0:21:39.160 --> 0:21:42.960
+So that supports directly...
+
+265
+0:21:42.960 --> 0:21:45.720
+So basically the data never leaves VPP.
+
+266
+0:21:45.720 --> 0:21:53.940
+And you can do direct copies between processes without having to copy.
+
+267
+0:21:53.940 --> 0:21:56.440
+Because everything stays in VPP in the end.
+
+268
+0:21:56.440 --> 0:22:02.760
+For MEMIF we don't support that out of the box but nothing forbids you to spawn two pods.
+
+269
+0:22:02.760 --> 0:22:03.880
+Make them share a socket.
+
+270
+0:22:03.880 --> 0:22:09.800
+And it's only shared memory so you can directly do it without having to spin up the whole
+
+271
+0:22:09.800 --> 0:22:10.800
+thing.
+
+272
+0:22:10.800 --> 0:22:16.000
+So you could even do that in any cluster or directly in bare metal.
+
+273
+0:22:16.000 --> 0:22:22.560
+So MEMIF is really a lightweight protocol so you can do that just with regular socket.
+
+274
+0:22:22.560 --> 0:22:30.920
+Okay, cool.
+
+275
+0:22:30.920 --> 0:22:31.920
+Thank you very much.
+
+276
+0:22:31.920 --> 0:22:32.920
+Thanks for listening.
+
+277
+0:22:32.920 --> 0:22:55.700
+We'll see you next time.
+
+278
+0:22:55.700 --> 0:22:56.680
+Okay Eastern.
+
+279
+0:22:56.680 --> 0:22:58.000
+No?
+
+280
+0:22:58.000 --> 0:22:59.120
+Yes.
+
+281
+0:22:59.120 --> 0:23:02.880
+Okay Eastern.
+

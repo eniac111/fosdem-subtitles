@@ -1,0 +1,967 @@
+WEBVTT
+
+00:00.000 --> 00:07.600
+So, my name is Robin Groszie.
+
+00:07.600 --> 00:12.240
+I used to work for TransIP at first and Team Blue after they merged with a bunch of other
+
+00:12.240 --> 00:17.600
+companies for about a decade until a month ago.
+
+00:17.600 --> 00:24.200
+During that time period, we transitioned from running our own closed-source DNS server software
+
+00:24.200 --> 00:26.880
+to running open-source DNS server software.
+
+00:26.880 --> 00:32.720
+And just like the talk we just had that happens to be PowerDNS.
+
+00:32.720 --> 00:38.320
+So I'll take you through the issues we had going from closed-source to open-source, which
+
+00:38.320 --> 00:44.880
+roughly took the entire time I was there, about nine years.
+
+00:44.880 --> 00:46.880
+So yeah, let's start.
+
+00:46.880 --> 00:52.080
+So how it started for me, TransDNS, which they called the Homebrew DNS software, was
+
+00:52.080 --> 01:00.440
+written originally in about 2003, 2004, and it had DNS support added in 2012.
+
+01:00.440 --> 01:07.480
+When I started working at TransIP in 2013 as a PHP coder, I was asked to help them
+
+01:07.480 --> 01:12.680
+debug a crasher in the TransDNS code.
+
+01:12.680 --> 01:17.920
+It basically came down to a buffer overflow because somebody had, one of our customers
+
+01:17.920 --> 01:25.400
+had managed to put more than 16 kilobytes of text record data on one single label.
+
+01:25.400 --> 01:32.000
+The really ugly quick fix was to increase the buffer to 32 kilobytes.
+
+01:32.000 --> 01:36.360
+And one small disclaimer, I was involved in almost all the work that I mentioned here
+
+01:36.360 --> 01:41.000
+where there are some things that I didn't do myself or just consulted on, stuff like
+
+01:41.000 --> 01:42.000
+that.
+
+01:42.000 --> 01:44.840
+I'll try to make a distinction about it, but I might miss some stuff.
+
+01:44.840 --> 01:48.560
+Yeah, so back then it was a really basic setup.
+
+01:48.560 --> 01:49.760
+We basically had three servers.
+
+01:49.760 --> 01:51.280
+They were all running TransDNS.
+
+01:51.280 --> 01:54.680
+There was no load balancing.
+
+01:54.680 --> 01:58.840
+The signing stack was built using DNS stack tools for those few people who still know
+
+01:58.840 --> 02:00.560
+what it is.
+
+02:00.560 --> 02:04.320
+And there was a lot of automation on top of DNS stack tools in PHP to make all of that
+
+02:04.320 --> 02:09.480
+work and ultimately upload stuff to the registries because we were a registrar, so a lot of the
+
+02:09.480 --> 02:10.480
+stuff was automated.
+
+02:10.480 --> 02:17.680
+All of this DNS propagation was done to cronjobs, which means it was very slow.
+
+02:17.680 --> 02:23.080
+It took roughly five minutes to propagate a DNS change, which back then wasn't really
+
+02:23.080 --> 02:27.800
+a big problem, but as we went on, it became more and more an issue, especially when we
+
+02:27.800 --> 02:34.640
+got Let's Encrypt that you needed to quickly update your DNS to get your certificate signed.
+
+02:34.640 --> 02:41.800
+I think we still have roughly 1 million zones in the setup, most of which, so about 80,
+
+02:41.800 --> 02:44.720
+90% are DNS-exigned.
+
+02:44.720 --> 02:48.720
+There were very few people back then that actually knew stuff about it and dared to
+
+02:48.720 --> 02:49.720
+work on it.
+
+02:49.720 --> 02:54.440
+I think maybe three or four people, one of which was I.
+
+02:54.440 --> 03:00.080
+It had very bad RFC compatibility, which I will get into a little bit later.
+
+03:00.080 --> 03:05.200
+Adding new record types, which Kevin mentioned, like SSHFP was a lot of work because there
+
+03:05.200 --> 03:10.320
+was an interpreter in Transdian as itself, which had to be written in C, and writing
+
+03:10.320 --> 03:15.640
+interpreters in C for stack strings is not fun.
+
+03:15.640 --> 03:19.680
+I fixed that initial buffer overflow block, but the main problem was there was just a
+
+03:19.680 --> 03:22.640
+lot of bound checking in the code.
+
+03:22.640 --> 03:29.960
+There were a lot of hidden bugs that probably should be fixed as well.
+
+03:29.960 --> 03:31.720
+We took a few initial steps.
+
+03:31.720 --> 03:35.560
+Initially, because we had the three servers, there was no long-standing thing in front of
+
+03:35.560 --> 03:40.520
+that, it meant that if we restarted Transdian S, one of the servers would stop responding
+
+03:40.520 --> 03:42.520
+until the restart was done.
+
+03:42.520 --> 03:48.460
+The restart took roughly 15 minutes because every single record would get loaded into
+
+03:48.460 --> 03:53.680
+memory and since we had a million zones, I think it was like 25 million records or something
+
+03:53.680 --> 03:57.160
+back then, it just took a lot of time.
+
+03:57.160 --> 04:01.640
+Kind of used the quick DNS zone parts and stuff.
+
+04:01.640 --> 04:04.280
+The first thing we did was implement load balancing.
+
+04:04.280 --> 04:05.760
+This was before DNS.
+
+04:05.760 --> 04:07.600
+This was a thing.
+
+04:07.600 --> 04:12.880
+We tried initially, it was relay day, which some of the BSD folks might know.
+
+04:12.880 --> 04:18.440
+It did work, but we had a lot of weird issues.
+
+04:18.440 --> 04:21.480
+It was really hard to debug.
+
+04:21.480 --> 04:27.080
+Eventually we switched to using HAProxy for TCP, which works, nothing more to say about
+
+04:27.080 --> 04:28.080
+it.
+
+04:28.080 --> 04:34.760
+I wrote something rather quickly, in C, roughly based on the Transdian S code to forward the
+
+04:34.760 --> 04:36.160
+UDP stuff.
+
+04:36.160 --> 04:40.640
+That worked quite well and actually enabled us to actually iterate on the Transdian S
+
+04:40.640 --> 04:47.400
+code because we could do safe restarts without having to worry about queries being dropped.
+
+04:47.400 --> 04:51.040
+That allowed me to fix the glaring issues like there not being any bound checking in
+
+04:51.040 --> 04:55.760
+the code, so we had less risk of buffer overflows.
+
+04:55.760 --> 05:02.240
+I fixed a lot of the EDS comp issues that were becoming a problem at that point.
+
+05:02.240 --> 05:06.400
+Eventually when DNS was a little bit more mature, we switched to that because otherwise
+
+05:06.400 --> 05:10.120
+I had to maintain another piece of software and I really didn't feel like that.
+
+05:10.120 --> 05:18.600
+In the meantime, I did improve the TCP stack a lot in Transdian S because we noticed that,
+
+05:18.600 --> 05:28.280
+especially SIDN, the.nl registry, did a lot of TCP queries.
+
+05:28.280 --> 05:32.680
+The original implementation was basically just spawn a new thread for every TCP connection,
+
+05:32.680 --> 05:38.120
+but once you get to about a thousand threads, that's not a great solution.
+
+05:38.120 --> 05:44.320
+I changed to a polling-based model, work rate got pretty high performance, and we never
+
+05:44.320 --> 05:46.360
+had a problem with it after that.
+
+05:46.360 --> 05:54.440
+The only thing I changed later is when we moved to Linux, I changed to E-Pole.
+
+05:54.440 --> 05:59.080
+SIDN had validation monitoring, and we kept getting reminded by the fact that we were
+
+05:59.080 --> 06:04.360
+doing a lot of stuff wrong.
+
+06:04.360 --> 06:10.000
+We actually had one specific case that basically covered most of the, I think it was about
+
+06:10.000 --> 06:14.680
+80% of those errors.
+
+06:14.680 --> 06:18.000
+With 62 issues, but they have the same cost.
+
+06:18.000 --> 06:21.120
+The first issue was the incorrect handling of wildcards.
+
+06:21.120 --> 06:32.080
+If you have a wildcard, for example, star.nl, and you have a record C.nl, and then you
+
+06:32.080 --> 06:39.160
+try to resolve A.C.nl, it should not hit the wildcard because C.nl exists, which means
+
+06:39.160 --> 06:43.640
+you should return a no data or an extra main in this case.
+
+06:43.640 --> 06:49.400
+But cleanse DNS didn't really care, so it would just return the data from the wildcard.
+
+06:49.400 --> 06:54.120
+Very useful, makes it a lot easier to configure DNS, but it causes some issues, especially
+
+06:54.120 --> 06:57.040
+with DNS validation.
+
+06:57.040 --> 07:01.280
+The second issue was basically the same early, the Antinom terminals.
+
+07:01.280 --> 07:09.160
+If A.B.C. exists, and you try to resolve B.C., even though there's nothing specific on B.C.,
+
+07:09.160 --> 07:14.520
+you should say there's no data rather than it's a non-existent domain, also causes the
+
+07:14.520 --> 07:16.660
+inner stack validation errors.
+
+07:16.660 --> 07:18.560
+Same basic cause.
+
+07:18.560 --> 07:25.920
+The solution was to switch from, in transiting is to switch from an ordered map that used
+
+07:25.920 --> 07:32.320
+the type and the domain name as the key to a map that only used the domain name as the
+
+07:32.320 --> 07:35.800
+key and have an array in there with the types, which could also be empty.
+
+07:35.800 --> 07:40.800
+We would immediately notice if there was a label in our way.
+
+07:40.800 --> 07:41.800
+That worked well.
+
+07:41.800 --> 07:45.760
+I actually did it, this next slide.
+
+07:45.760 --> 07:50.320
+The only problem is we couldn't just deploy that because we might break stuff for our
+
+07:50.320 --> 07:56.520
+customers and customers get a little bit difficult if you break stuff for them.
+
+07:56.520 --> 08:02.840
+What I decided was, okay, for DNS-SIC, it's broken anyways because DNS-SIC enabled resolvers
+
+08:02.840 --> 08:08.360
+would just return errors when you have one of these labels.
+
+08:08.360 --> 08:09.880
+What I did is fixed the two steps.
+
+08:09.880 --> 08:15.440
+I initially enabled it only for DNS-SIC queries, the correct behavior, and kept the wrong behavior
+
+08:15.440 --> 08:18.560
+for non-DNSIC queries.
+
+08:18.560 --> 08:20.640
+In between, we just gathered a large amount of queries.
+
+08:20.640 --> 08:28.360
+I think I did two days of TCP dumping and mailing it down to the actual unique queries.
+
+08:28.360 --> 08:32.680
+Contact what our name-super would respond for DNS-SIC versus non-DNSIC.
+
+08:32.680 --> 08:37.560
+For everything that had a difference, we contacted the customers and told them, hey, you need
+
+08:37.560 --> 08:38.560
+to fix this.
+
+08:38.560 --> 08:41.160
+I think it was only about 20 to 30 customers.
+
+08:41.160 --> 08:46.760
+It was actually not that many, so that made it a lot easier.
+
+08:46.760 --> 08:49.640
+Then we just, at some point, I decided I'll flip the switch.
+
+08:49.640 --> 08:53.560
+There were a few customers that didn't respond, but at some point, you just have to decide
+
+08:53.560 --> 08:56.440
+to don't give a fic.
+
+08:56.440 --> 09:04.120
+Another small issue with RFC implementation was the NSIC implementation, because almost
+
+09:04.120 --> 09:06.080
+all of our zones use NSIC 3.
+
+09:06.080 --> 09:13.600
+The NSIC implementation was not as well-tested as the NSIC 3 implementation, so it was wrong.
+
+09:13.600 --> 09:15.160
+Really wrong.
+
+09:15.160 --> 09:23.760
+I just rewrote it from scratch, and then it worked.
+
+09:23.760 --> 09:28.840
+We started to think about moving to power DNS, and the main reason we did was because
+
+09:28.840 --> 09:35.040
+SIDN announced that we would no longer get a DNS-SIC incentive for domains using DNS
+
+09:35.040 --> 09:36.400
+key algorithm 7.
+
+09:36.400 --> 09:41.400
+That's the RSA plus NSIC 3 algorithm.
+
+09:41.400 --> 09:45.360
+That would cost us a bunch of money, and that's a very good way to stimulate people to do
+
+09:45.360 --> 09:46.360
+stuff.
+
+09:46.360 --> 09:51.280
+At this point, we decided to buy the bullet and just start over from scratch and build
+
+09:51.280 --> 09:55.040
+a really new, more modern setup.
+
+09:55.040 --> 10:01.720
+We picked power DNS partially because we already had some experience with it, and we didn't
+
+10:01.720 --> 10:05.320
+really want to deal with zone files, because we had a million zones, and putting them all
+
+10:05.320 --> 10:11.080
+on a file system makes things annoying.
+
+10:11.080 --> 10:18.480
+Power DNS was the only one where we thought, oh, this allows us to do changes via the API.
+
+10:18.480 --> 10:25.280
+We don't need to worry about having separate zone files for every single zone.
+
+10:25.280 --> 10:28.960
+We needed to pick a power DNS backend to use, because power DNS is one thing, but you still
+
+10:28.960 --> 10:32.120
+need something to put stuff in.
+
+10:32.120 --> 10:37.120
+There we sort of hit a problem, because transgene is really fast, because it's literally just
+
+10:37.120 --> 10:39.400
+a hash map in memory.
+
+10:39.400 --> 10:44.920
+It can basically do instant answers.
+
+10:44.920 --> 10:50.960
+Power DNS back in is very nice and flexible, but it's not really fast, especially because
+
+10:50.960 --> 10:56.800
+we had a lot of zones that would not get very frequent queries.
+
+10:56.800 --> 11:01.480
+They'd have a lot of non-active data, which means the query cache wouldn't really help
+
+11:01.480 --> 11:06.280
+a lot, which means that we would have a lot of SQL queries continuously, because they
+
+11:06.280 --> 11:10.240
+would get queried sometimes, just not a lot.
+
+11:10.240 --> 11:12.840
+The bind backend had the same problem as all the other name servers.
+
+11:12.840 --> 11:17.000
+We didn't have API support, and it would mean we needed to use a lot of zone files, which
+
+11:17.000 --> 11:20.040
+we didn't want to.
+
+11:20.040 --> 11:23.160
+Introducing the LNDB backend.
+
+11:23.160 --> 11:26.840
+This already exists at the point that we started looking at it, because Hubert had written
+
+11:26.840 --> 11:28.640
+it.
+
+11:28.640 --> 11:32.600
+It's very fast, and it has support for the API, which is really nice.
+
+11:32.600 --> 11:37.400
+It only had one major issue.
+
+11:37.400 --> 11:41.360
+Because of the way that it implemented it, it didn't really allow records bigger than
+
+11:41.360 --> 11:43.880
+512 bytes.
+
+11:43.880 --> 11:47.760
+We have quite a lot of those.
+
+11:47.760 --> 11:49.360
+I decided to fix that in the end.
+
+11:49.360 --> 11:56.000
+I wrote a pull request for the Power DNS team, and I think that was pretty quickly accepted
+
+11:56.000 --> 11:57.000
+into there.
+
+11:57.000 --> 12:02.480
+It also included some migration code, so the old LNDB database would automatically be
+
+12:02.480 --> 12:07.200
+automatically migrated to the new LNDB database format.
+
+12:07.200 --> 12:11.480
+It also improved performance in some corner cases, but that was not really the goal of
+
+12:11.480 --> 12:15.160
+this batch.
+
+12:15.160 --> 12:16.600
+Then we started moving over.
+
+12:16.600 --> 12:17.600
+We built a setup.
+
+12:17.600 --> 12:18.600
+It was really cool.
+
+12:18.600 --> 12:20.120
+There's a lot of automation around it.
+
+12:20.120 --> 12:25.280
+It does actually do all the zone transfer via HFR, even though Kevin just said it's a
+
+12:25.280 --> 12:27.400
+bad idea if you have a lot of zones.
+
+12:27.400 --> 12:31.680
+In practice, it works quite well, except for one issue.
+
+12:31.680 --> 12:38.560
+Every first day, our updates would take ages to go through, and basically we traced it
+
+12:38.560 --> 12:41.280
+down to an enormous bump in the HFR queues.
+
+12:41.280 --> 12:45.440
+We would literally have 400,000 HFR queued up.
+
+12:45.440 --> 12:48.840
+That was a bit of a problem.
+
+12:48.840 --> 12:53.840
+The reason this happens is because Power DNS renews its signatures every first day of the
+
+12:53.840 --> 12:54.840
+week.
+
+12:54.840 --> 12:55.840
+Very nice.
+
+12:55.840 --> 12:57.800
+We don't have to think about it.
+
+12:57.800 --> 13:01.800
+The problem is, if you have a million zones, that takes quite a while, especially because
+
+13:01.800 --> 13:04.760
+we were running our hidden primary on a VM.
+
+13:04.760 --> 13:08.120
+It was also not that quick to answer queries.
+
+13:08.120 --> 13:11.560
+We could have just shown more hardware in it, but we decided to look a little bit more
+
+13:11.560 --> 13:14.320
+at a more sustainable solution.
+
+13:14.320 --> 13:19.360
+Because if it works with one million zones on a faster machine, it will still work if
+
+13:19.360 --> 13:22.320
+you have 10 million zones.
+
+13:22.320 --> 13:27.000
+I discussed it with the Power DNS guys, and I came up with a solution which is HFR priority
+
+13:27.000 --> 13:28.600
+levels.
+
+13:28.600 --> 13:33.880
+Rather than treating all HFRs that need to be done at the same level, we gave more priority
+
+13:33.880 --> 13:35.720
+to things that are user initiated.
+
+13:35.720 --> 13:41.960
+If you initiate an HFR via Power DNS control, it will be first in the queue.
+
+13:41.960 --> 13:45.080
+Whatever else is in the queue, that one will be treated first.
+
+13:45.080 --> 13:49.320
+After that, there's the API, notified, so refreshed, and signature refreshed is the
+
+13:49.320 --> 13:51.680
+lowest priority.
+
+13:51.680 --> 13:57.560
+That meant that, yes, we would still have quite a large queue, but we could still process
+
+13:57.560 --> 14:00.040
+our updates very quickly.
+
+14:00.040 --> 14:05.680
+That was included in the Power DNS hot right-click queue as well, and 4.5 it was included.
+
+14:05.680 --> 14:10.080
+We still saw the use queues, but the zone updates were pretty quickly propagated, so
+
+14:10.080 --> 14:11.920
+that for us was fine.
+
+14:11.920 --> 14:16.000
+We never had a problem with it after that.
+
+14:16.000 --> 14:19.720
+Then we had some other issues.
+
+14:19.720 --> 14:22.960
+Most of which were either mine ourselves in the load balance layer or just fixed in Power
+
+14:22.960 --> 14:24.440
+DNS updates.
+
+14:24.440 --> 14:29.320
+The TCP performance is still something I want to look at in Power DNS just for fun as an
+
+14:29.320 --> 14:31.840
+open source developer.
+
+14:31.840 --> 14:35.720
+It's on my list of things I want to improve.
+
+14:35.720 --> 14:43.040
+We had some various smaller bugs in the LNDV backend because it was quite new.
+
+14:43.040 --> 14:47.400
+We were not the first one that ran it a really large scale, but we were one of the first
+
+14:47.400 --> 14:51.720
+ones and we did see some problems that nobody else had had yet.
+
+14:51.720 --> 14:57.600
+One CFE we discovered literally within a day of rolling out a new version.
+
+14:57.600 --> 15:01.920
+That was very fun for Peter because he got to roll out a new list a day after he released
+
+15:01.920 --> 15:06.640
+the previous one.
+
+15:06.640 --> 15:11.920
+We had an issue that there were certain query patterns that we would get that were specifically
+
+15:11.920 --> 15:16.720
+designed to target a weakness in Power DNS.
+
+15:16.720 --> 15:21.360
+That was a transience we didn't care about them, but Power DNS did get affected.
+
+15:21.360 --> 15:25.320
+We eventually resolved this by adding some detection at the load balance layer that would
+
+15:25.320 --> 15:29.440
+just block queries for those affected domains.
+
+15:29.440 --> 15:35.720
+It would mean that that customer's domain would have limited functionality, but at least
+
+15:35.720 --> 15:39.320
+it would still work and all the other customers would not be affected, which was for us the
+
+15:39.320 --> 15:45.880
+most important thing.
+
+15:45.880 --> 15:48.360
+Some closing thoughts.
+
+15:48.360 --> 16:12.380
+Migrating a Home
+
+16:12.380 --> 16:18.360
+Back It just really took a lot of time.
+
+16:18.360 --> 16:24.960
+We can even in theory add different brands of secondaries.
+
+16:24.960 --> 16:30.140
+Currently there's a few issues that would prevent it, but it's relatively easy to solve.
+
+16:30.140 --> 16:36.460
+We could just run Not as a secondary, or NSD or even bind if we would want to do that for
+
+16:36.460 --> 16:39.480
+some reason.
+
+16:39.480 --> 16:45.640
+What I did really, really notice is don't try to do this in one go because it's a lot
+
+16:45.640 --> 16:49.140
+of work and you'll make mistakes.
+
+16:49.140 --> 16:54.860
+If you do it in smaller steps, the mistakes will be smaller, easier to fix, and it also
+
+16:54.860 --> 16:59.620
+just feels a lot better if you can accomplish some things in between rather than trying
+
+16:59.620 --> 17:01.420
+to do it all at once.
+
+17:01.420 --> 17:06.980
+One thing I wanted to ask, DNSSEC incentives, they work both when trying to get people to
+
+17:06.980 --> 17:14.320
+use DNSSEC, but they also work to improve the quality of the DNSSEC because we've seen,
+
+17:14.320 --> 17:19.040
+especially in the.nl zone because I've also been involved in that work a little bit, some
+
+17:19.040 --> 17:24.760
+very bad implementations that got fixed when the rules were made stricter, including ours
+
+17:24.760 --> 17:30.240
+initially, but were even the worst ones.
+
+17:30.240 --> 17:31.700
+That is it.
+
+17:31.700 --> 17:36.920
+For the people I would like to see, I've open sourced trans DNS before I left the company
+
+17:36.920 --> 17:41.320
+so I can see it myself as well still, so that's fun.
+
+17:41.320 --> 17:42.920
+It's on GitHub.
+
+17:42.920 --> 17:47.440
+I've also put the URLs for the two major pull requests I made.
+
+17:47.440 --> 17:51.480
+There's a bunch of other ones, but I haven't put all of them in there.
+
+17:51.480 --> 17:53.480
+That's about it.
+
+17:53.480 --> 17:55.480
+Questions?
+
+17:55.480 --> 18:07.480
+I wanted to remark, of course, you are enjoyable.
+
+18:07.480 --> 18:15.480
+Kevin's talk, your talk, all things that you know about, the DNS is hard, getting it right
+
+18:15.480 --> 18:16.480
+is e-marred.
+
+18:16.480 --> 18:17.480
+The difference being is Kevin is shooting his own foot.
+
+18:17.480 --> 18:18.480
+You are shooting the feet of your customers that are paying you not to.
+
+18:18.480 --> 18:25.480
+That makes it a bit more of a concern than the UK's.
+
+18:25.480 --> 18:35.480
+I used to be a customer, but on the upside, most of these mess apps probably weren't noticed
+
+18:35.480 --> 18:36.480
+by the majority.
+
+18:36.480 --> 18:41.480
+I think you should take it more seriously if you are a company that actually makes money
+
+18:41.480 --> 18:42.480
+out of posting.
+
+18:42.480 --> 18:45.480
+The comment is that we both made mistakes.
+
+18:45.480 --> 18:52.480
+It was a bit related to the talk, Kevin did, so a lot of the things that we said are related
+
+18:52.480 --> 18:58.480
+and the comment is, yeah, Kevin was only doing it for himself and we were doing it for paying
+
+18:58.480 --> 18:59.480
+customers.
+
+18:59.480 --> 19:01.480
+Yeah, I agree.
+
+19:01.480 --> 19:08.480
+When I started, there were a lot of issues and I've tried three years to attempt to fix
+
+19:08.480 --> 19:09.480
+them as much as I could.
+
+19:09.480 --> 19:15.480
+To be clear, I wasn't hired to maintain trans DNS, that just happened to be something that
+
+19:15.480 --> 19:22.480
+got shoved into my lab because I knew some C and C++.
+
+19:22.480 --> 19:25.480
+I became pretty passionate about it.
+
+19:25.480 --> 19:29.480
+I quickly rolled into the PowerDNS community.
+
+19:29.480 --> 19:35.480
+I also added a lot of contributions to DNS when that was getting started up.
+
+19:35.480 --> 19:42.480
+I agree with the initial statement and I've tried to fix it as much as I could.
+
+19:42.480 --> 19:45.480
+I'd like to make a comment to this one.
+
+19:45.480 --> 19:53.480
+Sometimes you set out with certain criteria and you build something that can meet that
+
+19:53.480 --> 19:59.480
+criteria and it scales to a certain point and eventually you get to only building customers
+
+19:59.480 --> 20:06.480
+and a lot of customers show the company that started off with more customers and maybe
+
+20:06.480 --> 20:09.480
+at the time that this was a good system that people thought they needed.
+
+20:09.480 --> 20:15.480
+But as the business grew and things grow, sometimes you have to do exactly what you
+
+20:15.480 --> 20:16.480
+did.
+
+20:16.480 --> 20:19.480
+You evaluate and say, it's time for something different.
+
+20:19.480 --> 20:20.480
+It's real.
+
+20:20.480 --> 20:28.480
+It's good that he identified that and made the changes accordingly and a great solution.
+
+20:28.480 --> 20:32.480
+A brief resume.
+
+20:32.480 --> 20:38.480
+He said that sometimes due to scaling, you run into issues that you hadn't foreseen when
+
+20:38.480 --> 20:40.480
+you were an agent and he set something up.
+
+20:40.480 --> 20:45.480
+Just taking a step to resolve them in the end can be a good thing.
+
+20:45.480 --> 20:47.480
+There was a question there.
+
+20:47.480 --> 20:54.480
+How did you get your employer to agree with open sourcing?
+
+20:54.480 --> 20:58.480
+The question is how did they get them to agree with the open sourcing.
+
+20:58.480 --> 21:05.480
+At the point that I open sourced it, I was CTO slash head of R&D of the Dutch part of
+
+21:05.480 --> 21:08.480
+the organization.
+
+21:08.480 --> 21:12.480
+Also, I only open sourced it after we totally took it out of production.
+
+21:12.480 --> 21:17.480
+It was mainly a historic interest thing.
+
+21:17.480 --> 21:25.480
+Did you ever consider open sourcing before switching?
+
+21:25.480 --> 21:31.480
+The question is, did we consider open sourcing before switching?
+
+21:31.480 --> 21:32.480
+No.
+
+21:32.480 --> 21:40.480
+I'll tell you, we weren't very proud of, at least I wasn't proud of the source code quality.
+
+21:40.480 --> 21:43.480
+I didn't write it myself, all of it.
+
+21:43.480 --> 21:45.480
+I only contributed to it later.
+
+21:45.480 --> 21:48.480
+I tried to improve it as much as I could, but it's still not.
+
+21:48.480 --> 21:54.480
+It's very focused on just doing one thing and it's very good at that, but it's not
+
+21:54.480 --> 21:58.480
+very applicable to use by others.
+
+21:58.480 --> 22:02.480
+I think it's interesting now to see some of the tricks to make things really fast that
+
+22:02.480 --> 22:08.480
+you can see in the code, but beyond that, I would never use it in a production environment
+
+22:08.480 --> 22:14.480
+other than the one it was in, because that one was built specifically to run around that code.
+
+22:14.480 --> 22:17.480
+One more question.
+
+22:17.480 --> 22:24.480
+What was the motivation for implementing the DNS hosting in trans DNS?
+
+22:24.480 --> 22:30.480
+Even around the time when you started as a company, there was not a software available
+
+22:30.480 --> 22:32.480
+that could have been used.
+
+22:32.480 --> 22:39.480
+The question is, what was the motivation to implement their own DNS software?
+
+22:39.480 --> 22:45.480
+To be clear, trans DNS was implemented in 2003, so this was roughly when power DNS
+
+22:45.480 --> 22:51.480
+started to grow, but the problem was that there were already quite a lot of zones in there,
+
+22:51.480 --> 22:56.480
+and it just got a little bit cumbersome using Bind, because that was the primary name
+
+22:56.480 --> 23:00.480
+server software you'd used back then.
+
+23:00.480 --> 23:03.480
+That was the main motivation.
+
+23:03.480 --> 23:06.480
+Bind was getting annoying because you had to have a lot of zone files, and everything
+
+23:06.480 --> 23:13.480
+was running on FreeBSD using UFS, so there was a 32,000 files per directory file limit
+
+23:13.480 --> 23:16.480
+at that point, which also didn't help.
+
+23:16.480 --> 23:17.480
+There's ways to solve that.
+
+23:17.480 --> 23:22.480
+That's not that complicated, but that was the main motivation, as well as I think there
+
+23:22.480 --> 23:27.480
+were some performance issues in Bind back then that were relatively easily resolved.
+
+23:27.480 --> 23:33.480
+The other alternatives would have been GGB DNS, but that had its own things, like the
+
+23:33.480 --> 23:40.480
+guy that wrote it, not saying you should use it.
+
+23:40.480 --> 23:44.480
+Anything else?
+
+23:44.480 --> 23:45.480
+Because we're done.
+
+23:45.480 --> 23:46.480
+Okay.
+
+23:46.480 --> 24:04.480
+Thank you, everyone.
