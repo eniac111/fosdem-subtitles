@@ -1,0 +1,1108 @@
+1
+0:00:00.000 --> 0:00:07.520
+So, we have Guillaume.
+
+2
+0:00:07.520 --> 0:00:11.200
+He's going to talk about the merging process for the Rust compiler.
+
+3
+0:00:11.200 --> 0:00:12.200
+Okay.
+
+4
+0:00:12.200 --> 0:00:14.440
+Yeah, you can hear me.
+
+5
+0:00:14.440 --> 0:00:15.440
+Perfect.
+
+6
+0:00:15.440 --> 0:00:16.440
+So, hi, everyone.
+
+7
+0:00:16.440 --> 0:00:22.920
+So, I'll be talking, as you mentioned, about the merge process in the Rust compiler.
+
+8
+0:00:22.920 --> 0:00:31.560
+So, who I am first, Rust language reviewer and contributor, member of a few team.
+
+9
+0:00:31.560 --> 0:00:33.680
+So I'm in the Rust doc team.
+
+10
+0:00:33.680 --> 0:00:37.000
+Not to be confused with the former documentation team.
+
+11
+0:00:37.000 --> 0:00:39.840
+Also, docs.rest team and DevTools team.
+
+12
+0:00:39.840 --> 0:00:42.680
+So very documentation oriented.
+
+13
+0:00:42.680 --> 0:00:48.320
+And I'm working at Huawei currently.
+
+14
+0:00:48.320 --> 0:00:53.880
+So we will start by taking a scenario.
+
+15
+0:00:53.880 --> 0:00:56.880
+Hold on.
+
+16
+0:00:56.880 --> 0:01:01.440
+So when you have made the pull request, you open it.
+
+17
+0:01:01.440 --> 0:01:07.320
+And the first thing that will happen on the pull request will be that the bot will assign
+
+18
+0:01:07.320 --> 0:01:10.000
+you a reviewer.
+
+19
+0:01:10.000 --> 0:01:11.160
+So in this case, myself.
+
+20
+0:01:11.160 --> 0:01:16.080
+So very likely a pull request on a Rust doc tool.
+
+21
+0:01:16.080 --> 0:01:18.720
+And after that, you will have some tags.
+
+22
+0:01:18.720 --> 0:01:25.560
+So it's waiting on review and it's concerning the Rust doc team which helps us to find the
+
+23
+0:01:25.560 --> 0:01:34.800
+right people in case the reviewer assigned isn't available in a week, if I remember correctly.
+
+24
+0:01:34.800 --> 0:01:41.000
+So explanation a bit about how the bot is picking the people.
+
+25
+0:01:41.000 --> 0:01:49.680
+We have a repository with the list of all teams and its members, formers and everything.
+
+26
+0:01:49.680 --> 0:01:55.880
+And the bot basically picks someone from this repository.
+
+27
+0:01:55.880 --> 0:02:04.080
+And this website, the governance page on the Rust-long.org website is generated from it.
+
+28
+0:02:04.080 --> 0:02:09.560
+So if you need to contact someone from one of the team, whatever reason, that's where
+
+29
+0:02:09.560 --> 0:02:14.120
+you go.
+
+30
+0:02:14.120 --> 0:02:16.440
+So now the approval itself.
+
+31
+0:02:16.440 --> 0:02:24.440
+So let's say that the pull request is implemented with no request from the reviewer or anything.
+
+32
+0:02:24.440 --> 0:02:31.240
+If it has a knowing performance impact for this to have this information, if we have
+
+33
+0:02:31.240 --> 0:02:40.200
+a depth, we have tools that allow us to actually check if it's actually the case.
+
+34
+0:02:40.200 --> 0:02:47.560
+So if needed, we just say, hey, Rustbot, can you run a perf check on this?
+
+35
+0:02:47.560 --> 0:02:49.320
+I will come back to this later.
+
+36
+0:02:49.320 --> 0:02:54.680
+And we have a very nice page with some metrics and a lot of steps.
+
+37
+0:02:54.680 --> 0:03:00.960
+So another important thing is checking that there is no breaking change.
+
+38
+0:03:00.960 --> 0:03:06.680
+So of course, if you are changing something in the STD, for example, or changing how projection
+
+39
+0:03:06.680 --> 0:03:13.400
+works on anything, then it becomes a lot more complex and process becomes a lot longer.
+
+40
+0:03:13.400 --> 0:03:16.560
+The same way we'll come back to this later.
+
+41
+0:03:16.560 --> 0:03:24.240
+Of course, if it adds a new feature, it's very likely that we will need to be sure at
+
+42
+0:03:24.240 --> 0:03:29.360
+100% that it's not something that we'll need to change, or deprecate, or literally just
+
+43
+0:03:29.360 --> 0:03:35.800
+remove at some point because it happened a few times and it's not great.
+
+44
+0:03:35.800 --> 0:03:38.880
+And obviously, the CI must pass.
+
+45
+0:03:38.880 --> 0:03:45.320
+So that's a lot of small conditions.
+
+46
+0:03:45.320 --> 0:03:47.480
+So now about the CI.
+
+47
+0:03:47.480 --> 0:03:50.080
+So there are two levels of CI.
+
+48
+0:03:50.080 --> 0:03:54.080
+The one that you will see directly when you open the pull request.
+
+49
+0:03:54.080 --> 0:04:04.080
+It's a lot of tests, almost all of them, but it's only on Linux X64 because as you may
+
+50
+0:04:04.080 --> 0:04:12.240
+know, we support quite a lot of targets, not as much as GCC yet, but at some point maybe.
+
+51
+0:04:12.240 --> 0:04:19.160
+And this checks, for example, if the call is wait-formited, if you have all the tests
+
+52
+0:04:19.160 --> 0:04:22.800
+passing, and by all the tests, I mean literally all the tests.
+
+53
+0:04:22.800 --> 0:04:28.640
+So you have all the rest tool tests.
+
+54
+0:04:28.640 --> 0:04:35.560
+The compiler error output, the compiler checks if the code is giving the right result, the
+
+55
+0:04:35.560 --> 0:04:39.940
+assembly, pretty much everything, and it includes the tools.
+
+56
+0:04:39.940 --> 0:04:47.240
+So if you made a change in the compiler that breaks a tool like rest.clippy or rest.fmt,
+
+57
+0:04:47.240 --> 0:04:50.240
+then we need to be aware of it right away.
+
+58
+0:04:50.240 --> 0:04:54.560
+Otherwise, we are going to have quite a bit of time.
+
+59
+0:04:54.560 --> 0:04:58.720
+And all that is done directly on the pull request.
+
+60
+0:04:58.720 --> 0:05:06.720
+So at the current time, it takes around one hour to run this small subset.
+
+61
+0:05:06.720 --> 0:05:14.480
+And when the pull request has been approved, we make the full run of all these tests and
+
+62
+0:05:14.480 --> 0:05:17.440
+for all platforms.
+
+63
+0:05:17.440 --> 0:05:23.320
+And this time, it's when, I think if I remember correctly, it's like on 40 targets or something
+
+64
+0:05:23.320 --> 0:05:29.520
+like that, and it takes roughly around three hours.
+
+65
+0:05:29.520 --> 0:05:31.760
+We have our own infra for this.
+
+66
+0:05:31.760 --> 0:05:36.640
+We have dedicated the team for that too, the infra team.
+
+67
+0:05:36.640 --> 0:05:41.520
+And I think it's currently done on AWS to be confirmed.
+
+68
+0:05:41.520 --> 0:05:46.740
+But in short, nothing can be merged if the CI doesn't pass.
+
+69
+0:05:46.740 --> 0:05:50.720
+We enforce this, I think it was three or four years ago.
+
+70
+0:05:50.720 --> 0:05:58.480
+A few things that were merged and were expected to be fixed in very soon comic fixes were
+
+71
+0:05:58.480 --> 0:06:03.800
+quite bad experiences, and we decided to have zero tolerance policy.
+
+72
+0:06:03.800 --> 0:06:05.240
+It's working quite nice.
+
+73
+0:06:05.240 --> 0:06:09.120
+So currently, we keep it.
+
+74
+0:06:09.120 --> 0:06:11.200
+So now the build queue.
+
+75
+0:06:11.200 --> 0:06:19.520
+Then we approve the pull request with the command at the R+, you might have seen it
+
+76
+0:06:19.520 --> 0:06:21.880
+or not.
+
+77
+0:06:21.880 --> 0:06:27.880
+We have a build queue, and that's where you can see pretty much everything that is happening.
+
+78
+0:06:27.880 --> 0:06:32.560
+So in the current case, you will see the pull request, the first one which is pending.
+
+79
+0:06:32.560 --> 0:06:40.160
+So it allows you to see what is being tested and eventually how long it remains.
+
+80
+0:06:40.160 --> 0:06:44.040
+And you can see also everything that is approved and everything.
+
+81
+0:06:44.040 --> 0:06:51.760
+And it's sorted by priority first, which you can see because I had to make a small screenshot.
+
+82
+0:06:51.760 --> 0:06:56.960
+And the second thing is how old the pull request is.
+
+83
+0:06:56.960 --> 0:07:04.960
+We generally have around 20 pull requests at the same time in this build queue.
+
+84
+0:07:04.960 --> 0:07:10.060
+So to make things faster, we have what we call a rollup process.
+
+85
+0:07:10.060 --> 0:07:15.920
+We group a full pull request that we are sure have no performance impact or anything.
+
+86
+0:07:15.920 --> 0:07:20.420
+And we say, OK, make a rollup of five pull requests.
+
+87
+0:07:20.420 --> 0:07:22.880
+You can see the button, create a rollup.
+
+88
+0:07:22.880 --> 0:07:28.400
+So we pick a few pull requests and we click on the button, and it generates a pull request
+
+89
+0:07:28.400 --> 0:07:31.000
+for us with our account.
+
+90
+0:07:31.000 --> 0:07:37.800
+And after that, we give it quite a high priority and like that we can have a big bunch of pull
+
+91
+0:07:37.800 --> 0:07:39.600
+requests merged at once.
+
+92
+0:07:39.600 --> 0:07:41.800
+Very useful.
+
+93
+0:07:41.800 --> 0:07:44.660
+And that's it for the build queue.
+
+94
+0:07:44.660 --> 0:07:49.000
+So what I explained a bit before, what is tested.
+
+95
+0:07:49.000 --> 0:07:50.620
+So we have the compile test.
+
+96
+0:07:50.620 --> 0:07:56.640
+So if your code is supposed to compile or not, because for example, we want to ensure
+
+97
+0:07:56.640 --> 0:08:04.320
+certain cases in very weird cases don't compile or in the other case, compile.
+
+98
+0:08:04.320 --> 0:08:09.240
+And that's how you can discover things like you can't implement directly on projections.
+
+99
+0:08:09.240 --> 0:08:13.520
+And if that doesn't speak much to you, it's a good sign.
+
+100
+0:08:13.520 --> 0:08:16.560
+We have all the unit tests.
+
+101
+0:08:16.560 --> 0:08:19.520
+Unit tests are mostly for the tools.
+
+102
+0:08:19.520 --> 0:08:28.400
+But we have a few tests with like I mentioned just below the error output.
+
+103
+0:08:28.400 --> 0:08:29.400
+It's quite important.
+
+104
+0:08:29.400 --> 0:08:36.000
+So we ensure that the Rust doc and the Rust C errors are looking exactly as you might
+
+105
+0:08:36.000 --> 0:08:37.560
+expect.
+
+106
+0:08:37.560 --> 0:08:44.200
+If you ever used, and I think a lot of you used already Rust, you might have appreciated
+
+107
+0:08:44.200 --> 0:08:47.960
+the errors and the output.
+
+108
+0:08:47.960 --> 0:08:51.000
+That's because they are very, very strongly tested.
+
+109
+0:08:51.000 --> 0:08:56.640
+Currently, just for the UI test, we have around 20,000 tests.
+
+110
+0:08:56.640 --> 0:09:00.760
+So it's quite monstrous and running it take quite some time.
+
+111
+0:09:00.760 --> 0:09:04.320
+I think it's, well, at least 10 minutes, something like that.
+
+112
+0:09:04.320 --> 0:09:06.520
+It's quite heavy.
+
+113
+0:09:06.520 --> 0:09:12.760
+Maybe you don't know it, but the documentation example are tested, all of them.
+
+114
+0:09:12.760 --> 0:09:17.480
+You can just test them manually in your code by running cargo test.
+
+115
+0:09:17.480 --> 0:09:24.600
+The cargo tool will take all the unit tests in your code, test folder, will run on everything.
+
+116
+0:09:24.600 --> 0:09:29.000
+And it includes, of course, everything that is in the documentation.
+
+117
+0:09:29.000 --> 0:09:37.320
+So that allows us to reduce the maintenance burden by being sure that we don't give examples
+
+118
+0:09:37.320 --> 0:09:41.400
+that are not compiling anymore or completely broken.
+
+119
+0:09:41.400 --> 0:09:42.720
+Quite useful once again.
+
+120
+0:09:42.720 --> 0:09:44.280
+It reduces burden.
+
+121
+0:09:44.280 --> 0:09:47.800
+And of course, we have all the tools.
+
+122
+0:09:47.800 --> 0:09:50.520
+So cargo, raster, clippy, rest, fmt.
+
+123
+0:09:50.520 --> 0:09:59.440
+So as I mentioned, when you change something on the compiler, since these tools are using
+
+124
+0:09:59.440 --> 0:10:04.960
+directly the compiler, they are actually compiler extensions except the cargo.
+
+125
+0:10:04.960 --> 0:10:10.000
+Cargo is just tested to ensure that not a new option is breaking something.
+
+126
+0:10:10.000 --> 0:10:14.160
+So for the others, there are extensions of the compiler, and we need to ensure that no
+
+127
+0:10:14.160 --> 0:10:19.720
+changes is breaking anything because that would be problematic.
+
+128
+0:10:19.720 --> 0:10:26.560
+We generate a lot of documentation, and we have to ensure that we have no dead links.
+
+129
+0:10:26.560 --> 0:10:30.880
+And in fact, we do have some of them, and we ignore them on purpose.
+
+130
+0:10:30.880 --> 0:10:32.360
+So sorry for that.
+
+131
+0:10:32.360 --> 0:10:37.520
+We can't fix them because, funnily enough, in the STD, we re-export the stuff that is
+
+132
+0:10:37.520 --> 0:10:40.600
+in the core, and they share the same documentation.
+
+133
+0:10:40.600 --> 0:10:46.840
+So if you are looking at the documentation in the STD pages, other links are working
+
+134
+0:10:46.840 --> 0:10:48.840
+in the core crate.
+
+135
+0:10:48.840 --> 0:10:49.840
+They're not.
+
+136
+0:10:49.840 --> 0:10:54.120
+So try to use the STD as much as possible.
+
+137
+0:10:54.120 --> 0:10:57.600
+And it's just very basic, but we have quite a lot more.
+
+138
+0:10:57.600 --> 0:11:01.400
+We mentioned in the previous talk the inline assembly.
+
+139
+0:11:01.400 --> 0:11:03.200
+It's part of the things.
+
+140
+0:11:03.200 --> 0:11:10.160
+We realized when working on the GCC backend this time is that GCC doesn't allow to specify
+
+141
+0:11:10.160 --> 0:11:14.040
+a syntax that's thanks to this test suite.
+
+142
+0:11:14.040 --> 0:11:19.600
+So currently, we can't implement all features, and it's going to take quite a long time,
+
+143
+0:11:19.600 --> 0:11:25.320
+but hopefully at some point, someone motivated will do it.
+
+144
+0:11:25.320 --> 0:11:30.800
+So on which OS and architectures are tested, everything.
+
+145
+0:11:30.800 --> 0:11:34.240
+We have a target TR policy.
+
+146
+0:11:34.240 --> 0:11:38.720
+You can go check it on the page just linked below.
+
+147
+0:11:38.720 --> 0:11:46.040
+But basically, TR1 platforms are the platforms that are fully tested, implemented, and everything.
+
+148
+0:11:46.040 --> 0:11:48.840
+So Mac OS, Linux, and Windows.
+
+149
+0:11:48.840 --> 0:11:55.600
+And they must pass all the tests, and we build them, and we ensure that what we have built
+
+150
+0:11:55.600 --> 0:12:01.600
+and has to be able to be uncompressed and working on the target and everything.
+
+151
+0:12:01.600 --> 0:12:04.560
+So strict, very strict restriction.
+
+152
+0:12:04.560 --> 0:12:08.920
+On the TR2 platforms, it's a lot more relaxed.
+
+153
+0:12:08.920 --> 0:12:10.920
+We just need it to build.
+
+154
+0:12:10.920 --> 0:12:12.680
+If it works, well, it's good.
+
+155
+0:12:12.680 --> 0:12:16.240
+If it doesn't, well, too bad.
+
+156
+0:12:16.240 --> 0:12:19.320
+And for the TR3 platforms, it exists.
+
+157
+0:12:19.320 --> 0:12:21.680
+Yeah, that's great.
+
+158
+0:12:21.680 --> 0:12:27.000
+So for example, if you want to build on the Nintendo 3DS, you can.
+
+159
+0:12:27.000 --> 0:12:30.880
+We don't know if it would work, but you can.
+
+160
+0:12:30.880 --> 0:12:35.960
+And you can see the list of the platforms each tier on the page just below.
+
+161
+0:12:35.960 --> 0:12:42.520
+Like I mentioned, we have quite a lot, and we hope to be able to expand it a bit more
+
+162
+0:12:42.520 --> 0:12:47.120
+by adding at least the GCC backend at some point.
+
+163
+0:12:47.120 --> 0:12:50.760
+A lot of work remained.
+
+164
+0:12:50.760 --> 0:12:52.660
+So what about releases now?
+
+165
+0:12:52.660 --> 0:12:56.920
+Because as you might know, we make a release every six weeks.
+
+166
+0:12:56.920 --> 0:13:00.600
+So it's very fast release cycle.
+
+167
+0:13:00.600 --> 0:13:04.600
+So once this happens, the build queue is frozen.
+
+168
+0:13:04.600 --> 0:13:09.760
+We don't allow anything below like a priority or 10,000 to be merged.
+
+169
+0:13:09.760 --> 0:13:16.160
+It's a completely random number, but generally, if you go higher than 10, it's quite important.
+
+170
+0:13:16.160 --> 0:13:18.820
+So in this case, we freeze everything.
+
+171
+0:13:18.820 --> 0:13:25.720
+And the only things allowed to be merged are the patches to make actually the stable and
+
+172
+0:13:25.720 --> 0:13:28.400
+better branches update.
+
+173
+0:13:28.400 --> 0:13:35.600
+An important thing that is noted here is that we don't have the need to freeze for the Nike.
+
+174
+0:13:35.600 --> 0:13:41.000
+We just say at a given time of every day, OK, this will be the really the Nike version
+
+175
+0:13:41.000 --> 0:13:42.000
+for today.
+
+176
+0:13:42.000 --> 0:13:43.000
+Yay.
+
+177
+0:13:43.000 --> 0:13:44.760
+And that's it.
+
+178
+0:13:44.760 --> 0:13:47.920
+So back to this, the third point.
+
+179
+0:13:47.920 --> 0:13:56.840
+All relevant information is updated and we're and by that I mean the websites, the documentation,
+
+180
+0:13:56.840 --> 0:13:58.880
+the book I think or two.
+
+181
+0:13:58.880 --> 0:13:59.880
+Pretty much everything.
+
+182
+0:13:59.880 --> 0:14:02.200
+We generate the binaries.
+
+183
+0:14:02.200 --> 0:14:03.800
+So that's what I mentioned.
+
+184
+0:14:03.800 --> 0:14:10.960
+That's the things that need to be working for at least tier one polyform.
+
+185
+0:14:10.960 --> 0:14:14.240
+And of course, we make a blog post.
+
+186
+0:14:14.240 --> 0:14:19.880
+Generally, the blog post is written not for the current stable reads, but we write it
+
+187
+0:14:19.880 --> 0:14:21.480
+at the beta version.
+
+188
+0:14:21.480 --> 0:14:28.000
+And then depending if we need the backports, for example, we realize that in the current
+
+189
+0:14:28.000 --> 0:14:32.120
+beta version, something is completely broken and we don't want that.
+
+190
+0:14:32.120 --> 0:14:34.840
+And it's an easy enough fix.
+
+191
+0:14:34.840 --> 0:14:41.400
+Either we backport a patch that was merged on the Nike directly onto the beta branch
+
+192
+0:14:41.400 --> 0:14:43.880
+or we say, OK, too bad.
+
+193
+0:14:43.880 --> 0:14:47.400
+We reverse that and we'll do it the next time.
+
+194
+0:14:47.400 --> 0:14:49.480
+It happened quite a lot.
+
+195
+0:14:49.480 --> 0:14:52.200
+And it's not uncommon.
+
+196
+0:14:52.200 --> 0:14:55.040
+Let's just say it's better if it doesn't happen.
+
+197
+0:14:55.040 --> 0:15:00.600
+It allows us to not have the.1 version coming up like a three days later because we realize
+
+198
+0:15:00.600 --> 0:15:03.080
+that we broke something.
+
+199
+0:15:03.080 --> 0:15:06.680
+And the blog post is released.
+
+200
+0:15:06.680 --> 0:15:08.180
+So now performance.
+
+201
+0:15:08.180 --> 0:15:13.520
+What I mentioned is that we need to check sometimes performance.
+
+202
+0:15:13.520 --> 0:15:15.760
+So we have to speed it now.
+
+203
+0:15:15.760 --> 0:15:19.960
+So for the performance, we have a lot of benchmarks.
+
+204
+0:15:19.960 --> 0:15:24.920
+You can see on the left, it's generally for the number of instructions that have been
+
+205
+0:15:24.920 --> 0:15:25.920
+written.
+
+206
+0:15:25.920 --> 0:15:33.480
+It's what we consider the most important metric and most stable.
+
+207
+0:15:33.480 --> 0:15:38.520
+So when you have all green numbers and quite high, oh, it's 8%.
+
+208
+0:15:38.520 --> 0:15:41.760
+Yeah, that's quite right.
+
+209
+0:15:41.760 --> 0:15:45.440
+So when you have all green numbers, it's great and everyone is parting.
+
+210
+0:15:45.440 --> 0:15:50.400
+And if you have all red numbers either, you have a very good reason or it's not going
+
+211
+0:15:50.400 --> 0:15:54.840
+to be merged until you can make them at least black.
+
+212
+0:15:54.840 --> 0:16:02.160
+And we have, like I said, a lot of metrics like cycles, memory usage, disk usage, because
+
+213
+0:16:02.160 --> 0:16:05.800
+we start to worry about the binary size.
+
+214
+0:16:05.800 --> 0:16:11.720
+We realized that all the doc attributes were generated in the binaries, which is not great.
+
+215
+0:16:11.720 --> 0:16:14.920
+So we are going to fix that at some point.
+
+216
+0:16:14.920 --> 0:16:20.440
+And you can see on the right that maybe you can see what just believe what I say.
+
+217
+0:16:20.440 --> 0:16:26.320
+The results are showed in the nice comment directly on the pull request.
+
+218
+0:16:26.320 --> 0:16:31.920
+So other cases, when you add a new feature or introducing a breaking change, there are
+
+219
+0:16:31.920 --> 0:16:34.080
+three possibilities.
+
+220
+0:16:34.080 --> 0:16:38.360
+The mostly known one is the RFC, request for comments.
+
+221
+0:16:38.360 --> 0:16:40.000
+It has its own repository.
+
+222
+0:16:40.000 --> 0:16:42.920
+It takes a lot of time and effort and comments.
+
+223
+0:16:42.920 --> 0:16:47.120
+And it can go really fast, like two days.
+
+224
+0:16:47.120 --> 0:16:50.000
+Or it can take an indefinite amount of time.
+
+225
+0:16:50.000 --> 0:16:57.000
+Some examples, some references have been opened and still are commented on since before the
+
+226
+0:16:57.000 --> 0:16:58.000
+1.0.
+
+227
+0:16:58.000 --> 0:17:00.360
+So that gives you an idea.
+
+228
+0:17:00.360 --> 0:17:03.160
+We have the MCP, major compiler changes.
+
+229
+0:17:03.160 --> 0:17:05.920
+So not too big changes in the compiler.
+
+230
+0:17:05.920 --> 0:17:08.480
+We find it not to great how the query system is working.
+
+231
+0:17:08.480 --> 0:17:10.200
+So let's try this solution.
+
+232
+0:17:10.200 --> 0:17:14.240
+And they discuss mostly design and very technical points.
+
+233
+0:17:14.240 --> 0:17:15.240
+Interesting.
+
+234
+0:17:15.240 --> 0:17:19.760
+But if you don't know this area, it's not very understandable.
+
+235
+0:17:19.760 --> 0:17:22.400
+And the last one is common to all teams.
+
+236
+0:17:22.400 --> 0:17:26.880
+So the FCP, the final comment period, it's something that we want.
+
+237
+0:17:26.880 --> 0:17:30.000
+And we just want to be sure that everyone is on board.
+
+238
+0:17:30.000 --> 0:17:32.120
+So we ask for an FCP.
+
+239
+0:17:32.120 --> 0:17:38.440
+And once more than half of the members of the team are OK with it, then we approve it.
+
+240
+0:17:38.440 --> 0:17:41.560
+And here we go.
+
+241
+0:17:41.560 --> 0:17:48.080
+So we, of course, for every pull request that is merged, we check for potential example.
+
+242
+0:17:48.080 --> 0:17:49.880
+No, that's before.
+
+243
+0:17:49.880 --> 0:17:50.880
+Sorry.
+
+244
+0:17:50.880 --> 0:18:00.080
+When we make a new feature that potentially change current behavior, we look for potential
+
+245
+0:18:00.080 --> 0:18:02.760
+integrations in all the creates ecosystems.
+
+246
+0:18:02.760 --> 0:18:05.520
+So we make what we call a creator run.
+
+247
+0:18:05.520 --> 0:18:10.400
+And with this version of your code, we run on all creates.
+
+248
+0:18:10.400 --> 0:18:15.520
+And we generate a nice report, you can see on the left.
+
+249
+0:18:15.520 --> 0:18:20.040
+And if you only have a flaky stuff, we say, OK, no impact.
+
+250
+0:18:20.040 --> 0:18:21.040
+So it's good.
+
+251
+0:18:21.040 --> 0:18:22.080
+We don't care.
+
+252
+0:18:22.080 --> 0:18:24.360
+That's pretty much it.
+
+253
+0:18:24.360 --> 0:18:31.160
+And same as for the performance, we have a nice comment explaining everything in short,
+
+254
+0:18:31.160 --> 0:18:38.160
+which is much more easy to read that the thing on the left, which is actually not good.
+
+255
+0:18:38.160 --> 0:18:45.280
+And now a little part I like to do every time, tips for potential new contributors.
+
+256
+0:18:45.280 --> 0:18:55.560
+We have a lot of classified tag issues with ELC or Imanto or both issues.
+
+257
+0:18:55.560 --> 0:18:58.080
+Take a look at them.
+
+258
+0:18:58.080 --> 0:19:01.120
+We try to be as helpful as possible to newcomers.
+
+259
+0:19:01.120 --> 0:19:04.760
+It's important for us to have new blood.
+
+260
+0:19:04.760 --> 0:19:08.920
+We have always good surprise with newcomers.
+
+261
+0:19:08.920 --> 0:19:13.560
+We wrote a receive dev guide, which is not up to date at all.
+
+262
+0:19:13.560 --> 0:19:19.400
+So at least you have a vague idea of what's going on, because I think not many people
+
+263
+0:19:19.400 --> 0:19:21.200
+have an idea.
+
+264
+0:19:21.200 --> 0:19:28.480
+And you can try also to write compiler plugins or eventually contribute to Clippy to see
+
+265
+0:19:28.480 --> 0:19:32.720
+how the compiler higher internal levels work.
+
+266
+0:19:32.720 --> 0:19:35.520
+But Clippy, it's really simple to contribute to it.
+
+267
+0:19:35.520 --> 0:19:37.360
+Like they have a full guide or anything.
+
+268
+0:19:37.360 --> 0:19:42.320
+So if you want a big, nice first step, take a look at Clippy and how it works.
+
+269
+0:19:42.320 --> 0:19:46.520
+And it gives a very, very nice introduction.
+
+270
+0:19:46.520 --> 0:19:51.120
+And I am making publicity like for myself.
+
+271
+0:19:51.120 --> 0:19:57.320
+I wrote a small recipe to create, which makes a few things simpler to write plugins and
+
+272
+0:19:57.320 --> 0:19:59.720
+extensions to the compiler.
+
+273
+0:19:59.720 --> 0:20:02.520
+If you want to write, go ahead.
+
+274
+0:20:02.520 --> 0:20:06.440
+It's made to be usable as much as possible.
+
+275
+0:20:06.440 --> 0:20:07.440
+And thank you for listening.
+
+276
+0:20:07.440 --> 0:20:17.400
+You have Mr. Shor's website.
+
+277
+0:20:17.400 --> 0:20:38.740
+Thank you.
+

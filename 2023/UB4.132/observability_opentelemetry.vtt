@@ -1,0 +1,835 @@
+WEBVTT
+
+00:00.000 --> 00:10.600
+Perfect. Hello, everyone. I might need to take a selfie because they're not going to
+
+00:10.600 --> 00:19.280
+believe me when I get back. So people like testing, obviously, and they know. I used
+
+00:19.280 --> 00:23.600
+to do a video because they're freaking not going to believe me. So apparently, people
+
+00:23.600 --> 00:29.000
+know what open telemetry is and what testing is. And yeah, I was not expecting this to
+
+00:29.000 --> 00:35.320
+be good. So you're going to go out on Twitter. That's for sure. But yeah, anyway, let's
+
+00:35.320 --> 00:43.280
+just take a second to welcome our new guests in. Perfect. Perfect. Yeah, this went from
+
+00:43.280 --> 00:50.840
+fun to stressful really quickly. But yeah, so let me begin. For the next 20 or so minutes,
+
+00:50.840 --> 00:55.000
+I'll be talking about observability driven development with open telemetry. So a lot
+
+00:55.000 --> 00:58.880
+of complicated words, a lot of stuff that's going to be happening, and a lot of things
+
+00:58.880 --> 01:04.080
+I need to explain for you as testers and how you can get started with this new thing of
+
+01:04.080 --> 01:11.760
+being ODD instead of TDD. So first, a quick rundown of who I am. I'm running DevRel at
+
+01:11.760 --> 01:17.480
+TraceTest, which is a new tool, new open source tool that we're building for trace-based testing.
+
+01:17.480 --> 01:23.960
+I'll obviously explain all of that later on. But you're wondering, what am I, DevRel person,
+
+01:23.960 --> 01:31.240
+doing at an open source conference? Because I successfully failed a startup that was doing
+
+01:31.240 --> 01:36.160
+online education. So I was from there, went into education. And because we're basically
+
+01:36.160 --> 01:41.880
+educators in DevRel, I was like, maybe, maybe, you know, I write shitty code, I can maybe
+
+01:41.880 --> 01:46.680
+be good at something like talking. So I figured that might be a good career shift. But I've
+
+01:46.680 --> 01:51.280
+also been helping build open source DevTools for five or so years. So it's pretty natural
+
+01:51.280 --> 01:54.600
+for me to be here. So enough about that. You probably think that I know what I'm talking
+
+01:54.600 --> 02:00.680
+about. Let's keep it rolling. There are four main topics. So remember these four topics
+
+02:00.680 --> 02:05.200
+that we will cover in the next 20 or so minutes. And that's first, we'll talk about the pain
+
+02:05.200 --> 02:09.840
+of testing microservices. It's a horrible, horrible thing. And we'll also talk about
+
+02:09.840 --> 02:15.840
+TDD and how integration testing is really hard. We're all doing it. It's terrible. It's
+
+02:15.840 --> 02:21.360
+hard. But we're still doing it. And then in the last two parts, we'll talk about observability
+
+02:21.360 --> 02:25.840
+driven development, how it can help. And then we'll show a code example, a hands on example
+
+02:25.840 --> 02:28.880
+of how you can do it as well. So I want you to take something home with you after this
+
+02:28.880 --> 02:34.500
+20 minute talk and actually start doing it yourself. So from the beginning, from the
+
+02:34.500 --> 02:39.400
+top down, let's talk about the pain of testing microservices. So first, the biggest issue
+
+02:39.400 --> 02:45.640
+is that you have no way of knowing where your HTTP transaction fails. You don't know. You
+
+02:45.640 --> 02:52.080
+can test an API endpoint, you get a response back, but it might be task failed successfully.
+
+02:52.080 --> 02:58.040
+You never really know if you have a row of microservices behind that initial service.
+
+02:58.040 --> 03:03.840
+So that's something you can track. You can track and test how these microservice to microservice
+
+03:03.840 --> 03:09.520
+communications happen. And of course, the hardest thing, what we all really love to
+
+03:09.520 --> 03:16.400
+hate is mocking. It's really hard. It's really, really hard. So the solution that we propose
+
+03:16.400 --> 03:21.840
+is that we go into doing something called observability driven development, which means
+
+03:21.840 --> 03:27.880
+that you're using distributed traces as the test assertions. So you're already using your
+
+03:27.880 --> 03:33.680
+underlying trace infrastructure to run your tests. And now because this is a testing bedroom,
+
+03:33.680 --> 03:39.600
+you might not know what tracing is. LightStep has a very nice definition of it, and they
+
+03:39.600 --> 03:45.280
+say that distributed tracing refers to methods of observing requests as they propagate through
+
+03:45.280 --> 03:50.680
+a distributed system, which means that if you have a distributed system on the left,
+
+03:50.680 --> 03:56.440
+you have services that communicate with each other. And on the right, you can see that
+
+03:56.440 --> 04:02.640
+that entire distributed trace is split into different spans. A span is the smallest unit
+
+04:02.640 --> 04:09.800
+of a distributed test. So a span can be, it can be a timestamp. It can be a database interaction
+
+04:09.800 --> 04:15.720
+or database statement. It can be HTTP codes. It can be objects that you generate in your
+
+04:15.720 --> 04:22.280
+custom instrumentation itself. So they are literally the smallest form or part of a distributed
+
+04:22.280 --> 04:28.200
+trace. The distributed system we'll be talking about today, so the samples we will be talking
+
+04:28.200 --> 04:33.760
+about is very simple. We have two services with a mock database connection. Just to simplify
+
+04:33.760 --> 04:38.400
+this whole architecture, we will be using this to explain how distributed tracing works
+
+04:38.400 --> 04:44.160
+and how you run observability-driven development on such a system. Now, just a code sample,
+
+04:44.160 --> 04:50.000
+because this is JavaScript, the only language I really know, not that well, this is what
+
+04:50.000 --> 04:55.280
+a trace would look like. You're setting the span, you're adding attributes, and then you're
+
+04:55.280 --> 05:02.120
+ending the span. So this is the code representation of what we have over here. So just remember
+
+05:02.120 --> 05:08.600
+that for now, and we'll get into more details as we progress. So the visual key, or the
+
+05:08.600 --> 05:12.280
+visual layout of a distributed span would look like this. This is taken from the Trace
+
+05:12.280 --> 05:17.200
+Test app, but this is any, like any distributed span looks like this, where you have your
+
+05:17.200 --> 05:22.380
+distributed trace, and you can see all of the spans within it. And if you drill into
+
+05:22.380 --> 05:28.640
+one particular span, you can see, okay, so here are all of the attributes that this span
+
+05:28.640 --> 05:34.080
+has. It can be available, Book ID, the check, and the parent ID. There's a lot of different
+
+05:34.080 --> 05:39.000
+attributes you have in every span. So the next topic I do want to cover, we have all
+
+05:39.000 --> 05:43.960
+the basics down. We know why it's hard. We need to figure out why integration testing
+
+05:43.960 --> 05:49.640
+and TDD really need help. Everybody knows about the red-green feedback loop. It's awesome.
+
+05:49.640 --> 05:56.480
+It's great. We like it. We don't need to change it. But integration tests are hard. Integration
+
+05:56.480 --> 06:01.440
+tests are the kicker, where they need access to services and infrastructure. That's the
+
+06:01.440 --> 06:05.000
+hard part. You need to set up different triggers. You need to access databases. You need to
+
+06:05.000 --> 06:08.280
+set up environment variables. You need to set up authentication. All of those things
+
+06:08.280 --> 06:13.760
+that everybody hates doing. And of course, you can track which part of the microservice
+
+06:13.760 --> 06:19.200
+chain failed, which means that you're writing 90% of your code just as plumbing, just to
+
+06:19.200 --> 06:25.560
+make sure that the test will run. 10% is actually writing the test, writing the test case, and
+
+06:25.560 --> 06:31.080
+actually getting value from your TDD process. So here's what a traditional integration test
+
+06:31.080 --> 06:36.400
+would look like. You have all of your setup. Again, this is JavaScript. It can be any language.
+
+06:36.400 --> 06:39.560
+You have your setup, a bunch of modules, a bunch of setup, a bunch of plumbing, and then
+
+06:39.560 --> 06:43.440
+you have more plumbing because you need to mock something. Then you have even more plumbing
+
+06:43.440 --> 06:47.860
+because you have to figure out how to run this custom freaking syntax that has nothing
+
+06:47.860 --> 06:51.120
+to do with any language, really. You just have to learn it. So it's a lot of stuff you
+
+06:51.120 --> 06:57.080
+have to know before you actually run tests. If you compare that to a trace-based test,
+
+06:57.080 --> 07:03.840
+you say, here's my URL. Here's my method. This is what I'm asserting against. That's
+
+07:03.840 --> 07:12.120
+it. No complications, no plumbing, no nothing. It just points to the trace, the trace span
+
+07:12.120 --> 07:19.760
+you want to target. You have your assertion and it's done. So this is why I think observability-driven
+
+07:19.760 --> 07:26.480
+can help our testing process where, obviously, we need to explain what ODD is. The main thing
+
+07:26.480 --> 07:31.000
+that I think is important to know is that you need to write your code and your observability
+
+07:31.000 --> 07:37.080
+instrumentation in parallel. So the same way you do the red-green process for TDD, in ODD,
+
+07:37.080 --> 07:42.640
+you write your trace spans and you write your code and your features in parallel, which
+
+07:42.640 --> 07:47.360
+is good first thing because in production that helps your DevOps people when they have
+
+07:47.360 --> 07:52.400
+to troubleshoot, but it's also helping you write better code. ODD is really powerful
+
+07:52.400 --> 07:57.000
+because first and foremost, of course, you're not testing mocks. Nothing is artificial.
+
+07:57.000 --> 08:03.800
+You're not creating black boxes. You're literally testing data from the traces in the real environment.
+
+08:03.800 --> 08:09.160
+So you can spin up your system, get traces from the system and test on those traces.
+
+08:09.160 --> 08:13.560
+Of course, it works with all of your existing open telemetry-based distributed tracing.
+
+08:13.560 --> 08:18.720
+So if you have tracing enabled or if you want to enable it, it's really simple nowadays,
+
+08:18.720 --> 08:25.280
+it will just work. And then from the ODD definition, we need to figure out what trace-based testing
+
+08:25.280 --> 08:31.880
+is here. So you basically add assertions against span values and that's what determines whether
+
+08:31.880 --> 08:37.240
+the test has failed or the test has passed. It's really straightforward. So you're not
+
+08:37.240 --> 08:41.840
+just testing against the API response, you're actually testing against the whole distributed
+
+08:41.840 --> 08:46.960
+trace your system generates. So unlike postman, where you trigger a test, you get something
+
+08:46.960 --> 08:52.400
+back and then you're asserting on that response, you're literally testing and running assertions
+
+08:52.400 --> 08:56.680
+against the entire distributed trace. Really, really cool.
+
+08:56.680 --> 09:00.840
+Now let's go into some practice. How do you do observability driven development? Well,
+
+09:00.840 --> 09:06.760
+you do trace tests because that's the open source tool we're building, shocker. But what's
+
+09:06.760 --> 09:11.160
+important about trace tests is fully open source, 100% open source CNCF project and
+
+09:11.160 --> 09:18.040
+it uses open telemetry trace spans as assertions. Very straightforward. Of course, it does work
+
+09:18.040 --> 09:22.880
+with any existing tracing solution you might have. You can use vendors, you can use open
+
+09:22.880 --> 09:27.000
+source tools, you can use whatever. If you have tracing in your system, it'll just work.
+
+09:27.000 --> 09:30.920
+Also what's important is it doesn't matter if you're a QA engineer, if you're a backend
+
+09:30.920 --> 09:37.080
+developer, if you're a DevOps person, it'll just work. You have tools for everybody, Web
+
+09:37.080 --> 09:41.440
+UI, CLI, whatever you want, whatever you need, it's there for you.
+
+09:41.440 --> 09:46.720
+And then why I think it's powerful, you're not running artificial tests, you're testing
+
+09:46.720 --> 09:51.840
+against real data and obviously you have a tool belt that you're really used to. You
+
+09:51.840 --> 09:56.240
+can run test suites by chaining tests together, have transactions where the normal, whether
+
+09:56.240 --> 09:59.440
+the normal, the standard way you're running integration tests is you have a setup, you're
+
+09:59.440 --> 10:03.360
+connecting to a database, you're running an insert, you're checking if the insert works,
+
+10:03.360 --> 10:08.360
+you're deleting that whole path, that environment and that's what we provide as well. You can
+
+10:08.360 --> 10:14.000
+set that whole transaction up through the UI. So it's literally what you're used to,
+
+10:14.000 --> 10:19.200
+but better. You always have test environments as well, which is a very big thing because
+
+10:19.200 --> 10:23.440
+you can have one set environment for your Dev, for your QA, for your prod, for your
+
+10:23.440 --> 10:26.640
+whatever. So it's very, very flexible in that way as well.
+
+10:26.640 --> 10:32.240
+Obviously, I'm going to stress this no mocks because I really like that. I hate, I hate
+
+10:32.240 --> 10:36.680
+mocking. So I'm going to just shove this down your throat. Every slide is going to be no
+
+10:36.680 --> 10:41.800
+mocking. But you also, one thing that I think is massively important is that if anybody's
+
+10:41.800 --> 10:46.340
+running serverless, I've been running serverless since it was a thing like in 2018 when everybody
+
+10:46.340 --> 10:50.440
+wanted to run serverless and it was horrible, it was a horrible experience. So I'd suggest
+
+10:50.440 --> 10:55.800
+nobody really does it. But if you have to, because of PMs, testing events on message
+
+10:55.800 --> 11:01.000
+queues and testing events on distributed systems and services in AWS or whatever, it would
+
+11:01.000 --> 11:04.440
+like, you never, you'd like, it's prayer driven development. You never really know what's
+
+11:04.440 --> 11:08.000
+going to happen, right? So that's something that we provide. You can literally see the
+
+11:08.000 --> 11:12.600
+entire trace from that ASIC message queue, from other systems, from other services, and
+
+11:12.600 --> 11:16.160
+you really know what's happening. Obviously, it's important that you get assertions based
+
+11:16.160 --> 11:20.560
+on timing. Maybe you want all of your database requests and your database queries to finish
+
+11:20.560 --> 11:25.760
+within 500 milliseconds. That just works. And you can also set wildcard assertions.
+
+11:25.760 --> 11:31.800
+So the same thing I was saying about the database queries, it works for wildcards as well. So
+
+11:31.800 --> 11:36.360
+a visual demo, like a representation, what that would mean is literally like this. So
+
+11:36.360 --> 11:40.480
+you have your text test executor, which is, you can think of that as a trigger. You're
+
+11:40.480 --> 11:45.080
+testing your system. That trace data is getting written to your trace data store. It can be
+
+11:45.080 --> 11:51.140
+pretty much anything you've all heard of. Jaeger, OpenSearch, Rufana Tempo, OpenTelemetry
+
+11:51.140 --> 11:55.600
+Collector, like all of those, even vendors like Datadog or whatever. And then what happens
+
+11:55.600 --> 11:59.880
+is that once the response gets back, we pick up that response, but we also pick up the
+
+11:59.880 --> 12:07.080
+trace. So you can run assertions based on both the trace and the response itself. And
+
+12:07.080 --> 12:11.080
+then obviously you get the result back and then you can see if it's passed, if it's not
+
+12:11.080 --> 12:16.520
+passed, what you need to fix, et cetera. So yeah, after all of this, we're 10 minutes
+
+12:16.520 --> 12:21.320
+in, perfect. After all of this just like theory and understanding what's happening, we want
+
+12:21.320 --> 12:25.720
+to jump into actual code. So let's go back to the sample of checking our trace-based
+
+12:25.720 --> 12:33.340
+test. So we have a URL and we're making sure that we're sending a get request to that URL.
+
+12:33.340 --> 12:39.480
+We're setting up a span. So we're targeting the books span in the books API. And we're
+
+12:39.480 --> 12:44.480
+making sure that we want to have a list of books equal to three. So this is our TDD red
+
+12:44.480 --> 12:48.520
+green process. We have a test. We want to run the code and we see, okay, so we have
+
+12:48.520 --> 12:52.640
+a handler here. It's getting some books. We have some books, but you can see that there's
+
+12:52.640 --> 12:58.420
+no instrumentation. So if we do run the test, it's going to say, okay, the 200 is fine,
+
+12:58.420 --> 13:03.640
+but we're not getting any books here. Red, let's go ahead and refactor. We're adding
+
+13:03.640 --> 13:08.640
+in our spans. So we say, okay, so now I'll add an attribute and I want to pass in the
+
+13:08.640 --> 13:16.360
+book's length into this attribute right here. Perfect. Now it passes. So this is the most
+
+13:16.360 --> 13:21.340
+banal simple use case that you can see, but you're already seeing value from it because
+
+13:21.340 --> 13:25.960
+you can pass in a custom value. That's a real, real data. You don't have to mess about with
+
+13:25.960 --> 13:31.220
+any mocking or anything. And then obviously one thing that I'm stressing is very important
+
+13:31.220 --> 13:36.680
+is what if you want to add a span duration? So I want all of, I want this API to finish
+
+13:36.680 --> 13:45.120
+within 500 milliseconds. Okay. Right now, if we have an issue, even though the code
+
+13:45.120 --> 13:52.120
+works, it might be performing badly. We can add in the span duration, check for the timing,
+
+13:52.120 --> 13:57.000
+and then obviously refactor if we need to refactor. And that's the thing in the UI as
+
+13:57.000 --> 14:01.400
+well. Once you do refactor it, this is what you would see. You go and say, okay, so finally
+
+14:01.400 --> 14:07.920
+now I have a passing test. This book's API is returning within 500 milliseconds. And
+
+14:07.920 --> 14:12.440
+then obviously the last and I think crucial thing with using trace based testing is that
+
+14:12.440 --> 14:18.480
+you can literally test on a search on every part of an HTTP transaction. So if we go back
+
+14:18.480 --> 14:23.920
+to our books handler API, instead of calling books, we're now calling available books.
+
+14:23.920 --> 14:29.360
+So we are calling an external API to see if the books are available or not. So we're having
+
+14:29.360 --> 14:35.360
+this microservice to microservice communication. And if we check that, get available books
+
+14:35.360 --> 14:40.000
+function, so we have some promise thingamajig happening here. We're calling an availability
+
+14:40.000 --> 14:44.880
+API and we're just checking if it's available or not. So the kicker here is we're calling
+
+14:44.880 --> 14:49.720
+an external API. The external API is super simple. We're just running some tests, whether
+
+14:49.720 --> 14:54.800
+it's available or not, and we're setting this attribute. So it's a very, very simple example.
+
+14:54.800 --> 15:05.960
+But the thing is, what if in the availability check we have a problem? There we go. Oh yeah,
+
+15:05.960 --> 15:11.600
+good, good. This is why I don't do live demos. Anyway, so if in the availability check, if
+
+15:11.600 --> 15:16.760
+you're checking here, you can see, oh, we have a problem. There are books that are out
+
+15:16.760 --> 15:22.040
+of stock. So this is that down the chain action that would happen. You would never know what
+
+15:22.040 --> 15:26.800
+the hell is the problem. But now, because we have this set up, we can say, OK, so I'm
+
+15:26.800 --> 15:31.520
+adding into my trace based test. I want to make sure the availability API is up. So I'm
+
+15:31.520 --> 15:35.960
+actually triggering this host. And I also want to make sure that all of these is available
+
+15:35.960 --> 15:42.360
+attributes is true. If I do run that test, I'll see that, whoopsie, I'll see that they're
+
+15:42.360 --> 15:48.760
+all passing except for this one because, oh wait, there was actually one node, one part
+
+15:48.760 --> 15:54.640
+of the trace, one span that was returning false because one book was out of stock. And
+
+15:54.640 --> 15:58.420
+if you jump in here, you can see that everything is literally passing. Everything is passing
+
+15:58.420 --> 16:05.360
+except for that one span, which is something you would never figure out if you were running
+
+16:05.360 --> 16:11.240
+the traditional way of running tests. And the last thing I really want to stress before
+
+16:11.240 --> 16:16.360
+we wrap up is that this will work with any distributed system that has open telemetry
+
+16:16.360 --> 16:21.400
+instrumentation. So any system that looks like this, you have an app with open telemetry,
+
+16:21.400 --> 16:24.840
+you're sending to the open telemetry collector, and then you're sending that trace data to
+
+16:24.840 --> 16:30.640
+any trace data store. Jager open search doesn't really matter. You hook in your trace test
+
+16:30.640 --> 16:36.720
+instance, you pick up data on every request, you pick up data from the trace data store,
+
+16:36.720 --> 16:43.160
+and you run these tests. This is the only setup you really need to do. Install the CLI,
+
+16:43.160 --> 16:48.000
+install the server, one command, one command, and you're ready. Set up your Docker composer
+
+16:48.000 --> 16:52.720
+Kubernetes. All of this works out of the box with the install. We have good engineers.
+
+16:52.720 --> 16:57.880
+These guys really try to make the install really simple. You set up the trace data store.
+
+16:57.880 --> 17:02.560
+You can do that in the UI or in the CLI, doesn't really matter. Connect the data store and
+
+17:02.560 --> 17:10.920
+you're done. It just works. So the last recap, two minutes left. What did we learn today?
+
+17:10.920 --> 17:16.120
+We learned that obviously ODD or observability driven development is really awesome. You
+
+17:16.120 --> 17:20.520
+don't have to mock, again with the mocking. You're testing against real data and you don't
+
+17:20.520 --> 17:25.760
+have any black boxes anymore. You know exactly what's happening in every single microservice.
+
+17:25.760 --> 17:32.620
+You can assert on every step of the transaction. And as a last recap, I mean, you wouldn't
+
+17:32.620 --> 17:37.760
+be here if you thought testing was fun or easy or something that you really enjoy doing.
+
+17:37.760 --> 17:42.760
+It is hard. Like we all know, it is very hard. Testing distributed systems is even harder.
+
+17:42.760 --> 17:48.680
+Testing microservices is even harder. So I want to help you elevate that TDD processor.
+
+17:48.680 --> 17:54.400
+You're already doing, you're already doing well that you like to doing ODD as well. That's
+
+17:54.400 --> 18:00.600
+pretty much it. We're on point. If you have any questions, if you want to check out TraceTest,
+
+18:00.600 --> 18:04.860
+just go to GitHub, CubeShop, TraceTest. You can download it. You can read a blog post
+
+18:04.860 --> 18:10.400
+I wrote about this as well. So knock yourselves out, I guess. You can also do, just to make
+
+18:10.400 --> 18:14.640
+it easier, you can do the, you can also jump into Discord. You can chat with me or the
+
+18:14.640 --> 18:19.680
+engineers face to face. If you have any questions, if you want to try it out, check out the GitHub.
+
+18:19.680 --> 18:24.440
+Also give us a star, you know, because it's kind of why I'm here. I have to earn my salary
+
+18:24.440 --> 18:39.280
+some way. So questions?
+
+18:39.280 --> 18:53.400
+Yeah, sure. So tests run against the trace from the system. Yes. The way it happens is
+
+18:53.400 --> 18:59.320
+that, imagine you're running a postman request. That would be called, because this is TraceTest,
+
+18:59.320 --> 19:04.560
+that would be called response test. You get a response, you're testing on it. For TraceTest,
+
+19:04.560 --> 19:08.720
+you get the response, but you're also tapping into the trace data store and getting the
+
+19:08.720 --> 19:14.640
+traces that that request generates. So from that distributed trace, then you're running
+
+19:14.640 --> 19:18.600
+assertions based on the spans within that trace. If that answers your question.
+
+19:18.600 --> 19:35.840
+Yeah, for sure. The only thing is that, obviously if you're running locally, you have a setup
+
+19:35.840 --> 19:41.280
+where your application is sending to either an open telemetry collector or whatever. You
+
+19:41.280 --> 19:46.240
+can also tap into that where you configure TraceTest to be the pipeline endpoint of your
+
+19:46.240 --> 19:52.560
+open telemetry collector. So you can just run it as a dev tool as well. Also, we might,
+
+19:52.560 --> 19:57.160
+I'm not sure if I'm good saying this on camera, but we might be building a desktop app very
+
+19:57.160 --> 20:01.680
+soon because we're like half a year into this. So we're still kind of figuring out what you
+
+20:01.680 --> 20:06.440
+guys need. So that's why I'm here as well. But yeah, let's see what happens. It's a great
+
+20:06.440 --> 20:13.800
+question, by the way. It's good that I finished early. We have like time for questions. This
+
+20:13.800 --> 20:21.760
+is great. So is there anything that limits this to test notices? Like, could you use
+
+20:21.760 --> 20:27.720
+this as a way of measuring SLOs for like half the user journeys?
+
+20:27.720 --> 20:32.200
+So yeah, the question was measuring SLOs for user journeys. That's actually something we're
+
+20:32.200 --> 20:36.880
+working on now. I'm not sure if you know about the Captain project. So we have an integration
+
+20:36.880 --> 20:41.040
+with the Captain project as of last week, quite literally. So if you want to check that
+
+20:41.040 --> 20:46.400
+out, you just jump into Trace Test Integrates with Captain and you'll get a lot of documentation
+
+20:46.400 --> 20:50.800
+and sample apps examples and whatnot to set that up as well. So that's an excellent use
+
+20:50.800 --> 20:53.440
+case and something that we actively have been working on.
+
+20:53.440 --> 21:02.440
+So most modern apps use a browser, which you also get to leverage your data through the
+
+21:02.440 --> 21:03.440
+browser.
+
+21:03.440 --> 21:07.720
+100%. The thing is that whatever you have implemented, if you have auto traces coming
+
+21:07.720 --> 21:13.640
+in from that system, it works. So it's language agnostic, set up agnostic. It's literally
+
+21:13.640 --> 21:18.480
+like just the traces are important. So if you're running Otel, if you're running the
+
+21:18.480 --> 21:23.040
+Datadog agent, Elastic agent, literally anything that generates traces, it'll work. Obviously
+
+21:23.040 --> 21:28.680
+works best with Otel because open source, you know. But yeah, it just works.
+
+21:28.680 --> 21:40.520
+Could you use this live introduction to periodically check certain constraints, like instead of
+
+21:40.520 --> 21:45.960
+writing custom alerting rules based on your traces, putting up these assertions and say
+
+21:45.960 --> 21:51.040
+okay, once a day I want my samples, so you can check the assertion?
+
+21:51.040 --> 21:56.160
+So if I understand the question correctly, it is do I run synthetic tests with Trace
+
+21:56.160 --> 22:01.520
+test? Yes. If you have a CI pipeline or like you can have a cron job somewhere running,
+
+22:01.520 --> 22:05.240
+it doesn't really matter, every five minutes I want to trigger this test and make sure
+
+22:05.240 --> 22:08.160
+that all of the assertions are true. That's perfectly fine.
+
+22:08.160 --> 22:16.160
+No, but my question was more if I have trace data for my production system, can I use trace
+
+22:16.160 --> 22:19.160
+test to play with these states?
+
+22:19.160 --> 22:23.160
+Oh yeah, 100%. It works. You can think of it as testing in production and making sure
+
+22:23.160 --> 22:28.160
+that the production environment is healthy. That works as well.
+
+22:28.160 --> 22:38.160
+Hi. So the trace test depend on your instrumentation, right? Your instrumentation is in your production
+
+22:38.160 --> 22:43.160
+code. Do you have any advice on how do you prevent your production code from bloating
+
+22:43.160 --> 22:51.160
+with the instrumentation to beat these tests?
+
+22:51.160 --> 22:57.040
+I'm going to say that's a great question, but I think I'm not even close to being good
+
+22:57.040 --> 23:00.040
+enough of an engineer to answer that question, to be honest.
+
+23:00.040 --> 23:03.040
+If we could pass it on to the team? 100%, 100%.
+
+23:03.040 --> 23:07.040
+Because this looks like a really useful tool, but...
+
+23:07.040 --> 23:08.040
+Right.
+
+23:08.040 --> 23:09.040
+I'm sure.
+
+23:09.040 --> 23:10.040
+Thank you.
+
+23:10.040 --> 23:11.040
+Okay, who's next?
+
+23:11.040 --> 23:12.040
+Yeah, go ahead.
+
+23:12.040 --> 23:13.040
+Yeah, this is quite a massive question.
+
+23:13.040 --> 23:23.920
+But it looks like you really can pick black boxes, but another hand, right in the past
+
+23:23.920 --> 23:34.920
+like this, and that's the span they might be necessarily tapping into the intricate
+
+23:34.920 --> 23:43.920
+details of the infrastructure. So is this necessarily good? Because the text actually
+
+23:43.920 --> 23:47.920
+knows what's in that black box. So when you refactor your infrastructure, you might have
+
+23:47.920 --> 23:53.920
+to throw out all your tests because you don't have the database in your test.
+
+23:53.920 --> 24:01.720
+Yeah, that's a good question as well. I think the logical solution would be trace test is
+
+24:01.720 --> 24:06.720
+like a map, is just mapping out your infra. So if you're using it, you can also use it
+
+24:06.720 --> 24:12.800
+just to gain visibility. So it doesn't have to be that it's only focused on the testing.
+
+24:12.800 --> 24:16.600
+If you're using it to map out your infra, even if you have changes, if you're running
+
+24:16.600 --> 24:21.560
+the test again, you'll exactly know what changed. So if you're running assertions based on one
+
+24:21.560 --> 24:28.000
+database table, so to say, and then running an API on one endpoint that has one particular
+
+24:28.000 --> 24:32.160
+host name, if you change those up, you'll see what fails and you can figure out, oh,
+
+24:32.160 --> 24:37.660
+okay, so we changed that last week because of XYZ and you can know exactly what changed.
+
+24:37.660 --> 24:43.320
+So I think the overview, the visibility into your system, because when you're running microservices,
+
+24:43.320 --> 24:48.560
+when you're running a bunch of stuff, distributed systems, whatever, it's just hard to have
+
+24:48.560 --> 24:53.680
+a mental model, a mind map, so to say, of everything that's happening. So I think that's
+
+24:53.680 --> 24:57.040
+a good part of the value there as well.
+
+24:57.040 --> 24:59.040
+Thank you. No more time.
+
+24:59.040 --> 25:28.040
+Yeah.

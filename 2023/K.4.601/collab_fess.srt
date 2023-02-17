@@ -1,0 +1,1264 @@
+1
+0:00:00.000 --> 0:00:09.520
+All right, so thanks for coming to this talk.
+
+2
+0:00:09.520 --> 0:00:12.040
+I know there are a lot of interesting talks for
+
+3
+0:00:13.480 --> 0:00:16.320
+interesting things put in this one.
+
+4
+0:00:16.320 --> 0:00:19.360
+So I'm gonna talk about search, more specifically,
+
+5
+0:00:19.360 --> 0:00:25.320
+about how to deploy one within an organization, okay?
+
+6
+0:00:25.320 --> 0:00:29.040
+So in this today's talk, I'm gonna cover these topics.
+
+7
+0:00:29.040 --> 0:00:34.600
+So it all started with engineers using multiple content management tools.
+
+8
+0:00:34.600 --> 0:00:39.840
+And I'm gonna talk about how searching became a problem and
+
+9
+0:00:39.840 --> 0:00:46.040
+how we use an OSS tool to address their problem and the limits to its tests.
+
+10
+0:00:46.040 --> 0:00:50.720
+And how we overcame some of the problems with this.
+
+11
+0:00:50.720 --> 0:00:54.840
+And I'm gonna touch on contribution side of the project and
+
+12
+0:00:54.840 --> 0:00:59.720
+I'm gonna share some insights and observations.
+
+13
+0:00:59.720 --> 0:01:05.640
+Okay, so here's the list of chapters, so let's go.
+
+14
+0:01:07.400 --> 0:01:10.960
+So just quickly, me and the team.
+
+15
+0:01:10.960 --> 0:01:13.440
+So I'm an engineer at Toshiba.
+
+16
+0:01:13.440 --> 0:01:17.640
+I've been recently maintaining the company's cloud infrastructure and
+
+17
+0:01:17.640 --> 0:01:22.960
+just trying to increase the scope and range of automation through these
+
+18
+0:01:22.960 --> 0:01:28.320
+activities because otherwise without increasing the automation, we are kinda doomed.
+
+19
+0:01:28.320 --> 0:01:32.200
+But more importantly, here's the list of very capable,
+
+20
+0:01:32.200 --> 0:01:35.200
+hardworking engineers that made this project possible.
+
+21
+0:01:35.200 --> 0:01:37.320
+So I have a huge respect to them.
+
+22
+0:01:38.520 --> 0:01:41.400
+So now on to the background.
+
+23
+0:01:44.280 --> 0:01:48.560
+So in large corporations like ours,
+
+24
+0:01:48.560 --> 0:01:51.160
+we typically have lots and lots of companies.
+
+25
+0:01:51.160 --> 0:01:55.560
+And our team's job as software engineering center is to deploy and
+
+26
+0:01:55.560 --> 0:01:59.480
+provide tools to other Toshiba companies,
+
+27
+0:01:59.480 --> 0:02:03.440
+like product development departments and R&D departments.
+
+28
+0:02:04.880 --> 0:02:08.720
+Now we have about 200 units of deployment and
+
+29
+0:02:10.440 --> 0:02:18.040
+we have these tools that are basically sort of heavily OSS based.
+
+30
+0:02:18.040 --> 0:02:24.280
+And now let me turn on the user point here.
+
+31
+0:02:24.280 --> 0:02:27.880
+So we have a few more, but these four are like a very,
+
+32
+0:02:27.880 --> 0:02:32.400
+like a core of our tools.
+
+33
+0:02:32.400 --> 0:02:36.400
+So now as we diversify with the tools,
+
+34
+0:02:36.400 --> 0:02:40.280
+the searching became increasingly a problem.
+
+35
+0:02:40.280 --> 0:02:42.880
+And there were two major reasons.
+
+36
+0:02:42.880 --> 0:02:49.360
+For one thing, there is no easy way to search laterally.
+
+37
+0:02:49.360 --> 0:02:55.280
+That is, sometimes we want to search all of these places exhaustively
+
+38
+0:02:55.280 --> 0:02:58.280
+to make sure that we're not missing anything.
+
+39
+0:02:58.280 --> 0:02:59.440
+But there's no easy way to do that.
+
+40
+0:03:00.520 --> 0:03:06.640
+And one more thing is, one more problem is that as we found out,
+
+41
+0:03:06.640 --> 0:03:09.360
+these tools are not quite cut out for
+
+42
+0:03:09.360 --> 0:03:13.480
+searching inside certain binary files like PDF files and
+
+43
+0:03:13.480 --> 0:03:19.480
+office document files, which are really something we use quite often.
+
+44
+0:03:19.480 --> 0:03:23.440
+So what all of these lead to is that ideally,
+
+45
+0:03:23.440 --> 0:03:27.200
+what we want is single search box that given a query,
+
+46
+0:03:29.480 --> 0:03:35.440
+searches all the places and like really no matter where they are and
+
+47
+0:03:35.440 --> 0:03:38.840
+where the documents are and what the formats are.
+
+48
+0:03:38.840 --> 0:03:40.120
+So that's what we are going for.
+
+49
+0:03:44.200 --> 0:03:47.640
+However, this is not a, this is gonna be a daunting task though,
+
+50
+0:03:47.640 --> 0:03:51.840
+because such a tool would have to be,
+
+51
+0:03:51.840 --> 0:03:57.040
+not only be able to solve the two problems that I talked about,
+
+52
+0:03:57.040 --> 0:04:03.000
+but would have to have, like you would have to come with
+
+53
+0:04:03.000 --> 0:04:08.360
+all the essential features, both on the user side and on the admin side.
+
+54
+0:04:08.360 --> 0:04:13.400
+That is, we have to be able to easily set up crawlers and
+
+55
+0:04:13.400 --> 0:04:16.720
+all those things and run them and maintain them easily.
+
+56
+0:04:17.960 --> 0:04:22.760
+So, but there is a tool specifically designed for
+
+57
+0:04:22.760 --> 0:04:25.800
+this task and the name of the tool is FES.
+
+58
+0:04:25.800 --> 0:04:31.040
+So next, I'm gonna quickly talk about what this tool is and
+
+59
+0:04:31.040 --> 0:04:37.320
+what it's like to use it, as I don't think this is particularly a well known tool.
+
+60
+0:04:37.320 --> 0:04:41.360
+So FES is, as read me on the GitHub repo sets,
+
+61
+0:04:41.360 --> 0:04:45.200
+a powerful but easily deployable enterprise search server.
+
+62
+0:04:47.040 --> 0:04:50.400
+So an enterprise search here describes software for
+
+63
+0:04:50.400 --> 0:04:55.040
+searching information within an enterprise as opposed to web search,
+
+64
+0:04:55.040 --> 0:04:56.320
+like Google and DuckDuckGo.
+
+65
+0:04:59.320 --> 0:05:03.240
+Now, FES uses Elastic Search as its search engine,
+
+66
+0:05:03.240 --> 0:05:07.760
+meaning that indexing certain binary files like office files and
+
+67
+0:05:07.760 --> 0:05:12.120
+PD files are more or less automatic.
+
+68
+0:05:12.120 --> 0:05:17.360
+And one notable feature of this tool is that it comes with several types of
+
+69
+0:05:17.360 --> 0:05:18.560
+web crawlers.
+
+70
+0:05:18.560 --> 0:05:22.640
+There's one for web pages and there's also one for
+
+71
+0:05:22.640 --> 0:05:25.720
+file system like a directory hierarchies.
+
+72
+0:05:25.720 --> 0:05:28.600
+And there's one for a database as well.
+
+73
+0:05:28.600 --> 0:05:33.400
+And all of this is to get data from many different kinds of sources.
+
+74
+0:05:33.400 --> 0:05:37.600
+And if you look at the screenshots, there is a search box and
+
+75
+0:05:37.600 --> 0:05:40.120
+also they have admin console.
+
+76
+0:05:40.120 --> 0:05:45.160
+And the search engine results page looks only familiar to many, I think.
+
+77
+0:05:46.840 --> 0:05:51.160
+And this tool is developed by a company named CodeLips,
+
+78
+0:05:51.160 --> 0:05:54.520
+which is a company that develops in open sources tools.
+
+79
+0:05:54.520 --> 0:05:58.960
+And they have a lot of experience engaging with OS's community.
+
+80
+0:05:58.960 --> 0:06:05.160
+So, and let's take a quick look at how this tool works by looking at
+
+81
+0:06:05.160 --> 0:06:10.000
+one of its core features, which is a web crawler.
+
+82
+0:06:10.000 --> 0:06:10.920
+And I think it's a,
+
+83
+0:06:10.920 --> 0:06:15.480
+a web crawler is basically a backbone of this whole system.
+
+84
+0:06:15.480 --> 0:06:19.480
+And I think the concept is familiar to everyone.
+
+85
+0:06:19.480 --> 0:06:22.520
+It basically crawls and indexes web pages,
+
+86
+0:06:22.520 --> 0:06:26.320
+web page contents and uploaded files.
+
+87
+0:06:27.960 --> 0:06:34.440
+So the way you create web crawlers on Fisk is you go to admin console and
+
+88
+0:06:34.440 --> 0:06:38.600
+then set these parameters for web crawlers.
+
+89
+0:06:38.600 --> 0:06:40.400
+Now there are quite a few parameters here, but
+
+90
+0:06:40.400 --> 0:06:42.960
+I'm gonna focus on a few important ones.
+
+91
+0:06:44.080 --> 0:06:47.960
+And first there is, of course, URLs field.
+
+92
+0:06:47.960 --> 0:06:52.520
+And then you can include and exclude certain URLs.
+
+93
+0:06:52.520 --> 0:06:59.560
+Fisk respects robots.txt, but certain robots.txt file
+
+94
+0:06:59.560 --> 0:07:03.080
+doesn't disallow certain not so relevant pages.
+
+95
+0:07:03.080 --> 0:07:07.480
+So in this case, in that kind of case, this comes in handy.
+
+96
+0:07:07.480 --> 0:07:11.640
+And there are also fields like depth and max access count,
+
+97
+0:07:11.640 --> 0:07:17.760
+which you probably want to set to a very high, large value so
+
+98
+0:07:17.760 --> 0:07:20.560
+that crawlers are not gonna stop pretty much surely.
+
+99
+0:07:21.880 --> 0:07:26.560
+And then we came to the permissions parameter.
+
+100
+0:07:26.560 --> 0:07:28.800
+And I think this one needs a little bit more expansion.
+
+101
+0:07:29.880 --> 0:07:36.160
+So this, this parameter is where you can implement per user access control.
+
+102
+0:07:36.160 --> 0:07:41.680
+That is, when you, I think the, I hope the phone is versioned up, but
+
+103
+0:07:41.680 --> 0:07:49.680
+when you list users like that, and let's say the crawlers index everything and
+
+104
+0:07:49.680 --> 0:07:53.400
+search is ready, then, and the users search something,
+
+105
+0:07:54.600 --> 0:07:57.680
+only the users listed there see the results.
+
+106
+0:07:58.880 --> 0:08:04.360
+So but notice that this setting is per web crawler basis,
+
+107
+0:08:04.360 --> 0:08:09.080
+meaning that if you have 100 projects on GitLab, you're gonna need 100 web
+
+108
+0:08:09.080 --> 0:08:12.840
+crawlers, which is a lot, so clearly some kind of automation is necessary.
+
+109
+0:08:12.840 --> 0:08:14.160
+And I'll get back to this point later.
+
+110
+0:08:15.280 --> 0:08:21.040
+One more quick, one more thing to mention here is that user name here
+
+111
+0:08:21.040 --> 0:08:26.880
+can be either users on Fisk, Fisk has its own users and
+
+112
+0:08:26.880 --> 0:08:34.880
+groups, but can also be users authenticated by LDAP directory service.
+
+113
+0:08:34.880 --> 0:08:40.280
+There's an option to configure this on Fisk.
+
+114
+0:08:40.280 --> 0:08:46.400
+So I hope that gave you the like some feel on how things work on Fisk.
+
+115
+0:08:46.400 --> 0:08:52.480
+So let's move on to the customization part of the stock.
+
+116
+0:08:52.480 --> 0:08:55.240
+So no tools are perfect and Fisk is not an exception.
+
+117
+0:08:55.240 --> 0:08:59.400
+So we have to customize and patch Fisk in a few ways.
+
+118
+0:08:59.400 --> 0:09:05.000
+So just quickly, here's a list of patches.
+
+119
+0:09:05.000 --> 0:09:11.000
+So our dev team engineers over time wrote more than a few patches.
+
+120
+0:09:11.000 --> 0:09:16.600
+And the general quality improvement patches and bug fix patches
+
+121
+0:09:16.600 --> 0:09:21.960
+have emerged upstream, but they're also more like experimental and
+
+122
+0:09:24.120 --> 0:09:27.280
+patches that are very specific to our problem.
+
+123
+0:09:27.280 --> 0:09:29.320
+And those are kept proprietary.
+
+124
+0:09:29.320 --> 0:09:31.360
+And I'm gonna talk about two of those patches.
+
+125
+0:09:33.040 --> 0:09:35.840
+First one is the authentication for web crawlers.
+
+126
+0:09:35.840 --> 0:09:41.520
+Now, most of the pages of GitLab and Redline are behind login pages.
+
+127
+0:09:42.520 --> 0:09:49.400
+And Fisk has, so the web crawler has to authenticate itself as it makes its way.
+
+128
+0:09:49.400 --> 0:09:52.200
+Now, Fisk has a mechanism for this.
+
+129
+0:09:52.200 --> 0:09:56.240
+That is, you can create web authentication objects and
+
+130
+0:09:56.240 --> 0:09:59.520
+patch it to each web crawler.
+
+131
+0:09:59.520 --> 0:10:09.760
+This works in some cases out of the box if the login form page is fairly standard.
+
+132
+0:10:09.760 --> 0:10:15.360
+But our GitLab uses SAML.
+
+133
+0:10:15.360 --> 0:10:19.560
+And then as it turns out, Fisk does not support this.
+
+134
+0:10:19.560 --> 0:10:22.880
+We have to do some patching.
+
+135
+0:10:22.880 --> 0:10:28.000
+To just go over how the patching works at the conceptual level,
+
+136
+0:10:28.000 --> 0:10:33.280
+what we did is we defined extra optional parameters that
+
+137
+0:10:33.280 --> 0:10:36.440
+admin can write on the console.
+
+138
+0:10:36.440 --> 0:10:43.000
+That is, if there were parameters starting with SAML underscore,
+
+139
+0:10:43.000 --> 0:10:46.880
+the patched parser of this form is gonna pick them up and store them.
+
+140
+0:10:46.880 --> 0:10:52.400
+And later, web crawler is gonna see these parameters and
+
+141
+0:10:52.400 --> 0:10:56.000
+recognizes that SAML authentication,
+
+142
+0:10:56.000 --> 0:10:59.520
+SAML login needs to be attempted and
+
+143
+0:10:59.520 --> 0:11:03.880
+runs extra SAML specific logic.
+
+144
+0:11:05.280 --> 0:11:09.120
+So that's the patch one.
+
+145
+0:11:09.120 --> 0:11:15.520
+And then the second one is about repository contents.
+
+146
+0:11:15.520 --> 0:11:20.560
+So many of the repositories we have on GitLab are several gigabytes in size.
+
+147
+0:11:20.560 --> 0:11:25.680
+So, and both GitLab and
+
+148
+0:11:25.680 --> 0:11:29.760
+Redmine have pages to view repository files.
+
+149
+0:11:29.760 --> 0:11:32.240
+So in theory, if you wait long enough,
+
+150
+0:11:32.240 --> 0:11:39.600
+web crawler is gonna index all these contents through those pages in theory.
+
+151
+0:11:39.600 --> 0:11:43.080
+But this turned out to be a complete non-starter,
+
+152
+0:11:43.080 --> 0:11:47.880
+just because it's too slow and quite understandably so.
+
+153
+0:11:47.880 --> 0:11:51.920
+And the reason is, it's just so
+
+154
+0:11:51.920 --> 0:11:55.080
+the web crawler is gonna make HTTP requests and
+
+155
+0:11:55.080 --> 0:12:00.240
+GitLab features the file, just one file from repo and then renders it to the web page.
+
+156
+0:12:00.240 --> 0:12:07.080
+So there's just too many steps to just get the content of one file.
+
+157
+0:12:07.080 --> 0:12:16.480
+So what we did is to first clone the repository contents to local file system.
+
+158
+0:12:16.480 --> 0:12:19.080
+And then run, this is file crawler,
+
+159
+0:12:19.080 --> 0:12:25.840
+which is a crawler for directory hierarchy and do everything locally.
+
+160
+0:12:25.840 --> 0:12:30.640
+Now this more or less solved the problem of speed.
+
+161
+0:12:30.640 --> 0:12:33.840
+But one problem is that since everything is done locally,
+
+162
+0:12:36.560 --> 0:12:40.160
+when the search indices are stored, the things are, the path is,
+
+163
+0:12:40.160 --> 0:12:45.320
+the file system path is, so we had to remap these to the URL so
+
+164
+0:12:45.320 --> 0:12:50.120
+that later when the user clicks a link, it takes the user to
+
+165
+0:12:50.120 --> 0:12:57.040
+the repository file page on GitLab.
+
+166
+0:12:57.040 --> 0:13:02.440
+So what we did is, again, we defined custom
+
+167
+0:13:02.440 --> 0:13:07.840
+optional parameters that the admin can write on the console,
+
+168
+0:13:07.840 --> 0:13:13.160
+config parameters field, specifically this prefix URL and
+
+169
+0:13:13.160 --> 0:13:15.720
+this particular URL parameters.
+
+170
+0:13:15.720 --> 0:13:22.080
+And when these parameters are present, the parser's gonna pick them up.
+
+171
+0:13:22.080 --> 0:13:27.240
+And then later, the web crawler's gonna see these parameters and
+
+172
+0:13:27.240 --> 0:13:32.640
+then if these are present, it will perform remapping.
+
+173
+0:13:32.640 --> 0:13:38.640
+So this is the conceptual overview of how this patching works.
+
+174
+0:13:38.640 --> 0:13:44.040
+So, yeah, and now most of these parameters
+
+175
+0:13:44.040 --> 0:13:47.880
+are related to the web driver client on this.
+
+176
+0:13:47.880 --> 0:13:53.240
+And there's information about this web driver client and
+
+177
+0:13:53.240 --> 0:13:58.920
+phase 14 issue as since the web driver client is
+
+178
+0:13:58.920 --> 0:14:03.200
+sort of like discontinued on phase 14 and phase 14 is latest.
+
+179
+0:14:03.200 --> 0:14:09.800
+And phase 14 has playwright based crawler,
+
+180
+0:14:09.800 --> 0:14:14.040
+which is still in development and the information in the appendix.
+
+181
+0:14:14.040 --> 0:14:18.120
+Now, I'm gonna talk about another important subject and
+
+182
+0:14:18.120 --> 0:14:19.160
+which is automation.
+
+183
+0:14:20.160 --> 0:14:27.200
+And as you might have guessed, our configuration grew more and
+
+184
+0:14:27.200 --> 0:14:29.880
+more complicated as it always does.
+
+185
+0:14:29.880 --> 0:14:36.920
+So for instance, we have way more than quite a few configurations for
+
+186
+0:14:36.920 --> 0:14:42.080
+each phase instance and so there are lots of manual edits of config files.
+
+187
+0:14:42.080 --> 0:14:45.600
+But these are taken care of by Ansible and Dockerfile and
+
+188
+0:14:45.600 --> 0:14:47.080
+I think that's standard.
+
+189
+0:14:47.080 --> 0:14:52.400
+But perhaps more interesting instance is we have to create
+
+190
+0:14:52.400 --> 0:14:56.480
+several web crawlers per phase instance.
+
+191
+0:14:56.480 --> 0:15:01.120
+And the reason is typically on GitLab you have projects and
+
+192
+0:15:01.120 --> 0:15:03.440
+for each project you have members.
+
+193
+0:15:03.440 --> 0:15:08.320
+And what you want to make sure is when users search something,
+
+194
+0:15:08.320 --> 0:15:15.600
+you see only the resources they have access to.
+
+195
+0:15:15.600 --> 0:15:26.320
+And so to automate the creation of web crawlers in such a case,
+
+196
+0:15:26.320 --> 0:15:33.480
+Pest has APIs just like GitLab APIs.
+
+197
+0:15:33.480 --> 0:15:37.520
+So to explain how this is handled,
+
+198
+0:15:39.200 --> 0:15:45.520
+to look at the sample script, you can kind of combine the GitLab APIs and
+
+199
+0:15:45.520 --> 0:15:46.760
+Pest APIs.
+
+200
+0:15:46.760 --> 0:15:50.000
+First you can use GitLab APIs to get all the projects and
+
+201
+0:15:50.000 --> 0:15:53.800
+then for each projects you can get the list of members.
+
+202
+0:15:53.800 --> 0:16:00.840
+And then for using that list of members, you can create web crawler.
+
+203
+0:16:00.840 --> 0:16:06.400
+And this is where Pest API comes in to create web crawler.
+
+204
+0:16:06.400 --> 0:16:10.920
+And then you can also create web authentication object and
+
+205
+0:16:10.920 --> 0:16:13.080
+attach it to that web crawler.
+
+206
+0:16:13.080 --> 0:16:19.400
+So the Pest APIs are mostly like GitLab APIs and
+
+207
+0:16:19.400 --> 0:16:23.880
+for those who have used them, I think they'll be fairly intuitive.
+
+208
+0:16:28.680 --> 0:16:33.560
+So that's the quick intro to the Pest APIs and
+
+209
+0:16:33.560 --> 0:16:38.920
+I'm gonna share some insights and observations that I can make.
+
+210
+0:16:38.920 --> 0:16:44.200
+So the first is did Pest solve our problems?
+
+211
+0:16:44.200 --> 0:16:46.880
+And the answer would be definitely yes.
+
+212
+0:16:48.280 --> 0:16:56.880
+So the users can now search across tools and inside binary files.
+
+213
+0:16:56.880 --> 0:17:00.160
+And this turned out to be quite powerful as, for instance,
+
+214
+0:17:00.160 --> 0:17:05.640
+even if the file is like a docx file or even if it's a legacy doc format.
+
+215
+0:17:05.640 --> 0:17:09.880
+And even if it's in a very obscure location,
+
+216
+0:17:09.880 --> 0:17:14.680
+in a very old repository, deeply nested places,
+
+217
+0:17:14.680 --> 0:17:20.680
+users can actually find text inside the file.
+
+218
+0:17:20.680 --> 0:17:22.400
+So this turned out to be quite powerful.
+
+219
+0:17:23.480 --> 0:17:27.480
+But it's not without a problem though.
+
+220
+0:17:27.480 --> 0:17:30.640
+So one problem is the performance.
+
+221
+0:17:30.640 --> 0:17:34.400
+If you wanna index contents of GitLab,
+
+222
+0:17:34.400 --> 0:17:38.480
+which have say several hundred projects and
+
+223
+0:17:38.480 --> 0:17:43.480
+several thousand issues using Pest instance running on this
+
+224
+0:17:44.760 --> 0:17:50.480
+level of computing resource, it takes us about a couple days to index everything.
+
+225
+0:17:51.720 --> 0:17:56.520
+And this is something we are trying to improve on.
+
+226
+0:17:56.520 --> 0:18:02.640
+Like how to incrementally index contents and
+
+227
+0:18:02.640 --> 0:18:04.680
+using some other techniques.
+
+228
+0:18:07.560 --> 0:18:11.280
+But for now, that's it for this talk.
+
+229
+0:18:11.280 --> 0:18:13.240
+So thank you so much for listening.
+
+230
+0:18:13.240 --> 0:18:15.880
+And I wanna open this up to the Q&A session.
+
+231
+0:18:15.880 --> 0:18:34.800
+So, any questions?
+
+232
+0:18:34.800 --> 0:18:35.800
+So you have a different type of resources, right?
+
+233
+0:18:35.800 --> 0:18:38.800
+So every resource has different properties, I guess.
+
+234
+0:18:38.800 --> 0:18:42.400
+So I do indexing the same properties for every resource.
+
+235
+0:18:42.400 --> 0:18:46.760
+Do you have a set of properties to index?
+
+236
+0:18:46.760 --> 0:18:48.560
+Are you only indexing content?
+
+237
+0:18:50.280 --> 0:18:52.200
+So I'm trying to understand the question.
+
+238
+0:18:52.200 --> 0:18:55.160
+Yeah, so when you're indexing documents,
+
+239
+0:18:55.160 --> 0:18:58.920
+you are indexing the content of the document, the text of the document?
+
+240
+0:18:58.920 --> 0:18:59.440
+Yes.
+
+241
+0:18:59.440 --> 0:19:02.520
+Or are you indexing also some of the properties like the name,
+
+242
+0:19:02.520 --> 0:19:04.760
+the title, the author, the-
+
+243
+0:19:06.920 --> 0:19:07.560
+I would say yes.
+
+244
+0:19:07.560 --> 0:19:10.400
+I think, so I think, let me repeat the question.
+
+245
+0:19:10.400 --> 0:19:14.200
+The question is whether this, you know,
+
+246
+0:19:14.200 --> 0:19:20.440
+this index only the contents, like the text inside the file,
+
+247
+0:19:20.440 --> 0:19:26.240
+or does it index things such as metadata,
+
+248
+0:19:26.240 --> 0:19:32.920
+like title field or PowerPoint or like they have like several metadata.
+
+249
+0:19:32.920 --> 0:19:33.880
+Yes, it does.
+
+250
+0:19:33.880 --> 0:19:37.440
+It indexes those metadata as well.
+
+251
+0:19:37.440 --> 0:19:42.880
+And those are handled by most likely by elastic search.
+
+252
+0:19:42.880 --> 0:19:44.880
+But yes, on the-
+
+253
+0:19:44.880 --> 0:19:51.160
+the- we, you know, those metadata are indexed.
+
+254
+0:19:51.160 --> 0:19:56.240
+And actually, it shows the metadata title
+
+255
+0:19:56.240 --> 0:20:01.120
+if they are present on the search results page.
+
+256
+0:20:01.120 --> 0:20:02.120
+So yeah.
+
+257
+0:20:02.120 --> 0:20:03.120
+I guess, yeah.
+
+258
+0:20:03.120 --> 0:20:04.120
+I guess, yeah.
+
+259
+0:20:04.120 --> 0:20:05.600
+The second one is a quick one.
+
+260
+0:20:05.600 --> 0:20:07.360
+So are you accepting contributions?
+
+261
+0:20:07.360 --> 0:20:08.360
+To the project?
+
+262
+0:20:08.360 --> 0:20:09.360
+To the project?
+
+263
+0:20:09.360 --> 0:20:14.560
+It's an open project and you are accepting contributions and new blue ones?
+
+264
+0:20:14.560 --> 0:20:16.760
+I'm sorry, I'm trying to get it.
+
+265
+0:20:16.760 --> 0:20:24.760
+So your question is whether we are accepting contributions to the-
+
+266
+0:20:24.760 --> 0:20:25.760
+Sorry.
+
+267
+0:20:25.760 --> 0:20:26.760
+It-
+
+268
+0:20:26.760 --> 0:20:29.760
+Not-
+
+269
+0:20:29.760 --> 0:20:32.760
+On our side, I don't quite think so.
+
+270
+0:20:32.760 --> 0:20:40.360
+So you have a catalog of connectors to all of this and so on?
+
+271
+0:20:40.360 --> 0:20:42.360
+To elastic search and so on?
+
+272
+0:20:42.360 --> 0:20:47.360
+So for instance, I was thinking on CMIS that is an standard for content management.
+
+273
+0:20:47.360 --> 0:20:54.360
+So I was thinking on trying to continue this new connector, the best project.
+
+274
+0:20:54.360 --> 0:20:56.360
+Is that an option?
+
+275
+0:20:56.360 --> 0:21:00.360
+I'm sorry, I'm trying to understand the question.
+
+276
+0:21:00.360 --> 0:21:03.360
+You said something about connectors, right?
+
+277
+0:21:03.360 --> 0:21:08.360
+I mean, in that connector, but I don't know if connectors is the right word for you.
+
+278
+0:21:08.360 --> 0:21:14.360
+I mean, so you have a specific router for every different assistant, right?
+
+279
+0:21:14.360 --> 0:21:25.360
+You have a router for elastic search, a router for office, a router for set options, right?
+
+280
+0:21:25.360 --> 0:21:31.360
+So we can add new router for different assistant?
+
+281
+0:21:31.360 --> 0:21:33.360
+Yes, yes.
+
+282
+0:21:33.360 --> 0:21:40.360
+I mean, first has several different crores for different types of resources.
+
+283
+0:21:40.360 --> 0:21:55.360
+And so the question is that are we going to- are we accepting new types of crores as contribution?
+
+284
+0:21:55.360 --> 0:21:57.360
+Is that the question?
+
+285
+0:21:57.360 --> 0:21:59.360
+Yeah, it's the one right there.
+
+286
+0:21:59.360 --> 0:22:09.360
+We're kind of like a cooperation and working as a- on our side working as a project inside a cooperation.
+
+287
+0:22:09.360 --> 0:22:18.360
+So we buy ourselves a knock at the moment accepting like a contribution to the project, but yeah.
+
+288
+0:22:18.360 --> 0:22:21.360
+Okay, perfect thing.
+
+289
+0:22:21.360 --> 0:22:23.360
+Another question?
+
+290
+0:22:23.360 --> 0:22:27.360
+Are you going to publish the slides that you presented?
+
+291
+0:22:27.360 --> 0:22:31.360
+The slides that you presented, are you going to publish them somewhere?
+
+292
+0:22:31.360 --> 0:22:34.360
+There and there will be a convenient program.
+
+293
+0:22:34.360 --> 0:22:41.360
+Yeah, they're on Fozdom website, so you should be able to download them.
+
+294
+0:22:41.360 --> 0:22:43.360
+I'm sure I have a question.
+
+295
+0:22:43.360 --> 0:22:44.360
+I have a short one.
+
+296
+0:22:44.360 --> 0:22:50.360
+You said indexing is about several days for this project you have.
+
+297
+0:22:50.360 --> 0:22:52.360
+What about re-indexing?
+
+298
+0:22:52.360 --> 0:23:00.360
+So if content changes, re-index all the time, but you index, making the whole index new,
+
+299
+0:23:00.360 --> 0:23:04.360
+or is it faster to just re-index certain documents?
+
+300
+0:23:04.360 --> 0:23:08.360
+So the question is, let's say, you know, like after index everything,
+
+301
+0:23:08.360 --> 0:23:16.360
+and then in the subsequent run of web crores and then what kind of crores,
+
+302
+0:23:16.360 --> 0:23:25.360
+are they updated like, you know, incrementally faster, or do we have to re-index everything?
+
+303
+0:23:25.360 --> 0:23:37.360
+So the FIST tries to sort of crawl and, you know, like efficiently,
+
+304
+0:23:37.360 --> 0:23:42.360
+that is, it tries to ignore the contents of web pages that haven't been updated.
+
+305
+0:23:42.360 --> 0:23:46.360
+It checks the, I think, the last modified field.
+
+306
+0:23:46.360 --> 0:23:56.360
+But so this, the mechanism of incremental crawling is not very sort of, it's not very ideal.
+
+307
+0:23:56.360 --> 0:24:03.360
+For instance, the last modified field are like, it's not quite well-imposed, for instance.
+
+308
+0:24:03.360 --> 0:24:11.360
+It's only the certain types of static web pages use it.
+
+309
+0:24:11.360 --> 0:24:19.360
+And so it's, you know, like, so there are a lot of unnecessary re-indexing happening,
+
+310
+0:24:19.360 --> 0:24:24.360
+but there are some mechanisms to, you know, only index things that have been updated.
+
+311
+0:24:24.360 --> 0:24:32.360
+But I gotta say that that mechanism is not very well-run, and there are a lot of re-indexing,
+
+312
+0:24:32.360 --> 0:24:46.360
+and then the subsequent crawling is not, you know, not as efficient as we want.
+
+313
+0:24:46.360 --> 0:24:51.360
+And then, you know, it is, yeah.
+
+314
+0:24:51.360 --> 0:24:52.360
+Yes.
+
+315
+0:24:52.360 --> 0:24:59.360
+Okay, thank you very much.
+
+316
+0:24:59.360 --> 0:25:04.360
+Thank you.
+

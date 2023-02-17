@@ -1,0 +1,1212 @@
+1
+0:00:00.000 --> 0:00:09.960
+Next up, we have two speakers for the prize of one.
+
+2
+0:00:09.960 --> 0:00:15.440
+They are going to talk about everything to do with an open, more open source version
+
+3
+0:00:15.440 --> 0:00:16.440
+of Tailscale.
+
+4
+0:00:16.440 --> 0:00:21.520
+So let's give an applause to Christopher and Joanne.
+
+5
+0:00:21.520 --> 0:00:23.320
+Hello.
+
+6
+0:00:23.320 --> 0:00:26.320
+Hello.
+
+7
+0:00:26.320 --> 0:00:27.320
+This is cool.
+
+8
+0:00:27.320 --> 0:00:28.320
+Hello.
+
+9
+0:00:28.320 --> 0:00:33.920
+This is Christopher and I'm going to, together with Joanne, talk a bit about how we use integration
+
+10
+0:00:33.920 --> 0:00:40.840
+testing to kind of re-implement the control panel or the control server of Tailscale.
+
+11
+0:00:40.840 --> 0:00:43.720
+So first a little bit about us.
+
+12
+0:00:43.720 --> 0:00:46.120
+Juan Fontelonso is the creator of HetScale.
+
+13
+0:00:46.120 --> 0:00:50.640
+He works for the European Space Agency on cloud and DevOps and infrastructure.
+
+14
+0:00:50.640 --> 0:00:55.240
+He claims to have been my first manager, but I think that's incorrect.
+
+15
+0:00:55.240 --> 0:00:58.720
+And he has the attention span of a goldfish.
+
+16
+0:00:58.720 --> 0:01:01.040
+Which makes the whole collaboration very fun.
+
+17
+0:01:01.040 --> 0:01:03.160
+And I'm here with Christopher.
+
+18
+0:01:03.160 --> 0:01:09.800
+He's a top contributor of HetScale and one of the other maintainers alongside me.
+
+19
+0:01:09.800 --> 0:01:14.680
+He's part of the technical staff at Tailscale and part of his time paid by Tailscale is
+
+20
+0:01:14.680 --> 0:01:17.120
+to work improving HetScale.
+
+21
+0:01:17.120 --> 0:01:21.960
+I was his manager, at least from a hierarchical point of view.
+
+22
+0:01:21.960 --> 0:01:26.480
+And one of the challenges we have is that he always finds these kind of super niche
+
+23
+0:01:26.480 --> 0:01:31.160
+languages like Ocamel or things like that where he tries to re-implement HetScale in.
+
+24
+0:01:31.160 --> 0:01:38.040
+But first of all, how many people here know Tailscale?
+
+25
+0:01:38.040 --> 0:01:39.040
+And HetScale?
+
+26
+0:01:39.040 --> 0:01:40.040
+Good.
+
+27
+0:01:40.040 --> 0:01:43.640
+That's pretty good.
+
+28
+0:01:43.640 --> 0:01:49.640
+So for the people who don't know, we'll do like a quick tweak what is Tailscale.
+
+29
+0:01:49.640 --> 0:01:56.080
+So Tailscale tries to solve this problem where you basically sit and you want to connect
+
+30
+0:01:56.080 --> 0:01:59.040
+your organization or home or something like this.
+
+31
+0:01:59.040 --> 0:02:07.960
+And you have an old school or legacy VPN concentrator where you connect into your kind of perimeter.
+
+32
+0:02:07.960 --> 0:02:10.040
+You have access to absolutely everything.
+
+33
+0:02:10.040 --> 0:02:13.360
+There's a single point of failure and a massive bottleneck.
+
+34
+0:02:13.360 --> 0:02:22.000
+And it tries to do this by creating like a mesh VPN that uses direct connections wire
+
+35
+0:02:22.000 --> 0:02:27.280
+guard and kind of facilitates this for you using techniques like natural versatile and
+
+36
+0:02:27.280 --> 0:02:32.000
+has a very, very powerful client that will make sure that you always reach like what
+
+37
+0:02:32.000 --> 0:02:34.320
+you're trying to get to.
+
+38
+0:02:34.320 --> 0:02:41.280
+And it offers a lot of different kind of granular access and you get a lot more power compared
+
+39
+0:02:41.280 --> 0:02:46.840
+to your old school bottleneck single point of failure VPN.
+
+40
+0:02:46.840 --> 0:02:50.560
+And in Tailscale, the clients are open source, at least for the open platforms.
+
+41
+0:02:50.560 --> 0:02:52.760
+And what they have is a closed SaaS.
+
+42
+0:02:52.760 --> 0:02:57.240
+But still they are quite open when it comes to explaining how the whole thing works.
+
+43
+0:02:57.240 --> 0:03:02.560
+And in March 2020, they published a blog post basically explaining how the whole thing worked,
+
+44
+0:03:02.560 --> 0:03:07.760
+how they use these natural versatile techniques to so you don't have to open the ports in
+
+45
+0:03:07.760 --> 0:03:09.160
+the router.
+
+46
+0:03:09.160 --> 0:03:14.040
+And there was a phrase in this blog post that gathered my attention for a little bit and
+
+47
+0:03:14.040 --> 0:03:18.960
+it was basically talking about a coordination server that the clients talk to a coordination
+
+48
+0:03:18.960 --> 0:03:27.720
+server core of this service service offering, which is essentially a shared rob box for
+
+49
+0:03:27.720 --> 0:03:31.560
+this wire guard public case.
+
+50
+0:03:31.560 --> 0:03:39.440
+So I was puzzled by that and basically took that open source clients and started reverse
+
+51
+0:03:39.440 --> 0:03:47.080
+engineering, basically a lot of print apps to see what kind of payload were they sending,
+
+52
+0:03:47.080 --> 0:03:52.360
+what kind of endpoints or protocol they were doing.
+
+53
+0:03:52.360 --> 0:03:56.200
+And yeah, this was around April 2020 in June.
+
+54
+0:03:56.200 --> 0:04:02.440
+I mean, there was a lot of free time at that time and in June I did the initial release.
+
+55
+0:04:02.440 --> 0:04:07.160
+I talked to my friend Christopher about tail scale and he was very happy distributing wire
+
+56
+0:04:07.160 --> 0:04:13.280
+guard keys with Ansible, which yeah, so I kept doing my own thing for a while.
+
+57
+0:04:13.280 --> 0:04:19.280
+Head scale gain a little bit of traction and around mid 2021 he joined because he was quite
+
+58
+0:04:19.280 --> 0:04:20.840
+curious about the whole thing.
+
+59
+0:04:20.840 --> 0:04:27.040
+But he was afraid about breaking stuff and that's why kind of we are here.
+
+60
+0:04:27.040 --> 0:04:30.760
+Although he was not afraid of making a logon that I think is super nice.
+
+61
+0:04:30.760 --> 0:04:38.320
+So what I've learned during this reverse engineering exercise is that the test kit clients talk
+
+62
+0:04:38.320 --> 0:04:41.640
+to what is basically a web service.
+
+63
+0:04:41.640 --> 0:04:47.920
+This web service receives metadata from the clients like the endpoints or the wire guard
+
+64
+0:04:47.920 --> 0:04:53.440
+public keys that they use and assigns them IP addresses like you would have in a classic
+
+65
+0:04:53.440 --> 0:04:56.480
+traditional VPN service.
+
+66
+0:04:56.480 --> 0:05:04.160
+Once everybody knows about everything, you can establish this mesh network across the
+
+67
+0:05:04.160 --> 0:05:09.580
+clients because the data doesn't go through the web service.
+
+68
+0:05:09.580 --> 0:05:12.720
+So we arrived to the initial stage of head scale.
+
+69
+0:05:12.720 --> 0:05:17.440
+The illusion that everything works and kind of worked until you stop doing.
+
+70
+0:05:17.440 --> 0:05:23.760
+So we had this web service, we implemented the web service, series of endpoints that
+
+71
+0:05:23.760 --> 0:05:29.120
+we found in the reverse engineering exercise and we were assigning IP address when that
+
+72
+0:05:29.120 --> 0:05:34.080
+node arrives and what happens when a second node arrives.
+
+73
+0:05:34.080 --> 0:05:40.040
+Hey, we want to tell that I'm here and I want to find my friends and I want to communicate
+
+74
+0:05:40.040 --> 0:05:41.040
+with them.
+
+75
+0:05:41.040 --> 0:05:47.400
+So in order to handle that and to handle the metadata that you need to establish the connections,
+
+76
+0:05:47.400 --> 0:05:52.600
+we developed a little bit of a state machine to handle a new node has arrived.
+
+77
+0:05:52.600 --> 0:05:59.120
+There has been a change in the map of the network and we need to distribute the updated
+
+78
+0:05:59.120 --> 0:06:01.800
+metadata that we have.
+
+79
+0:06:01.800 --> 0:06:13.200
+However, at that time I was kind of learning go and we follow a little bit of a weird approach
+
+80
+0:06:13.200 --> 0:06:19.960
+in handling concurrency which was basically adding more mutex every time we needed it.
+
+81
+0:06:19.960 --> 0:06:25.760
+And this is a problem because at the end we ended up with a great mutex for this state
+
+82
+0:06:25.760 --> 0:06:30.520
+machine and this is a very big problem because a Python track is tomorrow so the grid logs
+
+83
+0:06:30.520 --> 0:06:32.620
+are over there.
+
+84
+0:06:32.620 --> 0:06:37.240
+So what ended up happening inside this state machine or what didn't end up happening was
+
+85
+0:06:37.240 --> 0:06:42.700
+that basically some of the failure modes we saw was that a new node tried to register
+
+86
+0:06:42.700 --> 0:06:46.920
+and then we burned a couple of CPU cycles trying to calculate some stuff and then we
+
+87
+0:06:46.920 --> 0:06:48.120
+did nothing.
+
+88
+0:06:48.120 --> 0:06:51.300
+So no updates were sent out or anything.
+
+89
+0:06:51.300 --> 0:06:56.320
+Sometimes we would have a new node joining and we would compute everything, send some
+
+90
+0:06:56.320 --> 0:06:57.320
+network traffic.
+
+91
+0:06:57.320 --> 0:06:58.880
+We just omitted the new information.
+
+92
+0:06:58.880 --> 0:07:01.080
+That was kind of crucial for everyone to know.
+
+93
+0:07:01.080 --> 0:07:03.320
+So it ended up not working.
+
+94
+0:07:03.320 --> 0:07:08.760
+And sometimes a new node joined, nothing really happened but then eventually something happens
+
+95
+0:07:08.760 --> 0:07:13.760
+and it sent out an update to everyone and that was useful.
+
+96
+0:07:13.760 --> 0:07:20.440
+And sometimes on the individual update channels for each node some of these aforementioned
+
+97
+0:07:20.440 --> 0:07:25.520
+mutexes kind of deadlocked up the whole thread or the go routine and then we just never sent
+
+98
+0:07:25.520 --> 0:07:29.880
+updates to particular nodes and sometimes we just deadlocked the whole server and you
+
+99
+0:07:29.880 --> 0:07:34.880
+kind of had to kick it to make it come back to life.
+
+100
+0:07:34.880 --> 0:07:40.800
+But still there was kind of this notion that it did work pretty well eventually most of
+
+101
+0:07:40.800 --> 0:07:46.360
+the time and it gave this kind of like dissolution of working.
+
+102
+0:07:46.360 --> 0:07:51.600
+Because what you often saw was that you had like three nodes and only two of them actually
+
+103
+0:07:51.600 --> 0:07:56.520
+talked together and as long as those had received the updates they needed, the user was happy
+
+104
+0:07:56.520 --> 0:08:03.120
+and you're just like, it works so I'm going to press the star side on GitHub and share
+
+105
+0:08:03.120 --> 0:08:04.640
+it with my friends.
+
+106
+0:08:04.640 --> 0:08:10.840
+So but we figured that eventually this would like caught up with us and we're trying to
+
+107
+0:08:10.840 --> 0:08:14.460
+get to this stage where we, you know, it works most of the time.
+
+108
+0:08:14.460 --> 0:08:20.280
+So what we did have was a fair amount of unit tests but the problem with unit tests is that
+
+109
+0:08:20.280 --> 0:08:24.600
+we're trying to reverse engineering something, that we're also learning how it works and
+
+110
+0:08:24.600 --> 0:08:32.120
+what we spent a lot of time on was misunderstanding how it was supposed to work, writing unit tests
+
+111
+0:08:32.120 --> 0:08:37.880
+that would pass but they were wrong so you kind of have like a passing test and it's
+
+112
+0:08:37.880 --> 0:08:40.000
+an entirely wrong implementation.
+
+113
+0:08:40.000 --> 0:08:44.760
+And 90% of what we were actually trying to do was integrate with a third party software
+
+114
+0:08:44.760 --> 0:08:48.640
+and this is where we get to actual integration tests.
+
+115
+0:08:48.640 --> 0:08:53.840
+So what I started doing was I found this Docker test framework which basically allows you
+
+116
+0:08:53.840 --> 0:08:57.000
+to programmatically create Docker containers.
+
+117
+0:08:57.000 --> 0:09:04.560
+So we started making tests that spun up a headscape container, it created a bunch of
+
+118
+0:09:04.560 --> 0:09:10.280
+tail scale instances also running in Docker and associated them with a couple of users
+
+119
+0:09:10.280 --> 0:09:15.240
+and tried to emulate the entire environment so you can test everyone to everyone.
+
+120
+0:09:15.240 --> 0:09:21.360
+We had them join the head scale server and since it takes a little bit of time for everyone
+
+121
+0:09:21.360 --> 0:09:26.960
+to catch up with each other and send the updates and stuff, so we put a sleep of two minutes
+
+122
+0:09:26.960 --> 0:09:33.440
+in front of the test which is a terrible idea but you know, you learn.
+
+123
+0:09:33.440 --> 0:09:38.160
+And then after that sleep runs out, presumably everyone is now up to date and can talk to
+
+124
+0:09:38.160 --> 0:09:42.440
+each other so we had a test, the most basic test is, is my network working, can everyone
+
+125
+0:09:42.440 --> 0:09:43.680
+ping everyone?
+
+126
+0:09:43.680 --> 0:09:45.840
+So we tried to do that.
+
+127
+0:09:45.840 --> 0:09:52.480
+And of course that didn't work because of all of the errors we actually had in the code.
+
+128
+0:09:52.480 --> 0:09:57.360
+And I ran some initial, like, tried to make some statistics on my laptop and out of like
+
+129
+0:09:57.360 --> 0:10:02.160
+100 test runs we had 70 failures, that's pretty bad.
+
+130
+0:10:02.160 --> 0:10:06.600
+But at this point we're starting to approach like we have an actual goal that we can measure
+
+131
+0:10:06.600 --> 0:10:10.400
+so we can improve on this.
+
+132
+0:10:10.400 --> 0:10:15.240
+And quite rapidly we figured out that these two big blocks of problems that we have is
+
+133
+0:10:15.240 --> 0:10:16.920
+associated with two things.
+
+134
+0:10:16.920 --> 0:10:22.240
+So one of them is the being able to reliably send updates to all of our clients, which
+
+135
+0:10:22.240 --> 0:10:27.680
+is the kind of deadlock problem that the update channels were just locking up and didn't really
+
+136
+0:10:27.680 --> 0:10:28.680
+work.
+
+137
+0:10:28.680 --> 0:10:33.000
+So we made a massive, massive rewrite PR that redid the whole logic and made sure that we
+
+138
+0:10:33.000 --> 0:10:37.520
+always were able to send an update to the client as long as it was connected.
+
+139
+0:10:37.520 --> 0:10:41.740
+And then the other problem was the state machine that was very broken.
+
+140
+0:10:41.740 --> 0:10:47.400
+And then we kind of figured out that we can make a global state and we tried to simplify
+
+141
+0:10:47.400 --> 0:10:49.720
+it initially and optimize later.
+
+142
+0:10:49.720 --> 0:10:57.080
+So basically a global state, how can we determine if everyone is up to date and make sure that
+
+143
+0:10:57.080 --> 0:11:01.420
+we know when you last received this successful update and if not we have to reissue ones
+
+144
+0:11:01.420 --> 0:11:04.000
+to make sure that you know everything.
+
+145
+0:11:04.000 --> 0:11:09.320
+However, changing the Rambo culture takes a little bit of time.
+
+146
+0:11:09.320 --> 0:11:15.520
+We kept merging stuff without proper integration testing, but as Christopher said, we didn't
+
+147
+0:11:15.520 --> 0:11:20.840
+have the incentive, we didn't have the pressure because the thing really worked.
+
+148
+0:11:20.840 --> 0:11:26.040
+It's not the same when you are in your home lab and you join a node than when you are
+
+149
+0:11:26.040 --> 0:11:28.520
+joining 100 nodes within one second.
+
+150
+0:11:28.520 --> 0:11:34.760
+So if you are slowly joining machines to your tail net, things were working.
+
+151
+0:11:34.760 --> 0:11:41.640
+However, the project was gaining popularity and we were increasing more and more in contributions,
+
+152
+0:11:41.640 --> 0:11:43.240
+in external PRs.
+
+153
+0:11:43.240 --> 0:11:50.080
+This was around August 2021 or September, something like that.
+
+154
+0:11:50.080 --> 0:11:51.720
+But it was great.
+
+155
+0:11:51.720 --> 0:11:56.840
+We were getting to a point where we could improve head scale with confidence.
+
+156
+0:11:56.840 --> 0:11:59.440
+We had a...
+
+157
+0:11:59.440 --> 0:12:04.160
+We could improve head scale with confidence in three aspects.
+
+158
+0:12:04.160 --> 0:12:07.200
+From a technical point of view, given that the project started as reverse engineering
+
+159
+0:12:07.200 --> 0:12:11.200
+effort, we had a lot of stuff that was not that great.
+
+160
+0:12:11.200 --> 0:12:17.240
+We could improve or maintain the compatibility with this third party external clients that
+
+161
+0:12:17.240 --> 0:12:22.440
+we are using and we could improve from a community point of view.
+
+162
+0:12:22.440 --> 0:12:27.600
+I'm going to talk a little bit about this now.
+
+163
+0:12:27.600 --> 0:12:30.440
+For starters, we could improve from a technical point of view.
+
+164
+0:12:30.440 --> 0:12:37.240
+We could do massive refactoring within the project or implementation of the second version
+
+165
+0:12:37.240 --> 0:12:42.800
+of the protocol without breaking the existing users.
+
+166
+0:12:42.800 --> 0:12:47.280
+The only thing that breaks is probably the mental health of the reviewer that has to
+
+167
+0:12:47.280 --> 0:12:49.560
+deal with 3000 lines of code.
+
+168
+0:12:49.560 --> 0:12:53.120
+But that's a different thing.
+
+169
+0:12:53.120 --> 0:13:00.240
+Then as I said, we have this minor small detail that we completely depend on a third party
+
+170
+0:13:00.240 --> 0:13:01.360
+client.
+
+171
+0:13:01.360 --> 0:13:05.720
+Because we are using exactly the same official clients as a stale scale.
+
+172
+0:13:05.720 --> 0:13:11.240
+However, we have a very good working relationship with them and every time that they change
+
+173
+0:13:11.240 --> 0:13:14.080
+something we get a heads up.
+
+174
+0:13:14.080 --> 0:13:21.160
+However, we keep everything, our integration tests, quite a bit commitment for support
+
+175
+0:13:21.160 --> 0:13:22.560
+of these clients.
+
+176
+0:13:22.560 --> 0:13:29.480
+We target the head of the repository, we target the unstable releases and we target nine
+
+177
+0:13:29.480 --> 0:13:35.200
+minor releases of the client to make sure that nothing breaks from their side or from
+
+178
+0:13:35.200 --> 0:13:36.760
+their own hours.
+
+179
+0:13:36.760 --> 0:13:38.360
+Because I mean, it can happen.
+
+180
+0:13:38.360 --> 0:13:48.040
+And then I think integration testing also helped the community because we as maintainers
+
+181
+0:13:48.040 --> 0:13:54.160
+can trust in a better way those random PRs from random unknown people that appear in
+
+182
+0:13:54.160 --> 0:13:56.440
+GitHub.
+
+183
+0:13:56.440 --> 0:14:01.680
+Which is something that is not given.
+
+184
+0:14:01.680 --> 0:14:08.560
+And in theory, or that's what one would think is that by having integration tests, contributors,
+
+185
+0:14:08.560 --> 0:14:15.120
+also external people that we don't know, should also feel more confident when submitting
+
+186
+0:14:15.120 --> 0:14:16.120
+a PR.
+
+187
+0:14:16.120 --> 0:14:18.720
+But that's a theory.
+
+188
+0:14:18.720 --> 0:14:21.520
+So it does still come with some challenges.
+
+189
+0:14:21.520 --> 0:14:26.800
+So one of the things that we see occasionally is that a PR comes in and it doesn't have
+
+190
+0:14:26.800 --> 0:14:33.320
+a test and then we ask nicely if they can add test and the contributor disappears.
+
+191
+0:14:33.320 --> 0:14:42.040
+So some of the times we're trying to improve on this thing and kind of like always get
+
+192
+0:14:42.040 --> 0:14:43.800
+them in.
+
+193
+0:14:43.800 --> 0:14:49.160
+So what we try to do is if they truly disappear, we try to pick it up if it's a feature that
+
+194
+0:14:49.160 --> 0:14:51.840
+we really want and we are bound to do so.
+
+195
+0:14:51.840 --> 0:14:58.240
+Sometimes we try to reach out and kind of sit and help them write a test and kind of
+
+196
+0:14:58.240 --> 0:15:01.120
+onboard them in this kind of things.
+
+197
+0:15:01.120 --> 0:15:08.080
+One of the tests actually for our, there is a SSH feature and the test for that, I knew
+
+198
+0:15:08.080 --> 0:15:10.960
+the developer and he was also in Norway.
+
+199
+0:15:10.960 --> 0:15:16.000
+So once I was dropping by Oslo, we sat down for an afternoon and we worked on them together
+
+200
+0:15:16.000 --> 0:15:17.440
+and paired on them.
+
+201
+0:15:17.440 --> 0:15:19.360
+That's not available for everyone, sadly.
+
+202
+0:15:19.360 --> 0:15:26.880
+But we always try to kind of like get this test message out there in a way.
+
+203
+0:15:26.880 --> 0:15:32.520
+But there is a couple of other challenges as well and that is that adding the test raises
+
+204
+0:15:32.520 --> 0:15:33.840
+some sort of learning curve.
+
+205
+0:15:33.840 --> 0:15:38.640
+So you need to know Go test, you need to understand our test framework, you need to have Docker
+
+206
+0:15:38.640 --> 0:15:43.000
+and all of these kind of things versus not writing tests that are a lot less code.
+
+207
+0:15:43.000 --> 0:15:48.000
+And it's hard to convince people how awesome tests actually really are, that they're not
+
+208
+0:15:48.000 --> 0:15:54.680
+really a chore and that you really, really thank yourself later for doing them.
+
+209
+0:15:54.680 --> 0:15:58.440
+So some of the things we're trying to do to even make this barrier lower, since we're
+
+210
+0:15:58.440 --> 0:16:03.120
+so heavily dependent on this for compatibility and everything, is that we're making like
+
+211
+0:16:03.120 --> 0:16:08.880
+our own test framework V2 because we depended on a lot of repeated and copied code and there
+
+212
+0:16:08.880 --> 0:16:13.920
+was a really high bar for adding new tests and it was really hard to update and change
+
+213
+0:16:13.920 --> 0:16:20.800
+and it did depend on time.sleep which was, yeah, haunted me so many times and it couldn't
+
+214
+0:16:20.800 --> 0:16:27.120
+really be run in parallel for many of the previous reasons and the documentation wasn't
+
+215
+0:16:27.120 --> 0:16:31.360
+really good, like I knew how to use it, one knew how to use it and then that was about
+
+216
+0:16:31.360 --> 0:16:32.360
+it.
+
+217
+0:16:32.360 --> 0:16:35.480
+So a couple of other people figured it out.
+
+218
+0:16:35.480 --> 0:16:38.560
+So what we're trying to do is we're abstracting things a bit away.
+
+219
+0:16:38.560 --> 0:16:43.040
+So we have this concept called control server which is what essentially head scale is and
+
+220
+0:16:43.040 --> 0:16:48.800
+the tail scale product, the software as a service and it's implemented as head scaling
+
+221
+0:16:48.800 --> 0:16:53.880
+container and it exposes convenient functions that now have Godox support and all of these
+
+222
+0:16:53.880 --> 0:16:59.200
+things to make it easier for developers to actually use it and then we have the tail
+
+223
+0:16:59.200 --> 0:17:02.880
+scale client which is implemented as tail scaling container and it has the same type
+
+224
+0:17:02.880 --> 0:17:09.280
+of convenience functions and what this allows us to do is previously the two files on the
+
+225
+0:17:09.280 --> 0:17:17.240
+right here, sorry, on the left is two different versions of the setup code for the test because
+
+226
+0:17:17.240 --> 0:17:21.560
+when you needed something that was slightly special, you had to copy the whole thing and
+
+227
+0:17:21.560 --> 0:17:27.080
+then make a new file to be able to write a test case like you see on the other side here
+
+228
+0:17:27.080 --> 0:17:31.440
+but now after abstracting that away, making it a lot more configurable, we allow people
+
+229
+0:17:31.440 --> 0:17:37.200
+to write more or less regular test cases but you just set up what we call a scenario which
+
+230
+0:17:37.200 --> 0:17:42.320
+is a head scale with a given amount of tail scale nodes and then you let them ping each
+
+231
+0:17:42.320 --> 0:17:44.540
+other or something like this.
+
+232
+0:17:44.540 --> 0:17:47.020
+So what do we test right now?
+
+233
+0:17:47.020 --> 0:17:50.760
+We kept all of the original tests.
+
+234
+0:17:50.760 --> 0:17:55.800
+So basically we make all nodes join the network and we make them ping each other to verify
+
+235
+0:17:55.800 --> 0:17:59.720
+that we have a fully functioning network both by IP and magic DNS.
+
+236
+0:17:59.720 --> 0:18:03.960
+Magic DNS is tail scale DNS system.
+
+237
+0:18:03.960 --> 0:18:08.880
+We test tail drop which is a file sharing feature a bit like Apple's AirDrop and we
+
+238
+0:18:08.880 --> 0:18:13.520
+send the files from every node to every node to make sure that they work.
+
+239
+0:18:13.520 --> 0:18:17.680
+We test all our registration flows because we've broken them a couple of times so it
+
+240
+0:18:17.680 --> 0:18:23.520
+was better to do it that way which is pre-authored keys and web plus a command line flow and
+
+241
+0:18:23.520 --> 0:18:26.800
+even open ID we currently have tests for.
+
+242
+0:18:26.800 --> 0:18:31.600
+We try to isolate all of our network from the internet and test with our own embedded
+
+243
+0:18:31.600 --> 0:18:38.480
+relay server because tail scale depends on relay servers that we also embed in our binary
+
+244
+0:18:38.480 --> 0:18:46.040
+and we have a preliminary test for the SSH features that we support which is like authenticated
+
+245
+0:18:46.040 --> 0:18:51.720
+by head scale so you can SSH into your machine and we test SSH all to all and we try to
+
+246
+0:18:51.720 --> 0:18:58.040
+do negative tests and also we test our CLI because if you may change something you don't
+
+247
+0:18:58.040 --> 0:19:03.040
+want to sit and type in every single command in a structured way manually because that's
+
+248
+0:19:03.040 --> 0:19:04.040
+just painful.
+
+249
+0:19:04.040 --> 0:19:09.880
+So in the future we want to also kind of improve this granular access control that tail scale
+
+250
+0:19:09.880 --> 0:19:10.880
+offer.
+
+251
+0:19:10.880 --> 0:19:17.440
+Currently this is a very good example of where we have added a lot of unit tests and they
+
+252
+0:19:17.440 --> 0:19:20.320
+all pass but they're all wrong.
+
+253
+0:19:20.320 --> 0:19:28.120
+So they're mostly wrong so we have to kind of redo most of this into integration test
+
+254
+0:19:28.120 --> 0:19:32.240
+first and then kind of backfill the unit test once we know how the implementation is actually
+
+255
+0:19:32.240 --> 0:19:33.920
+supposed to work.
+
+256
+0:19:33.920 --> 0:19:38.800
+And one of the things we've been dabbling with especially for this ACL feature is to
+
+257
+0:19:38.800 --> 0:19:43.840
+use that control server abstraction we have before and use the tail scale product to test
+
+258
+0:19:43.840 --> 0:19:48.560
+our tests because if they pass on the public server we know they're correct and then we
+
+259
+0:19:48.560 --> 0:19:52.800
+can use them to verify our thing and then maybe run tail scale in the VM instead of
+
+260
+0:19:52.800 --> 0:19:57.720
+Docker to test it properly but that's more of a benefit for tail scale than it is for
+
+261
+0:19:57.720 --> 0:19:58.720
+us.
+
+262
+0:19:58.720 --> 0:20:05.200
+So if you're just here waiting for the next talk a little bit of a TLDR is that I mean
+
+263
+0:20:05.200 --> 0:20:09.840
+we cannot understate how important having this integration testing when we depend on
+
+264
+0:20:09.840 --> 0:20:15.440
+an external party having for the development of hell scale.
+
+265
+0:20:15.440 --> 0:20:20.040
+I reckon also the head like a name is also excellent.
+
+266
+0:20:20.040 --> 0:20:24.440
+Pointing tail scale would have been worse.
+
+267
+0:20:24.440 --> 0:20:29.400
+We have I mean with integration testing we are able to maintain this compatibility with
+
+268
+0:20:29.400 --> 0:20:37.000
+a client and we are able to take contributions from third party developers otherwise it's
+
+269
+0:20:37.000 --> 0:20:41.760
+a little bit more difficult to develop this trust across the internet right.
+
+270
+0:20:41.760 --> 0:20:46.920
+And even though the tests are not perfect and we still have to migrate unit tests towards
+
+271
+0:20:46.920 --> 0:20:56.240
+integration tests I think this is one of the keys for the success of the project.
+
+272
+0:20:56.240 --> 0:20:59.880
+So some extra things.
+
+273
+0:20:59.880 --> 0:21:03.000
+Tail scale is hosting a happy hour at a brew dog by the station.
+
+274
+0:21:03.000 --> 0:21:05.680
+This QR code takes you to a sign up form.
+
+275
+0:21:05.680 --> 0:21:09.680
+I'll quickly switch back to this slide at the end but I have like a question slide as
+
+276
+0:21:09.680 --> 0:21:12.280
+well so you know we go through this.
+
+277
+0:21:12.280 --> 0:21:14.040
+Basically this is how to reach us.
+
+278
+0:21:14.040 --> 0:21:19.040
+Get up we have a discord community and we're very happy to talk to anyone who wants to
+
+279
+0:21:19.040 --> 0:21:24.960
+talk to us here at Fostem so please feel free to reach out and I'll leave it at this one
+
+280
+0:21:24.960 --> 0:21:30.200
+if anyone has any questions we have we have some minutes I think.
+
+281
+0:21:30.200 --> 0:21:37.560
+Thank you.
+
+282
+0:21:37.560 --> 0:21:41.320
+While I have your attention we have a go for that lost air wallets.
+
+283
+0:21:41.320 --> 0:21:46.080
+Look to the left look to the right front and back if you see a wall that is not yours please
+
+284
+0:21:46.080 --> 0:21:49.200
+come bring to the front it will help this person a lot.
+
+285
+0:21:49.200 --> 0:21:50.200
+Thank you.
+
+286
+0:21:50.200 --> 0:21:54.040
+Let's switch things.
+
+287
+0:21:54.040 --> 0:21:57.120
+After you look for the wallet and you have a question raise your hand and I'll try to
+
+288
+0:21:57.120 --> 0:21:59.000
+come with these microphone.
+
+289
+0:21:59.000 --> 0:22:07.000
+How is the front thank you.
+
+290
+0:22:07.000 --> 0:22:12.000
+How come the tail scale guys are not mad at you and not only are not mad at you but they
+
+291
+0:22:12.000 --> 0:22:16.280
+heard you afterwards.
+
+292
+0:22:16.280 --> 0:22:19.560
+I mean part of it is working.
+
+293
+0:22:19.560 --> 0:22:21.560
+No.
+
+294
+0:22:21.560 --> 0:22:24.040
+I think part of it is that they are quite chill.
+
+295
+0:22:24.040 --> 0:22:26.680
+I mean they could have they are quite chill.
+
+296
+0:22:26.680 --> 0:22:31.520
+They could have taken this way worse than they have and I don't think we are competition
+
+297
+0:22:31.520 --> 0:22:37.960
+we are focused on self hosters on home labs perhaps a little bit of a small company.
+
+298
+0:22:37.960 --> 0:22:43.320
+I'm going to usually happens is that people that use head scale at home then they go to
+
+299
+0:22:43.320 --> 0:22:47.600
+their companies and they talk about their scale and when you're in a company you actually
+
+300
+0:22:47.600 --> 0:22:50.640
+prefer to pay for the service.
+
+301
+0:22:50.640 --> 0:22:53.120
+So it is like a way.
+
+302
+0:22:53.120 --> 0:22:54.120
+Thank you very much.
+
+303
+0:22:54.120 --> 0:23:10.680
+Last round of applause if you have any questions you can catch them in the hallway track.
+

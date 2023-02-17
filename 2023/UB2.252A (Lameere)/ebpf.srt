@@ -1,0 +1,1224 @@
+1
+0:00:00.000 --> 0:00:10.520
+Hi everyone, my name is Francisco Laniel and today I will present you Inspector Gadget
+
+2
+0:00:10.520 --> 0:00:13.360
+an EVP-F based tool to observe containers.
+
+3
+0:00:13.360 --> 0:00:16.360
+So first of all, what are containers?
+
+4
+0:00:16.360 --> 0:00:20.280
+Containers permits you to run applications isolated from each other.
+
+5
+0:00:20.280 --> 0:00:24.360
+So on the figure on the right you can see that there are actually three containers and
+
+6
+0:00:24.360 --> 0:00:27.440
+three applications A, B and C.
+
+7
+0:00:27.440 --> 0:00:35.040
+To isolate and run those applications we rely on a container engine like Cryo or ContainerD.
+
+8
+0:00:35.040 --> 0:00:40.720
+The container engine will ask to the operating kernel, to the host operating system to create
+
+9
+0:00:40.720 --> 0:00:42.480
+containers for us.
+
+10
+0:00:42.480 --> 0:00:47.800
+So contrary to virtual machine where you have a guest operating system and an host operating
+
+11
+0:00:47.800 --> 0:00:54.000
+system all containers here share the same host operating system.
+
+12
+0:00:54.000 --> 0:00:58.760
+So container engine will ask to the kernel to create two containers but sadly in the
+
+13
+0:00:58.760 --> 0:01:04.280
+Linux kernel there is no structure used to represent a container like you have the task
+
+14
+0:01:04.280 --> 0:01:07.520
+structure represent a task there is no such structure.
+
+15
+0:01:07.520 --> 0:01:13.800
+Instead the container relies on several features provided to you by the kernel.
+
+16
+0:01:13.800 --> 0:01:18.280
+To have security isolation you will rely on the name spaces.
+
+17
+0:01:18.280 --> 0:01:23.680
+For example with the moon name spaces each container will have its own set of file and
+
+18
+0:01:23.680 --> 0:01:31.120
+for example container A will not be able to access file of container B except explicitly.
+
+19
+0:01:31.120 --> 0:01:35.640
+To isolate this time resources you will use the C group.
+
+20
+0:01:35.640 --> 0:01:39.560
+So you will be able to dedicate a resource to one container.
+
+21
+0:01:39.560 --> 0:01:46.000
+For example with the memory C group you will be able to limit the memory footprint of a
+
+22
+0:01:46.000 --> 0:01:47.000
+container.
+
+23
+0:01:47.000 --> 0:01:54.440
+For example you will set the limit to 2 gigabyte and if your container allocate and try to
+
+24
+0:01:54.440 --> 0:01:58.560
+touch 3 gigabyte it will be out of memory.
+
+25
+0:01:58.560 --> 0:02:03.480
+So containers are really cool because they permit you to isolate different workloads.
+
+26
+0:02:03.480 --> 0:02:09.920
+Sadly using them pose several problems particularly when something is wrong and to debug them.
+
+27
+0:02:09.920 --> 0:02:13.920
+First it is harder to attach debugger to a running application.
+
+28
+0:02:13.920 --> 0:02:20.480
+You can still do it but it is not as simple as running gdb and running things locally.
+
+29
+0:02:20.480 --> 0:02:26.240
+Also you will need to take into account the communication between different containers.
+
+30
+0:02:26.240 --> 0:02:31.600
+Nowadays it is in the command to explode your application into several microservices.
+
+31
+0:02:31.600 --> 0:02:37.640
+For example if you have a website you will have maybe one container for the web server
+
+32
+0:02:37.640 --> 0:02:42.340
+and another container for the database engine.
+
+33
+0:02:42.340 --> 0:02:46.840
+So you will need to be sure that those two containers communicate otherwise your website
+
+34
+0:02:46.840 --> 0:02:49.760
+will just do nothing.
+
+35
+0:02:49.760 --> 0:02:55.020
+To do so we developed Inspector Gadget which is a Swiss Army knife based on EVPF.
+
+36
+0:02:55.020 --> 0:02:57.960
+It comes with actually two binary local gadget.
+
+37
+0:02:57.960 --> 0:03:03.920
+The first one to debug locally running container and CapCutter gadget which this time focus
+
+38
+0:03:03.920 --> 0:03:08.040
+on containers running in Kubernetes cluster.
+
+39
+0:03:08.040 --> 0:03:11.960
+So on the figure I will show you the different tools offered by Inspector Gadget and which
+
+40
+0:03:11.960 --> 0:03:16.360
+part of the kernel they permit to monitor.
+
+41
+0:03:16.360 --> 0:03:18.920
+The first type of gadget we have are the tracer.
+
+42
+0:03:18.920 --> 0:03:23.920
+The tracer will basically print events as they are going on the standard output.
+
+43
+0:03:23.920 --> 0:03:28.520
+So for example with trace exec you will be able to trace the call made to the syscall
+
+44
+0:03:28.520 --> 0:03:29.920
+exec.
+
+45
+0:03:29.920 --> 0:03:34.600
+With trace moon you will be able to monitor the call to the syscall moon which can be
+
+46
+0:03:34.600 --> 0:03:38.520
+pretty useful when you need to mount volume.
+
+47
+0:03:38.520 --> 0:03:42.640
+And for example with trace out of memory key you will trace when the out of memory killer
+
+48
+0:03:42.640 --> 0:03:45.720
+kills one application.
+
+49
+0:03:45.720 --> 0:03:49.280
+Then we will find the profile get the profile category.
+
+50
+0:03:49.280 --> 0:03:54.440
+So for example the profile category you will make it run for a given amount of time and
+
+51
+0:03:54.440 --> 0:03:59.400
+with profile block IO you will get information or getting the distribution of your input
+
+52
+0:03:59.400 --> 0:04:01.520
+output.
+
+53
+0:04:01.520 --> 0:04:07.120
+Then you will find the snapshot category which will give you some information on the system
+
+54
+0:04:07.120 --> 0:04:08.760
+as it is running at time t.
+
+55
+0:04:08.760 --> 0:04:12.760
+So for example with snapshot process you will be able to get all the processes which are
+
+56
+0:04:12.760 --> 0:04:18.640
+running in your containers or you can also get this information for your whole Kubernetes
+
+57
+0:04:18.640 --> 0:04:21.000
+cluster.
+
+58
+0:04:21.000 --> 0:04:22.960
+Then you will find the top category.
+
+59
+0:04:22.960 --> 0:04:29.920
+So the top category mimic the top command line interface tool as it will print ranking
+
+60
+0:04:29.920 --> 0:04:33.840
+on information which will be actualized each second.
+
+61
+0:04:33.840 --> 0:04:37.640
+So for example with top file you will get information regarding the file that are the
+
+62
+0:04:37.640 --> 0:04:40.120
+most accessed.
+
+63
+0:04:40.120 --> 0:04:46.960
+Then the last category is there is only one gadget in this category and it is trace loop.
+
+64
+0:04:46.960 --> 0:04:50.620
+Trace loop can be seen as a trace but for containers.
+
+65
+0:04:50.620 --> 0:04:57.720
+So you will be able to monitor all the syscall done by your container.
+
+66
+0:04:57.720 --> 0:05:03.120
+Okay so before going into the internal architecture of inspector gadget and what is eBPF I will
+
+67
+0:05:03.120 --> 0:05:07.400
+show you a small demonstration to compile local gadget trace exec.
+
+68
+0:05:07.400 --> 0:05:13.360
+So the tool to trace exec syscall made by container running locally and exec noob which
+
+69
+0:05:13.360 --> 0:05:19.320
+is an already existing eBPF tool.
+
+70
+0:05:19.320 --> 0:05:22.000
+Okay so we will first create a test container.
+
+71
+0:05:22.000 --> 0:05:28.880
+So the test container will execute sleep periodically.
+
+72
+0:05:28.880 --> 0:05:34.000
+And then we will now trace the new processes creation using exec snoop.
+
+73
+0:05:34.000 --> 0:05:38.680
+So exec snoop is an eBPF tool based and made by IOVIS or BCC people.
+
+74
+0:05:38.680 --> 0:05:41.820
+So as you can see there are two types of sleep.
+
+75
+0:05:41.820 --> 0:05:47.040
+There is one sleep point three second and one other sleep point five second.
+
+76
+0:05:47.040 --> 0:05:49.920
+Sadly in my container I only use point three seconds.
+
+77
+0:05:49.920 --> 0:05:52.640
+So the point five is done by the host.
+
+78
+0:05:52.640 --> 0:05:57.240
+And I'm not interested at all at processes running in my host.
+
+79
+0:05:57.240 --> 0:06:02.720
+To do so I will use local gadget to trace the same type same types of events.
+
+80
+0:06:02.720 --> 0:06:08.000
+But this time I will be able to get only the event inside the container.
+
+81
+0:06:08.000 --> 0:06:13.480
+And as you can see we will get the same information plus the name of the container whether event
+
+82
+0:06:13.480 --> 0:06:21.840
+occurs.
+
+83
+0:06:21.840 --> 0:06:27.760
+Okay so before going into the internal architecture of inspector gadget what is eBPF?
+
+84
+0:06:27.760 --> 0:06:32.400
+According to Brendan Gregg eBPF does to Linux what JavaScript does to HTML.
+
+85
+0:06:32.400 --> 0:06:37.360
+It permits you to run mini program which are safe into a virtual machine inside a kernel
+
+86
+0:06:37.360 --> 0:06:40.640
+which will be run only on some particular event.
+
+87
+0:06:40.640 --> 0:06:43.440
+For example disk IOV.
+
+88
+0:06:43.440 --> 0:06:46.680
+Sadly the eBPF program safety comes at a price.
+
+89
+0:06:46.680 --> 0:06:48.160
+You are kinder limited.
+
+90
+0:06:48.160 --> 0:06:54.520
+For example you cannot have an eBPF program which will have an infinite loop or not statically
+
+91
+0:06:54.520 --> 0:06:56.040
+bounded loop.
+
+92
+0:06:56.040 --> 0:07:00.720
+Also there is no function like malloc or cameloc so you cannot allocate dynamically memory
+
+93
+0:07:00.720 --> 0:07:07.800
+but you will see that there are some possibilities to cope with this limitation.
+
+94
+0:07:07.800 --> 0:07:12.880
+Okay inside the canary we will find two software components which are related to eBPF.
+
+95
+0:07:12.880 --> 0:07:14.760
+The first one is the verifier.
+
+96
+0:07:14.760 --> 0:07:20.280
+It will take as input your eBPF program and will ensure that it is safe.
+
+97
+0:07:20.280 --> 0:07:24.560
+If this is the case it will end your safe program to the just in time compiler.
+
+98
+0:07:24.560 --> 0:07:29.840
+The just in time compiler will basically translate your eBPF bytecode to the machine code and
+
+99
+0:07:29.840 --> 0:07:34.200
+it will install it to be run on some events.
+
+100
+0:07:34.200 --> 0:07:38.880
+When you want to develop an eBPF program you will write it in a syntax which is almost
+
+101
+0:07:38.880 --> 0:07:44.880
+that of the C you will then compile it using clang and the target eBPF to get an eBPF object
+
+102
+0:07:44.880 --> 0:07:45.880
+file.
+
+103
+0:07:45.880 --> 0:07:49.760
+So this eBPF object file will contain the eBPF bytecode.
+
+104
+0:07:49.760 --> 0:07:55.540
+You will then include this eBPF object file into another program running in the userland.
+
+105
+0:07:55.540 --> 0:07:59.400
+So to do so you can use your favorite language.
+
+106
+0:07:59.400 --> 0:08:01.160
+You can use C, you can use Golang.
+
+107
+0:08:01.160 --> 0:08:04.120
+There are plenty of possibilities.
+
+108
+0:08:04.120 --> 0:08:08.600
+So you will use this program and you will use also maps, eBPF maps.
+
+109
+0:08:08.600 --> 0:08:12.280
+eBPF maps are data structure related to eBPF.
+
+110
+0:08:12.280 --> 0:08:15.020
+It exists plenty of different type of map.
+
+111
+0:08:15.020 --> 0:08:20.760
+You will get one eBPF map to represent array, one eBPF map to represent key value store.
+
+112
+0:08:20.760 --> 0:08:23.780
+You have several possibilities.
+
+113
+0:08:23.780 --> 0:08:29.040
+So when you want to load your eBPF program into the kernel you will mainly use a library
+
+114
+0:08:29.040 --> 0:08:34.380
+related to eBPF like libBPF in C or cLUM eBPF in Golang.
+
+115
+0:08:34.380 --> 0:08:39.400
+So your eBPF program will be loaded into the kernel through the BPFC score.
+
+116
+0:08:39.400 --> 0:08:40.800
+It will be verified.
+
+117
+0:08:40.800 --> 0:08:48.320
+If it is okay it will be just in type compile and installed to monitor some event.
+
+118
+0:08:48.320 --> 0:08:52.980
+We will do the same with the map because for example we will be able to use the map to
+
+119
+0:08:52.980 --> 0:08:59.800
+either share information between several eBPF program or between kernel and userland as
+
+120
+0:08:59.800 --> 0:09:03.800
+our eBPF program are run into the kernel.
+
+121
+0:09:03.800 --> 0:09:08.760
+So now let's say that I have a process which called the x-axis call.
+
+122
+0:09:08.760 --> 0:09:11.080
+Then our eBPF program will be executed.
+
+123
+0:09:11.080 --> 0:09:16.960
+It will write some information into the eBPF map and thanks to the library I will be able
+
+124
+0:09:16.960 --> 0:09:23.280
+to read this information and print it for example to the standard put and then deal
+
+125
+0:09:23.280 --> 0:09:26.880
+with them in userland.
+
+126
+0:09:26.880 --> 0:09:32.620
+Okay regarding local gadgets the main component is the local gadget manager.
+
+127
+0:09:32.620 --> 0:09:38.680
+So the local gadget manager at each time maintains a container collection so it knows perfectly
+
+128
+0:09:38.680 --> 0:09:43.680
+what are the running container in the system at a given time.
+
+129
+0:09:43.680 --> 0:09:48.800
+Indeed we rely on run-fanotify to add container to this container collection where the container
+
+130
+0:09:48.800 --> 0:09:53.400
+are created and to remove them where they are deleted.
+
+131
+0:09:53.400 --> 0:09:58.280
+We are also able to start some inspector gadget tracer like the one to trace the exact system
+
+132
+0:09:58.280 --> 0:09:59.580
+call.
+
+133
+0:09:59.580 --> 0:10:06.080
+So when we decide to start tracer for example the one to trace exact syscall we will not
+
+134
+0:10:06.080 --> 0:10:08.440
+directly load the eBPF program.
+
+135
+0:10:08.440 --> 0:10:15.220
+We will create a particular eBPF map that we will use to store information regarding
+
+136
+0:10:15.220 --> 0:10:18.600
+our container of interest.
+
+137
+0:10:18.600 --> 0:10:23.800
+Indeed the eBPF program will be executed each time an event occur and we need to do a filtering
+
+138
+0:10:23.800 --> 0:10:25.400
+regarding this.
+
+139
+0:10:25.400 --> 0:10:32.520
+In the first demonstration I was only interested into events occurring inside containers and
+
+140
+0:10:32.520 --> 0:10:34.160
+not on the host.
+
+141
+0:10:34.160 --> 0:10:39.600
+To do so the eBPF map will contain the moon namespace ID of the container which interests
+
+142
+0:10:39.600 --> 0:10:41.840
+me.
+
+143
+0:10:41.840 --> 0:10:50.440
+So when I will run my eBPF program we will install the eBPF program and basically we
+
+144
+0:10:50.440 --> 0:10:56.200
+basically compare to the eBPF code of the exact snoop that I presented into the first
+
+145
+0:10:56.200 --> 0:10:57.560
+demonstration.
+
+146
+0:10:57.560 --> 0:11:00.840
+We took it and we modified it to add this filtering.
+
+147
+0:11:00.840 --> 0:11:05.840
+So basically with this code snippet we will get the moon namespace ID of the current
+
+148
+0:11:05.840 --> 0:11:12.280
+task and we will compare it if it is present into this map or not.
+
+149
+0:11:12.280 --> 0:11:16.560
+If it is not the case we just do not care about this container and we just do not care
+
+150
+0:11:16.560 --> 0:11:20.200
+about this task because it is not in our container.
+
+151
+0:11:20.200 --> 0:11:25.240
+If it is the case if the moon namespace ID is inside the container we will continue the
+
+152
+0:11:25.240 --> 0:11:30.800
+execution of our eBPF program because we care about it.
+
+153
+0:11:30.800 --> 0:11:35.640
+So now we will show you a more realistic world demonstration of local gadgets particularly
+
+154
+0:11:35.640 --> 0:11:47.920
+how to use it to verify second profile.
+
+155
+0:11:47.920 --> 0:11:51.920
+So okay we will create an nginx container with a ccomb profile installed.
+
+156
+0:11:51.920 --> 0:12:00.040
+So ccomb profile is a feature of the Linux kernel to allow or disallow the call of some
+
+157
+0:12:00.040 --> 0:12:01.040
+syscall.
+
+158
+0:12:01.040 --> 0:12:03.640
+So okay I will create it.
+
+159
+0:12:03.640 --> 0:12:08.540
+I wrote by hand the second profile that I gave to Docker.
+
+160
+0:12:08.540 --> 0:12:13.280
+So okay let's create it and now let's query the nginx server.
+
+161
+0:12:13.280 --> 0:12:20.000
+Yes some mistakes maybe I forgot to add one syscall into the second profile.
+
+162
+0:12:20.000 --> 0:12:24.520
+So I will stop the nginx container.
+
+163
+0:12:24.520 --> 0:12:30.280
+Now we will start local gadget and I will start local gadget on a container on one particular
+
+164
+0:12:30.280 --> 0:12:32.600
+container the nginx container.
+
+165
+0:12:32.600 --> 0:12:38.120
+Note that it is perfectly possible to start the local gadget with a given name with a
+
+166
+0:12:38.120 --> 0:12:43.080
+given container name even if this container name does not exist at the time because it
+
+167
+0:12:43.080 --> 0:12:49.520
+will be added automatically thanks to the container correction and rank for notify.
+
+168
+0:12:49.520 --> 0:12:55.320
+Okay I will now run an nginx container but without any second profile I will call it.
+
+169
+0:12:55.320 --> 0:12:57.000
+Now I will stop my container.
+
+170
+0:12:57.000 --> 0:13:01.640
+It will automatically stop local gadget.
+
+171
+0:13:01.640 --> 0:13:07.160
+Now I will just compare the two second profile the one that I wrote and the one generated
+
+172
+0:13:07.160 --> 0:13:11.400
+by local gadget.
+
+173
+0:13:11.400 --> 0:13:17.720
+Okay I forgot the same file syscalls so it can maybe explain some few bugs.
+
+174
+0:13:17.720 --> 0:13:27.360
+Okay let's run again the nginx container with this new second profile.
+
+175
+0:13:27.360 --> 0:13:30.280
+Okay now it's the moment of truth let's call it.
+
+176
+0:13:30.280 --> 0:13:36.440
+And yeah everything is okay so yeah basically local gadget really helped us to verify the
+
+177
+0:13:36.440 --> 0:13:43.320
+second profile that I wrote by N and more than that it can generate for you second profile.
+
+178
+0:13:43.320 --> 0:13:48.880
+Okay so I told you about local gadget and when I presented you first inspector gadget
+
+179
+0:13:48.880 --> 0:13:53.120
+I told you it comes with two binary local gadget that I already presented and cap cutter
+
+180
+0:13:53.120 --> 0:13:54.360
+gadget.
+
+181
+0:13:54.360 --> 0:14:00.320
+So cap cutter gadget is designed to monitor containers inside Kubernetes cluster.
+
+182
+0:14:00.320 --> 0:14:06.120
+So on the figure I represented a schematic of Kubernetes cluster so on the left we have
+
+183
+0:14:06.120 --> 0:14:11.240
+the developer laptop on the right we have the Kubernetes cluster so we have one node
+
+184
+0:14:11.240 --> 0:14:17.480
+for the K for the Kubernetes control plane and we have one worker node.
+
+185
+0:14:17.480 --> 0:14:22.880
+First of all we will need to deploy an inspector gadget pod on each node to be able to monitor
+
+186
+0:14:22.880 --> 0:14:26.000
+the events occurring on this node.
+
+187
+0:14:26.000 --> 0:14:33.000
+So we will create a diamond set Kubernetes will deploy then a inspector gadget pod on
+
+188
+0:14:33.000 --> 0:14:37.000
+each node of our cluster.
+
+189
+0:14:37.000 --> 0:14:42.680
+Then we will want to trace a specific event for example the execsys call so we will use
+
+190
+0:14:42.680 --> 0:14:48.160
+the cap cutter gadget trace exec command we will ask to the control plane to create a
+
+191
+0:14:48.160 --> 0:14:54.520
+trace CRD so trace CRD is a custom resource definition which is proper to inspector gadget
+
+192
+0:14:54.520 --> 0:14:58.520
+and that we use mainly to start and stop tracer.
+
+193
+0:14:58.520 --> 0:15:06.280
+So we will have also a trace CRD per node like we have one gadget pod per node.
+
+194
+0:15:06.280 --> 0:15:10.840
+So we will create the eBPF program on the associated map we will install it into the
+
+195
+0:15:10.840 --> 0:15:17.600
+kernel the eBPF program will be executed if there are some code to exec occurring on our
+
+196
+0:15:17.600 --> 0:15:25.200
+node those events will be written to a perf buffer a perf buffer is a specific type of
+
+197
+0:15:25.200 --> 0:15:30.960
+eBPF map I said leading that have the time to enter into the details so we will be able
+
+198
+0:15:30.960 --> 0:15:37.040
+to read this information from userland and the events are will be published to a stream
+
+199
+0:15:37.040 --> 0:15:44.800
+to a gRPC stream we will then use cap cutter exec to read the gRPC stream and so the information
+
+200
+0:15:44.800 --> 0:15:48.480
+will be printed on the developer laptop.
+
+201
+0:15:48.480 --> 0:15:56.360
+So I will show you a more realistic example about how to use cap cutter gadgets to verify
+
+202
+0:15:56.360 --> 0:16:02.160
+the container capabilities so just before jumping into the demonstration the capabilities
+
+203
+0:16:02.160 --> 0:16:08.320
+are another feature of the kernel to limit what your application can do.
+
+204
+0:16:08.320 --> 0:16:18.600
+So again time for the demonstration.
+
+205
+0:16:18.600 --> 0:16:23.160
+So this time I will deploy an nginx web server with some capabilities set so here is the
+
+206
+0:16:23.160 --> 0:16:28.040
+list of the capabilities so for example you can see that there is the sysadmin capabilities
+
+207
+0:16:28.040 --> 0:16:33.720
+which is not forcefully capabilities you want to but it seems nginx needed to run so you
+
+208
+0:16:33.720 --> 0:16:38.120
+did not have the choice okay so I deployed it and suddenly it seems that there are some
+
+209
+0:16:38.120 --> 0:16:45.240
+mistakes so okay let's get some more information okay operation not permitted okay if I have
+
+210
+0:16:45.240 --> 0:16:53.040
+an operation not permitted it may be because I forgot one capability into my deployment
+
+211
+0:16:53.040 --> 0:16:58.840
+okay so on the bottom I run the cap cutter gadget trace capabilities so as you can see
+
+212
+0:16:58.840 --> 0:17:04.160
+I just want to get capabilities which are used in the namespace demo because it is the
+
+213
+0:17:04.160 --> 0:17:11.000
+namespace where my nginx container is and so the big difference between local gadget
+
+214
+0:17:11.000 --> 0:17:16.800
+and cap cutter gadget is that cap cutter gadget will give us information regarding Kubernetes
+
+215
+0:17:16.800 --> 0:17:21.800
+so for each event we will get the node where the event occurred the namespace the pod and
+
+216
+0:17:21.800 --> 0:17:28.040
+the container it is really aware of the fact that it is running inside Kubernetes so okay
+
+217
+0:17:28.040 --> 0:17:54.000
+I deleted my deployment I will run it again okay we were in the world demonstration for
+
+218
+0:17:54.000 --> 0:18:00.000
+the beginning okay so during this time if someone has quick question or if there was
+
+219
+0:18:00.000 --> 0:18:06.840
+one point but wasn't clear I can take it quickly okay everything was clear until this moment
+
+220
+0:18:06.840 --> 0:18:32.560
+so perfect
+
+221
+0:18:32.560 --> 0:18:39.680
+okay let's delete our own I've used deployments now can take a bit of time because it is in
+
+222
+0:18:39.680 --> 0:18:46.160
+Kubernetes so yeah compared to when running locally need to take into a communication
+
+223
+0:18:46.160 --> 0:18:56.400
+with remote services so okay okay now I will deploy my nginx deployment again and so we
+
+224
+0:18:56.400 --> 0:19:02.240
+will get the information directly so as you can see we have the name of the capabilities
+
+225
+0:19:02.240 --> 0:19:07.840
+and when they are used and we have also in this column if it is allowed by the kernel
+
+226
+0:19:07.840 --> 0:19:13.560
+or if it is denied so all the above capabilities were allowed and the shown capabilities was
+
+227
+0:19:13.560 --> 0:19:22.080
+denied yeah I think I forgot it in my deployment file so I will just delete my deployment file
+
+228
+0:19:22.080 --> 0:19:26.240
+again yeah there is a lot of back and forth but sadly I do not think we have a lot of
+
+229
+0:19:26.240 --> 0:19:47.840
+choice
+
+230
+0:19:47.840 --> 0:19:52.240
+yeah again if there is quick question during the deleting and the redeployment of the whole
+
+231
+0:19:52.240 --> 0:20:00.000
+thing yeah I can take it and so I will update my deployment file to add the capabilities
+
+232
+0:20:00.000 --> 0:20:10.000
+that I missed okay let's deploy it again and just cross the finger that it is the last
+
+233
+0:20:10.000 --> 0:20:37.360
+time yeah let's wait for everything to be to be ready
+
+234
+0:20:37.360 --> 0:20:48.160
+also a bit of time so okay should do the trick and anyway I do not think we can wait faster
+
+235
+0:20:48.160 --> 0:20:57.280
+so okay everything seems to be ready now we will get the IP of our pod we will now kill
+
+236
+0:20:57.280 --> 0:21:02.680
+it and now it's the moment of truth and as we can see we get nginx default message so
+
+237
+0:21:02.680 --> 0:21:09.560
+everything was fine I just forgot to add one capability in my deployment file so it's now
+
+238
+0:21:09.560 --> 0:21:16.280
+time to conclude so as I show you during this presentation inspector gadget permits to monitor
+
+239
+0:21:16.280 --> 0:21:21.240
+containers both running locally with local gadget and both and running in kubernetes
+
+240
+0:21:21.240 --> 0:21:27.800
+cluster with cap cutter gadget it is of precious help to debug this application I really like
+
+241
+0:21:27.800 --> 0:21:33.640
+to use gdb but and any kind of debugger but in the case that I show you it would be not
+
+242
+0:21:33.640 --> 0:21:40.760
+so helpful particularly because if you run gdb for the second profile you will just get
+
+243
+0:21:40.760 --> 0:21:46.520
+an error number and it will not be so helpful and the same with the capability example we
+
+244
+0:21:46.520 --> 0:21:52.360
+will not be able to know why the syscall failed we will just know it failed with the neural
+
+245
+0:21:52.360 --> 0:21:59.800
+number but kinder hard to say it was because of the missing capability so as a future work
+
+246
+0:21:59.800 --> 0:22:04.680
+we plan to improve the scaling of inspector gadget because I has told you we use cap cutter
+
+247
+0:22:04.680 --> 0:22:12.280
+exact to read the gRPC stream and sadly doesn't scale very well we also plan to add a new gadget
+
+248
+0:22:12.280 --> 0:22:17.720
+and as inspector gadgets is an open source software if you have any idea of a gadget or
+
+249
+0:22:17.720 --> 0:22:22.200
+if you want to contribute one I will be really happy to see your contribution and to review
+
+250
+0:22:22.200 --> 0:22:29.400
+it so you can find us on our website inspector gadget dot io we are also on github so and there
+
+251
+0:22:29.400 --> 0:22:34.680
+are the inspector gadget organization and we also have a channel in the kubernetes slack
+
+252
+0:22:34.680 --> 0:22:39.720
+so inspector gadget so yeah if one day you use inspector gadget and there is something that you
+
+253
+0:22:39.720 --> 0:22:47.480
+do not understand please just feel free to come to the channel and ask we will be really we are
+
+254
+0:22:47.480 --> 0:22:52.680
+here to help you and it will be real pleasure to chat with you so I thank you all that for
+
+255
+0:22:52.680 --> 0:23:21.000
+your attention and if you have any question feel free to ask thank you thank you very interesting
+
+256
+0:23:21.000 --> 0:23:26.520
+talk I would like to know I've seen that you were deploying the agents as a demon set so you were
+
+257
+0:23:26.520 --> 0:23:32.680
+running it in all the nodes I was wondering if you can just tailor it to one single node because you
+
+258
+0:23:32.680 --> 0:23:37.720
+know that the current workload that you want to check or the current pod you want to check is there
+
+259
+0:23:37.720 --> 0:23:44.600
+second question would be I understand that this is really good for for debugging environments
+
+260
+0:23:44.600 --> 0:23:49.320
+would you do you think that this would be ready if you had an incident or something going on that
+
+261
+0:23:49.320 --> 0:23:54.520
+you want to investigate in a production environment okay just to be sure that I understood correctly
+
+262
+0:23:54.520 --> 0:23:59.640
+your question you were asking precision when I deploy the inspector gadget pod I deployed it in
+
+263
+0:23:59.640 --> 0:24:05.560
+each node in the kubernetes cluster and so you wanted to know if it is possible to not deploy it
+
+264
+0:24:05.560 --> 0:24:12.040
+on each node yes perfectly there is a and related to that when you're running the the comments from
+
+265
+0:24:12.040 --> 0:24:17.160
+your computer does it apply to all nodes at the same time or can you tailor also to just go
+
+266
+0:24:17.160 --> 0:24:22.280
+target it to one node or something you can you can target one node so you can basically you can
+
+267
+0:24:22.280 --> 0:24:27.880
+filter by several you have three possibilities to filter you can filter by node you can filter by
+
+268
+0:24:27.880 --> 0:24:33.240
+namespace and you can filter by pod name even container name and of course you can mix all of
+
+269
+0:24:33.240 --> 0:24:39.000
+this I was a bit quick regarding the demonstration on this but yeah you have yeah you can do a lot
+
+270
+0:24:39.000 --> 0:24:44.840
+of filtering so yeah so you can do you can deploy the inspector gadget pod on each node
+
+271
+0:24:44.840 --> 0:24:51.000
+and then filter by by node name but even though if you know that there is one specific problem
+
+272
+0:24:51.000 --> 0:24:57.000
+occurring on one particular node you can deploy the pod on only this specific node we had we have
+
+273
+0:24:57.000 --> 0:25:03.720
+an option to do so with capture gadget deploy to only say to specify which node you want to deploy
+
+274
+0:25:03.720 --> 0:25:22.440
+it thank you you're welcome thanks for the talk again I am just wondering if you can send the
+
+275
+0:25:22.440 --> 0:25:29.000
+metrics to grafana or something to do the filtering and the querying around is that possible
+
+276
+0:25:29.000 --> 0:25:35.880
+so just to be sure you asked if I can send the metrics to grafana yeah that raises that okay
+
+277
+0:25:35.880 --> 0:25:43.880
+so we plan to we we're actually developing it a lot and we are actually working on it a lot and
+
+278
+0:25:43.880 --> 0:25:51.160
+we plan to add an exporter to Prometheus all right but yeah it is still I would not say working
+
+279
+0:25:51.160 --> 0:25:58.120
+progress but thinking in progress all right yeah but nonetheless nonetheless we have a lot of
+
+280
+0:25:58.120 --> 0:26:05.160
+things to do with this but nonetheless if you are really interested into uh primitives I think
+
+281
+0:26:05.160 --> 0:26:10.760
+there is only if you go to the inspector gadget repository they will be you know on the right
+
+282
+0:26:10.760 --> 0:26:18.760
+there is uh used by and so there is a project which does the exporting to primitives but this
+
+283
+0:26:18.760 --> 0:26:24.840
+is not us we developed it and we plan to yeah there is a there is a lot of thing that we want
+
+284
+0:26:24.840 --> 0:26:28.360
+to support all right thanks
+
+285
+0:26:34.200 --> 0:26:38.200
+then I think we're done oh one more question
+
+286
+0:26:41.400 --> 0:26:46.200
+yeah I have a question regarding this demon said that it should be
+
+287
+0:26:46.200 --> 0:26:55.160
+installed on the kubernetes nodes is recommended to it like keep it there always or just install
+
+288
+0:26:55.160 --> 0:27:01.000
+when you need to debug it then remove it back I'm sorry can you please repeat it this demon set
+
+289
+0:27:01.000 --> 0:27:06.920
+on the kubernetes nodes is it recommended to keep it there for always like or just install for
+
+290
+0:27:06.920 --> 0:27:11.160
+the back and then remove back in in the diamond set if I can
+
+291
+0:27:11.160 --> 0:27:15.560
+this remote component
+
+292
+0:27:32.600 --> 0:27:36.200
+no so basically the question was about when I deploy the inspector gadget pod
+
+293
+0:27:36.200 --> 0:27:41.960
+if it is recommended to have it running it for a long time or just shortly no clearly you should
+
+294
+0:27:41.960 --> 0:27:48.360
+not have run it you should not have it running for a long time as we install evpf program we
+
+295
+0:27:48.360 --> 0:27:53.080
+need to have some privilege and we need for example the capsis admin and all this sort of stuff we
+
+296
+0:27:53.080 --> 0:27:59.720
+cannot use the user namespace which were which was added recently in kubernetes so no you just
+
+297
+0:27:59.720 --> 0:28:04.840
+deploy it you collect the mature you collect the you monitor the events you want to monitor and
+
+298
+0:28:04.840 --> 0:28:09.960
+then you just redeploy it so and deploying its specter gadget is as simple as deploying it is
+
+299
+0:28:09.960 --> 0:28:15.720
+one common line interface call and you are done so yeah just avoid it having it running for a long
+
+300
+0:28:15.720 --> 0:28:23.400
+time it's it is a tool to debug so it would be like if you run your application all the time with gdb
+
+301
+0:28:23.400 --> 0:28:41.960
+attached to be kinder so yeah no is there a measurable performance impact on of having the
+
+302
+0:28:41.960 --> 0:28:47.000
+agent deployed in your cluster since it's measuring all these things so you are asking about if when
+
+303
+0:28:47.000 --> 0:28:56.040
+we monitor event if we have a decrease in performance right so not so much and it would
+
+304
+0:28:56.040 --> 0:29:01.640
+be related to the whole evpf as evpf program are run into the kernel you do not have you know
+
+305
+0:29:01.640 --> 0:29:08.040
+context switch between userland and kernel learn so it is kinder as quick and you avoid having a
+
+306
+0:29:08.040 --> 0:29:20.360
+big decrease in performance okay thank you you're welcome then i think we're done thank you thank you
+

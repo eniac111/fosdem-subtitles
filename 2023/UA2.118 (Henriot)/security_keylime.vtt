@@ -1,0 +1,979 @@
+WEBVTT
+
+00:00.000 --> 00:01.000
+Hello?
+
+00:01.000 --> 00:02.000
+Okay.
+
+00:02.000 --> 00:03.000
+Now it works.
+
+00:03.000 --> 00:04.000
+Kind of, right?
+
+00:04.000 --> 00:05.000
+We've got...
+
+00:05.000 --> 00:06.000
+Okay.
+
+00:06.000 --> 00:07.000
+So hello, everyone.
+
+00:07.000 --> 00:08.000
+Welcome.
+
+00:08.000 --> 00:09.000
+Welcome to Security Dev Room.
+
+00:09.000 --> 00:14.000
+And we've got our next talk about Key Lime and Dremel at the station, which will be given
+
+00:14.000 --> 00:16.000
+by Understand and...
+
+00:16.000 --> 00:17.000
+Sorry.
+
+00:17.000 --> 00:18.000
+Okay.
+
+00:18.000 --> 00:23.000
+So, we're going to go to the next room.
+
+00:23.000 --> 00:30.000
+Sorry.
+
+00:30.000 --> 00:31.000
+So welcome.
+
+00:31.000 --> 00:33.000
+Sorry about the trouble.
+
+00:33.000 --> 00:36.000
+So I'm Anders Sorsakie.
+
+00:36.000 --> 00:38.000
+I'm a software engineer at Red Hat.
+
+00:38.000 --> 00:40.000
+And I'm here with Sauer.
+
+00:40.000 --> 00:41.000
+Yeah.
+
+00:41.000 --> 00:42.000
+I'm Tore.
+
+00:42.000 --> 00:45.400
+And I'm a maintainer of Linux distribution for a school and universities.
+
+00:45.400 --> 00:47.400
+And I'm also a maintainer of Key Lime.
+
+00:47.400 --> 00:48.400
+Yeah.
+
+00:48.400 --> 00:51.680
+So we are here to talk about remote at the station with Key Lime.
+
+00:51.680 --> 00:54.600
+So let's get started.
+
+00:54.600 --> 01:00.040
+Imagine you are like a car vendor who maintains and updates the systems running in cars, but
+
+01:00.040 --> 01:06.440
+you want to make sure that the systems in the cars were not modified so that you can
+
+01:06.440 --> 01:12.840
+check if the customer is too eligible to receive the latest updates or something like that.
+
+01:12.840 --> 01:18.240
+Or you are a software company building software in the cloud, but I want to make sure that
+
+01:18.240 --> 01:22.160
+the build tooling was not modified.
+
+01:22.160 --> 01:28.080
+Or you are a telecom company that wants to make sure that the systems you deployed that
+
+01:28.080 --> 01:31.800
+controls antennas, they were not modified.
+
+01:31.800 --> 01:38.880
+So what all these cases have in common is first, they are remote.
+
+01:38.880 --> 01:44.040
+Second, you don't really have full control of the systems in the world.
+
+01:44.040 --> 01:52.260
+So the question is, how can you check that the system was not modified in the wild?
+
+01:52.260 --> 01:58.720
+So our way would be if you could somehow get some information about the system and then
+
+01:58.720 --> 02:02.720
+check if it's what you expected from that.
+
+02:02.720 --> 02:11.400
+And of course, in case it's not, then you would want to have a way to react on that.
+
+02:11.400 --> 02:18.320
+So if you can do that continuously, get the information checked, then you have a monitoring
+
+02:18.320 --> 02:22.600
+of the integrity of the system.
+
+02:22.600 --> 02:30.040
+So that's one of the things the remote at this stage can provide is to check remote
+
+02:30.040 --> 02:34.520
+integrity, remote machine integrity, how it works.
+
+02:34.520 --> 02:40.840
+So you have a trusted entity running in some controlled environment, and then you have
+
+02:40.840 --> 02:45.800
+a trusted agent on the other side running on the monitoring system.
+
+02:45.800 --> 02:53.920
+And you ask for the information to that agent and gets back some information called a quote.
+
+02:53.920 --> 03:02.640
+Then you can verify that that agent is running in a machine in the state that you trust.
+
+03:02.640 --> 03:06.960
+So that comes with the problem of trust.
+
+03:06.960 --> 03:14.400
+So how can you trust the machine or the agent running in some machine that you don't control?
+
+03:14.400 --> 03:22.480
+So you don't really trust directly the agent, but you trust on a hardware root of trust,
+
+03:22.480 --> 03:26.520
+which is the trusted platform model or TPM.
+
+03:26.520 --> 03:27.920
+What are the TPMs?
+
+03:27.920 --> 03:36.400
+They are pieces of hardware that can perform crypto operations such as dirty keys, signing,
+
+03:36.400 --> 03:45.480
+data, and it has this special key and certificate called e-endorsement key, which are generated
+
+03:45.480 --> 03:47.080
+during manufacturing.
+
+03:47.080 --> 03:54.520
+So the manufacturer generates the key and publishes the CA certificate so that you can
+
+03:54.520 --> 03:59.080
+verify that it is legitimate.
+
+03:59.080 --> 04:07.000
+And then this EKE, the endorsement keys, can't sign data directly, but you can generate the
+
+04:07.000 --> 04:12.800
+attestation keys that are associated with that endorsement key in a way that you can
+
+04:12.800 --> 04:19.560
+verify the origin of some assigned data so that you can make sure that that data was
+
+04:19.560 --> 04:25.520
+signed by that specific TPM.
+
+04:25.520 --> 04:32.240
+And another important thing that the TPM has are the platform conversion registers, which
+
+04:32.240 --> 04:40.800
+are special registers designed to start measurements about the system in a way that you can verify
+
+04:40.800 --> 04:43.720
+the integrity.
+
+04:43.720 --> 04:48.400
+So how these measurements are done?
+
+04:48.400 --> 04:57.560
+During boot, each step of the boot is measured by the UFI into the TPM via the PCR extend
+
+04:57.560 --> 04:59.360
+operation.
+
+04:59.360 --> 05:09.360
+So each step the boot process goes, you get a hash of the binary or the software that
+
+05:09.360 --> 05:13.320
+is running and extend into a PCR.
+
+05:13.320 --> 05:17.000
+I will explain that soon.
+
+05:17.000 --> 05:25.160
+And so during boot, the UEFI is responsible for measuring the boot steps into the TPM.
+
+05:25.160 --> 05:32.400
+And after boot, then the kernel integrity measurement architecture, or IMA, will measure
+
+05:32.400 --> 05:34.960
+any open file that matches a policy.
+
+05:34.960 --> 05:43.240
+You can configure the IMA, and it will measure the files open into a PCI as well.
+
+05:43.240 --> 05:54.200
+So if you have the information like the state of the PCR and the event log or all the operations,
+
+05:54.200 --> 06:00.100
+extend operations that were performed, then you can verify the integrity of the machine.
+
+06:00.100 --> 06:06.160
+So how this PCR extend algorithm works is kind of simple.
+
+06:06.160 --> 06:15.440
+You get the old value starting the PCR, concatenated with the measurement from the data.
+
+06:15.440 --> 06:18.620
+So this measurement is basically a hash.
+
+06:18.620 --> 06:24.280
+So you concatenate the old value with the hash of the measurement, calculate the hash
+
+06:24.280 --> 06:33.040
+of all of these, and put back into the PCR.
+
+06:33.040 --> 06:36.160
+So that's done for each step.
+
+06:36.160 --> 06:43.480
+So of course, these PCRs, if you know a bit of TPM, they don't match the actual numbers.
+
+06:43.480 --> 06:46.760
+But this is just for illustration.
+
+06:46.760 --> 06:57.280
+So after measuring all these steps, you have the final value in the PCR that you can calculate
+
+06:57.280 --> 07:05.640
+like a golden value, which you calculate the hash of all the PCR values, and you have a
+
+07:05.640 --> 07:09.200
+representation of the state of the machine.
+
+07:09.200 --> 07:12.560
+And that can be verified.
+
+07:12.560 --> 07:16.600
+So how key lime works.
+
+07:16.600 --> 07:22.960
+So in the left side, you have a trusted entity where you, like probably a machine that you
+
+07:22.960 --> 07:27.800
+control, where you run the verifier side of the key lime.
+
+07:27.800 --> 07:29.760
+It's a server.
+
+07:29.760 --> 07:34.480
+And on the right side, you have the monitored system.
+
+07:34.480 --> 07:35.480
+It is remote.
+
+07:35.480 --> 07:37.680
+You don't have complete control of it.
+
+07:37.680 --> 07:42.480
+But the agent has access to the TPM installed in that machine.
+
+07:42.480 --> 07:51.240
+And so the server can verify, the verifier can request a state to the agent.
+
+07:51.240 --> 08:00.040
+And the agent will access the TPM to get the code, meaning the PCR values, and also together
+
+08:00.040 --> 08:07.640
+with the event logs or all the PCR extend operations that were performed, and throw
+
+08:07.640 --> 08:13.320
+it back to the verifier.
+
+08:13.320 --> 08:21.640
+And then the verifier can verify first the origin of that piece of data because it's
+
+08:21.640 --> 08:24.360
+signed by the AEK key.
+
+08:24.360 --> 08:29.320
+So you can make sure that that data came from that machine that contains that TPM.
+
+08:29.320 --> 08:34.640
+And you can verify the identity of the TPM using the EK certificate.
+
+08:34.640 --> 08:42.640
+And with the values you obtained for the PCRs and the event log, you can replay all the
+
+08:42.640 --> 08:50.240
+extend operations so that in the end you can get the values that it should have.
+
+08:50.240 --> 08:59.040
+And so without this information, you can verify the integrity of the machine.
+
+08:59.040 --> 09:05.880
+Since you also got the information from IMA, like all the files that were open and matched
+
+09:05.880 --> 09:14.240
+some policy, what are the IMA will calculate the hash of open files that match some policy
+
+09:14.240 --> 09:15.920
+and extend to the PCR.
+
+09:15.920 --> 09:22.640
+So you get this log containing the file names and the matching hashes.
+
+09:22.640 --> 09:32.360
+So you can also with some policy engine verify the integrity of individual files in the remote
+
+09:32.360 --> 09:33.360
+machine.
+
+09:33.360 --> 09:41.880
+So you can like full integrity view of the remote machine.
+
+09:41.880 --> 09:49.720
+So with that information, the verifier can check if it's okay, the testation was successful.
+
+09:49.720 --> 09:55.520
+But if it was not, it doesn't match what you expected, then it's a failure.
+
+09:55.520 --> 10:02.440
+So in case of failure, we have a revocation framework, which is a way to...
+
+10:02.440 --> 10:11.520
+So you can configure some actions to the verifier, some script that it can run to perform some
+
+10:11.520 --> 10:12.520
+action.
+
+10:12.520 --> 10:13.940
+It can be some web hooks.
+
+10:13.940 --> 10:18.680
+So if some attestation fails, it sends some requests to some web hook.
+
+10:18.680 --> 10:25.840
+Or you can notify the agents directly via REST API and send some payload to be trigger
+
+10:25.840 --> 10:27.640
+some operation there.
+
+10:27.640 --> 10:33.560
+The simplest scenario, for example, if you had a cluster with various machines and one
+
+10:33.560 --> 10:40.280
+of them failed attestation, you cannot find the others to remove that node from the cluster
+
+10:40.280 --> 10:43.640
+by blocking the network connectivity, for example.
+
+10:43.640 --> 10:47.080
+So that's how Key Lime works in general.
+
+10:47.080 --> 10:49.560
+So now I'm passing the mic to Tor.
+
+10:49.560 --> 10:53.480
+He will continue with the real world stuff.
+
+10:53.480 --> 10:58.800
+Yeah, so now we heard how Key Lime works.
+
+10:58.800 --> 11:05.160
+And we want to show that you can use it in production and what are the challenges that
+
+11:05.160 --> 11:07.960
+you will run into if you want to try that.
+
+11:07.960 --> 11:10.480
+We have three main scenarios there.
+
+11:10.480 --> 11:17.100
+We have first the policy creation, then the monitoring, and then how to react on that.
+
+11:17.100 --> 11:23.400
+So the first part is we want to create policies for our system.
+
+11:23.400 --> 11:29.160
+For that, we need to know what is actually on our system and what are our systems.
+
+11:29.160 --> 11:33.440
+So from a software side perspective, it's normal that we integrate.
+
+11:33.440 --> 11:35.000
+We have a CI-CD pipeline.
+
+11:35.000 --> 11:36.720
+We get what data gets into that.
+
+11:36.720 --> 11:39.060
+And we want to save the hashes there.
+
+11:39.060 --> 11:41.080
+But we need also a lot of other stuff.
+
+11:41.080 --> 11:47.200
+We want to know what packages are installed, where they end up on our system, have their
+
+11:47.200 --> 11:48.200
+signatures.
+
+11:48.200 --> 11:49.800
+Can we verify that?
+
+11:49.800 --> 11:54.320
+That is what we normally want to have, and either this information is already provided
+
+11:54.320 --> 11:59.000
+by the distribution or we need to generate that on our own.
+
+11:59.000 --> 12:03.000
+Then on the hardware side, we need to know what kind of hardware we're running.
+
+12:03.000 --> 12:06.040
+So as we said, we have the EK, so the endorsement key.
+
+12:06.040 --> 12:10.900
+We need to at least know that to trust the TPM in some regard.
+
+12:10.900 --> 12:15.000
+And then ideally, we want to also know what firmware is running on that device and which
+
+12:15.000 --> 12:16.720
+configuration do we have.
+
+12:16.720 --> 12:20.760
+For example, do we allow CQ to be disabled and enabled?
+
+12:20.760 --> 12:25.640
+Do we have our own keys on there and stuff like that?
+
+12:25.640 --> 12:31.400
+So if you have all that information, we can go to the other side, which is the monitoring.
+
+12:31.400 --> 12:35.440
+That part is implemented by Keyline.
+
+12:35.440 --> 12:39.800
+If you have all the necessary information, we provide documentation and tools to generate
+
+12:39.800 --> 12:43.560
+a policy for that and you can feed it in that and so on.
+
+12:43.560 --> 12:51.240
+The challenge that you run into here is that for many of you, probably I'm a measured boot
+
+12:51.240 --> 12:55.080
+and TPMs are new.
+
+12:55.080 --> 13:01.160
+If you run into issues, then you also need to try to understand how that works to debug
+
+13:01.160 --> 13:02.160
+it.
+
+13:02.160 --> 13:06.920
+So that is a challenge you run into that you still need a good understanding of those technologies
+
+13:06.920 --> 13:10.080
+to make your life easier.
+
+13:10.080 --> 13:13.240
+But yeah, that is mostly solved by Keyline.
+
+13:13.240 --> 13:19.040
+Then we come to the non-technical side, which is we need to react somehow when we have a
+
+13:19.040 --> 13:21.720
+revocation failure.
+
+13:21.720 --> 13:24.640
+Is that a lot actually relevant for us?
+
+13:24.640 --> 13:28.960
+Because if we have like a file changes in TEMP, we don't really care.
+
+13:28.960 --> 13:32.800
+But then who needs to be notified if you have that?
+
+13:32.800 --> 13:37.040
+Then how do we tie that in our current monitoring infrastructure, for example, like with the
+
+13:37.040 --> 13:38.040
+WebHawks?
+
+13:38.040 --> 13:44.000
+And lastly, if you're a company and it's a potential security breach if Keyline fares
+
+13:44.000 --> 13:46.120
+in the way that you configured it.
+
+13:46.120 --> 13:52.360
+So there are service agreements in place which need to notify and how do we respond for that.
+
+13:52.360 --> 14:01.840
+But going now from the general part to actual examples, I work on a Linux distribution that
+
+14:01.840 --> 14:09.720
+does exams for schools and universities called LANDSTICK and we developed with the University
+
+14:09.720 --> 14:16.920
+of Applied Sciences and Arts, Northwestern Switzerland, also called FRNV, a system called
+
+14:16.920 --> 14:21.920
+Campla which is secure, bring your own device exams.
+
+14:21.920 --> 14:24.560
+So what is the problem here?
+
+14:24.560 --> 14:28.800
+The students want to bring their own device, their own notebook into the lecture hall and
+
+14:28.800 --> 14:31.080
+want to write their exams on that.
+
+14:31.080 --> 14:34.960
+We don't want to touch their operating system, so we do something which we call bring your
+
+14:34.960 --> 14:35.960
+own hardware.
+
+14:35.960 --> 14:41.440
+They bring their own hardware and we boot a live Linux system on that system and remotely
+
+14:41.440 --> 14:45.480
+attest if that system is running correctly.
+
+14:45.480 --> 14:46.520
+So what do we have?
+
+14:46.520 --> 14:50.280
+We have our hardware which has a hard drive and a TPM.
+
+14:50.280 --> 14:55.900
+Now we boot the distribution called LANDSTICK and on that we have the key lime agent running
+
+14:55.900 --> 14:58.860
+and also Imer and our measured boot stuff.
+
+14:58.860 --> 15:02.960
+And now the interesting part is we just care about the TPM.
+
+15:02.960 --> 15:07.520
+We don't care about the hard drive and what is on that system otherwise.
+
+15:07.520 --> 15:13.200
+So now we have the actual server solution.
+
+15:13.200 --> 15:21.080
+So we register to the exam system and this also includes that we register to key lime.
+
+15:21.080 --> 15:27.240
+Then we check in return if the system is actually in a trustworthy state and if that's the case,
+
+15:27.240 --> 15:34.920
+we release the exam files which is in our case normally RDP session which then connects
+
+15:34.920 --> 15:40.480
+to the cloud where the people are actually writing their exams.
+
+15:40.480 --> 15:44.800
+So why are we doing that this way?
+
+15:44.800 --> 15:50.480
+The first one is that we guarantee that the environment for every student is the same
+
+15:50.480 --> 15:55.920
+because they only provide their hardware and it's basically a terminal to connect to the
+
+15:55.920 --> 16:01.600
+actual exam so if there's computing intensive stuff then it doesn't really matter.
+
+16:01.600 --> 16:07.400
+And also because they only bring their own hardware and don't need to install monitoring
+
+16:07.400 --> 16:13.400
+software on their system to write the exam, we don't care what data is on that.
+
+16:13.400 --> 16:14.640
+We don't want to know.
+
+16:14.640 --> 16:19.840
+It's first for privacy and also to make setup way easier.
+
+16:19.840 --> 16:26.240
+Now, back to a more traditional scenario that more of you are probably familiar with the
+
+16:26.240 --> 16:27.240
+cloud.
+
+16:27.240 --> 16:34.560
+There we have the example that IBM uses for hypervisor at the station and they don't use
+
+16:34.560 --> 16:38.160
+run time at the station so not AMR.
+
+16:38.160 --> 16:44.400
+They use measure boot to see if the hypervisor booted up correctly.
+
+16:44.400 --> 16:51.280
+So their challenges were that implementing the actual response procedures, so the procedure
+
+16:51.280 --> 16:59.960
+from we have an alert to how do we deal with that now, that is the difficult part because
+
+16:59.960 --> 17:04.920
+the one is the technical side but how do we structure our teams in a way that we can guarantee
+
+17:04.920 --> 17:05.920
+that.
+
+17:05.920 --> 17:14.040
+Then also the other ones are eliminating false positives that ties into the first point because
+
+17:14.040 --> 17:18.760
+if a human needs to react, then we want to have no false positives and also no false
+
+17:18.760 --> 17:21.080
+negatives ideally.
+
+17:21.080 --> 17:26.040
+And false negatives are for security very, very bad so we don't want to have that.
+
+17:26.040 --> 17:29.320
+And lastly is keeping the policies up to date.
+
+17:29.320 --> 17:34.640
+Even if you roll your own distribution and are big enough, it's very difficult to be
+
+17:34.640 --> 17:39.520
+up to date on the policies and integrate them automatically.
+
+17:39.520 --> 17:44.480
+And lastly they have an escalation chain just for illustration purposes, they use key lime
+
+17:44.480 --> 17:50.680
+to monitor that, tie that into their Jira system and then have an actual person react
+
+17:50.680 --> 17:53.640
+on the other side.
+
+17:53.640 --> 18:01.440
+And then one point from a distribution, so in this case from SUSE, I asked them and they
+
+18:01.440 --> 18:06.640
+integrated key lime into pretty much any product, so it's an open SUSE today if you want to
+
+18:06.640 --> 18:10.160
+use it in micro S, there's instruction to do that.
+
+18:10.160 --> 18:14.520
+And then also in SUSE enterprise Linux and an ALP.
+
+18:14.520 --> 18:21.720
+Their challenges also were integrating it with SELinux fully and making IMA usable.
+
+18:21.720 --> 18:26.720
+So do we have signatures, how do we provide the hashes?
+
+18:26.720 --> 18:35.600
+And the general thing for distribution is how do we provide robust policies in general?
+
+18:35.600 --> 18:43.480
+Because we want users to try out the technology and want to experiment with that, but how
+
+18:43.480 --> 18:45.600
+do we give them the starting point?
+
+18:45.600 --> 18:50.040
+And that is still very difficult because as we saw, there are many data points that need
+
+18:50.040 --> 18:55.280
+to be collected and that is a challenge that they're trying to solve actively by making
+
+18:55.280 --> 18:59.880
+getting the signatures and the hashes easier.
+
+18:59.880 --> 19:05.560
+So to say for the end, try remote attestation today.
+
+19:05.560 --> 19:12.080
+The technology that you need to do that is pretty much in every device that you have
+
+19:12.080 --> 19:14.240
+like in a notebook that you can use.
+
+19:14.240 --> 19:16.720
+So you can find key lime at key lime.def.
+
+19:16.720 --> 19:20.560
+And yeah, thank you.
+
+19:20.560 --> 19:30.720
+So do we have questions?
+
+19:30.720 --> 19:36.400
+Lots of questions.
+
+19:36.400 --> 19:38.640
+Thank you for a great presentation.
+
+19:38.640 --> 19:43.960
+One question, you talked a lot about the verification side of the processing.
+
+19:43.960 --> 19:50.320
+You talked a lot about the verification side, but to have the golden values or the PCRs
+
+19:50.320 --> 19:53.240
+in your verified system, you need to provision them.
+
+19:53.240 --> 20:00.200
+So I was not sure the distribution side of things was how do you manage that in key lime?
+
+20:00.200 --> 20:02.440
+Could you shed some light on that?
+
+20:02.440 --> 20:03.440
+Yeah.
+
+20:03.440 --> 20:11.280
+So with the golden values, we have the values in the TPM and then they are also tied to
+
+20:11.280 --> 20:14.360
+Event Lock and IMR and like measured boot.
+
+20:14.360 --> 20:20.280
+And we solve that issue that we don't actually need golden values by having a policy engine.
+
+20:20.280 --> 20:26.240
+Basically that verifies the logs itself, checks if those match the values, but then we check
+
+20:26.240 --> 20:28.480
+the logs and not the end value.
+
+20:28.480 --> 20:33.320
+So and then a distribution can help because they can provide like a lot of the signatures
+
+20:33.320 --> 20:38.080
+already and which files are in which packages and how they end up.
+
+20:38.080 --> 20:41.560
+That makes the life for the distribution easier.
+
+20:41.560 --> 20:44.440
+Yes, sir.
+
+20:44.440 --> 20:47.440
+Questions?
+
+20:47.440 --> 20:50.120
+What is the performance of the switch check?
+
+20:50.120 --> 20:54.360
+How much time does it take and how much data is required for switch here?
+
+20:54.360 --> 20:57.920
+Monitoring?
+
+20:57.920 --> 21:06.040
+From what I saw, I don't have like a benchmarks for that, but it's pretty quick, like 200
+
+21:06.040 --> 21:08.680
+milliseconds, something like that.
+
+21:08.680 --> 21:18.200
+So the round trip from the request to the response is like 200 milliseconds in my tests,
+
+21:18.200 --> 21:20.960
+but of course it's on my machine, right?
+
+21:20.960 --> 21:24.160
+We don't have benchmarks for the performance.
+
+21:24.160 --> 21:28.120
+Yes, so it heavily also depends what you want to attest.
+
+21:28.120 --> 21:34.120
+If you just have measured boot, it's the quote time on the hardware TPM maximum to a second.
+
+21:34.120 --> 21:40.520
+And then it's like a couple of most megabytes, single digits that you have a data that is
+
+21:40.520 --> 21:42.960
+transferred.
+
+21:42.960 --> 21:48.880
+You had said that one of the challenges of implementation was dealing with false positives
+
+21:48.880 --> 21:50.480
+and maybe false negatives.
+
+21:50.480 --> 21:53.960
+Can you give some examples of when that would occur?
+
+21:53.960 --> 21:59.080
+Yes, because we are still talking over the network.
+
+21:59.080 --> 22:03.480
+That is like a false positive if the network connection goes down.
+
+22:03.480 --> 22:08.000
+And the other one is it's kind of a false positive and not really is if your policy
+
+22:08.000 --> 22:11.000
+is not up to date.
+
+22:11.000 --> 22:14.800
+For the system, it's not a false positive in the traditional sense, but it's false positive
+
+22:14.800 --> 22:19.320
+because you don't want that alert actually to happen.
+
+22:19.320 --> 22:23.000
+For the university use case, how do you know that you are actually talking to the real
+
+22:23.000 --> 22:25.440
+TPM in the laptop?
+
+22:25.440 --> 22:27.880
+So we have two ways.
+
+22:27.880 --> 22:34.160
+First we verify against the hardware manufacturer.
+
+22:34.160 --> 22:36.840
+So they have a CA that we can verify against.
+
+22:36.840 --> 22:43.440
+And also we can enroll the notebooks directly, so we check if the device is, which I forgot
+
+22:43.440 --> 22:47.640
+to say that the university part is still proof of concept.
+
+22:47.640 --> 22:55.440
+So we are currently working on it, but it's not rolled out like large scale.
+
+22:55.440 --> 23:03.320
+How do you make sure that a measurement, an alert event, a new change happened?
+
+23:03.320 --> 23:07.760
+And how do you make sure that it's not intercepted over the network?
+
+23:07.760 --> 23:12.200
+Sorry, once again.
+
+23:12.200 --> 23:16.200
+How do you make sure that when there's an event saying that there's a change in the
+
+23:16.200 --> 23:22.080
+machine, a new measurement that appears, how do you make sure that the event is not intercepted
+
+23:22.080 --> 23:27.760
+in the network between the monitored machine and the trusted system?
+
+23:27.760 --> 23:35.120
+So is the question, how do we deal with the losing connection between the agent, the monitored
+
+23:35.120 --> 23:37.240
+system and the verifier?
+
+23:37.240 --> 23:42.680
+Losing connection or having maybe something in between, making sure that it does not go
+
+23:42.680 --> 23:47.920
+to the trusted system.
+
+23:47.920 --> 23:52.720
+There's something in between that makes sure that you're never going to be notified that
+
+23:52.720 --> 24:01.840
+a system is going to be compromised or just became compromised.
+
+24:01.840 --> 24:07.840
+If we have a blocking connection between the agent and the verifier side, then we get a
+
+24:07.840 --> 24:11.280
+timeout at somewhat and then the agent gets automatically distrusted.
+
+24:11.280 --> 24:17.600
+And if you said from the notification system itself, if you say we notify all the other
+
+24:17.600 --> 24:19.680
+agents, of course then there is an issue.
+
+24:19.680 --> 24:24.160
+If you cannot reach to them on a trusted channel, then it's basically getting over in that direction.
+
+24:24.160 --> 24:29.400
+So you need to get your revocation alerts if you want to guarantee them all the time
+
+24:29.400 --> 24:30.760
+through a trusted channel.
+
+24:30.760 --> 24:35.320
+So the trust boundary is for the attestation part that we see that, but the revocation
+
+24:35.320 --> 24:41.840
+part if you want to reach that, then it needs to go through a trusted channel.
+
+24:41.840 --> 24:46.920
+So continuing on this question, actually, I think how do you make sure that your actual
+
+24:46.920 --> 24:52.040
+verifier is connected to the right agent and you don't have a man in the middle attack
+
+24:52.040 --> 24:56.560
+that's happening and rerouting this to a fake agent and fake TPM?
+
+24:56.560 --> 25:00.240
+So that's tied with the EK certificate.
+
+25:00.240 --> 25:06.280
+So you trust the manufacturer because when they manufacture the TPM, they will create
+
+25:06.280 --> 25:11.200
+this key that cannot be modified or removed in any way.
+
+25:11.200 --> 25:14.760
+So it provides the identity to the TPM.
+
+25:14.760 --> 25:22.920
+So when you get the information from the TPM or from some agent, you can verify that that
+
+25:22.920 --> 25:32.040
+data came from the TPM that has some EK key because it's signed and you can verify the
+
+25:32.040 --> 25:36.680
+origin using the CA certificate provided by the member factor.
+
+25:36.680 --> 25:45.160
+So you can check that the TPM is exactly the one you expected using the EK certificate.
+
+25:45.160 --> 25:46.160
+Okay.
+
+25:46.160 --> 25:47.160
+Thank you for the talk.
+
+25:47.160 --> 25:48.160
+Thank you for all the questions.
+
+25:48.160 --> 25:49.160
+We are out of time.
+
+25:49.160 --> 26:07.280
+Thank you.

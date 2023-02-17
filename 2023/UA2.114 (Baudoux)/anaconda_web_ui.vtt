@@ -1,0 +1,742 @@
+WEBVTT
+
+00:00.000 --> 00:11.200
+Hello. Welcome to my talk about building a WebPI for the federal install. So my name
+
+00:11.200 --> 00:19.840
+is Martin Koman and I work in the team that's building the Anaconda installer used by federal
+
+00:19.840 --> 00:28.560
+and related distributions. First I would like to talk a bit about why we decided to actually
+
+00:28.560 --> 00:36.480
+build a WebPI for our installer. And yeah, first like very shortly about like the federal
+
+00:36.480 --> 00:42.600
+installer project. Yeah, the name of it is Anaconda which is very confusing for some
+
+00:42.600 --> 00:49.480
+people doing Python in the scientific domain because there is a very similar project in
+
+00:49.480 --> 00:54.880
+that it's like a Python thing but it's called the same as V but I think we are older. So
+
+00:54.880 --> 01:02.040
+anyway right now we have a GTK3 UI for the installer. We have a text-based UI. It's also
+
+01:02.040 --> 01:10.200
+possible to fully automate the installation. We have things like add-on support and yeah,
+
+01:10.200 --> 01:17.440
+we are used as I mentioned by federal, CentOS and others. This talk is basically concerning
+
+01:17.440 --> 01:23.000
+only the graphical user interface. We don't expect to have any changes for the text-based
+
+01:23.000 --> 01:31.680
+interface and the kick-start based automation in the context of the WebUI. So why did we
+
+01:31.680 --> 01:36.960
+actually choose to do something about the current graphical interface and why did we
+
+01:36.960 --> 01:46.080
+choose to start working on a WebUI? So one of the points is that the current GTK interface
+
+01:46.080 --> 01:54.160
+comes from the year 2013. Kind of looks like early GNOME 3 by coincidence maybe. It was
+
+01:54.160 --> 02:00.840
+built at the same time basically. And over time we added new features. We fixed bugs.
+
+02:00.840 --> 02:06.160
+We adapted to various federal changes for example. And the stuff kind of got bolted
+
+02:06.160 --> 02:13.160
+on like not always it was possible to change the UI. So in some cases it's getting a bit
+
+02:13.160 --> 02:20.960
+clunky already. Another issue is that some of the technology we build it on is getting
+
+02:20.960 --> 02:29.480
+a bit old right now. GTK 3 is not that old at the moment but already you have GTK 4.
+
+02:29.480 --> 02:36.080
+Eventually we would have to port it. One of the issues is for example that the federal
+
+02:36.080 --> 02:42.920
+installation image. The federal project tries to have minimal dependencies of applications.
+
+02:42.920 --> 02:48.840
+So like over time we want to have like the minimum amount of libraries. So we would have
+
+02:48.840 --> 02:55.320
+to quite possibly migrate to keep the image sizes small. That's one of the reasons. We
+
+02:55.320 --> 03:00.240
+also still run on top of X. There is even some hard dependency right now on keyboard
+
+03:00.240 --> 03:05.880
+switching during the installation. So this is something we would have to address anyway.
+
+03:05.880 --> 03:13.120
+The remote access to a graphical installation right now is not the best. It's based on VNC.
+
+03:13.120 --> 03:20.040
+So it's unsecure. It's not very efficient. It requires you to have a graphical system
+
+03:20.040 --> 03:25.040
+running on the host that you are installing. And you need a special application that might
+
+03:25.040 --> 03:32.320
+not be available that users might need to install. So that's one of the issues. And
+
+03:32.320 --> 03:38.160
+also I'm not saying it's not possible to test GTK 3 interfaces but basically it's not that
+
+03:38.160 --> 03:44.240
+simple and we don't really have any unit test coverage. There are people from for example
+
+03:44.240 --> 03:50.320
+the federal QA community that do test Anaconda but what they are using is basically a screenshot
+
+03:50.320 --> 03:59.080
+or graphical bitmap based testing right now. So this is something that could be improved.
+
+03:59.080 --> 04:06.800
+And also what we have seen in the past years is that there seems to be a clear trend towards
+
+04:06.800 --> 04:12.040
+using Web UIs for system management. Some of you might still remember some of the system
+
+04:12.040 --> 04:18.360
+config tools used on Fedora and CentOS and Trell that used to be available to configure
+
+04:18.360 --> 04:24.800
+stuff like services, networking, firewalls. All of these over time effectively became
+
+04:24.800 --> 04:30.520
+cockpit plugins for the cockpit web console. So this seems to be the trend overall for
+
+04:30.520 --> 04:40.160
+system management as far as we can tell. So what we kind of found out, there are some
+
+04:40.160 --> 04:47.080
+benefits of doing something about the current UI situation and doing something about it
+
+04:47.080 --> 04:54.560
+with a web technology based UI. So while we are at it we can address some of the UX issues
+
+04:54.560 --> 05:00.760
+we have right now because it's effectively a fresh start right now. It's easier to achieve
+
+05:00.760 --> 05:08.240
+consistency because you are building the whole thing so you can make sure that it feels similar,
+
+05:08.240 --> 05:14.640
+it's using the same concepts, the same workflows for everything hopefully. Also another thing
+
+05:14.640 --> 05:22.980
+is that given the proliferation of Web UIs everywhere basically there seems to be much
+
+05:22.980 --> 05:29.640
+bigger community of users, of developers of these technologies and there is overall more
+
+05:29.640 --> 05:36.400
+documentation, there's even more resources for non-developer roles like UX designers
+
+05:36.400 --> 05:47.520
+or usability testing projects. And this seems to be unfortunately quite lacking in many
+
+05:47.520 --> 05:55.280
+native GUI libraries right now in comparison to the web technologies. And also like one
+
+05:55.280 --> 06:03.880
+quite big point for it is that using a Web UI, just to be specific, we are going to use
+
+06:03.880 --> 06:10.480
+the Web UI both locally and remotely. So we want to run it for the local graphical session
+
+06:10.480 --> 06:16.960
+if any but also it makes it much, much easier to access the installation remotely. So for
+
+06:16.960 --> 06:25.280
+any headless installations it should be much easier for the users using the installer to
+
+06:25.280 --> 06:30.480
+connect securely and much more efficiently to the house that is being installed. Also
+
+06:30.480 --> 06:36.360
+the house doesn't have to contain any graphical dependencies effectively because all the rendering
+
+06:36.360 --> 06:42.440
+is happening on the client so the installation image could be much more and also the installation
+
+06:42.440 --> 06:47.280
+time resource requirements could be much, much smaller. That could be an issue for stuff
+
+06:47.280 --> 06:54.160
+like Raspberry Pis or some IOT SBCs which are perfectly fine for the tasks you will
+
+06:54.160 --> 06:59.560
+be using them but if you try to do a graphical installation on them, bearing like possible
+
+06:59.560 --> 07:04.600
+issues with drivers, it might need much more resources to just install to bring up the
+
+07:04.600 --> 07:14.040
+graphical interface than it will be using for its lifetime of doing some useful work.
+
+07:14.040 --> 07:20.840
+So let's talk a bit about the technical details of the tools that we are using to build the
+
+07:20.840 --> 07:28.000
+UI for the Fedora installer right now. So this is the overall architecture. The install
+
+07:28.000 --> 07:36.080
+is already modular in that it has a Python backend which has a D-Bus interface. Then
+
+07:36.080 --> 07:43.960
+we are using Cockpit to provide a bridge between D-Bus and the web application which itself
+
+07:43.960 --> 07:52.560
+is then written with ReactJS for the logic and pattern fly for the WebUI widgets. The
+
+07:52.560 --> 07:59.720
+current Anaconda with the GTK3UI and even with the Kickstart support is actually using
+
+07:59.720 --> 08:05.920
+the same Python backend and even the GTK3UI already is communicating with the backend
+
+08:05.920 --> 08:13.160
+via D-Bus. So this makes it possible for us to right now work in parallel that we are
+
+08:13.160 --> 08:20.880
+building the WebUI next to these other UIs right now. Just instead of directly calling
+
+08:20.880 --> 08:30.560
+D-Bus you have pattern fly with JAX React talking via D-Bus calling D-Bus calls from
+
+08:30.560 --> 08:37.480
+the backend. This is very similar to Cockpit plugins in general. Usually you have the networking
+
+08:37.480 --> 08:43.040
+screen in Cockpit for example and what it does, it's talking to network manager via
+
+08:43.040 --> 08:49.120
+this bridge. It's doing D-Bus calls from JVAS. It's basically the idea of Cockpit and we
+
+08:49.120 --> 09:01.360
+are using this for our project. I've already mentioned this. It's not about another UI
+
+09:01.360 --> 09:07.680
+that you can remotely access while keeping the current graphical interface next to this.
+
+09:07.680 --> 09:13.960
+Eventually once we cover all the necessary functionality for the given project or product
+
+09:13.960 --> 09:18.320
+it should replace the current graphical interface. But right now it's being developed next to
+
+09:18.320 --> 09:24.480
+it and thanks to the modular backend text to the D-Bus interface it's not that hard
+
+09:24.480 --> 09:35.800
+to do it. Also one more thing that we found very useful is the Cockpit test framework.
+
+09:35.800 --> 09:41.080
+This is addressing the issue I've mentioned previously about no unit tests for the graphical
+
+09:41.080 --> 09:46.440
+interface. This is something that has been developed for the Cockpit project itself which
+
+09:46.440 --> 09:53.960
+directly maintains a lot of the screens you will see when you install Fedora or CentOS
+
+09:53.960 --> 10:00.440
+or some such distribution and enable Cockpit. But there are also many community maintained
+
+10:00.440 --> 10:07.560
+outside of the main community developing Cockpit, many other Cockpit plugins. So that is a very
+
+10:07.560 --> 10:13.080
+comprehensive and I would say very nice test suite which makes it possible to essentially
+
+10:13.080 --> 10:18.560
+write Python unit tests that then manipulate your Web UI or Cockpit plugin, in our case
+
+10:18.560 --> 10:29.720
+the Anaconda Fedora installer interface. And it also supports pixel testing which we are
+
+10:29.720 --> 10:35.960
+thinking this is nice but then we actually thought about the other issue that most web
+
+10:35.960 --> 10:42.560
+applications have and that's dependencies. There are dependencies being pulled from NPM
+
+10:42.560 --> 10:50.520
+for pattern fly for ReactJS and other libraries you might need to use and the problem with
+
+10:50.520 --> 10:56.440
+this is that the release cadence is pretty fast. There are new versions of pattern fly
+
+10:56.440 --> 11:03.880
+all the time and it would be very easy to get left behind basically to have very big
+
+11:03.880 --> 11:09.640
+difference in using some old version and being much harder to upgrade later on. And pixel
+
+11:09.640 --> 11:15.560
+tests make it much, much more easy to update this automatically or almost automatically
+
+11:15.560 --> 11:21.160
+because you can effectively compare if you see any graphical changes from the old to
+
+11:21.160 --> 11:27.120
+the new version. Same thing for any changes for the Web UI, you can easily see what the
+
+11:27.120 --> 11:32.320
+new state looks like. If you see some changes that are expected, if you change some label
+
+11:32.320 --> 11:38.680
+or add a button or if the layout is totally wrong. So, yeah, this is something I can recommend
+
+11:38.680 --> 11:43.200
+for web applications. It seems to be very, not something we expected to be using but
+
+11:43.200 --> 11:51.560
+it helps a lot. And it's, yeah, it's a part of the cockpit test tooling. So, okay, so
+
+11:51.560 --> 12:01.440
+how far we got? This all started about a year ago in earnest. And right now we have very
+
+12:01.440 --> 12:09.280
+simple but end-to-end install images that can be used to demonstrate the Web UI. And
+
+12:09.280 --> 12:17.080
+actually you will end up with a functional, minimal but functional system. It's possible
+
+12:17.080 --> 12:22.520
+to select an installation language. We already support geolocation like with the current
+
+12:22.520 --> 12:29.720
+GTK3 interface. It's possible to select the disks. It's possible to dynamically add disks.
+
+12:29.720 --> 12:35.640
+And this is kind of a demonstration of some dynamic behavior we wanted to have there.
+
+12:35.640 --> 12:41.360
+That's it right now for storage. Storage, I'll talk a bit more about it later on. But
+
+12:41.360 --> 12:49.400
+that's one of our main focus points because, like, that's like 90% of every install. We
+
+12:49.400 --> 12:55.400
+have a review screen where you can see the settings. And where you can, where you are
+
+12:55.400 --> 13:00.200
+so told that, yeah, you shouldn't really run it right now on any production system that
+
+13:00.200 --> 13:04.640
+has any useful data because you select the disks and we will use them. Like, we will
+
+13:04.640 --> 13:09.880
+wipe them and use them. So that's the minimal storage we have been able to come up with
+
+13:09.880 --> 13:15.960
+for now until we have some more comprehensive screens where you can actually, like, keep
+
+13:15.960 --> 13:22.080
+partitions and stuff like that. And the last one is just a progress screen where you can
+
+13:22.080 --> 13:26.360
+see the installation happening, where you can see some errors if there are any, where
+
+13:26.360 --> 13:33.680
+you can kind of guess how long it will take because that's not always easy to tell the
+
+13:33.680 --> 13:42.880
+user correctly. So to have at least some pictures in the presentation. So this is in general
+
+13:42.880 --> 13:50.800
+how it looks like. If you've seen the current Anaconda, this is quite a departure from it.
+
+13:50.800 --> 14:01.680
+And he decided to have flexible design layout. And if you've seen some pattern file applications,
+
+14:01.680 --> 14:08.000
+this should look pretty familiar. And that's one of the aims as well. Like, people who
+
+14:08.000 --> 14:13.360
+are, who use cockpit or some other applications using this toolkit could be quite more familiar
+
+14:13.360 --> 14:23.680
+than seeing some a bit outdated GTK3 interface in some unfamiliar theming. So as you can
+
+14:23.680 --> 14:29.960
+see, it's pretty similar. This is the installation destination screen. We already have some built-in
+
+14:29.960 --> 14:35.440
+help support. Like, you can help, you can click on some of the information links. You
+
+14:35.440 --> 14:43.320
+will get a dock with help content. This is demonstrating just some simple disk selection.
+
+14:43.320 --> 14:50.120
+You can plug in a USB drive already to add more disks. We expect this to grow in functionality
+
+14:50.120 --> 14:57.680
+quite a lot for stuff like network attached storage and more complex disk layouts. And
+
+14:57.680 --> 15:03.840
+this is the review screen. Right now it looks very similar, but again we expect this to
+
+15:03.840 --> 15:10.120
+grow quite a bit because as we add more screens, this should directly proliferate here. And
+
+15:10.120 --> 15:16.840
+we are looking into ways how to, for example, visualize more complex storage layouts because
+
+15:16.840 --> 15:23.240
+that will be challenging, but it was one of the pain points we got from users so far.
+
+15:23.240 --> 15:28.880
+Yeah, this is the progress. This is basically the last thing you will see. Then it will
+
+15:28.880 --> 15:33.800
+just tell you, yeah, you are done. So that's it, like, four screens right now. But it's
+
+15:33.800 --> 15:42.800
+already producing functional systems. One other outcome of this project so far is a
+
+15:42.800 --> 15:49.880
+preview image. Sorry for the long links, but essentially the main information. If you go
+
+15:49.880 --> 15:53.660
+to Fedra magazine and type in Anaconda, you will get a bunch of articles about the Web
+
+15:53.660 --> 15:59.280
+UI because that's what we are writing about Anaconda right now. So there is a preview
+
+15:59.280 --> 16:06.520
+image. The idea is that we will refresh it once every time we add something visible.
+
+16:06.520 --> 16:11.920
+Right now it's about like a month old, but I would expect some new features landing in
+
+16:11.920 --> 16:18.840
+the next few weeks. So this will be updated regularly. And that's the best you can use
+
+16:18.840 --> 16:24.400
+right now to have a feel of how the Web UI looks like. It's a self-contained image that
+
+16:24.400 --> 16:32.880
+effectively dumps F37 user space into the machine that you run it on. And please don't
+
+16:32.880 --> 16:40.840
+run it on anything production resembling. So we found some challenges, like, working
+
+16:40.840 --> 16:48.840
+on this. Yeah, we have a huge amount of functionality. The project is all the current UI has been
+
+16:48.840 --> 16:55.080
+used for like nine years. So we are really trying to kind of check what is being used
+
+16:55.080 --> 17:03.200
+and what not. So we don't go insane implementing it all. So that's ongoing. We try to identify
+
+17:03.200 --> 17:11.880
+and avoid some of the UX problems we have right now. Also, and keeping things consistent.
+
+17:11.880 --> 17:18.760
+Like, that's one nice thing about pattern fly. There are pretty nice UX guidelines that
+
+17:18.760 --> 17:31.400
+you can apply on many, many things. And that helps to keep the UI consistent. Yeah. Another
+
+17:31.400 --> 17:36.760
+issue is like how to run this locally. That's not that easy, actually, because, like, the
+
+17:36.760 --> 17:45.160
+Web engines are pretty monolithic, pretty big. And they come with some mainly RAM requirements,
+
+17:45.160 --> 17:50.120
+not to mention the image size requirements. And there are actually not that many usable
+
+17:50.120 --> 17:57.040
+Web engines on federal. It's effectively GDK, WebKit, or Firefox. And each one of them has
+
+17:57.040 --> 18:02.900
+some pluses, some minuses. So right now we are still comparing these two and deciding
+
+18:02.900 --> 18:09.440
+which one to use. For remote running, that's kind of not our problem that much. That's
+
+18:09.440 --> 18:16.240
+another issue with pattern fly. Like, if we see some corruption, some, like, layout issues,
+
+18:16.240 --> 18:22.760
+it quite possibly would affect other pattern fly users. And you might not need to do something
+
+18:22.760 --> 18:32.520
+about it unless, unlike if we used some very, very custom Web UI stuff. For the remote running,
+
+18:32.520 --> 18:40.840
+another issue is how you actually authenticate the thing, how you encrypt in a useful manner.
+
+18:40.840 --> 18:47.520
+So this is still ongoing how we solve that. It might not be pretty, but one way is to
+
+18:47.520 --> 18:54.080
+show some certificate fingerprints to the user to show some generated passwords or stuff
+
+18:54.080 --> 19:01.120
+like that. Another option is to use custom images. That might be perfect for some cases,
+
+19:01.120 --> 19:06.840
+to bother some for others. So we will see right now. The Web UI image you can use right
+
+19:06.840 --> 19:13.560
+now is, this is disabled right now, but if you use the inst.WebUI.remote option, you
+
+19:13.560 --> 19:18.080
+can actually access the Web UI remotely. But you need to pass it because it's, like, totally
+
+19:18.080 --> 19:29.800
+unsecured right now. These mechanisms are not yet in place. So, okay, this is really
+
+19:29.800 --> 19:34.680
+in the planning stages and we don't have much time to talk about it. But the main focus
+
+19:34.680 --> 19:40.800
+is definitely storage. This will be big. We plan to have something that you can manually
+
+19:40.800 --> 19:48.080
+do, something that guides you. And, yeah, it should start landing in the next few preview
+
+19:48.080 --> 19:55.120
+image releases, definitely. And, yeah, more screens, definitely. The priority is driven
+
+19:55.120 --> 20:02.480
+by the next, the first image we could reply, basically. So right now there is, like, some
+
+20:02.480 --> 20:08.840
+date and time work already running. We have some mockups for user and root password configuration.
+
+20:08.840 --> 20:13.920
+We need to add the error reporting, definitely, and other stuff. Definitely add-ons. Already
+
+20:13.920 --> 20:23.320
+the UI supports them. We need to keep it. And, yeah, I think this is actually, yeah.
+
+20:23.320 --> 20:30.880
+So this is, uh-huh. So this is the, this is the last slide. And it's, I think we can start
+
+20:30.880 --> 20:37.200
+with the questions just quickly. Like, storage is a big focus. This is a way you can provide
+
+20:37.200 --> 20:43.520
+feedback to us about it. And let's start with the questions. Thanks.
+
+20:43.520 --> 20:54.240
+Hey, Martin. I don't have a question per se. Oh, yeah. I really appreciate the stuff
+
+20:54.240 --> 21:00.320
+that you folks are doing. I tried doing this myself by wrapping Kickstart with Vue chairs,
+
+21:00.320 --> 21:05.040
+Flask. And I thought that it would be really feasible, really easy thing to do. But when
+
+21:05.040 --> 21:09.640
+I started implementing it, I came to know the kind of intricacies that I was to take
+
+21:09.640 --> 21:16.640
+care of. So I'm totally looking forward to what you folks end up doing. All the best.
+
+21:16.640 --> 21:18.640
+Thanks.
+
+21:18.640 --> 21:27.120
+Okay. Oh, Anakana has now just nice features as escaping to a terminal, for instance, to
+
+21:27.120 --> 21:33.560
+bypass things Anakana can't do at the moment. Do you retain the two? Or plan to do?
+
+21:33.560 --> 21:40.880
+So the current interface, as well as if you can access the machine locally, it should
+
+21:40.880 --> 21:46.000
+still be possible to do anything in the terminal that you can do today. And you should be also
+
+21:46.000 --> 21:50.200
+able to use the existing text interface. We won't be changing that.
+
+21:50.200 --> 21:56.440
+Yes. But you can escape the web interface, get a terminal, or what is the way to do that?
+
+21:56.440 --> 22:01.640
+This is not yet settled. We will include it. But the cockpit project has built-in terminal
+
+22:01.640 --> 22:07.160
+emulators. I could imagine this to be included in the web UI. So we might be able to include
+
+22:07.160 --> 22:09.040
+it in our web UI as well.
+
+22:09.040 --> 22:12.440
+Would be nice if you did.
+
+22:12.440 --> 22:22.720
+Thanks for the feedback.
+
+22:22.720 --> 22:27.000
+Thank you for the talk. I think this is very interesting. I think it's a good idea. Certainly
+
+22:27.000 --> 22:32.040
+convenient to set up headless machines this way. But at the same time, I was wondering,
+
+22:32.040 --> 22:38.200
+I think it was Alex Larson who wrote this Broadway back-end for GTK. So basically you
+
+22:38.200 --> 22:45.560
+could use GTK and it would output to what goes into a web browser. And it just comes
+
+22:45.560 --> 22:51.480
+to my mind, why not use something like that instead? Because I think that if you, we want
+
+22:51.480 --> 22:56.280
+to continue to invest in GTK and technical technologies using GTK because we need GTK
+
+22:56.280 --> 23:02.400
+for Fedora, we don't really need web for sure. And so if we can end up using GTK and investing
+
+23:02.400 --> 23:06.760
+more resources there, maybe this makes it just overall better for the whole health of
+
+23:06.760 --> 23:10.400
+the ecosystem. And we get our web UI too.
+
+23:10.400 --> 23:11.400
+Thank you.
+
+23:11.400 --> 23:16.880
+I must say I don't have really very recent information about it. But we looked at it
+
+23:16.880 --> 23:23.440
+a while ago basically at the Broadway technology. It definitely looked interesting, but it looked
+
+23:23.440 --> 23:28.560
+more like a demo back then. It could have progressed since then. But I think there have
+
+23:28.560 --> 23:36.000
+been some issues like with authentication or possibly performance. So yeah, that's a
+
+23:36.000 --> 23:38.880
+good point, but I don't have like latest information right now for it.
+
+23:38.880 --> 23:39.880
+I would check.
+
+23:39.880 --> 23:40.880
+Okay.
+
+23:40.880 --> 23:46.880
+Then you can have all your, you can have the GTK and you have your web, everyone wins with
+
+23:46.880 --> 23:47.880
+one code base.
+
+23:47.880 --> 23:48.880
+Yeah.
+
+23:48.880 --> 23:49.880
+Thank you.
+
+23:49.880 --> 24:12.400
+Well, just another question. Before Fedora was 37, we had a discussion about soft rate
+
+24:12.400 --> 24:18.680
+installation using the BIOS boot machines and we found a good solution. But and I couldn't
+
+24:18.680 --> 24:25.760
+ask currently a bit strange installing software rate on EFI systems because we don't use an
+
+24:25.760 --> 24:31.200
+EFI system partition, but a rate partition. Do we have a chance to get that fixed too?
+
+24:31.200 --> 24:37.800
+I'm not sure. Like I, like it's not that many people actually in the, in the installer team
+
+24:37.800 --> 24:43.760
+and I have been very much concerned and concentrated on the, on the web UI right now for the couple,
+
+24:43.760 --> 24:47.800
+last couple months. But definitely if you reach out to us, like we have a mailing list
+
+24:47.800 --> 24:53.360
+or we have a metrics channel, I think right now already for Fedora. So please reach out
+
+24:53.360 --> 24:55.600
+using some of these channels and we can look at it.
+
+24:55.600 --> 24:58.600
+Yes. Oh, you do.
+
+24:58.600 --> 25:21.640
+Is it, is it possible to provision the machine from the cockpit because you can already create
+
+25:21.640 --> 25:27.080
+in cockpit virtual machines. So it would be nice to be integrated in one place in one
+
+25:27.080 --> 25:29.800
+console. Is it possible or do you have such a plan?
+
+25:29.800 --> 25:35.160
+I think it's a, I don't think we have like integration for it right now, but that's an
+
+25:35.160 --> 25:39.880
+interesting idea. And like we have been thinking for stuff like satellite and some other provisioning
+
+25:39.880 --> 25:45.040
+mechanisms that it would make sense to more closely integrate with the install with the
+
+25:45.040 --> 25:51.160
+web UI because you could avoid the certificate and authentication issues if you could, for
+
+25:51.160 --> 25:55.040
+example, inject something into the image. So that could, that would work like you could
+
+25:55.040 --> 26:01.480
+have like create machine or provision bare metal or whatever. And it could like include
+
+26:01.480 --> 26:07.800
+some like trust chain, I think there's whatever into the installation around and then you
+
+26:07.800 --> 26:11.680
+could then directly connect to the, to the machine. Yeah. We have been thinking about
+
+26:11.680 --> 26:16.840
+it, but we haven't yet implemented something like this, but it seems like obvious choice
+
+26:16.840 --> 26:21.920
+for some mechanisms and we have integrating it like this with cockpit machines. That could
+
+26:21.920 --> 26:23.920
+be a nice idea. So thanks for the suggestion.
+
+26:23.920 --> 26:24.920
+Okay. Thanks.
+
+26:24.920 --> 26:25.920
+We're at a time.
+
+26:25.920 --> 26:26.920
+Okay.
+
+26:26.920 --> 26:27.920
+Thank you, Mark.
+
+26:27.920 --> 26:28.920
+Thanks a lot.
+
+26:28.920 --> 26:34.920
+Okay. Thanks a lot.

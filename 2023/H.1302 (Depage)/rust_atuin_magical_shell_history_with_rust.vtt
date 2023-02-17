@@ -1,0 +1,664 @@
+WEBVTT
+
+00:00.000 --> 00:11.900
+Hey, everyone, and welcome to my talk, keeping history in sync with turtles and magic or
+
+00:11.900 --> 00:16.960
+the same shell history everywhere. I'm going to be talking to you today about a project
+
+00:16.960 --> 00:23.560
+I've been building on and off for the last two years or so. To get started, who am I?
+
+00:23.560 --> 00:29.080
+My name is Ellie and I'm the lead infrastructure engineer at a company called PostHog. When
+
+00:29.080 --> 00:33.400
+I'm not writing software for work, I try and maintain a couple of side projects in my free
+
+00:33.400 --> 00:38.040
+time. When I don't have the energy for that, I'm normally exploring outdoors, which, as
+
+00:38.040 --> 00:43.920
+you can probably see, is usually on a motorbike for me. To dive into a tune, first of all,
+
+00:43.920 --> 00:49.600
+I'm going to start with the name. Originally, it was called shink for shell and sync, but
+
+00:49.600 --> 00:55.240
+I couldn't really say that out loud without cringing. I looked at something new. I've
+
+00:55.240 --> 01:00.520
+been a fan of terry pratchett's disc world books for a really long time. For those who
+
+01:00.520 --> 01:06.200
+are unfamiliar, the premise there is that the world is a disc and it rests on the shoulders
+
+01:06.200 --> 01:11.120
+of four giant elephants stood on the shell of a space turtle called the great attun,
+
+01:11.120 --> 01:16.240
+which I'm probably mispronouncing. I thought it would be a bit pretentious to include the
+
+01:16.240 --> 01:21.000
+words the great in my project name and putting an apostrophe in a binary is probably not
+
+01:21.000 --> 01:28.520
+a good idea. I ended up with the name attun. A little bit more specifically, attun was
+
+01:28.520 --> 01:34.520
+made to synchronize shell history between multiple computers. I had the problem that
+
+01:34.520 --> 01:39.080
+I would be switching between a whole bunch of laptops, I would be remoting into various
+
+01:39.080 --> 01:45.160
+different boxes and trying to find one command that I ran a few days previously on whichever
+
+01:45.160 --> 01:50.680
+computer it was was pretty difficult. So I wanted it all in the same place. The first
+
+01:50.680 --> 01:57.000
+thing I did was replace the normal ZSH history, bash history or whatever fish uses, I don't
+
+01:57.000 --> 02:03.600
+really remember, with a SQLite database. We could then have some functions to import your
+
+02:03.600 --> 02:09.440
+normal text history into the database. Because databases are a little bit more flexible than
+
+02:09.440 --> 02:15.080
+flat text files, we could also include some additional context. In the case of attun,
+
+02:15.080 --> 02:21.320
+this is context such as how long a command took to run, whether or not it was successful,
+
+02:21.320 --> 02:27.360
+which directory it was ran in, as well as the shell session. So the way we do this is
+
+02:27.360 --> 02:33.960
+we plug into your shell. If your shell supports it, it's via the normal shell hooks, pre-command
+
+02:33.960 --> 02:39.120
+or pre-exact and post-command, I think they're called. But in the case of bash, which I do
+
+02:39.120 --> 02:48.360
+not have positive feelings towards, we do a really horrible pack with the prompt. So,
+
+02:48.360 --> 02:53.880
+hopefully you can see the GIF on the right. On top of this database, we also built a search
+
+02:53.880 --> 03:00.960
+TUI. This is bound by default to control R and the up arrow, which is a little bit contentious
+
+03:00.960 --> 03:08.320
+for some people, so you can remap that, too. Search UI has three different search modes.
+
+03:08.320 --> 03:14.800
+By default, one is a fuzzy search inspired by FZF, the other is a prefix search, which
+
+03:14.800 --> 03:19.720
+is pretty self-explanatory and a substring search, which same thing, you should know
+
+03:19.720 --> 03:26.200
+what that means. We also have several different filter modes. So, attun allows you to search
+
+03:26.200 --> 03:31.040
+your shell history for the current session, for the current directory, for the current
+
+03:31.040 --> 03:36.000
+machine or just all of your shell history for every machine ever. That you've connected,
+
+03:36.000 --> 03:41.280
+anyway. It would be cool if it could have otherwise. A little bit more on that extra
+
+03:41.280 --> 03:46.360
+context. Attun has a stats command which kind of analyzes all of your history and will show
+
+03:46.360 --> 03:50.280
+you things like the most used command, which for me is LS. I didn't realise I ran that
+
+03:50.280 --> 03:57.600
+so much. How many commands you have ran, as well as how many unique commands you've ran.
+
+03:57.600 --> 04:01.480
+We're definitely not making the most of all the data available, and there's a lot more
+
+04:01.480 --> 04:07.000
+sort of cool analysis we could do. You can also get the stats for a specific day or week
+
+04:07.000 --> 04:14.000
+or month or whatever. A little bit more on the search. You don't have to use the search
+
+04:14.000 --> 04:21.960
+UI. We also have a command line search interface. This is kind of useful if you have a specific
+
+04:21.960 --> 04:27.080
+command in mind. Maybe you know roughly when it was or roughly what it looks like. It's
+
+04:27.080 --> 04:31.800
+also useful to integrate with other tools. Someone on the Discord told me that apparently
+
+04:31.800 --> 04:38.560
+they've used this to integrate directly with FZF instead, which is pretty cool. You can
+
+04:38.560 --> 04:44.600
+see here that I'm searching for all successfully ran commands after yesterday at 3pm that start
+
+04:44.600 --> 04:51.960
+with Git. Obviously, I did not make these slides today. The time specifier supports
+
+04:51.960 --> 05:00.280
+like a human way of expressing time, and the command search supports regular expressions.
+
+05:00.280 --> 05:07.000
+A little bit more about the Syncs ever. It's a kind of pretty boring HTTP API that shares
+
+05:07.000 --> 05:14.040
+blobs. It has no idea what the blobs actually contain. It was originally written with warp,
+
+05:14.040 --> 05:21.400
+which I found to be very fun. Kind of nice mental exercise, I guess. We ended up rewriting
+
+05:21.400 --> 05:27.280
+with Axum because while warp was fun, it was difficult for contributors to figure out how
+
+05:27.280 --> 05:34.160
+to use, and it also contributed pretty massively to a high compile time. And Axum has just
+
+05:34.160 --> 05:40.560
+served the problem. The server is completely self-hostable. Anyone with it installed can
+
+05:40.560 --> 05:45.600
+just run a 2N server and have a running server. We also have docker images and Kubernetes
+
+05:45.600 --> 05:51.520
+manifests for anyone that wants to get a little bit more fancy. A little bit more on the Sync
+
+05:51.520 --> 05:56.220
+is that it's not quite realtime yet. While I would love it if it was, it currently syncs
+
+05:56.220 --> 06:02.160
+an interval of 15 minutes, and you can reduce this down to zero, which basically means it
+
+06:02.160 --> 06:09.260
+will sync after every single command. If you know fancy running your own infrastructure,
+
+06:09.260 --> 06:14.200
+there's a public deployment of a 2N that I ran. Currently, it's got about 11 million
+
+06:14.200 --> 06:19.720
+lines of shell history on it. There's about 300 active users. It's all running on one
+
+06:19.720 --> 06:24.920
+dedicated Hetzena box, and it handles way more requests than I thought it ever would.
+
+06:24.920 --> 06:29.760
+I'd also like to thank the GitHub sponsors I got, which I didn't really expect anyone
+
+06:29.760 --> 06:36.960
+to contribute, but they cover the server bills entirely now, which is a really nice feeling.
+
+06:36.960 --> 06:40.880
+A little bit more about privacy. I imagine people here probably feel more strongly about
+
+06:40.880 --> 06:46.880
+that than others. Everything is fully end-to-end encrypted in the Sync, because I really don't
+
+06:46.880 --> 06:54.200
+want the responsibility of people accidentally pasted into a shell API keys on my machine.
+
+06:54.200 --> 06:59.560
+We use libsodium secret box, because I'm not at all a cryptographer, and it's more difficult
+
+06:59.560 --> 07:05.640
+to mess up than most other things. Finding a reliably maintained library for that was
+
+07:05.640 --> 07:13.000
+a bit tricky. The original bindings we used were not maintained beyond security patches.
+
+07:13.000 --> 07:17.720
+We recently switched to Rust crypto, if I remember rightly. All of the encryption keys
+
+07:17.720 --> 07:22.160
+get automatically generated when you log in, and you have to keep track of them yourself.
+
+07:22.160 --> 07:27.160
+If you lose your keys, there's nothing I can do. Your data is gone.
+
+07:27.160 --> 07:33.560
+So why Rust? This is the Rust dev room, after all. A token runs twice for every shell command
+
+07:33.560 --> 07:38.800
+you run. It runs just before and just afterwards. It lets us get the timing data and everything
+
+07:38.800 --> 07:45.320
+else. If we had latency there for an interpreter to start up or a run time to do whatever it
+
+07:45.320 --> 07:51.400
+does, the experience would not be great. If you added 50 to 100 milliseconds to every
+
+07:51.400 --> 07:58.120
+command you ran, people would rightfully complain. So Rust fits the bill very nicely there. It
+
+07:58.120 --> 08:04.800
+also has to be reliable, because if we're dropping shell history randomly, then it's
+
+08:04.800 --> 08:10.480
+not at all serving the purpose it was written for. Having a static binary to deploy is also
+
+08:10.480 --> 08:16.320
+really nice. No one has to make sure they have Rust 3.7, not pointing any languages in
+
+08:16.320 --> 08:21.280
+particular, installed on their system with the right versions of various libraries installed
+
+08:21.280 --> 08:25.400
+or anything like that. And it's also safe. So, you know, I don't have to worry about
+
+08:25.400 --> 08:31.220
+any memory issues or anything like that. The other factor which I think for a side project
+
+08:31.220 --> 08:38.160
+is especially important is that Rust is fun. When I started this project, I was also considering
+
+08:38.160 --> 08:44.000
+using Go, and I was also writing Go for my day job. I didn't really fancy the idea of
+
+08:44.000 --> 08:49.920
+getting home after work, writing Go all day, and then writing some more Go. So Rust solved
+
+08:49.920 --> 08:53.880
+that very nicely, and I think the main reason I actually got around to finishing this is
+
+08:53.880 --> 08:59.100
+because I was enjoying writing it. Additionally, the Rust community is fantastic. Every time
+
+08:59.100 --> 09:03.560
+I've asked for help, people have been really helpful. Everything I wanted has been available,
+
+09:03.560 --> 09:06.960
+and they're just generally very welcoming and accepting, especially compared to some
+
+09:06.960 --> 09:13.360
+other tech communities. So I actually have one other service, and I'm glad most of the
+
+09:13.360 --> 09:17.800
+previous talks have discussed Python, because now I don't feel as weird for mentioning it
+
+09:17.800 --> 09:23.360
+in my presentation too. I have another service called rinse wind, a bit of a naming pattern
+
+09:23.360 --> 09:28.680
+there, if anyone is familiar with it. What this basically does is it picks into the database
+
+09:28.680 --> 09:33.800
+and generates graphs like this, which are heavily inspired by the GitHub commit activity
+
+09:33.800 --> 09:40.320
+chart but for your shell history. It's currently closed source for no real reason other than
+
+09:40.320 --> 09:46.320
+it's a really horrible hack that I don't want to package nicely for anyone. It mostly uses
+
+09:46.320 --> 09:52.360
+NumPy and OpenCV and a few other things. It's also completely opt-in, so you don't get this
+
+09:52.360 --> 09:56.280
+by default. If you don't want any proprietary code touching your data, you don't have to.
+
+09:56.280 --> 10:04.280
+It's cool. Just with one command, you enable this. On the open source side of things, this
+
+10:04.280 --> 10:08.360
+is the first open source project I've released that people have actually been interested
+
+10:08.360 --> 10:14.000
+in. I made it just for myself and stuck it on my GitHub, and it ended up being quite
+
+10:14.000 --> 10:19.360
+well received by a whole bunch of people. We ended up in a lot of package repositories.
+
+10:19.360 --> 10:25.360
+I think off the top of my head, it's the Arch Linux community repo, Homebrew, Alpine Linux,
+
+10:25.360 --> 10:30.240
+and some Nix. I'm not entirely sure how Nix works, but one of the Nix repositories. There's
+
+10:30.240 --> 10:36.960
+probably a whole bunch more that I'm not aware of. We've actually got 63 contributors as
+
+10:36.960 --> 10:42.760
+of today. Some of them are returning regular contributors, which is very nice that people
+
+10:42.760 --> 10:47.480
+want to regularly give time to my project. Some of them are just sort of drive-by. They
+
+10:47.480 --> 10:51.320
+found something that annoyed them or a bug they wanted to fix or something like that.
+
+10:51.320 --> 10:56.240
+They contributed, which was lovely. I'd also like to especially thank Conrad. He's much
+
+10:56.240 --> 11:01.000
+more involved in the Rust community than I am and also a very long-term friend of mine.
+
+11:01.000 --> 11:05.520
+He helps me maintain a 2in, and when I was first starting and not so good at Rust, he
+
+11:05.520 --> 11:13.800
+did a great job of tidying things up a bit. In terms of the future, right now, a 2in has
+
+11:13.800 --> 11:19.000
+a bit of a flaw in that you can't actually delete history once it's been synced. This
+
+11:19.000 --> 11:23.560
+is mostly because the sync is pretty consistent, and every machine you have is a potential
+
+11:23.560 --> 11:28.440
+writer, so ensuring that you delete something and it stays deleted is actually really difficult.
+
+11:28.440 --> 11:33.560
+I've currently got a solution to it which works on my laptop. I just need to make sure
+
+11:33.560 --> 11:40.040
+it works on everyone else's too. I'd also like to sort out Bash, because pretty much
+
+11:40.040 --> 11:45.720
+all the complaints we get about shell integrations are from people running Bash, and it's very
+
+11:45.720 --> 11:49.720
+frustrating. I don't actually use Bash, and I hate having a setup on my machine just for
+
+11:49.720 --> 11:56.880
+that. I'd also like to show some more information in the TUI. I don't know if you saw very much
+
+11:56.880 --> 12:01.280
+on the GIF earlier, but it basically just shows what's useful for search results. I
+
+12:01.280 --> 12:05.400
+would love it if there was another tab where you could also see sort of statistics about
+
+12:05.400 --> 12:10.400
+a command that's run, maybe how often it succeeds versus fails. You could get some nice stats
+
+12:10.400 --> 12:15.760
+about make-build that way, and that sort of thing. I'd like to improve the search a little
+
+12:15.760 --> 12:21.840
+bit too, because right now it's good enough, and I think it could always be improved. I've
+
+12:21.840 --> 12:26.800
+been meaning to explore some of the full-text search modules that SQLite has, or maybe something
+
+12:26.800 --> 12:33.280
+like TanTV or one of the other search libraries in Rust. Otherwise, I'd really like to improve
+
+12:33.280 --> 12:39.800
+the sorting. Right now, we sort chronologically, which is a pretty safe default. I'm not going
+
+12:39.800 --> 12:44.080
+to turn this into a horrible Twitter timeline type thing, but it would be nice if we could
+
+12:44.080 --> 12:49.320
+sort based on the context we have. Maybe every day at 9am, you CD into your repo and you
+
+12:49.320 --> 12:54.240
+run Git pull. By default, it would be nice if you press Ctrl-R and Git pull was already
+
+12:54.240 --> 12:58.040
+there at the time that you frequently run it. We've got all the data for that. It just
+
+12:58.040 --> 13:05.920
+needs to be plugged together. In the even further future, the number of people that have spoken
+
+13:05.920 --> 13:11.160
+to me about the fact that they have development API keys in their shell history, it would
+
+13:11.160 --> 13:15.080
+be nice if we could do something to get that out of the shell history and sync that alongside
+
+13:15.080 --> 13:21.880
+the data. Being able to bookmark commands is also something I would quite like to be
+
+13:21.880 --> 13:27.440
+able to do, because there's some longer commands I run frequently and search for frequently,
+
+13:27.440 --> 13:33.440
+having some sort of hotkey or alias would be really nice. Otherwise, I realised that
+
+13:33.440 --> 13:38.560
+a subset of a to-ends history could also be used as a runbook if you had a begin and an
+
+13:38.560 --> 13:45.760
+end marker to it and you could just replay some commands from your past. That's actually
+
+13:45.760 --> 13:50.400
+it. I went a bit faster than I was expecting, but if there are any questions, I'd be very
+
+13:50.400 --> 14:06.560
+happy to answer them.
+
+14:06.560 --> 14:12.520
+Can you search for things which have come after your most recent command frequently?
+
+14:12.520 --> 14:16.960
+I'm not sure what you mean, sorry. To take what you've just typed and see what you typically
+
+14:16.960 --> 14:21.880
+do next. So actually returning the command after the one you've searched for.
+
+14:21.880 --> 14:26.160
+That's one of the things I'd love to be able to do with the smarter ordering is know a
+
+14:26.160 --> 14:30.560
+sequence of commands that's commonly run and predict the next one based on history. If
+
+14:30.560 --> 14:32.760
+that's...
+
+14:32.760 --> 14:46.560
+So, I tried to install your tool, but I'm using Bash and I was wondering how far are
+
+14:46.560 --> 14:48.720
+you with fixing Bash?
+
+14:48.720 --> 14:52.800
+Bash generally works fine. It's usually the people that have a whole bunch of Bash plugins
+
+14:52.800 --> 14:59.280
+installed or have a weird Bash prompt that start to have some issues, but generally it's
+
+14:59.280 --> 15:06.280
+okay for most people.
+
+15:06.280 --> 15:19.120
+Does it handle having different cells in different computers? For example, if I'm using one computer
+
+15:19.120 --> 15:24.560
+Fizz and another CSA, does the thing work between those two?
+
+15:24.560 --> 15:31.120
+Yes. So we translate from whatever your shell uses natively into the format we use. So whichever
+
+15:31.120 --> 15:33.200
+shell you use on each machine doesn't matter.
+
+15:33.200 --> 15:34.200
+Okay. Thanks.
+
+15:34.200 --> 15:43.280
+I have a couple of questions. First, I didn't quite get how do you authenticate with the
+
+15:43.280 --> 15:47.120
+server by having a key?
+
+15:47.120 --> 15:51.840
+So the sort of user authentication is just a username and password, but then your actual
+
+15:51.840 --> 15:55.280
+data is encrypted by a key that's only held locally.
+
+15:55.280 --> 16:01.720
+All right. And second question, do you have a home AZSH plugin or have you considered
+
+16:01.720 --> 16:02.720
+one?
+
+16:02.720 --> 16:07.440
+So we have a ZSH plugin. You can use normal ZSH plugin managers to install and use it.
+
+16:07.440 --> 16:19.720
+All right. Thank you.
+
+16:19.720 --> 16:24.040
+Getting some exercise in.
+
+16:24.040 --> 16:31.120
+Is it possible to disable the history for a few commands and then re-enable it?
+
+16:31.120 --> 16:36.040
+Not currently. We have spoken about the idea of an incognito mode. If you prefix a command
+
+16:36.040 --> 16:39.400
+with a space, it won't be saved. It's kind of annoying if you have to run a lot of them
+
+16:39.400 --> 16:41.680
+in a way.
+
+16:41.680 --> 16:50.480
+We have some questions from the matrix. So Olivier says how would it interact with something
+
+16:50.480 --> 16:51.960
+like Starship?
+
+16:51.960 --> 16:57.400
+I actually use Starship and it doesn't interact with it at all in that it works completely
+
+16:57.400 --> 16:58.400
+fine.
+
+16:58.400 --> 17:04.200
+Awesome. And, yeah, that was the only question.
+
+17:04.200 --> 17:06.760
+Cool. Thank you.
+
+17:06.760 --> 17:13.360
+There's one at the front too.
+
+17:13.360 --> 17:18.720
+Two short questions. The first one is, since Besh is so probably, I'm using Besh. What's
+
+17:18.720 --> 17:20.120
+your favorite, Cheryl?
+
+17:20.120 --> 17:25.280
+I like ZSH, I think purely because I started using it maybe 10 years ago and have it so
+
+17:25.280 --> 17:31.640
+hard to break. I think if I was going to start again, I'd probably try fish a bit more.
+
+17:31.640 --> 17:35.800
+And a question about the time stamps. Are you using the client-side time stamps from the
+
+17:35.800 --> 17:37.320
+machines or server-side?
+
+17:37.320 --> 17:42.560
+We store client-side, the time stamp will be whatever your client is, but we use two
+
+17:42.560 --> 17:48.200
+time stamps to sync to work. We have the server local time stamp, which is only used for syncing,
+
+17:48.200 --> 17:53.280
+and the actual data is all encrypted and hidden, so it's whatever your client stores.
+
+17:53.280 --> 17:58.320
+Sometimes the local time stamp is important if you want to sync with the system, but sometimes
+
+17:58.320 --> 18:00.320
+also the whole time.
+
+18:00.320 --> 18:05.920
+The computers are out of sync. I had a bunch of issues of time stamps when I was first
+
+18:05.920 --> 18:11.800
+writing it, but we got it all sorted out in the end.
+
+18:11.800 --> 18:16.200
+Is there a limit to the length of command? For example, imagine a huge pipeline with
+
+18:16.200 --> 18:19.840
+the SQLs and JQ queries in there.
+
+18:19.840 --> 18:25.160
+Currently it's eight megabytes of whatever it is once it's been encrypted. It's only
+
+18:25.160 --> 18:28.200
+a server-side limit, and it's pretty arbitrary.
+
+18:28.200 --> 18:35.960
+Another question. Any plans for special handling for similar commands? Maybe fix syntax if
+
+18:35.960 --> 18:39.960
+you run similar commands in a row?
+
+18:39.960 --> 18:43.640
+I hadn't really thought of that before, but it might be worth considering.
+
+18:43.640 --> 18:51.280
+Sorry, I did have a few more questions from Matrix. I think my device is not synchronizing
+
+18:51.280 --> 18:54.840
+properly, but Andy sent me a screenshot.
+
+18:54.840 --> 18:59.560
+Does it integrate with regular history mechanisms provided by the shell, for example, excluding
+
+18:59.560 --> 19:06.200
+certain commands automatically like CDNLS, skipping storing in history by prefixing with
+
+19:06.200 --> 19:09.080
+white space for sensitive commands, etc.?
+
+19:09.080 --> 19:14.880
+The prefixing with white space is included. The default ignoring is not, but it doesn't
+
+19:14.880 --> 19:19.480
+actually replace the text file history either. You will still write to that if you ever decide
+
+19:19.480 --> 19:22.080
+you want to stop using it.
+
+19:22.080 --> 19:25.960
+Where would context-aware recommendations come from?
+
+19:25.960 --> 19:31.000
+If we have a history of your shell, we know the directories you're in, we know what commands
+
+19:31.000 --> 19:34.680
+you've been running at what times, so if we're predicting the next command that you want
+
+19:34.680 --> 19:37.840
+to run, we can use your own history.
+
+19:37.840 --> 19:40.120
+The question follows up with, it's end-to-end encrypted.
+
+19:40.120 --> 19:45.200
+It would all be from the client. The server's just a dumb blob store. It doesn't really
+
+19:45.200 --> 19:47.200
+know much of anything.
+
+19:47.200 --> 19:54.200
+Any more questions? I think that's it.
+
+19:54.200 --> 19:56.200
+Awesome. Thank you.
+
+19:56.200 --> 19:58.200
+Thank you.
+
+19:58.200 --> 20:17.200
+That was really well.

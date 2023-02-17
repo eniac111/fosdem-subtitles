@@ -1,0 +1,1652 @@
+1
+0:00:00.000 --> 0:00:07.060
+Hello, everyone.
+
+2
+0:00:07.060 --> 0:00:09.000
+Thanks for joining today.
+
+3
+0:00:09.000 --> 0:00:13.480
+Welcome to our talk on hole punching in the wild.
+
+4
+0:00:13.480 --> 0:00:19.020
+Sometimes I would say we're going to talk about the biggest hack of the Internet, which
+
+5
+0:00:19.020 --> 0:00:21.200
+I would refer to as hole punching.
+
+6
+0:00:21.200 --> 0:00:29.360
+We want to talk a bit about learnings from doing hole punching on larger networks.
+
+7
+0:00:29.360 --> 0:00:34.060
+Some might remember me from last year in Fosstem where I introduced our way of doing hole
+
+8
+0:00:34.060 --> 0:00:42.160
+punching and today we're coming here with a bunch of data.
+
+9
+0:00:42.160 --> 0:00:43.160
+So who are we?
+
+10
+0:00:43.160 --> 0:00:45.120
+Dennis, do you want to introduce yourself?
+
+11
+0:00:45.120 --> 0:00:46.120
+Yeah, okay.
+
+12
+0:00:46.120 --> 0:00:47.120
+My name is Dennis.
+
+13
+0:00:47.120 --> 0:00:52.280
+I'm working at ProcoLab as a research engineer at a team called ProbLab and I'm mainly focusing
+
+14
+0:00:52.280 --> 0:00:59.120
+on network measurements and proco-optimizations that come out of these measurements and, yeah,
+
+15
+0:00:59.120 --> 0:01:03.360
+I was working with Max on this hole punching campaign.
+
+16
+0:01:03.360 --> 0:01:04.360
+Very cool.
+
+17
+0:01:04.360 --> 0:01:08.160
+And Max, again, software engineer.
+
+18
+0:01:08.160 --> 0:01:11.840
+You can find us anywhere there online if you want.
+
+19
+0:01:11.840 --> 0:01:16.920
+Yeah, happy to communicate online further after the talk and we're also around at the
+
+20
+0:01:16.920 --> 0:01:17.920
+venue.
+
+21
+0:01:17.920 --> 0:01:18.920
+Wonderful.
+
+22
+0:01:18.920 --> 0:01:25.080
+Okay, what were we doing today?
+
+23
+0:01:25.080 --> 0:01:31.360
+I want to do a very quick intro to LIP2P, a peer-to-peer networking library, but then
+
+24
+0:01:31.360 --> 0:01:38.360
+dive right into the problem of why firewalls and nats are rather hard for peer-to-peer
+
+25
+0:01:38.360 --> 0:01:39.920
+networking.
+
+26
+0:01:39.920 --> 0:01:46.520
+The solution, which in some cases is hole punching, then how LIP2P does all of that
+
+27
+0:01:46.520 --> 0:01:53.240
+and then we have been running a large measurement campaign on the internet in the wild collecting
+
+28
+0:01:53.240 --> 0:01:59.160
+data how well hole punching works out there and we're going to present those findings
+
+29
+0:01:59.160 --> 0:02:05.680
+and then have takeaways of what we learned from there and where we're going from there.
+
+30
+0:02:05.680 --> 0:02:11.520
+All right, LIP2P, just a quick introduction.
+
+31
+0:02:11.520 --> 0:02:13.600
+It's a peer-to-peer networking library.
+
+32
+0:02:13.600 --> 0:02:16.160
+It's an open source project.
+
+33
+0:02:16.160 --> 0:02:21.720
+There's one specification and then there are many implementations of that specification,
+
+34
+0:02:21.720 --> 0:02:30.080
+among other languages in Go, JS, Rust, NIM, C++, Java, many, many out there.
+
+35
+0:02:30.080 --> 0:02:33.520
+It provides, I would say, two levels.
+
+36
+0:02:33.520 --> 0:02:38.480
+On the low level, it provides all kind of different connectivity options.
+
+37
+0:02:38.480 --> 0:02:45.240
+It takes care of the encryption and authentication, here being mutual authentication.
+
+38
+0:02:45.240 --> 0:02:48.400
+And then things like hole punching, for example.
+
+39
+0:02:48.400 --> 0:02:52.520
+Once you have these low level features of being able to connect to anyone out there
+
+40
+0:02:52.520 --> 0:02:57.200
+in an encrypted and authenticated way, you can then build higher level protocols on top
+
+41
+0:02:57.200 --> 0:03:03.280
+of that, which LIP2P also provides, like a DHT distributed hash table or gossiping protocols
+
+42
+0:03:03.280 --> 0:03:05.480
+and things like that.
+
+43
+0:03:05.480 --> 0:03:13.080
+My big statement always about LIP2P is it's all you need to build your peer-to-peer application.
+
+44
+0:03:13.080 --> 0:03:16.440
+All right.
+
+45
+0:03:16.440 --> 0:03:19.280
+To zoom out a little bit, that's LIP2P.
+
+46
+0:03:19.280 --> 0:03:23.440
+All the things that we're talking about today are implemented in LIP2P, but that doesn't
+
+47
+0:03:23.440 --> 0:03:29.440
+mean you can't implement it in any other networking library if you want to.
+
+48
+0:03:29.440 --> 0:03:35.000
+Our great motivation for LIP2P and in general for peer-to-peer networking is that we have
+
+49
+0:03:35.000 --> 0:03:42.360
+full connectivity among all the nodes within the network to the best of their capabilities,
+
+50
+0:03:42.360 --> 0:03:43.860
+obviously.
+
+51
+0:03:43.860 --> 0:03:49.440
+In this talk, we're going to focus on the problem of NATs and firewalls for peer-to-peer
+
+52
+0:03:49.440 --> 0:03:50.440
+networking.
+
+53
+0:03:50.440 --> 0:03:55.640
+Now, before all of you yell, I'm not saying let's get rid of firewalls.
+
+54
+0:03:55.640 --> 0:03:57.160
+Please let's not do that.
+
+55
+0:03:57.160 --> 0:04:03.520
+They have a very important purpose, but in some cases, we want to get around them.
+
+56
+0:04:03.520 --> 0:04:05.000
+Okay.
+
+57
+0:04:05.000 --> 0:04:06.400
+Cool.
+
+58
+0:04:06.400 --> 0:04:07.400
+Yeah.
+
+59
+0:04:07.400 --> 0:04:08.880
+I'm here in the network dev room.
+
+60
+0:04:08.880 --> 0:04:12.240
+I'm not going to explain what NATs and firewalls are.
+
+61
+0:04:12.240 --> 0:04:16.640
+I forget, let's say, it is firewalls.
+
+62
+0:04:16.640 --> 0:04:20.120
+But we will go a little bit into what that means for hole punching.
+
+63
+0:04:20.120 --> 0:04:27.480
+In general, for hole punching, NATs and firewalls are our big ones that we can have to get around.
+
+64
+0:04:27.480 --> 0:04:29.240
+Okay.
+
+65
+0:04:29.240 --> 0:04:34.960
+What is the problem in some fancy pictures?
+
+66
+0:04:34.960 --> 0:04:40.720
+A wants to send a packet to B, whether that's a TCP SIN or anything.
+
+67
+0:04:40.720 --> 0:04:44.680
+And A and B are both behind their home routers.
+
+68
+0:04:44.680 --> 0:04:48.040
+Just imagine two laptops in two different houses.
+
+69
+0:04:48.040 --> 0:04:51.280
+And they want to communicate directly with each other.
+
+70
+0:04:51.280 --> 0:04:57.360
+So A sends a packet to B. It crosses A's router.
+
+71
+0:04:57.360 --> 0:05:02.560
+A's router sets a five tuple in its routing table for that packet.
+
+72
+0:05:02.560 --> 0:05:09.040
+And the packet makes it to B. And obviously, a very good thing is that B drops that packet
+
+73
+0:05:09.040 --> 0:05:13.040
+because it's a packet that has no clue where it's coming from.
+
+74
+0:05:13.040 --> 0:05:15.000
+Probably some wider internet.
+
+75
+0:05:15.000 --> 0:05:16.040
+And it might be an attack.
+
+76
+0:05:16.040 --> 0:05:17.360
+So it's dropping it.
+
+77
+0:05:17.360 --> 0:05:21.760
+It doesn't have any five tuple in its routing table.
+
+78
+0:05:21.760 --> 0:05:22.760
+Right?
+
+79
+0:05:22.760 --> 0:05:23.760
+Okay.
+
+80
+0:05:23.760 --> 0:05:25.200
+So that is the problem.
+
+81
+0:05:25.200 --> 0:05:30.640
+And we somehow want to make A and B communicate with each other.
+
+82
+0:05:30.640 --> 0:05:35.400
+So the solution here, in some cases, it's hole punching.
+
+83
+0:05:35.400 --> 0:05:40.680
+We want A and B to connect to each other.
+
+84
+0:05:40.680 --> 0:05:45.920
+Instead of only having A send a packet to B, we have both of them send a packet at the
+
+85
+0:05:45.920 --> 0:05:46.920
+same time.
+
+86
+0:05:46.920 --> 0:05:50.520
+I'm talking in a little bit about what at the same time means.
+
+87
+0:05:50.520 --> 0:05:55.720
+But let's just for now say we have some magic synchronization mechanism.
+
+88
+0:05:55.720 --> 0:06:02.840
+So A sends a packet to B. B sends a packet to A. The packet from A punches a hole in
+
+89
+0:06:02.840 --> 0:06:04.820
+its routing table.
+
+90
+0:06:04.820 --> 0:06:07.120
+So adding a five tuple for it.
+
+91
+0:06:07.120 --> 0:06:14.000
+The packet from B punches a hole in its routing table on its side.
+
+92
+0:06:14.000 --> 0:06:16.160
+The packets cross somewhere in the internet.
+
+93
+0:06:16.160 --> 0:06:17.200
+Obviously, they don't.
+
+94
+0:06:17.200 --> 0:06:21.600
+But it's a nice metaphor.
+
+95
+0:06:21.600 --> 0:06:27.000
+And at some point, packet B arrives at router A. Router A checks its routing table.
+
+96
+0:06:27.000 --> 0:06:30.400
+A little bit simplified here.
+
+97
+0:06:30.400 --> 0:06:39.160
+It lets packet B pass same on router B. And this way, we actually exchange packets.
+
+98
+0:06:39.160 --> 0:06:42.480
+Cool.
+
+99
+0:06:42.480 --> 0:06:50.440
+So now the big problem is how does A and B know when to send those packets?
+
+100
+0:06:50.440 --> 0:06:53.840
+It has to happen at the same time, at least for TCP.
+
+101
+0:06:53.840 --> 0:06:56.860
+We might go a little bit into what that means for UDP.
+
+102
+0:06:56.860 --> 0:07:02.220
+But at least for TCP, this needs to happen at the same time for TCP simultaneous open
+
+103
+0:07:02.220 --> 0:07:04.640
+to happen in the end.
+
+104
+0:07:04.640 --> 0:07:06.560
+So how do we do that?
+
+105
+0:07:06.560 --> 0:07:08.320
+This is LIPIDAP specific.
+
+106
+0:07:08.320 --> 0:07:09.960
+It doesn't need to be LIPIDAP.
+
+107
+0:07:09.960 --> 0:07:14.080
+You can use any signaling protocol on top.
+
+108
+0:07:14.080 --> 0:07:16.320
+Let's say A and B want to connect.
+
+109
+0:07:16.320 --> 0:07:18.720
+And they need to hole punch at the same time.
+
+110
+0:07:18.720 --> 0:07:22.260
+They need to send those two packets from both sides at the same time.
+
+111
+0:07:22.260 --> 0:07:28.600
+So one can go through the hole of the other to the other side.
+
+112
+0:07:28.600 --> 0:07:29.600
+What do we do?
+
+113
+0:07:29.600 --> 0:07:31.440
+We need some kind of coordination mechanism.
+
+114
+0:07:31.440 --> 0:07:37.080
+So some kind of public server out there that is not behind a firewall on that.
+
+115
+0:07:37.080 --> 0:07:40.760
+B connects to the relay.
+
+116
+0:07:40.760 --> 0:07:44.000
+A learns B's address through the relay.
+
+117
+0:07:44.000 --> 0:07:45.840
+A connects through the relay.
+
+118
+0:07:45.840 --> 0:07:52.280
+So now the two, A and B, have a communication channel over the relay.
+
+119
+0:07:52.280 --> 0:08:01.840
+B sends a message to A. You can just think of it as a time synchronization protocol.
+
+120
+0:08:01.840 --> 0:08:10.920
+And at the same time, while sending that message, it measures the time it takes for A to send
+
+121
+0:08:10.920 --> 0:08:12.120
+a message back.
+
+122
+0:08:12.120 --> 0:08:15.000
+So at this time, we know the round trip time.
+
+123
+0:08:15.000 --> 0:08:23.360
+And then once we know the round trip time, B sends another message to A and waits exactly
+
+124
+0:08:23.360 --> 0:08:25.480
+half the round trip time.
+
+125
+0:08:25.480 --> 0:08:31.440
+And once A receives that sun down there, you can do the math.
+
+126
+0:08:31.440 --> 0:08:37.160
+If now both of them start, so A when it receives the packet, and B after half the round trip
+
+127
+0:08:37.160 --> 0:08:42.020
+time, they actually do the hole punch.
+
+128
+0:08:42.020 --> 0:08:45.960
+They exchange the packets, they cross somewhere in the internet.
+
+129
+0:08:45.960 --> 0:08:49.600
+Both of them punch the hole into their routers.
+
+130
+0:08:49.600 --> 0:08:51.300
+And ta-da.
+
+131
+0:08:51.300 --> 0:08:52.300
+We succeeded.
+
+132
+0:08:52.300 --> 0:08:53.300
+We have a hole punch.
+
+133
+0:08:53.300 --> 0:08:56.400
+We have a connection established.
+
+134
+0:08:56.400 --> 0:08:57.880
+Cool.
+
+135
+0:08:57.880 --> 0:08:58.880
+Okay.
+
+136
+0:08:58.880 --> 0:09:03.280
+A little bit in terms of timeline on all of this.
+
+137
+0:09:03.280 --> 0:09:04.600
+Hole punching is nothing new.
+
+138
+0:09:04.600 --> 0:09:07.560
+It's definitely nothing that Lippy to P invented.
+
+139
+0:09:07.560 --> 0:09:11.160
+Not at all.
+
+140
+0:09:11.160 --> 0:09:16.920
+The most obvious mention I know is an RFC 5128.
+
+141
+0:09:16.920 --> 0:09:20.120
+But again, it predates that for sure.
+
+142
+0:09:20.120 --> 0:09:24.040
+But I think it's a nice introduction to hole punching in general in case you like reading
+
+143
+0:09:24.040 --> 0:09:27.280
+ITF documents.
+
+144
+0:09:27.280 --> 0:09:33.800
+Since then, we have been implementing it around 2021, 2022, basing on a lot of past knowledge
+
+145
+0:09:33.800 --> 0:09:34.960
+around that.
+
+146
+0:09:34.960 --> 0:09:43.360
+I've been presenting this work at Fostem 2022 last year remotely.
+
+147
+0:09:43.360 --> 0:09:49.840
+And since then, we have rolled it out on a larger network, which is the IPFS network,
+
+148
+0:09:49.840 --> 0:09:56.560
+in a two phase way where all public nodes act as relay nodes, very limited relays.
+
+149
+0:09:56.560 --> 0:10:02.280
+And then in a second phase, all the clients gained the hole punching capabilities.
+
+150
+0:10:02.280 --> 0:10:08.600
+And now on this large peer-to-peer network, we actually have on the public nodes relaying
+
+151
+0:10:08.600 --> 0:10:10.200
+for the signaling.
+
+152
+0:10:10.200 --> 0:10:14.760
+And then the clients actually being able to do the hole punching work.
+
+153
+0:10:14.760 --> 0:10:18.160
+And so we have this deployed now in this large network.
+
+154
+0:10:18.160 --> 0:10:23.080
+But it's very hard to know how it's working, especially across the internet, across all
+
+155
+0:10:23.080 --> 0:10:28.280
+the networks, across all the different endpoints, across all the routing hardware and so on.
+
+156
+0:10:28.280 --> 0:10:32.720
+So that's why we launched the hole punching month, which is kind of like a measurement
+
+157
+0:10:32.720 --> 0:10:36.120
+campaign, which Dennis now is going to introduce.
+
+158
+0:10:36.120 --> 0:10:37.120
+Sorry.
+
+159
+0:10:37.120 --> 0:10:39.720
+Can you hear me?
+
+160
+0:10:39.720 --> 0:10:40.720
+Yes.
+
+161
+0:10:40.720 --> 0:10:41.720
+All right.
+
+162
+0:10:41.720 --> 0:10:42.720
+Thanks, Max.
+
+163
+0:10:42.720 --> 0:10:50.000
+Yeah, as Max said, the LIPDP folks conceived this new DCUTR protocol and then deployed
+
+164
+0:10:50.000 --> 0:10:51.000
+it to the network.
+
+165
+0:10:51.000 --> 0:10:53.800
+And now we want to know how well does it actually work.
+
+166
+0:10:53.800 --> 0:10:57.400
+And for this, we launched, as Max said, a measurement campaign during December.
+
+167
+0:10:57.400 --> 0:10:59.680
+I will get to this in a second.
+
+168
+0:10:59.680 --> 0:11:03.920
+But how actually do we measure these hole punching success rates?
+
+169
+0:11:03.920 --> 0:11:11.600
+And the challenge here is that we actually don't know the clients that are DCUTR capable.
+
+170
+0:11:11.600 --> 0:11:14.240
+So where are the clients that we want to hole punch?
+
+171
+0:11:14.240 --> 0:11:15.640
+Because they are behind nets.
+
+172
+0:11:15.640 --> 0:11:16.840
+We cannot enumerate them.
+
+173
+0:11:16.840 --> 0:11:22.800
+They don't register themselves in a central registry or so.
+
+174
+0:11:22.800 --> 0:11:25.880
+So we conceived this three-component architecture.
+
+175
+0:11:25.880 --> 0:11:29.880
+And the crucial thing here probably is this honeypot component, which is just a DHT server
+
+176
+0:11:29.880 --> 0:11:34.960
+node that interacts with, as Max said, the IPFS network.
+
+177
+0:11:34.960 --> 0:11:36.400
+And it's a very stable node.
+
+178
+0:11:36.400 --> 0:11:41.200
+And this means that it gets added to routing tables of different peers in the network.
+
+179
+0:11:41.200 --> 0:11:47.000
+And this increases chances if peers behind nets interact with this IPFS network come
+
+180
+0:11:47.000 --> 0:11:49.160
+across this honeypot.
+
+181
+0:11:49.160 --> 0:11:54.960
+So peers behind nets is in this diagram, the top right corner, some DCUTR-capable peer.
+
+182
+0:11:54.960 --> 0:11:59.000
+This one, by chance, by interacting with the network, comes across the honeypot.
+
+183
+0:11:59.000 --> 0:12:04.040
+And the honeypot then keeps track of those peers and writes it into a database.
+
+184
+0:12:04.040 --> 0:12:09.560
+And then this database is interfaced by a server component that serves those identified
+
+185
+0:12:09.560 --> 0:12:14.000
+and detected peers to a fleet of clients.
+
+186
+0:12:14.000 --> 0:12:19.880
+And the hole punch measurement campaign consisted of a deployment of those clients to a wide
+
+187
+0:12:19.880 --> 0:12:28.440
+variety of different laptops or users that agreed to run these kinds of clients.
+
+188
+0:12:28.440 --> 0:12:33.440
+And this client then queries the server for a peer-to-hole punch.
+
+189
+0:12:33.440 --> 0:12:39.160
+As Max said, it connects to the other peer-to-relay node and then exchanges those couple of packages,
+
+190
+0:12:39.160 --> 0:12:41.400
+tries to establish a direct connection.
+
+191
+0:12:41.400 --> 0:12:45.960
+And then at the end, it reports back if it worked, if it didn't work, what went wrong,
+
+192
+0:12:45.960 --> 0:12:46.960
+and so on.
+
+193
+0:12:46.960 --> 0:12:55.800
+And so we can probe the whole network, or like many, many clients and many network configurations.
+
+194
+0:12:55.800 --> 0:12:58.080
+So we did this measurement campaign.
+
+195
+0:12:58.080 --> 0:13:04.680
+We made some fuss about it during November internally at ProCollapse and also reached
+
+196
+0:13:04.680 --> 0:13:06.240
+out to the community.
+
+197
+0:13:06.240 --> 0:13:11.760
+And starting from the beginning of December, we said, OK, please download these clients.
+
+198
+0:13:11.760 --> 0:13:15.240
+Run it on your machines.
+
+199
+0:13:15.240 --> 0:13:21.000
+And let's try to gather as much data as possible during that time.
+
+200
+0:13:21.000 --> 0:13:25.440
+And as you can see here, so we collected around 6.25 million hole punch results.
+
+201
+0:13:25.440 --> 0:13:31.720
+So this is quite a lot of data from 154 clients that participated.
+
+202
+0:13:31.720 --> 0:13:37.160
+And we punched around 47,000 unique peers in this network.
+
+203
+0:13:37.160 --> 0:13:41.520
+And on the right-hand side, you can see the deployment of our clients, of our controlled
+
+204
+0:13:41.520 --> 0:13:42.520
+clients.
+
+205
+0:13:42.520 --> 0:13:45.840
+The color here is the number of contributed results.
+
+206
+0:13:45.840 --> 0:13:47.760
+So the US was dominant here.
+
+207
+0:13:47.760 --> 0:13:52.880
+But we have many other nodes deployed in Europe, but also Australia and New Zealand, and also
+
+208
+0:13:52.880 --> 0:13:57.760
+South America, and also one client from the continent of Africa.
+
+209
+0:13:57.760 --> 0:14:05.560
+And these clients interacted with these other peers that are basically all around the world.
+
+210
+0:14:05.560 --> 0:14:11.360
+So we could measure hole punch success rates all across the globe.
+
+211
+0:14:11.360 --> 0:14:16.960
+And I think we have a very comprehensive data set here.
+
+212
+0:14:16.960 --> 0:14:21.520
+And so we now gathered the data.
+
+213
+0:14:21.520 --> 0:14:26.040
+And at the beginning of January, I started.
+
+214
+0:14:26.040 --> 0:14:28.160
+So I said, OK, the hole punch link month is over.
+
+215
+0:14:28.160 --> 0:14:31.440
+And I started to analyze the data a little bit.
+
+216
+0:14:31.440 --> 0:14:37.240
+And what you can see here on the x-axis is the, so each bar is a unique client.
+
+217
+0:14:37.240 --> 0:14:40.760
+And on the y-axis, we can see these different outcomes.
+
+218
+0:14:40.760 --> 0:14:45.600
+So each hole punch result, as I said, can have, so the clients report back these results,
+
+219
+0:14:45.600 --> 0:14:47.720
+and each result can have a different outcome.
+
+220
+0:14:47.720 --> 0:14:51.120
+These outcomes are at the top, so it can be successful.
+
+221
+0:14:51.120 --> 0:14:55.640
+So we actually were able to establish a direct connection through hole punching.
+
+222
+0:14:55.640 --> 0:14:57.200
+Then connection reversed.
+
+223
+0:14:57.200 --> 0:15:03.320
+This means I'm trying to hole punch, so I'm connecting to the other peer through the relay.
+
+224
+0:15:03.320 --> 0:15:07.560
+And the first thing before we do the hole punching dance is for the peer to directly
+
+225
+0:15:07.560 --> 0:15:12.160
+connect to us, because if we are directly reachable because we have port mapping in
+
+226
+0:15:12.160 --> 0:15:16.860
+place in the router, we don't actually need to do the hole punching exchange.
+
+227
+0:15:16.860 --> 0:15:18.240
+This is a connection reversed.
+
+228
+0:15:18.240 --> 0:15:21.760
+And as we can see here, it's a little hard to see.
+
+229
+0:15:21.760 --> 0:15:25.160
+But some clients actually have a lot of these results.
+
+230
+0:15:25.160 --> 0:15:29.320
+So this means they have a unique router configuration in place.
+
+231
+0:15:29.320 --> 0:15:31.640
+Then failed is the obvious thing.
+
+232
+0:15:31.640 --> 0:15:34.640
+So we tried, we exchanged these messages.
+
+233
+0:15:34.640 --> 0:15:37.840
+But in the end, we weren't able to establish a connection.
+
+234
+0:15:37.840 --> 0:15:45.640
+No stream is some internal error that's unique to our setup, so probably nothing to worry
+
+235
+0:15:45.640 --> 0:15:46.640
+about here.
+
+236
+0:15:46.640 --> 0:15:50.800
+And no connection means we try to connect to the other peer through a relay, but the
+
+237
+0:15:50.800 --> 0:15:52.080
+other peer was already gone.
+
+238
+0:15:52.080 --> 0:15:55.840
+It's a permissionless peer to peer network, so it could be from the time that the honeypot
+
+239
+0:15:55.840 --> 0:16:01.280
+detected the peer to the client trying to establish a connection to the peer that the
+
+240
+0:16:01.280 --> 0:16:04.400
+client has already churned and left the network.
+
+241
+0:16:04.400 --> 0:16:10.120
+But actually looking at these clients is a distorted view on the data because we allowed
+
+242
+0:16:10.120 --> 0:16:15.880
+everyone who participated in the campaign to freely move around.
+
+243
+0:16:15.880 --> 0:16:19.680
+So I was running this client on my laptop, and I was moving from a coffee shop, Wi-Fi
+
+244
+0:16:19.680 --> 0:16:23.440
+network, to a home network, to a university network, and so on.
+
+245
+0:16:23.440 --> 0:16:28.000
+And hole punching is actually dependent on those network configurations instead of just
+
+246
+0:16:28.000 --> 0:16:29.880
+me running the client.
+
+247
+0:16:29.880 --> 0:16:35.640
+So the challenge here with the data analysis was, so I'm also not done with that yet, and
+
+248
+0:16:35.640 --> 0:16:40.520
+happy to open for suggestions, to detect these individual networks that the clients operated
+
+249
+0:16:40.520 --> 0:16:41.520
+in.
+
+250
+0:16:41.520 --> 0:16:47.600
+With each hole punch result, the client reported their listening IP addresses and so on, and
+
+251
+0:16:47.600 --> 0:16:53.040
+I grouped them together to actually find out, to identify unique networks that those clients
+
+252
+0:16:53.040 --> 0:16:54.720
+operated in.
+
+253
+0:16:54.720 --> 0:17:01.160
+And at the end, I arrived at 342 unique client networks, and then the graph looks like this,
+
+254
+0:17:01.160 --> 0:17:03.680
+probably not much different than before.
+
+255
+0:17:03.680 --> 0:17:10.800
+But also there are some interesting unique network outcomes here that I will also get
+
+256
+0:17:10.800 --> 0:17:14.040
+to in a bit.
+
+257
+0:17:14.040 --> 0:17:19.600
+The most interesting graph is probably this one, so what's the success rate of this protocol?
+
+258
+0:17:19.600 --> 0:17:26.800
+And on the x-axis we have the success rate, binned by, yeah, just 5% binning, and on the
+
+259
+0:17:26.800 --> 0:17:33.040
+y-axis the number of networks that had the success rate by probing the whole other network.
+
+260
+0:17:33.040 --> 0:17:37.440
+And the majority of networks actually had a success rate of 70%, so I think this is
+
+261
+0:17:37.440 --> 0:17:44.200
+already, actually I think it's amazing, because from not being able to connect at all to having
+
+262
+0:17:44.200 --> 0:17:49.080
+a 70% chance to establish a direct connection without an intermediary, it's actually pretty
+
+263
+0:17:49.080 --> 0:17:50.720
+great.
+
+264
+0:17:50.720 --> 0:17:54.760
+But then also there are some networks that have very low success rate, and these are
+
+265
+0:17:54.760 --> 0:18:00.320
+the ones that are probably the most interesting ones.
+
+266
+0:18:00.320 --> 0:18:08.280
+Then also, the IP and transport dependence is also quite interesting, as an angle to
+
+267
+0:18:08.280 --> 0:18:11.400
+look at the data.
+
+268
+0:18:11.400 --> 0:18:17.680
+Here we can see the top row we used IPv4 and TCP to hole punch, so when these clients exchange
+
+269
+0:18:17.680 --> 0:18:25.320
+these connect messages, they actually exchange the publicly reachable IP addresses of those
+
+270
+0:18:25.320 --> 0:18:27.400
+two peers that want to hole punch.
+
+271
+0:18:27.400 --> 0:18:32.440
+And in our measurement campaign we restricted this to actually only IPv4 and TCP, and with
+
+272
+0:18:32.440 --> 0:18:37.520
+some other hole punches only to IPv6 and QUIC, which is on the bottom right.
+
+273
+0:18:37.520 --> 0:18:42.520
+And so we can take a look at which combination is more successful than the other.
+
+274
+0:18:42.520 --> 0:18:49.440
+And here we can see that IPv4 and TCP and QUIC is actually, if you average the numbers,
+
+275
+0:18:49.440 --> 0:18:55.080
+has a similar success rate, but on IPv6 it's basically not working at all.
+
+276
+0:18:55.080 --> 0:18:59.720
+And these unexpected things are actually the interesting ones for us.
+
+277
+0:18:59.720 --> 0:19:04.320
+Either it's a measurement error, or there's some inherent property to the networking setup
+
+278
+0:19:04.320 --> 0:19:11.520
+that prevents IPv6 from being hole punchable, basically.
+
+279
+0:19:11.520 --> 0:19:20.240
+So if we actually allow both transports, so in the previous graph we showed we were only
+
+280
+0:19:20.240 --> 0:19:26.000
+using TCP and QUIC, but if we allow both transports to simultaneously try to hole punch, we can
+
+281
+0:19:26.000 --> 0:19:31.720
+see that with 81% we end up with a QUIC connection, and this is just because QUIC connection establishment
+
+282
+0:19:31.720 --> 0:19:35.320
+is way faster than TCP connection.
+
+283
+0:19:35.320 --> 0:19:41.480
+So this is like an expected result here, just to verify some of the data here.
+
+284
+0:19:41.480 --> 0:19:45.440
+And now two takeaways for us for protocol improvements.
+
+285
+0:19:45.440 --> 0:19:51.000
+So if we took at private VPNs, so if clients are running in VPNs, we can see that the success
+
+286
+0:19:51.000 --> 0:19:56.200
+rate actually drops significantly from around 70% to less than 40%.
+
+287
+0:19:56.200 --> 0:20:00.240
+And my hypothesis here is that the router time that Max showed previously is measured
+
+288
+0:20:00.240 --> 0:20:05.520
+between A and B, but what we actually need is the router time between the router A and
+
+289
+0:20:05.520 --> 0:20:12.320
+router B, and if your router basically is your exit node or your gateway that you're
+
+290
+0:20:12.320 --> 0:20:17.960
+connected to from your VPN, this can differ by dozens of milliseconds actually, and so
+
+291
+0:20:17.960 --> 0:20:21.720
+the router time doesn't add up and the whole synchronization is a little off.
+
+292
+0:20:21.720 --> 0:20:25.960
+So this is potentially a protocol improvement here.
+
+293
+0:20:25.960 --> 0:20:31.880
+And then also interesting, so Max said they are exchanging these messages during the hole
+
+294
+0:20:31.880 --> 0:20:35.880
+punch, but actually we tried this three times.
+
+295
+0:20:35.880 --> 0:20:39.480
+So if it doesn't work the first time, we try it again, and if it doesn't work the second
+
+296
+0:20:39.480 --> 0:20:41.480
+time, we try it yet again.
+
+297
+0:20:41.480 --> 0:20:47.160
+But when we look at the data, if we end up with the successful hole punch connection,
+
+298
+0:20:47.160 --> 0:20:53.320
+it was actually successful with the first attempt in 97% or 98% of the cases.
+
+299
+0:20:53.320 --> 0:21:00.600
+So this is also something for the next steps for us.
+
+300
+0:21:00.600 --> 0:21:05.120
+We should consider changing our strategy on the second and third try to increase the odds.
+
+301
+0:21:05.120 --> 0:21:10.440
+So if we stick with the three retries, we shouldn't do the same thing over again, because
+
+302
+0:21:10.440 --> 0:21:14.580
+as we saw from the data, it doesn't make a difference.
+
+303
+0:21:14.580 --> 0:21:17.080
+So we should change our strategy here.
+
+304
+0:21:17.080 --> 0:21:29.200
+And so one thing would be to reverse the client server roles in this quick hole punching exchange.
+
+305
+0:21:29.200 --> 0:21:32.360
+This would be something.
+
+306
+0:21:32.360 --> 0:21:37.600
+And also the other protocol improvement for us, as I said, would be to change the measurement
+
+307
+0:21:37.600 --> 0:21:39.800
+of the round trip time.
+
+308
+0:21:39.800 --> 0:21:45.360
+And for the future, the data analysis, right now what I showed here is basically aggregates
+
+309
+0:21:45.360 --> 0:21:46.880
+across all the data.
+
+310
+0:21:46.880 --> 0:21:53.880
+And the interesting part is basically, so why is a specific client or a specific network,
+
+311
+0:21:53.880 --> 0:21:56.960
+why has it less or a worse success rate than others?
+
+312
+0:21:56.960 --> 0:22:00.360
+So these are these individual things to look into to increase.
+
+313
+0:22:00.360 --> 0:22:04.640
+Maybe there's a common pattern that you can address with a protocol to increase the success
+
+314
+0:22:04.640 --> 0:22:08.160
+rate and then identify those causes.
+
+315
+0:22:08.160 --> 0:22:12.580
+And also, at the end of all of this, we want to craft a follow-up publication to something
+
+316
+0:22:12.580 --> 0:22:20.480
+that Max and some fellow friends, I would say, have published just last year.
+
+317
+0:22:20.480 --> 0:22:27.120
+And we want to make the data set public and so on and so forth for others to benefit from
+
+318
+0:22:27.120 --> 0:22:31.240
+the data and can do their own analysis.
+
+319
+0:22:31.240 --> 0:22:32.960
+And with that, get involved.
+
+320
+0:22:32.960 --> 0:22:34.920
+Talk to us here at the venue about all of this.
+
+321
+0:22:34.920 --> 0:22:37.280
+LIP-ITV is a great project.
+
+322
+0:22:37.280 --> 0:22:39.400
+Have a look at all these links.
+
+323
+0:22:39.400 --> 0:22:41.360
+Get in touch and contribute.
+
+324
+0:22:41.360 --> 0:22:42.880
+Join our community calls.
+
+325
+0:22:42.880 --> 0:22:44.960
+And I think that's it.
+
+326
+0:22:44.960 --> 0:22:45.960
+Thank you very much.
+
+327
+0:22:45.960 --> 0:22:59.160
+This is what you implemented there.
+
+328
+0:22:59.160 --> 0:23:07.560
+Is it exactly Ice turn stuff or how different it is from this?
+
+329
+0:23:07.560 --> 0:23:11.440
+So we differ in some cases.
+
+330
+0:23:11.440 --> 0:23:14.400
+It's definitely very much motivated by Ice in turn.
+
+331
+0:23:14.400 --> 0:23:16.400
+So a couple of things.
+
+332
+0:23:16.400 --> 0:23:17.920
+We don't do turn itself.
+
+333
+0:23:17.920 --> 0:23:20.260
+We have our own relay protocol.
+
+334
+0:23:20.260 --> 0:23:26.480
+Because nodes in the network act as public for the public as relay nodes.
+
+335
+0:23:26.480 --> 0:23:30.240
+And the problem is you don't want to relay any traffic for anyone, but you want to make
+
+336
+0:23:30.240 --> 0:23:34.040
+this really restricted in terms of how much traffic, how long.
+
+337
+0:23:34.040 --> 0:23:40.640
+If you run a public node, you don't want to be the next relay node for everyone out there.
+
+338
+0:23:40.640 --> 0:23:48.200
+And then what we built here is very much TCP specific, but it also works well with UDP.
+
+339
+0:23:48.200 --> 0:23:50.040
+We need the synchronization.
+
+340
+0:23:50.040 --> 0:23:54.120
+And as far as I know, at least the WebRTC stack is very focused on UDP where timing
+
+341
+0:23:54.120 --> 0:23:56.080
+doesn't matter as much.
+
+342
+0:23:56.080 --> 0:23:59.600
+So you saw the timing protocol.
+
+343
+0:23:59.600 --> 0:24:04.960
+And that is very TCP specific where we want a TCP simultaneous connect which allows two
+
+344
+0:24:04.960 --> 0:24:17.240
+sends to actually result in a single TCP connection.
+
+345
+0:24:17.240 --> 0:24:18.600
+This is for your analysis.
+
+346
+0:24:18.600 --> 0:24:23.280
+I guess a lot of this depends on the default configurations of the firewall.
+
+347
+0:24:23.280 --> 0:24:31.200
+Did you kind of find out what are the branch type of firewalls or configurations that stops
+
+348
+0:24:31.200 --> 0:24:32.840
+hole punching in your research?
+
+349
+0:24:32.840 --> 0:24:40.820
+So yeah, so not in its entirety, but what we did is people that signed up for the measurement
+
+350
+0:24:40.820 --> 0:24:43.440
+campaign gave us information about the networks.
+
+351
+0:24:43.440 --> 0:24:49.120
+And so if we find something fishy in the data, we could also reach out to them and ask what's
+
+352
+0:24:49.120 --> 0:24:53.320
+the with the firewall setup in your specific network.
+
+353
+0:24:53.320 --> 0:24:57.240
+We also gather data about port mappings that are in place.
+
+354
+0:24:57.240 --> 0:25:02.720
+So what the host tries to do is establish a port mapping inside your router.
+
+355
+0:25:02.720 --> 0:25:06.560
+And this is also reported back.
+
+356
+0:25:06.560 --> 0:25:15.840
+And what we also did is try to query the login page from these routers and get some information
+
+357
+0:25:15.840 --> 0:25:24.600
+about what kind of firewall or router actually was preventing you from connecting to someone
+
+358
+0:25:24.600 --> 0:25:25.560
+else.
+
+359
+0:25:25.560 --> 0:25:31.520
+So these are the data points that we have to get some conclusions around this.
+
+360
+0:25:31.520 --> 0:25:34.600
+But more than this, we don't have.
+
+361
+0:25:34.600 --> 0:25:43.440
+But I think this is already pretty conclusive to a wide variety of analysis.
+
+362
+0:25:43.440 --> 0:25:45.560
+What I was just wondering about is, do you have any data?
+
+363
+0:25:45.560 --> 0:25:49.800
+How many clients actually were behind the net?
+
+364
+0:25:49.800 --> 0:25:57.260
+So all these clients that the honeypot detected were clients that are behind the net.
+
+365
+0:25:57.260 --> 0:25:58.560
+So these are all LTPP hosts.
+
+366
+0:25:58.560 --> 0:26:03.920
+And with the default configuration of LTPP hosts, if they only announce relay addresses,
+
+367
+0:26:03.920 --> 0:26:10.320
+this means that they must be not publicly reachable, which is for us equivalent with
+
+368
+0:26:10.320 --> 0:26:11.320
+being behind the net.
+
+369
+0:26:11.320 --> 0:26:13.320
+So it should be.
+
+370
+0:26:13.320 --> 0:26:16.640
+There's probably some error there.
+
+371
+0:26:16.640 --> 0:26:20.960
+So then all of the IPv6 kind of hosts you were trying to connect to also were behind
+
+372
+0:26:20.960 --> 0:26:21.960
+the net.
+
+373
+0:26:21.960 --> 0:26:22.960
+Kind of IPv6.
+
+374
+0:26:22.960 --> 0:26:23.960
+Yes, yes.
+
+375
+0:26:23.960 --> 0:26:25.040
+And this is the interesting thing.
+
+376
+0:26:25.040 --> 0:26:26.800
+So I cannot explain this yet.
+
+377
+0:26:26.800 --> 0:26:30.120
+Maybe it's a measurement error from us.
+
+378
+0:26:30.120 --> 0:26:34.240
+Maybe it's some, as I said, inherent property to something.
+
+379
+0:26:34.240 --> 0:26:35.240
+Maybe it's a protocol error.
+
+380
+0:26:35.240 --> 0:26:36.240
+I don't know.
+
+381
+0:26:36.240 --> 0:26:38.840
+And this is the interesting stuff in these kinds of things.
+
+382
+0:26:38.840 --> 0:26:39.840
+Thanks.
+
+383
+0:26:39.840 --> 0:26:46.040
+I'm very curious.
+
+384
+0:26:46.040 --> 0:26:49.320
+I was wondering, does it also work with multiple nets?
+
+385
+0:26:49.320 --> 0:27:00.120
+Can you hold punch through two nets?
+
+386
+0:27:00.120 --> 0:27:04.840
+So if another friend of mine who I convinced to run these clients actually was running
+
+387
+0:27:04.840 --> 0:27:09.880
+behind two nets and it was working.
+
+388
+0:27:09.880 --> 0:27:13.080
+But I'm not sure how many people actually ran behind two nets.
+
+389
+0:27:13.080 --> 0:27:16.640
+But in theory, maybe Max you can explain.
+
+390
+0:27:16.640 --> 0:27:19.520
+Right now we don't have really a lot of data about two nets.
+
+391
+0:27:19.520 --> 0:27:24.000
+And also we don't have the data, which I think was it called needle.
+
+392
+0:27:24.000 --> 0:27:27.480
+I don't quite know where you're within the same network.
+
+393
+0:27:27.480 --> 0:27:29.800
+But you don't know that you're next to each other.
+
+394
+0:27:29.800 --> 0:27:33.560
+And you actually want to hold punch through your own net, even though you can't connect
+
+395
+0:27:33.560 --> 0:27:34.560
+to each other.
+
+396
+0:27:34.560 --> 0:27:35.560
+So there's some challenges.
+
+397
+0:27:35.560 --> 0:27:36.560
+Do we still have time for another question?
+
+398
+0:27:36.560 --> 0:27:37.560
+Yeah, yeah.
+
+399
+0:27:37.560 --> 0:27:38.560
+Sorry.
+
+400
+0:27:38.560 --> 0:27:55.320
+So you said that for UDP should work similarly.
+
+401
+0:27:55.320 --> 0:27:57.240
+Did you do any experiments with that?
+
+402
+0:27:57.240 --> 0:28:01.360
+Because in the past we had a custom UDP hold punching thing and the routers were pretty
+
+403
+0:28:01.360 --> 0:28:02.360
+brain-dead.
+
+404
+0:28:02.360 --> 0:28:07.960
+They forgot the mapping within 20 seconds or something.
+
+405
+0:28:07.960 --> 0:28:11.160
+So we run this measurement campaign on TCP and quick.
+
+406
+0:28:11.160 --> 0:28:13.440
+And quick in the end is just UDP.
+
+407
+0:28:13.440 --> 0:28:19.200
+And what we do is something similar to stun in the ICE suit where we continuously try
+
+408
+0:28:19.200 --> 0:28:20.980
+to keep our mapping up.
+
+409
+0:28:20.980 --> 0:28:27.360
+And then on nets that do endpoint independent mappings, that actually helps.
+
+410
+0:28:27.360 --> 0:28:31.920
+So as long as we keep that up for like, I don't know, every 10 seconds or so, then our
+
+411
+0:28:31.920 --> 0:28:34.640
+mapping survives even on UDP.
+
+412
+0:28:34.640 --> 0:28:37.880
+Okay, cool.
+
+413
+0:28:37.880 --> 0:28:38.400
+Thank you very much.
+

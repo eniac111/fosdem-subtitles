@@ -1,0 +1,1177 @@
+WEBVTT
+
+00:00.000 --> 00:09.560
+I'm Wookie and I have come to talk to you about the year 2038 problem.
+
+00:09.560 --> 00:14.880
+I would quite like to get feedback and not talk all the time, which means I have slightly
+
+00:14.880 --> 00:17.160
+too much information to give you in the time available.
+
+00:17.160 --> 00:20.040
+I will try and get this about right.
+
+00:20.040 --> 00:24.920
+So just to make sure people understand what the problem is, time t on Unix is a 32-bit
+
+00:24.920 --> 00:33.400
+signed int which started in 1970 and counts in seconds so it rolls over in January 2038,
+
+00:33.400 --> 00:36.600
+at which point bad things will probably happen.
+
+00:36.600 --> 00:40.120
+That is now less than 15 years away, which isn't very long when you consider the sorts
+
+00:40.120 --> 00:43.200
+of systems that will still be running 32-bit code in that time.
+
+00:43.200 --> 00:47.200
+There are a lot of other things which will also go wrong at various dates, but I'm not
+
+00:47.200 --> 00:49.200
+talking about those today.
+
+00:49.200 --> 00:54.080
+Now I don't claim to be a particular expert in this area, but I have been taking a look
+
+00:54.080 --> 01:00.400
+at it for the last few months because Debian needs to do something and we should work out
+
+01:00.400 --> 01:02.240
+what it is.
+
+01:02.240 --> 01:07.560
+So I just kind of try and relatively quickly cover the problem and the issues as far as
+
+01:07.560 --> 01:08.560
+we know them.
+
+01:08.560 --> 01:11.560
+I was hoping to have done a few more tests before I got here so I could be a little bit
+
+01:11.560 --> 01:14.760
+more explicit about things that definitely will or will not break, but we are where we
+
+01:14.760 --> 01:21.560
+are and see what people think and also discover from you stuff that you know will break because
+
+01:21.560 --> 01:23.760
+I'd like to make a list.
+
+01:23.760 --> 01:28.120
+So obviously most people already use 64-bit computers which have 64-bit time to and this
+
+01:28.120 --> 01:35.600
+problem doesn't arise for many centuries, but there are still areas where cheap really
+
+01:35.600 --> 01:41.400
+matters and those people still use 32-bit, so cars, TVs, kind of embedded controllers
+
+01:41.400 --> 01:46.800
+for buildings and heat pumps and plants and all that stuff and also cheap phones.
+
+01:46.800 --> 01:50.040
+Talking to people in the business, 32-bit Android is still a thing and will remain a
+
+01:50.040 --> 01:54.960
+thing for quite a long time.
+
+01:54.960 --> 01:58.760
+The problem is that the stuff that people are still doing that with tends to get installed
+
+01:58.760 --> 02:00.600
+and left for a long time.
+
+02:00.600 --> 02:02.440
+So 15 years already isn't very long.
+
+02:02.440 --> 02:03.440
+We're a bit late.
+
+02:03.440 --> 02:09.960
+Quite a lot of the stuff that will break is already installed, well too late, but there
+
+02:09.960 --> 02:13.560
+will probably be more so we should probably fix it.
+
+02:13.560 --> 02:19.280
+Most of that stuff will be kind of embedded distros like OpenEmbedded and Android built
+
+02:19.280 --> 02:20.280
+for the thing.
+
+02:20.280 --> 02:26.480
+So the set of stuff using kind of Debian style binary distros that the supplies to is fairly
+
+02:26.480 --> 02:30.840
+small but we should probably still fix it.
+
+02:30.840 --> 02:38.400
+Some 32-bit architectures don't care because they already started with 64-bit time desensibly.
+
+02:38.400 --> 02:40.960
+Big distros, I don't even care about 32-bit anymore.
+
+02:40.960 --> 02:44.520
+If anyone wants to contradict me on that, that will be useful.
+
+02:44.520 --> 02:46.600
+I'm pretty sure Red Hat's given up already.
+
+02:46.600 --> 02:50.160
+I don't know about Fedora and how long they tend to...
+
+02:50.160 --> 02:53.200
+Okay, excellent.
+
+02:53.200 --> 02:59.000
+Obviously most of the other 32-bit architectures are varying degrees of obsolete but sort of
+
+02:59.000 --> 03:05.480
+still in use now but probably definitely not by another 15 years time or at least stuff
+
+03:05.480 --> 03:07.280
+that will still be installed.
+
+03:07.280 --> 03:10.120
+But I think the one thing that does still exist and is still being used fairly heavily
+
+03:10.120 --> 03:16.480
+is ARMv7 and Debian intends to carry on maintaining that for as long as people are using it.
+
+03:16.480 --> 03:18.640
+So we kind of have to fix that.
+
+03:18.640 --> 03:21.700
+And this problem is harder if you're a binary distro than if you're a source, rebuild everything
+
+03:21.700 --> 03:26.520
+every time distro because how does the transition work?
+
+03:26.520 --> 03:28.240
+So what has been done so far?
+
+03:28.240 --> 03:33.200
+Ant, who unfortunately isn't here, he did quite a lot of work on this starting in 2017
+
+03:33.200 --> 03:36.920
+with deeper fixing a load of kernel stuff at the bottom of the stack.
+
+03:36.920 --> 03:41.720
+Turns out the Perl people fixed this 12 years ago, although in a slightly odd way of course
+
+03:41.720 --> 03:44.720
+because it's Perl.
+
+03:44.720 --> 03:50.720
+But the muzzle was fixed a couple of years ago, GLM2 was fixed last year, year before.
+
+03:50.720 --> 03:52.800
+And I think quite a lot of stuff...
+
+03:52.800 --> 03:56.880
+Because some of those embedded people especially have been building with new muzzle which forces
+
+03:56.880 --> 04:00.480
+64-bit time to quite a lot of stuff has been fixed.
+
+04:00.480 --> 04:03.820
+But I do not have a good handle on how much stuff still is not fixed and will just break
+
+04:03.820 --> 04:04.820
+if you build it with...
+
+04:04.820 --> 04:10.360
+It won't even build, never mind work or stuff which will build but it'll just explode your
+
+04:10.360 --> 04:14.520
+file formats or eat its old data or whatever.
+
+04:14.520 --> 04:17.720
+So again I would like feedback on that.
+
+04:17.720 --> 04:21.680
+So quite a lot of people have done quite a lot of work.
+
+04:21.680 --> 04:26.040
+Ant tried rebuilding Debian in 2020 but everything was too new and too much broke and he didn't
+
+04:26.040 --> 04:27.240
+get very far.
+
+04:27.240 --> 04:33.720
+So we've just done it again a couple of times last year and just rebuilding the base part,
+
+04:33.720 --> 04:36.280
+that's what I've done and that seems to work.
+
+04:36.280 --> 04:41.680
+And doing an ABI analysis, Steve Langisek did a load of work in Ubuntu on how many libraries
+
+04:41.680 --> 04:45.240
+actually change which we'll get to in a moment.
+
+04:45.240 --> 04:46.240
+So how does this work?
+
+04:46.240 --> 04:51.520
+So Glibc 3.34, the way they've done it is to support the old 32-bit ABI and the new
+
+04:51.520 --> 04:55.720
+64-bit ABI and each package, you know, you set a magic variable, are we doing 64-bit
+
+04:55.720 --> 04:56.720
+or not?
+
+04:56.720 --> 04:58.320
+So it's a per build thing.
+
+04:58.320 --> 04:59.800
+Glibc doesn't just change.
+
+04:59.800 --> 05:03.500
+So normally an ABI transition, you know, you get the new library, it's different, you build
+
+05:03.500 --> 05:05.920
+against it, you get the new thing.
+
+05:05.920 --> 05:08.000
+So you don't have to do anything.
+
+05:08.000 --> 05:12.280
+But with Glibc we were given the choice, it's kind of unhelpful really.
+
+05:12.280 --> 05:17.720
+So something somewhere has to set the magic variable otherwise you'll get the old thing.
+
+05:17.720 --> 05:23.040
+They have some file format issues as well, the Yutomp and Co files and apparently that's
+
+05:23.040 --> 05:24.040
+fixed.
+
+05:24.040 --> 05:29.240
+QEMU allegedly is still broken but somebody has a plan.
+
+05:29.240 --> 05:34.640
+So just to make this a bit more complicated, Glibc sets file offset bits to 64 if you set
+
+05:34.640 --> 05:35.780
+time to 64.
+
+05:35.780 --> 05:41.040
+So you have to have large file systems if you're having 64-bit time.
+
+05:41.040 --> 05:45.240
+So that's two different ABI changes and that's been around a long time and people have been
+
+05:45.240 --> 05:46.960
+fixing it for ages.
+
+05:46.960 --> 05:52.040
+Again I don't know how much software doesn't work if you turn large file systems on, doesn't
+
+05:52.040 --> 05:54.300
+build, gets it wrong.
+
+05:54.300 --> 05:59.920
+My impression is that most stuff has been fixed and is actually using that already.
+
+05:59.920 --> 06:04.400
+But again I'm not sure of the numbers.
+
+06:04.400 --> 06:10.760
+The GNUlib, if you use GNUlib in your build system it will just turn on 64-bit support
+
+06:10.760 --> 06:13.180
+if Glibc provides it.
+
+06:13.180 --> 06:17.160
+So if you build with a modern Glibc you'll get 64-bit time to you unless you specifically
+
+06:17.160 --> 06:20.320
+set this magic variable you've never heard of to stop it doing that.
+
+06:20.320 --> 06:24.080
+So some people have been already bumped into 64-bit time when they weren't necessarily
+
+06:24.080 --> 06:25.680
+expecting it.
+
+06:25.680 --> 06:29.840
+And the last autocomp release was going, they decided that if you turned large file system
+
+06:29.840 --> 06:33.280
+on, you should have 64-bit time to you, either opposite way around the Glibc.
+
+06:33.280 --> 06:36.920
+Perfectively that meant anybody who'd ever put in large file system support any time
+
+06:36.920 --> 06:42.200
+in the last 15 years suddenly got 64-bit time to you if they re-autocomped, which some of
+
+06:42.200 --> 06:45.440
+us thought was a bit radical so we told them not to do that.
+
+06:45.440 --> 06:48.600
+But the thinking there was it's time, we should change.
+
+06:48.600 --> 06:50.680
+Please will people get a move on.
+
+06:50.680 --> 06:56.960
+So it wasn't completely crazy but I think that would surprise too many people I think.
+
+06:56.960 --> 07:01.500
+But we do need to work out how are we going to do this without surprise, so people transition
+
+07:01.500 --> 07:07.400
+but like when they expected to not because something they hadn't noticed changed.
+
+07:07.400 --> 07:12.400
+So the point here is if you use time t in any struct, especially in a public ABI for
+
+07:12.400 --> 07:19.200
+your library particularly or any file, then if the size changes, the ABI changes and your
+
+07:19.200 --> 07:21.720
+file format changes.
+
+07:21.720 --> 07:25.000
+And that is the transition we have to deal with.
+
+07:25.000 --> 07:30.080
+Now new ABIs is not uncommon, it happens all the time, libraries change, add new stuff,
+
+07:30.080 --> 07:35.160
+we're not adding new stuff, that's okay, but change stuff.
+
+07:35.160 --> 07:38.960
+But this is a big one because it affects a lot of packages, but not as big as some we've
+
+07:38.960 --> 07:41.400
+done in the past.
+
+07:41.400 --> 07:45.760
+File formats I think is harder to quantify and work out quite how big a problem that
+
+07:45.760 --> 07:51.720
+is or still is and it's kind of up to each, mostly an application level thing, you know,
+
+07:51.720 --> 07:55.440
+if your app stores files and it needs to be able to read its old files and its new files
+
+07:55.440 --> 07:58.200
+without exploding.
+
+07:58.200 --> 08:03.240
+File formats is a bit trickier, but again mostly that's been dealt with in the kernel,
+
+08:03.240 --> 08:05.040
+I believe.
+
+08:05.040 --> 08:09.840
+So the fundamental question, especially for Debian, but kind of more generally for everybody,
+
+08:09.840 --> 08:15.480
+is are we just going to update the existing architecture with this new feature which changes
+
+08:15.480 --> 08:19.160
+the ABI, which is what everybody's done so far.
+
+08:19.160 --> 08:25.120
+You just rebuild it with the new 64 bit time and stuff changes, but we still call it ARM
+
+08:25.120 --> 08:31.960
+Linux, new ABIHF or whatever in x86 world equivalent.
+
+08:31.960 --> 08:35.400
+That's not too bad if you rebuild from scratch every time, it's quite a lot harder in the
+
+08:35.400 --> 08:41.320
+binary distro world where we expect to upgrade things as we go along.
+
+08:41.320 --> 08:45.320
+And it does change the ABI, so in a sense this is kind of wrong because that triplet
+
+08:45.320 --> 08:48.920
+defines an ABI, but on the other hand we do this all the time.
+
+08:48.920 --> 08:53.240
+LFS changes the ABI and nobody said we need a new triplet for that.
+
+08:53.240 --> 08:57.160
+But from Debian's point of view, arguably a lot of people have said well this is too
+
+08:57.160 --> 09:01.400
+big and scary and everything might break, so let's not do that, let's just start a new
+
+09:01.400 --> 09:09.040
+architecture with a new triplet and then we'll know it's all done, everything will correspond
+
+09:09.040 --> 09:13.720
+and we're much less likely to get random breakage from a bit of half and half time to 32 bit
+
+09:13.720 --> 09:17.080
+and 64 bit time.
+
+09:17.080 --> 09:21.800
+But on the other hand, other stuff will break just because you've changed the name of the
+
+09:21.800 --> 09:25.920
+triplet and stuff, there's always some breakage in there.
+
+09:25.920 --> 09:29.360
+The problem is that if we decide we need a new architecture and everybody else has done
+
+09:29.360 --> 09:33.600
+it with the old triplet name, now the old triplet name means two different things, it
+
+09:33.600 --> 09:38.480
+means the new ABI or the old ABI for in Debian ecosystem and that doesn't seem like a good
+
+09:38.480 --> 09:40.440
+place to be either.
+
+09:40.440 --> 09:47.040
+So I don't know, if we could all agree what we're doing amongst distro people who care,
+
+09:47.040 --> 09:51.320
+that would be really helpful.
+
+09:51.320 --> 09:59.600
+But as I said, glibc doesn't enforce 64 bit time t, so if just building against a new
+
+09:59.600 --> 10:04.360
+glibc doesn't put you in 64 bit world, something somewhere has to set the magic variable and
+
+10:04.360 --> 10:09.600
+the question is, does dpacket do that or glibc do that or gcc do that, I mean it seems to
+
+10:09.600 --> 10:14.800
+me glibc should probably do it, but at the moment that's not a thing, we can work that
+
+10:14.800 --> 10:15.800
+out.
+
+10:15.800 --> 10:19.280
+As I said, a new triplet is kind of easier, we just start again, it gives the opportunity
+
+10:19.280 --> 10:23.440
+to call it arm 32 for the rest of the time, which would be a much better name, but you
+
+10:23.440 --> 10:28.400
+know, a very small bonus in comparison to how much work is involved.
+
+10:28.400 --> 10:32.560
+So in a way this transition is just like any other large transition and we've done it before,
+
+10:32.560 --> 10:37.760
+glibc5 to glibc6 was massive and that was like everything had to transition in one go,
+
+10:37.760 --> 10:41.880
+Debian was smaller back then which made it a bit easier and it affected everybody, so
+
+10:41.880 --> 10:42.880
+everybody had an incentive.
+
+10:42.880 --> 10:48.220
+The problem here is that it only really is an armhf problem, but if we have a big transition
+
+10:48.220 --> 10:54.400
+with lots of libraries, everybody has to wait whilst that piles up and then goes through
+
+10:54.400 --> 10:59.280
+and all the other architectures, proper architectures will complain and go, well you people get
+
+10:59.280 --> 11:02.680
+a move on, you've bunged up the whole world.
+
+11:02.680 --> 11:07.720
+But we have done this before, back in 2007, apparently long doubles changed from 64 bits
+
+11:07.720 --> 11:13.240
+to 128 bits on a whole load of relatively minor architectures nobody cares about, not
+
+11:13.240 --> 11:18.800
+now, I mean they probably cared a bit more 13 years ago and the world didn't expect,
+
+11:18.800 --> 11:24.120
+I didn't even notice, so it can't have been that bad.
+
+11:24.120 --> 11:27.920
+So yeah, so I had a look at some numbers, how big is this problem, is it completely
+
+11:27.920 --> 11:29.840
+intractable or not?
+
+11:29.840 --> 11:31.520
+I think that's quite an important question.
+
+11:31.520 --> 11:36.880
+So six and a half thousand packages out of our 35,000 have time to end them at all, so
+
+11:36.880 --> 11:42.160
+that's how big it could possibly be, but an awful lot of that is not in public APIs or
+
+11:42.160 --> 11:47.880
+file formats, again I have really no handle on how big the file format part of this is,
+
+11:47.880 --> 11:52.720
+but the API part we're getting a reasonable idea, so in the bottom 150 packages that you
+
+11:52.720 --> 11:57.520
+make to just bootstrap a system, 85 of those are libraries and 7 of those actually change
+
+11:57.520 --> 12:00.680
+with time t, so that doesn't sound too bad.
+
+12:00.680 --> 12:06.720
+Steve Langisek's done a very useful bit of work on Ubuntu, up to all 767 library packages,
+
+12:06.720 --> 12:13.440
+209 didn't analyse for tedious reasons, weak mobile layer, but of the 558 that did, 17%
+
+12:13.440 --> 12:17.840
+of them, i.e. 82, did change the ABI.
+
+12:17.840 --> 12:21.560
+So that doesn't sound too crazy.
+
+12:21.560 --> 12:24.840
+If we assume the same sort of fraction in the bit that's not yet analysed, there's
+
+12:24.840 --> 12:30.200
+maybe 115 libraries or something like that which would need to transition together.
+
+12:30.200 --> 12:34.840
+So that's a lot, but it's probably doable.
+
+12:34.840 --> 12:39.720
+I've just done some fairly random experiments having built both standard armhf, armhf with
+
+12:39.720 --> 12:43.720
+large file systems and armhf with time t and large file systems and just tried putting
+
+12:43.720 --> 12:48.640
+binaries in between them, and nothing obviously blew up, it didn't just immediately fail,
+
+12:48.640 --> 12:54.840
+so it's not that bad, but I didn't have a good set of things you should actually check,
+
+12:54.840 --> 13:00.040
+what are the tests I should run having installed some of this on the old system to see whether
+
+13:00.040 --> 13:01.440
+it broke.
+
+13:01.440 --> 13:06.400
+So I think we need a list like that to kind of get a handle on how bad that part of the
+
+13:06.400 --> 13:07.400
+problem is.
+
+13:07.400 --> 13:12.520
+So here's a few things which have been mentioned as potential problems, NFS version 3, apparently
+
+13:12.520 --> 13:16.920
+the time there, sometimes it's signed or sometimes it isn't depending on the client implementation,
+
+13:16.920 --> 13:21.280
+so some of them won't break for another 150 years, some will.
+
+13:21.280 --> 13:24.200
+That'll annoy some people.
+
+13:24.200 --> 13:31.040
+I don't know how many NFS people haven't moved to V4 yet, probably some.
+
+13:31.040 --> 13:32.680
+X3 is a problem, I don't know anything about that.
+
+13:32.680 --> 13:38.280
+XFS was a problem, but I believe that's fixed in kernel 5.10 or something.
+
+13:38.280 --> 13:42.080
+CPU was alleged to be a problem, but then somebody else told me that it has 11 octal
+
+13:42.080 --> 13:46.280
+digits and therefore 33 bits, so we've got another 150 years before that breaks.
+
+13:46.280 --> 13:48.600
+Does anybody know for a fact?
+
+13:48.600 --> 13:53.600
+There's a lot of room that shouldn't know stuff like this.
+
+13:53.600 --> 13:59.520
+Apparently INN will break, but you know, that's a thing, it could be fixed.
+
+13:59.520 --> 14:06.880
+32 bit wine on 32 bit systems with 64 bit time to allegedly might break, but then that's
+
+14:06.880 --> 14:14.280
+only on i386, I don't think we care about that, so I'm probably going to ignore that.
+
+14:14.280 --> 14:15.280
+So yeah, what else?
+
+14:15.280 --> 14:17.880
+Again, we shall come to some questions in a moment.
+
+14:17.880 --> 14:23.040
+I'm sure there's quite a lot of other things, but I don't know what they are.
+
+14:23.040 --> 14:25.320
+So yeah, it's question time.
+
+14:25.320 --> 14:29.280
+I have done that reasonably quickly, excellent.
+
+14:29.280 --> 14:32.520
+I would like feedback from people.
+
+14:32.520 --> 14:36.840
+So this point about the, are we doing a new architecture or not?
+
+14:36.840 --> 14:40.320
+Thinking so far in Debian has been kind of, this feels very big and intractable and we're
+
+14:40.320 --> 14:41.800
+not sure how bad it is.
+
+14:41.800 --> 14:45.640
+So it's a lot safer to do a new thing.
+
+14:45.640 --> 14:48.920
+But having done some research, the research I've seen suggests that maybe it's not so
+
+14:48.920 --> 14:50.120
+enormous we can't do this.
+
+14:50.120 --> 14:55.480
+So I think an in place transition probably is doable.
+
+14:55.480 --> 14:59.400
+There will probably be some breakage, but it'll only be an armchair, so it's like, we could
+
+14:59.400 --> 15:03.400
+just annoy those people for a while.
+
+15:03.400 --> 15:04.400
+It might eat your files a lot.
+
+15:04.400 --> 15:06.880
+I think that's the thing that is really going to piss people off.
+
+15:06.880 --> 15:11.680
+If you install a new thing and halfway through, it just corrupts files.
+
+15:11.680 --> 15:13.440
+They could be important.
+
+15:13.440 --> 15:15.320
+That's not good.
+
+15:15.320 --> 15:18.040
+So that's the driver for going, let's just do a new triplet.
+
+15:18.040 --> 15:21.720
+But I don't think anybody else wants to do a new triplet because most people have sort
+
+15:21.720 --> 15:26.680
+of fixed this with a standard transition within the system and a rebuild.
+
+15:26.680 --> 15:32.560
+So I'm not going to say what I think just yet, but I have been developing an opinion
+
+15:32.560 --> 15:34.240
+having done this research.
+
+15:34.240 --> 15:38.160
+Yeah, I would like to say I would love to get a list of things like, you know, is Dbus
+
+15:38.160 --> 15:39.160
+going to break?
+
+15:39.160 --> 15:43.920
+Does it have any times in it that's half your things are using new time and the other half
+
+15:43.920 --> 15:50.080
+are using old time and Dbus has, well, things like that, you know, IPC mechanisms as opposed
+
+15:50.080 --> 15:51.960
+to ABIs.
+
+15:51.960 --> 15:55.160
+I think the ABI problem we understand is the rest of it.
+
+15:55.160 --> 15:57.160
+I'm a bit worried about.
+
+15:57.160 --> 15:58.160
+Yeah.
+
+15:58.160 --> 16:03.440
+I'm not quite sure how to get, does anybody want to say anything?
+
+16:03.440 --> 16:05.440
+Somebody wants to say something.
+
+16:05.440 --> 16:08.720
+Have we got a roaming mic?
+
+16:08.720 --> 16:09.720
+Excellent.
+
+16:09.720 --> 16:11.720
+Steve, yeah, I see.
+
+16:11.720 --> 16:22.880
+Hi, Wookiee.
+
+16:22.880 --> 16:26.760
+Hi.
+
+16:26.760 --> 16:33.600
+So of course, having discussed about this a bit in the past, this is most complicated
+
+16:33.600 --> 16:36.800
+on arm hf, as you said.
+
+16:36.800 --> 16:46.040
+It's probably not possible to necessarily change the ABI of i386 because there are a whole
+
+16:46.040 --> 16:50.760
+load of old binaries that people will not be able to run anymore.
+
+16:50.760 --> 16:56.580
+And the only reason you'd ever care about running i386 is for shitty old binaries.
+
+16:56.580 --> 17:01.360
+It's less of an issue, therefore, arm hf, so that might be feasible.
+
+17:01.360 --> 17:03.320
+Yeah.
+
+17:03.320 --> 17:11.000
+So we need good test suites for all of these things and for good integration tests, as
+
+17:11.000 --> 17:15.040
+you say, for either end of IPC and that kind of thing.
+
+17:15.040 --> 17:17.800
+I have no idea on those.
+
+17:17.800 --> 17:27.080
+I wish I did.
+
+17:27.080 --> 17:29.080
+Okay.
+
+17:29.080 --> 17:33.560
+I have the same concern about 32-bit wine, which is people care about that for running
+
+17:33.560 --> 17:35.400
+shitty old Windows binaries.
+
+17:35.400 --> 17:36.400
+Somehow, somehow...
+
+17:36.400 --> 17:37.400
+I care about that.
+
+17:37.400 --> 17:40.760
+I have some shitty old Windows binaries and that's what it's for.
+
+17:40.760 --> 17:46.560
+I mean, somehow Win32 has become this lingua franca of I need an old program to run on
+
+17:46.560 --> 17:52.600
+any machine and now, like, if we look at what Valve is doing with Proton, they've just decided,
+
+17:52.600 --> 17:54.680
+fine, Win32 is the standard for it.
+
+17:54.680 --> 17:59.040
+So I realize there's a difference between Win32 and the architecture that it runs on,
+
+17:59.040 --> 18:08.200
+but Win32 specifically, as I understand it, 64-bit wine doesn't run 32-bit Windows binaries.
+
+18:08.200 --> 18:09.200
+Correct.
+
+18:09.200 --> 18:13.440
+So the thing is, wine already does API translation.
+
+18:13.440 --> 18:14.480
+That's what it does, right?
+
+18:14.480 --> 18:19.320
+So it seems to me that if the underlying system has 64-bit time calls, I'm not sure it necessarily
+
+18:19.320 --> 18:21.560
+can't work with the old binaries.
+
+18:21.560 --> 18:22.560
+Oh, that's something I haven't thought about.
+
+18:22.560 --> 18:24.640
+I understand exactly how this works.
+
+18:24.640 --> 18:30.520
+So I don't know whether, in fact, that is fixable or, as I say, whether anybody cares
+
+18:30.520 --> 18:34.800
+enough about i386 world, just leave it alone.
+
+18:34.800 --> 18:40.120
+I hadn't thought about the fact that that relies on the Windows time format, which isn't
+
+18:40.120 --> 18:41.680
+faced with this problem.
+
+18:41.680 --> 18:42.680
+Yeah.
+
+18:42.680 --> 18:46.600
+So, yeah, I'm not sure whether it's actually a big deal, just means someone would have
+
+18:46.600 --> 18:50.000
+to do some work in some old code that everyone's left alone for a very long time and nobody
+
+18:50.000 --> 18:52.000
+can remember how it works.
+
+18:52.000 --> 18:53.760
+I also wonder about ARMv5.
+
+18:53.760 --> 18:58.120
+There's an awful lot of Raspberry Pi ones floating around the world right now.
+
+18:58.120 --> 18:59.120
+Yes.
+
+18:59.120 --> 19:03.760
+It's a good point, actually.
+
+19:03.760 --> 19:06.560
+Are there any Pi people in the room?
+
+19:06.560 --> 19:08.680
+What have the Pi people thought about this problem?
+
+19:08.680 --> 19:17.840
+I haven't talked to the Pi people yet, and he's quite right that it's a significant constituency.
+
+19:17.840 --> 19:31.720
+I'm not from Rhine, but I remember something about improving their abstraction so that
+
+19:31.720 --> 19:36.720
+you can run 32-bit WINE applications on a 64-bit WINE.
+
+19:36.720 --> 19:50.240
+So to move the 64-bit, 32-bit translation into WINE so that the native libraries are
+
+19:50.240 --> 19:57.160
+all 64-bit, and I'm not sure if that would actually solve the year 2038 problem.
+
+19:57.160 --> 19:58.160
+Fair enough.
+
+19:58.160 --> 19:59.160
+So we're not sure.
+
+19:59.160 --> 20:00.160
+Totally good.
+
+20:00.160 --> 20:06.440
+So does anybody have things which they know will break, which have not been mentioned?
+
+20:06.440 --> 20:07.440
+People.
+
+20:07.440 --> 20:10.800
+There's a lot of software out there.
+
+20:10.800 --> 20:14.440
+Because if we don't know of lots of things that will break, maybe this isn't as bad as
+
+20:14.440 --> 20:15.440
+the...
+
+20:15.440 --> 20:16.440
+Yes.
+
+20:16.440 --> 20:17.440
+Yes.
+
+20:17.440 --> 20:18.440
+Yes.
+
+20:18.440 --> 20:19.440
+Yes.
+
+20:19.440 --> 20:20.440
+Yes.
+
+20:20.440 --> 20:21.440
+Yes.
+
+20:21.440 --> 20:22.440
+Yes.
+
+20:22.440 --> 20:23.440
+Yes.
+
+20:23.440 --> 20:24.440
+Yes.
+
+20:24.440 --> 20:25.440
+Yes.
+
+20:25.440 --> 20:26.440
+Yes.
+
+20:26.440 --> 20:27.440
+Yes.
+
+20:27.440 --> 20:28.440
+Yes.
+
+20:28.440 --> 20:29.440
+Yes.
+
+20:29.440 --> 20:30.440
+Yes.
+
+20:30.440 --> 20:31.440
+Yes.
+
+20:31.440 --> 20:32.440
+Yes.
+
+20:32.440 --> 20:33.440
+Yes.
+
+20:33.440 --> 20:34.440
+Yes.
+
+20:34.440 --> 20:40.160
+So you can use this magic autoconf variable that switches the transition to 64-bit time
+
+20:40.160 --> 20:47.680
+to off, but you cannot be sure that somebody used, well, maybe an unreleased part of Knulip
+
+20:47.680 --> 20:54.000
+into his autoconf code or whatever, and there are lots of exotic build systems out there
+
+20:54.000 --> 20:59.760
+where somebody may just say we are using 64-bit time, and then you have some random piece
+
+20:59.760 --> 21:04.000
+of software that is compiled in one way and some other random piece of software that is
+
+21:04.000 --> 21:05.360
+compiled the other way.
+
+21:05.360 --> 21:08.640
+So it's kind of already...
+
+21:08.640 --> 21:13.400
+We are already in a mess, and we just need to find the best way to get out of it.
+
+21:13.400 --> 21:16.840
+And the other thing that I wanted to say is that...
+
+21:16.840 --> 21:17.840
+I mean, I'm...
+
+21:17.840 --> 21:18.840
+Personally, I'm...
+
+21:18.840 --> 21:33.840
+...who want to keep doing this.
+
+21:33.840 --> 21:38.720
+I want to keep some ancient software running with binary compatibility, so...
+
+21:38.720 --> 21:44.240
+Yeah, I think, as I said, the big boys just abandoned 32-bit world, so they decided it's
+
+21:44.240 --> 21:45.240
+not their problem.
+
+21:45.240 --> 21:51.760
+Yeah, I'm also not from wine, but for sure, regarding what I was saying before, yeah,
+
+21:51.760 --> 21:57.840
+1.8 is basically going to start to support running on 64-bit, so the 32 binaries, so
+
+21:57.840 --> 21:58.840
+that won't be a problem.
+
+21:58.840 --> 22:04.480
+Another thing you mentioned, stuff like debus, as well, won't be a problem, because debus
+
+22:04.480 --> 22:06.080
+is not a type for time.
+
+22:06.080 --> 22:07.720
+It's basically passing numbers.
+
+22:07.720 --> 22:09.200
+You define the kind of...
+
+22:09.200 --> 22:11.640
+It's not passing time structs around to people.
+
+22:11.640 --> 22:18.080
+Yeah, I mean, it's my passing time, but it's not the time type, so basically you define
+
+22:18.080 --> 22:19.080
+the kind of...
+
+22:19.080 --> 22:20.080
+Yeah, it was a problem.
+
+22:20.080 --> 22:22.040
+I don't know how it works, but yeah.
+
+22:22.040 --> 22:26.560
+Any sort of protocol like that which was being given structs by one application and taking
+
+22:26.560 --> 22:30.520
+them out by another, if they have a different understanding of how big the time variable
+
+22:30.520 --> 22:31.520
+is, it won't work.
+
+22:31.520 --> 22:35.800
+Yeah, you know, that's exactly true, but I mean, in that case, there shouldn't be a
+
+22:35.800 --> 22:36.800
+problem.
+
+22:36.800 --> 22:42.440
+Why it might be a problem for stuff like using socket or FDS, that's indeed an issue, and
+
+22:42.440 --> 22:43.440
+that's...
+
+22:43.440 --> 22:44.440
+Right.
+
+22:44.440 --> 22:45.440
+I mean, just to respond to Andrea, the...
+
+22:45.440 --> 22:50.000
+I was going to say, no, my brain's failed.
+
+22:50.000 --> 22:51.320
+No, that's right.
+
+22:51.320 --> 22:54.520
+The fact that people, as you say, already there's a certain amount of randomness in
+
+22:54.520 --> 22:58.760
+what's built out there, if we're not noticing a huge number of problems from it, then maybe
+
+22:58.760 --> 22:59.760
+it's not too bad, right?
+
+22:59.760 --> 23:03.960
+You know, it could be viewed as a good thing, as a good sign.
+
+23:03.960 --> 23:05.880
+I don't know.
+
+23:05.880 --> 23:10.880
+In any case, when you said that you have to do large scale rebuild and that source distro
+
+23:10.880 --> 23:15.680
+is having easy, that's not entirely true because we will also have to schedule for our users
+
+23:15.680 --> 23:17.080
+a large scale rebuild.
+
+23:17.080 --> 23:18.080
+True.
+
+23:18.080 --> 23:19.080
+Easier, I think.
+
+23:19.080 --> 23:20.080
+Yeah.
+
+23:20.080 --> 23:26.800
+There was someone up there.
+
+23:26.800 --> 23:32.840
+There's at least an NTP which has some time of time T and...
+
+23:32.840 --> 23:33.840
+Yeah, that's 26.
+
+23:33.840 --> 23:34.840
+That runs out.
+
+23:34.840 --> 23:35.840
+So actually that's first.
+
+23:35.840 --> 23:38.480
+And that may be an even bigger disaster.
+
+23:38.480 --> 23:54.040
+Yeah, I further understand that I have time T2.
+
+23:54.040 --> 23:57.280
+I need to find that link for you.
+
+23:57.280 --> 23:58.280
+Okay, yes, please.
+
+23:58.280 --> 23:59.280
+Send me...
+
+23:59.280 --> 24:03.640
+If anybody wants to send me examples of things that should be tested, that will be brilliant.
+
+24:03.640 --> 24:05.120
+I think is probably the way to do it.
+
+24:05.120 --> 24:09.040
+But the other thing that I failed to get onto is there's a list where we intend to discuss
+
+24:09.040 --> 24:11.560
+this and produce a plan quite soon.
+
+24:11.560 --> 24:16.080
+I think we should do something like this year, whatever the hell it is.
+
+24:16.080 --> 24:18.840
+And we need a reasonable...
+
+24:18.840 --> 24:19.840
+Some representatives from each...
+
+24:19.840 --> 24:22.560
+It doesn't need to be very many people, but you know, the fairly small number of people
+
+24:22.560 --> 24:41.200
+who actually care about this problem...
+
+24:41.200 --> 24:43.000
+Which you're particularly worried about.
+
+24:43.000 --> 24:47.760
+Yeah, I guess that's our time anyway.
+
+24:47.760 --> 24:48.760
+So thank you very much.
+
+24:48.760 --> 24:56.160
+Thank you very much.

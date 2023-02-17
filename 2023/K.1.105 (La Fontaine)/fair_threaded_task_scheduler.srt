@@ -1,0 +1,2636 @@
+1
+0:00:00.000 --> 0:00:06.840
+Hello, my name is Vlad.
+
+2
+0:00:06.840 --> 0:00:14.000
+I am a CEO and C++ developer who is roughly eight years of experience.
+
+3
+0:00:14.000 --> 0:00:18.400
+Right now I work at a game dev company called Ubisoft, which some of you probably heard
+
+4
+0:00:18.400 --> 0:00:25.000
+about with mostly low-level networking and some bits of system programming.
+
+5
+0:00:25.000 --> 0:00:31.200
+In Ubisoft, while doing a complete rewrite of our networking stack in one of the game
+
+6
+0:00:31.200 --> 0:00:38.000
+engines, I managed to design, I hope, a cool algorithm for doing so-called task scheduling.
+
+7
+0:00:38.000 --> 0:00:44.880
+Today I share this algorithm in the form of this talk and an open-source C++ implementation
+
+8
+0:00:44.880 --> 0:00:45.880
+of it.
+
+9
+0:00:45.880 --> 0:00:49.560
+Although if you don't like C++, it doesn't have to be.
+
+10
+0:00:49.560 --> 0:00:55.600
+Today we focus just on the algorithms, and they can be implemented in some other language
+
+11
+0:00:55.600 --> 0:01:01.680
+too, like in Rust, I'm sure it can be done in Java, in C sharp maybe.
+
+12
+0:01:01.680 --> 0:01:09.000
+So there will be a lot of content, so we will be going relatively quick and I ask you to
+
+13
+0:01:09.000 --> 0:01:10.000
+concentrate.
+
+14
+0:01:10.000 --> 0:01:13.000
+The talk will follow the plan.
+
+15
+0:01:13.000 --> 0:01:18.560
+Firstly, what is task scheduling exactly, because many things can be understood as it.
+
+16
+0:01:18.560 --> 0:01:23.640
+Can I explain how it's normally done, what are typical problems with it, at least known
+
+17
+0:01:23.640 --> 0:01:29.480
+to me, and how it works in old task scheduler in my game engine, and how it works in the
+
+18
+0:01:29.480 --> 0:01:35.200
+new one, and then I will briefly show you the benchmarks, how it's verified, and what
+
+19
+0:01:35.200 --> 0:01:37.440
+are the future plans for it.
+
+20
+0:01:37.440 --> 0:01:40.160
+So what is task scheduling exactly?
+
+21
+0:01:40.160 --> 0:01:48.040
+Today in this talk I mean, as task scheduling, any kind of execution of code, such as callbacks,
+
+22
+0:01:48.040 --> 0:01:54.640
+functions for something similar, and we just call it task, a generic term.
+
+23
+0:01:54.640 --> 0:02:00.520
+So to give you a few examples, tasks can be callbacks in the thread pool, or tasks can
+
+24
+0:02:00.520 --> 0:02:08.320
+be watchers in an event loop like in libf in C, we can have watchers as timers or wrapping
+
+25
+0:02:08.320 --> 0:02:14.560
+sockets and they also have callbacks, or we can also call tasks routines in some routine
+
+26
+0:02:14.560 --> 0:02:21.800
+engine like C++ routines or fibers in the database.
+
+27
+0:02:21.800 --> 0:02:29.520
+So here is a very, very simple trivial scheduler implemented in C++ like code for simplicity,
+
+28
+0:02:29.520 --> 0:02:31.960
+which demonstrates this example.
+
+29
+0:02:31.960 --> 0:02:34.280
+So it's just a single thread.
+
+30
+0:02:34.280 --> 0:02:40.720
+It has a mutex lock queue for callbacks, and what it does is just executes of callbacks
+
+31
+0:02:40.720 --> 0:02:41.720
+one by one.
+
+32
+0:02:41.720 --> 0:02:44.080
+This is a very simple scheduler.
+
+33
+0:02:44.080 --> 0:02:50.520
+Now let's see if such a basic scheduler can solve a real task which I had at Ubisoft.
+
+34
+0:02:50.520 --> 0:02:56.680
+Here tasks execute requests coming to the server, and they handle save games, save game
+
+35
+0:02:56.680 --> 0:03:01.760
+blobs, and there might be tens of thousands of those requests per second, and they are
+
+36
+0:03:01.760 --> 0:03:03.360
+also CPU intensive.
+
+37
+0:03:03.360 --> 0:03:08.040
+So every task might take milliseconds of pure CPU time.
+
+38
+0:03:08.040 --> 0:03:15.160
+And also they consist of multiple steps like I have to in each task lock user profile in
+
+39
+0:03:15.160 --> 0:03:16.160
+some database.
+
+40
+0:03:16.160 --> 0:03:19.960
+Then I have to download the save game blob from another database.
+
+41
+0:03:19.960 --> 0:03:25.520
+Then I have to do some preprocessing of this blob some stuff with some manipulations.
+
+42
+0:03:25.520 --> 0:03:29.720
+Then I have to upload it back and then log the user profile.
+
+43
+0:03:29.720 --> 0:03:33.800
+As you can guess, most of the time the task is not doing anything at all.
+
+44
+0:03:33.800 --> 0:03:38.880
+It just sleeps waiting for network input from the databases.
+
+45
+0:03:38.880 --> 0:03:45.600
+So literally more than 90% of times there is nothing happening in this task.
+
+46
+0:03:45.600 --> 0:03:50.120
+The three-wall scheduler which we just saw with single thread, it will not work here.
+
+47
+0:03:50.120 --> 0:03:51.720
+It simply will not scale.
+
+48
+0:03:51.720 --> 0:03:59.280
+Firstly, single thread is not enough to handle so many requests, so being so CPU intensive.
+
+49
+0:03:59.280 --> 0:04:01.160
+It will just show on CPU.
+
+50
+0:04:01.160 --> 0:04:07.120
+Finally, we can't postpone blocked tasks and do other tasks while the first ones are waiting
+
+51
+0:04:07.120 --> 0:04:09.820
+for some events like network input.
+
+52
+0:04:09.820 --> 0:04:16.280
+So this means we need routines so that tasks could yield so they could give up their time
+
+53
+0:04:16.280 --> 0:04:20.360
+to some other tasks in the same thread.
+
+54
+0:04:20.360 --> 0:04:26.160
+The game engine I'm working with had a good enough scheduler which could do the job for
+
+55
+0:04:26.160 --> 0:04:29.240
+some years, good enough.
+
+56
+0:04:29.240 --> 0:04:36.200
+This was just a thread pool where each thread had a list of own tasks and when new tasks
+
+57
+0:04:36.200 --> 0:04:41.920
+were appearing there were distributed to those threads in a row and manner one by one and
+
+58
+0:04:41.920 --> 0:04:45.280
+they were pinned to those threads forever.
+
+59
+0:04:45.280 --> 0:04:47.760
+They could not migrate between threads.
+
+60
+0:04:47.760 --> 0:04:53.660
+And then what each worker thread does is updates all its tasks with some fixed hard coded period
+
+61
+0:04:53.660 --> 0:04:57.520
+like once per hundred milliseconds or once per second.
+
+62
+0:04:57.520 --> 0:05:02.880
+Each task after being updated it can return false eventually and it can see that it's
+
+63
+0:05:02.880 --> 0:05:04.920
+done and it is deleted.
+
+64
+0:05:04.920 --> 0:05:08.080
+So this is some polling basically.
+
+65
+0:05:08.080 --> 0:05:13.920
+We will call this scheduler updater because there isn't much scheduling.
+
+66
+0:05:13.920 --> 0:05:19.000
+Really it just updates those tasks without looking at their state or anything.
+
+67
+0:05:19.000 --> 0:05:21.760
+So we call it updater.
+
+68
+0:05:21.760 --> 0:05:27.120
+This updater thing has some typical problems like schedulers of this type sometimes.
+
+69
+0:05:27.120 --> 0:05:30.000
+Firstly it was unfair.
+
+70
+0:05:30.000 --> 0:05:32.840
+Meaning that tasks were pinned to threads.
+
+71
+0:05:32.840 --> 0:05:34.000
+They could not migrate.
+
+72
+0:05:34.000 --> 0:05:39.800
+This leads to a problem that your superior users will be unbalanced because some worker
+
+73
+0:05:39.800 --> 0:05:46.320
+threads will get heavy tasks and a lot of them will stay in the queues and other threads
+
+74
+0:05:46.320 --> 0:05:52.000
+will get light tasks and will be in like idlink most of the time.
+
+75
+0:05:52.000 --> 0:05:57.080
+This will happen even if you do perfect round robin and all your tasks are the same because
+
+76
+0:05:57.080 --> 0:06:00.240
+actually tasks are never the same.
+
+77
+0:06:00.240 --> 0:06:06.000
+Like in my case all the tasks do the same several steps but save game blobs they can
+
+78
+0:06:06.000 --> 0:06:09.320
+vary in size from kilobytes to megabytes.
+
+79
+0:06:09.320 --> 0:06:12.840
+Their processing, their downloading obviously takes not the same time.
+
+80
+0:06:12.840 --> 0:06:17.960
+So some threads will be unfairly loaded and they will perform worse at least in terms
+
+81
+0:06:17.960 --> 0:06:21.600
+of latency because they will have bigger queues.
+
+82
+0:06:21.600 --> 0:06:24.200
+Tasks will wait longer than them.
+
+83
+0:06:24.200 --> 0:06:29.520
+On that note it's not the only problem, the other problem is polling which in this case
+
+84
+0:06:29.520 --> 0:06:35.440
+means each task is updated unconditionally with some fixed period regardless of task
+
+85
+0:06:35.440 --> 0:06:36.440
+state.
+
+86
+0:06:36.440 --> 0:06:39.920
+So every task is updated even if it doesn't have work to do yet.
+
+87
+0:06:39.920 --> 0:06:44.120
+So it's still waiting for network input.
+
+88
+0:06:44.120 --> 0:06:49.000
+What it means is that if you select too big polling interval then you will have too high
+
+89
+0:06:49.000 --> 0:06:51.840
+latency more than you could have.
+
+90
+0:06:51.840 --> 0:06:57.160
+For instance imagine like we have a task with just three steps each taking five milliseconds
+
+91
+0:06:57.160 --> 0:07:00.200
+and in between it waits for some network input.
+
+92
+0:07:00.200 --> 0:07:03.880
+And we will update it once per 100 milliseconds.
+
+93
+0:07:03.880 --> 0:07:09.440
+Then your task will always at least take 215 milliseconds.
+
+94
+0:07:09.440 --> 0:07:13.960
+The thing is you don't always need so much time.
+
+95
+0:07:13.960 --> 0:07:19.040
+Most of the time like almost always the network response will arrive earlier than 100 milliseconds
+
+96
+0:07:19.040 --> 0:07:24.520
+expire and you have events to process but you are not doing it because it's not yet
+
+97
+0:07:24.520 --> 0:07:26.120
+time to update the task.
+
+98
+0:07:26.120 --> 0:07:28.760
+So we have higher latency than we could have.
+
+99
+0:07:28.760 --> 0:07:37.600
+If you try to fight it, try to set lower polling interval then you will be on CPU without need
+
+100
+0:07:37.600 --> 0:07:39.720
+because you will have spurious wakeups.
+
+101
+0:07:39.720 --> 0:07:41.160
+So unnecessary wakeups.
+
+102
+0:07:41.160 --> 0:07:46.720
+You will sometimes wake up tasks before they have stuff to do.
+
+103
+0:07:46.720 --> 0:07:51.480
+It doesn't sound too bad like how expensive can it be really.
+
+104
+0:07:51.480 --> 0:07:57.040
+Imagine like spurious update of a task would cost us just 10 microseconds to check a deadline
+
+105
+0:07:57.040 --> 0:08:01.120
+or check an atomic flag, lock and lock and utex and that's it.
+
+106
+0:08:01.120 --> 0:08:05.640
+It's not much but if you have 10,000 tasks per second doing those unnecessary wakeups
+
+107
+0:08:05.640 --> 0:08:13.140
+you just burned 10% of one CPU core which already sounds worse and this problem aggravates
+
+108
+0:08:13.140 --> 0:08:16.200
+if you have more threads than CPU cores.
+
+109
+0:08:16.200 --> 0:08:19.480
+Because then you didn't just burn the CPU time.
+
+110
+0:08:19.480 --> 0:08:24.520
+You stole it from other threads which could spend it on something useful.
+
+111
+0:08:24.520 --> 0:08:27.200
+This problem was actually real.
+
+112
+0:08:27.200 --> 0:08:32.640
+During low tests some servers were spending more CPU time on spurious wakeups than on
+
+113
+0:08:32.640 --> 0:08:34.280
+doing actual work.
+
+114
+0:08:34.280 --> 0:08:38.340
+So they were just burning.
+
+115
+0:08:38.340 --> 0:08:43.440
+So much for the green data clusters.
+
+116
+0:08:43.440 --> 0:08:48.000
+What we need on the summary from a really performance scheduler.
+
+117
+0:08:48.000 --> 0:08:49.920
+Firstly it should be fair.
+
+118
+0:08:49.920 --> 0:08:53.000
+We are not allowed to pin tasks to threads.
+
+119
+0:08:53.000 --> 0:08:54.640
+It doesn't scale.
+
+120
+0:08:54.640 --> 0:09:00.160
+Secondly we need routines so the tasks could give up their time so they could yield and
+
+121
+0:09:00.160 --> 0:09:04.320
+let the worker thread do some other tasks.
+
+122
+0:09:04.320 --> 0:09:08.680
+And also we have zero tolerance against polling.
+
+123
+0:09:08.680 --> 0:09:10.160
+No polling at all.
+
+124
+0:09:10.160 --> 0:09:12.960
+Everything should be event based.
+
+125
+0:09:12.960 --> 0:09:17.800
+And these goals are achieved in a new scheduler which I do to lack of fantasy just called
+
+126
+0:09:17.800 --> 0:09:18.800
+task scheduler.
+
+127
+0:09:18.800 --> 0:09:24.520
+Although the name is pretty self-explanatory what it does.
+
+128
+0:09:24.520 --> 0:09:27.800
+The plan is that we will go firstly.
+
+129
+0:09:27.800 --> 0:09:32.080
+We'll look at the big picture of the entire scheduler and then we will look at individual
+
+130
+0:09:32.080 --> 0:09:36.480
+parts of the scheduler when you will already know what they do.
+
+131
+0:09:36.480 --> 0:09:40.400
+Imagine like we have a process, this server running, it's a process.
+
+132
+0:09:40.400 --> 0:09:46.800
+It has multiple threads and they produce tasks.
+
+133
+0:09:46.800 --> 0:09:53.120
+And we have a global object of type task scheduler in the process like it can be C++ task scheduler,
+
+134
+0:09:53.120 --> 0:09:57.080
+Java task scheduler, whatever language we implemented it in.
+
+135
+0:09:57.080 --> 0:09:58.920
+It is a global object in the process.
+
+136
+0:09:58.920 --> 0:10:01.120
+And those threads they produce tasks.
+
+137
+0:10:01.120 --> 0:10:07.680
+So they receive some requests from clients and post them into tasks and post into the
+
+138
+0:10:07.680 --> 0:10:13.320
+task scheduler in form of some callbacks of some sort.
+
+139
+0:10:13.320 --> 0:10:18.680
+In the scheduler they will gather in a so-called front queue.
+
+140
+0:10:18.680 --> 0:10:25.040
+Then the scheduler will periodically pick up, take all the tasks from the front queue
+
+141
+0:10:25.040 --> 0:10:26.960
+and inspect them one by one.
+
+142
+0:10:26.960 --> 0:10:32.560
+It will see that some tasks are ready to be executed right now, the red ones on this slide.
+
+143
+0:10:32.560 --> 0:10:34.880
+They want to be executed as AP.
+
+144
+0:10:34.880 --> 0:10:40.960
+And some other tasks they do not want to be executed right now, they just yield it.
+
+145
+0:10:40.960 --> 0:10:44.680
+We have routine so there will be tasks which don't want to be executed now.
+
+146
+0:10:44.680 --> 0:10:46.720
+They are waiting for something.
+
+147
+0:10:46.720 --> 0:10:53.160
+For a deadline or for an explicit wake up for some event, they are moved into a wait
+
+148
+0:10:53.160 --> 0:10:57.840
+queue where they will wait for their events.
+
+149
+0:10:57.840 --> 0:11:03.360
+Also from the wait queue we extract some older tasks which were already sleeping there for
+
+150
+0:11:03.360 --> 0:11:05.480
+some time.
+
+151
+0:11:05.480 --> 0:11:10.520
+And now their deadline is up or they were woken up explicitly.
+
+152
+0:11:10.520 --> 0:11:13.080
+Either way we extract them from the queue.
+
+153
+0:11:13.080 --> 0:11:16.480
+And all those red tasks go to the ready queue.
+
+154
+0:11:16.480 --> 0:11:22.880
+And from here they are extracted by the worker threads which take them from the ready queue
+
+155
+0:11:22.880 --> 0:11:26.120
+one by one and execute.
+
+156
+0:11:26.120 --> 0:11:28.080
+And this is basically the entire pipeline.
+
+157
+0:11:28.080 --> 0:11:33.440
+It's not too complicated although some of you could already have a question who does
+
+158
+0:11:33.440 --> 0:11:34.440
+this part.
+
+159
+0:11:34.440 --> 0:11:37.480
+We have external threads posting tasks.
+
+160
+0:11:37.480 --> 0:11:39.600
+We have worker threads doing tasks.
+
+161
+0:11:39.600 --> 0:11:44.160
+But who does the scheduling itself, management of the queues?
+
+162
+0:11:44.160 --> 0:11:48.200
+The thing is there is no dedicated thread doing just the scheduling.
+
+163
+0:11:48.200 --> 0:11:53.240
+Instead the worker threads compete for doing the scheduling.
+
+164
+0:11:53.240 --> 0:11:54.760
+Depending on who of them is idle.
+
+165
+0:11:54.760 --> 0:12:01.200
+So imagine like this big rectangle with queues, it's a room with a single key to it.
+
+166
+0:12:01.200 --> 0:12:06.160
+And the worker threads sometimes depending on who of them is idle again will try to pick
+
+167
+0:12:06.160 --> 0:12:07.160
+out the key.
+
+168
+0:12:07.160 --> 0:12:12.800
+Whoever does it first enters the room, does the scheduling, this queue management stuff,
+
+169
+0:12:12.800 --> 0:12:14.760
+leaves the room and starts doing tasks.
+
+170
+0:12:14.760 --> 0:12:16.760
+So all the threads are the same.
+
+171
+0:12:16.760 --> 0:12:22.960
+There is no threads having roles of some sort like a naive implementation could do.
+
+172
+0:12:22.960 --> 0:12:28.600
+And it's a bit like dining philosophers problem except that we have just one fork here.
+
+173
+0:12:28.600 --> 0:12:33.040
+And this big rectangle in this case is just a plate of spaghetti.
+
+174
+0:12:33.040 --> 0:12:34.040
+But not in code.
+
+175
+0:12:34.040 --> 0:12:36.480
+Code is clean.
+
+176
+0:12:36.480 --> 0:12:42.240
+To improve understanding there is a short visual example I prepared.
+
+177
+0:12:42.240 --> 0:12:44.120
+Imagine like we have five tasks.
+
+178
+0:12:44.120 --> 0:12:46.800
+They are posted into the front queue.
+
+179
+0:12:46.800 --> 0:12:51.480
+And one of the worker threads has the scheduling key right now.
+
+180
+0:12:51.480 --> 0:12:54.240
+It will extract the tasks from the queue.
+
+181
+0:12:54.240 --> 0:12:56.560
+We'll see that a couple of them yielded.
+
+182
+0:12:56.560 --> 0:12:59.200
+They go to the wait queue waiting for something.
+
+183
+0:12:59.200 --> 0:13:02.960
+And the others are moved into the ready queue.
+
+184
+0:13:02.960 --> 0:13:05.880
+From here they are picked up by the worker threads.
+
+185
+0:13:05.880 --> 0:13:07.680
+Nobody is doing the scheduling right now.
+
+186
+0:13:07.680 --> 0:13:10.840
+All the threads are doing some actual work.
+
+187
+0:13:10.840 --> 0:13:13.120
+A couple of tasks are done.
+
+188
+0:13:13.120 --> 0:13:18.360
+And suddenly those waiting tasks are broken up or their deadline is up.
+
+189
+0:13:18.360 --> 0:13:19.920
+They want to be executed now.
+
+190
+0:13:19.920 --> 0:13:23.040
+So one of the worker threads will eventually pick up the scheduling key.
+
+191
+0:13:23.040 --> 0:13:24.440
+We'll notice this.
+
+192
+0:13:24.440 --> 0:13:28.680
+We'll move the tasks into the ready queue and then parallel some other thread finished
+
+193
+0:13:28.680 --> 0:13:30.520
+on older tasks.
+
+194
+0:13:30.520 --> 0:13:35.240
+Now those two tasks are picked up by a couple of random threads.
+
+195
+0:13:35.240 --> 0:13:36.240
+They are done.
+
+196
+0:13:36.240 --> 0:13:39.480
+And some other thread will pick up the scheduling key.
+
+197
+0:13:39.480 --> 0:13:42.280
+And the process repeats all the time when new tasks arrive.
+
+198
+0:13:42.280 --> 0:13:43.280
+This is it.
+
+199
+0:13:43.280 --> 0:13:49.880
+What we need to implement all this cool stuff, the language and the libraries which we will
+
+200
+0:13:49.880 --> 0:13:55.000
+be using need to provide us with the following stuff at least.
+
+201
+0:13:55.000 --> 0:14:01.160
+We need mutexes, containers like race lists, condition variables, and not important for
+
+202
+0:14:01.160 --> 0:14:05.080
+the algorithm but for the implementation, for the performance.
+
+203
+0:14:05.080 --> 0:14:07.000
+It's extremely important.
+
+204
+0:14:07.000 --> 0:14:10.760
+We will also need log-free atomic operations.
+
+205
+0:14:10.760 --> 0:14:15.720
+Just in case not all of you know what they are, here is a short server code explaining
+
+206
+0:14:15.720 --> 0:14:18.400
+what these log-free atomics are.
+
+207
+0:14:18.400 --> 0:14:19.760
+We will need three of them.
+
+208
+0:14:19.760 --> 0:14:27.600
+Firstly is atomic load, which is basically reading a variable but with respect to so-called
+
+209
+0:14:27.600 --> 0:14:31.200
+memory models, which we can Google afterwards.
+
+210
+0:14:31.200 --> 0:14:34.680
+It's too complicated topic to dive in right now.
+
+211
+0:14:34.680 --> 0:14:39.120
+We will also need atomic compare exchange, which is conditional assignment.
+
+212
+0:14:39.120 --> 0:14:45.360
+So we set a new value to some variable if it was equal to something else which we wanted
+
+213
+0:14:45.360 --> 0:14:46.360
+to check.
+
+214
+0:14:46.360 --> 0:14:48.480
+And we will also need atomic exchange.
+
+215
+0:14:48.480 --> 0:14:52.240
+So it sets a new value and returns the old value.
+
+216
+0:14:52.240 --> 0:14:58.560
+The cool stuff about those log-free atomics is that they are not only atomic but they
+
+217
+0:14:58.560 --> 0:14:59.560
+are log-free.
+
+218
+0:14:59.560 --> 0:15:01.920
+There is no mutexes.
+
+219
+0:15:01.920 --> 0:15:06.240
+On the contrary, mutexes use this stuff inside.
+
+220
+0:15:06.240 --> 0:15:10.360
+And how they are implemented, they are special instructions on the CPU.
+
+221
+0:15:10.360 --> 0:15:14.360
+So doing those operations doesn't even involve the kernel.
+
+222
+0:15:14.360 --> 0:15:17.160
+It's quite cheap if you use it efficiently.
+
+223
+0:15:17.160 --> 0:15:23.040
+But those free operations are basis for some very cool and extremely performant algorithms
+
+224
+0:15:23.040 --> 0:15:24.720
+as we will see, not just here.
+
+225
+0:15:24.720 --> 0:15:30.000
+There are a lot of those algorithms based on those log-free atomic operations.
+
+226
+0:15:30.000 --> 0:15:33.400
+They are also called log-free algorithms.
+
+227
+0:15:33.400 --> 0:15:39.480
+And we will follow the task pipeline looking at the scheduler parts.
+
+228
+0:15:39.480 --> 0:15:43.840
+And we will start from the front queue, just like the tasks.
+
+229
+0:15:43.840 --> 0:15:49.880
+We know that this queue has multiple producers and it has a single consumer.
+
+230
+0:15:49.880 --> 0:15:54.880
+So it means this queue is multi-producer single consumer.
+
+231
+0:15:54.880 --> 0:15:57.680
+This is a common notation for naming queues.
+
+232
+0:15:57.680 --> 0:16:02.520
+We say multi or single producer, multi or single consumer.
+
+233
+0:16:02.520 --> 0:16:04.760
+And we get four combinations of queue types.
+
+234
+0:16:04.760 --> 0:16:08.080
+This is multi-producer single consumer.
+
+235
+0:16:08.080 --> 0:16:12.600
+We also know about this queue that it will experience high contention because I want
+
+236
+0:16:12.600 --> 0:16:18.000
+my scheduler to be functional when I have tens of threads and millions of tasks per
+
+237
+0:16:18.000 --> 0:16:19.000
+second.
+
+238
+0:16:19.000 --> 0:16:23.240
+This means extreme contention on the front queue.
+
+239
+0:16:23.240 --> 0:16:28.040
+This in turn means I should avoid mutexes because mutexes most likely will choke here.
+
+240
+0:16:28.040 --> 0:16:34.120
+What you would do in a normal queue, not thread safe or anything, you would have to remember
+
+241
+0:16:34.120 --> 0:16:38.480
+two positions, head and tail, and maintain those positions.
+
+242
+0:16:38.480 --> 0:16:43.840
+If you try to turn this algorithm into a lock free thread safe implementation, it would
+
+243
+0:16:43.840 --> 0:16:50.400
+be a nightmare because the more variables you have to update in a lock free way, the
+
+244
+0:16:50.400 --> 0:16:52.520
+more complicated the algorithm gets.
+
+245
+0:16:52.520 --> 0:16:59.280
+And queue, like with two variables, it's extremely hard to implement in a lock free way.
+
+246
+0:16:59.280 --> 0:17:01.960
+We should try to avoid this if possible.
+
+247
+0:17:01.960 --> 0:17:06.160
+And the idea is let's make it a stack instead of queue.
+
+248
+0:17:06.160 --> 0:17:10.880
+So we will maintain just one position, the top item, and we don't need two variables
+
+249
+0:17:10.880 --> 0:17:14.760
+here and then the algorithm becomes quite simple.
+
+250
+0:17:14.760 --> 0:17:21.960
+Pushing is, well, we try to link new item with the old top, set it, atomic compare exchange
+
+251
+0:17:21.960 --> 0:17:27.800
+will fail if some other threads does it faster than we are in this push and we don't retry
+
+252
+0:17:27.800 --> 0:17:28.800
+it.
+
+253
+0:17:28.800 --> 0:17:29.800
+It's pretty simple.
+
+254
+0:17:29.800 --> 0:17:35.140
+The more complicated part, although it looks shorter, is popping the items.
+
+255
+0:17:35.140 --> 0:17:40.600
+The thing is that how pop is implemented, we just replace top item with null.
+
+256
+0:17:40.600 --> 0:17:43.640
+Effectively taking all the items at once.
+
+257
+0:17:43.640 --> 0:17:46.240
+We cannot pop them one by one.
+
+258
+0:17:46.240 --> 0:17:50.920
+And also we have to reverse the list before we return it because when we were pushing
+
+259
+0:17:50.920 --> 0:17:58.400
+items in FIFO order, pushing them on the stack, they are returned in LIFO order and we want
+
+260
+0:17:58.400 --> 0:17:59.520
+to maintain the order.
+
+261
+0:17:59.520 --> 0:18:01.560
+So we have to reverse it again.
+
+262
+0:18:01.560 --> 0:18:07.160
+These are two downsides that we can't pop one by one and we have to reverse the result
+
+263
+0:18:07.160 --> 0:18:08.840
+before returning it.
+
+264
+0:18:08.840 --> 0:18:15.280
+On the other hand, what we get, it is completely lock free, thread safe, and it's weight free.
+
+265
+0:18:15.280 --> 0:18:20.320
+Who will win those drawbacks for the being lock free and weight free?
+
+266
+0:18:20.320 --> 0:18:23.960
+We will see in the end in the benchmark section.
+
+267
+0:18:23.960 --> 0:18:27.000
+Next part of the task journey is weight queue.
+
+268
+0:18:27.000 --> 0:18:29.720
+As we know, it stores yielded tasks.
+
+269
+0:18:29.720 --> 0:18:36.040
+So they are waiting for something like in 99% of cases, they are waiting for a deadline.
+
+270
+0:18:36.040 --> 0:18:40.400
+Since we are using tasks for requests, requests usually have a time out, meaning that they
+
+271
+0:18:40.400 --> 0:18:42.080
+have a deadline.
+
+272
+0:18:42.080 --> 0:18:48.480
+So what we need is to be able to quickly pop all tasks with expired deadline simply because
+
+273
+0:18:48.480 --> 0:18:50.720
+we have to do everything here.
+
+274
+0:18:50.720 --> 0:18:53.680
+Quickly there is a lot of tasks.
+
+275
+0:18:53.680 --> 0:18:59.440
+And we also know that this queue is always accessed by one-third at a time.
+
+276
+0:18:59.440 --> 0:19:02.200
+The current scheduler worker who owns the scheduling key.
+
+277
+0:19:02.200 --> 0:19:04.760
+So there is no concurrency on the queue.
+
+278
+0:19:04.760 --> 0:19:10.960
+And that gives us quite a lot of freedom about what data structures we can use.
+
+279
+0:19:10.960 --> 0:19:13.880
+That basically means we can use binary heap.
+
+280
+0:19:13.880 --> 0:19:21.720
+It's ideal for such job when you have to quickly pop something sorted by thing like deadline.
+
+281
+0:19:21.720 --> 0:19:26.520
+What happens is that we sort the tasks by deadlines here, basically.
+
+282
+0:19:26.520 --> 0:19:29.560
+So the task with the closest deadline will be on top.
+
+283
+0:19:29.560 --> 0:19:36.160
+And we will be able for constant time to immediately if any task has expired by just looking at
+
+284
+0:19:36.160 --> 0:19:38.040
+the top.
+
+285
+0:19:38.040 --> 0:19:44.960
+And in case not all of you know what binary heap is, there is a brief explanation.
+
+286
+0:19:44.960 --> 0:19:51.680
+It's a perfectly balanced binary tree where each node value is less than values of its
+
+287
+0:19:51.680 --> 0:19:53.040
+child nodes.
+
+288
+0:19:53.040 --> 0:19:58.400
+We call this minimal heap, if we reverse the order, it will be called maximal heap.
+
+289
+0:19:58.400 --> 0:20:04.840
+And this heap, it has quite good complexity.
+
+290
+0:20:04.840 --> 0:20:05.840
+Quite good complexity.
+
+291
+0:20:05.840 --> 0:20:10.720
+So for logarithmic time, we can pop any items even from the middle.
+
+292
+0:20:10.720 --> 0:20:17.800
+We can push new items also for logarithmic time, which is very nice, very fast.
+
+293
+0:20:17.800 --> 0:20:26.600
+From the wait queue, the tasks migrate to the ready queue, which as we know is populated
+
+294
+0:20:26.600 --> 0:20:32.960
+by one thread, current scheduler worker, and it is consumed by multiple threads, worker
+
+295
+0:20:32.960 --> 0:20:34.840
+threads.
+
+296
+0:20:34.840 --> 0:20:39.680
+So it means this is a multi-consumer single producer queue.
+
+297
+0:20:39.680 --> 0:20:44.720
+We also know that it will as well experience high contention because task scheduler should
+
+298
+0:20:44.720 --> 0:20:49.880
+be perfectly functional with like ten worker threads, why not, and with millions of tasks
+
+299
+0:20:49.880 --> 0:20:52.160
+per second, we will have high contention.
+
+300
+0:20:52.160 --> 0:20:58.600
+We have to deal with it somehow, although unfortunately I don't know a nice simple algorithm
+
+301
+0:20:58.600 --> 0:21:03.640
+for doing unbounded and log-free queue of this type.
+
+302
+0:21:03.640 --> 0:21:09.040
+For the reason why you can Google ABA problem after the talk, it's also quite complicated.
+
+303
+0:21:09.040 --> 0:21:12.720
+We will not have time to dive into this.
+
+304
+0:21:12.720 --> 0:21:19.800
+But just know that it is much more complicated than multi-producer single consumer version,
+
+305
+0:21:19.800 --> 0:21:28.080
+although I know a couple of other queues, unbounded log-based and bounded log-free.
+
+306
+0:21:28.080 --> 0:21:32.420
+I want my final queue to be exactly unbounded, meaning not limited in size.
+
+307
+0:21:32.420 --> 0:21:35.320
+So I don't want any limits inside the scheduler.
+
+308
+0:21:35.320 --> 0:21:38.640
+You can add them on top, but I don't want them to be inside the scheduler.
+
+309
+0:21:38.640 --> 0:21:47.360
+I don't want it to be limited by anything like queue size.
+
+310
+0:21:47.360 --> 0:21:50.200
+So let's see what we can do with those two queues.
+
+311
+0:21:50.200 --> 0:21:55.160
+The bounded log-free version, bounded log-free queue is simple.
+
+312
+0:21:55.160 --> 0:22:01.400
+It's just a cyclic array, except that the read and write index will make atomic variables.
+
+313
+0:22:01.400 --> 0:22:07.080
+So in pushing, the only thing changes compared to normal cyclic buffer is that you increment
+
+314
+0:22:07.080 --> 0:22:11.760
+the write index atomically, atomic increment, and that's it.
+
+315
+0:22:11.760 --> 0:22:15.120
+The popping is just a little bit more complicated.
+
+316
+0:22:15.120 --> 0:22:19.160
+We have to retry it sometimes because there will be multiple consumers.
+
+317
+0:22:19.160 --> 0:22:22.160
+They will compete for the same element sometimes.
+
+318
+0:22:22.160 --> 0:22:26.560
+So atomic compare exchange will eventually fail, and we will have to retry, but it's
+
+319
+0:22:26.560 --> 0:22:29.480
+still quite simple.
+
+320
+0:22:29.480 --> 0:22:34.120
+And the unbounded log-queue is just trivial.
+
+321
+0:22:34.120 --> 0:22:39.400
+So it's a mutex and it's a list, and we take mutex from every operation.
+
+322
+0:22:39.400 --> 0:22:43.760
+Then it becomes log-based, but it's unbounded.
+
+323
+0:22:43.760 --> 0:22:48.960
+So what we can do with the read-queue, what I heard was the craziest idea.
+
+324
+0:22:48.960 --> 0:22:54.280
+The thing is our enemy is not the mutex itself.
+
+325
+0:22:54.280 --> 0:22:56.400
+It's the contention on the mutex.
+
+326
+0:22:56.400 --> 0:23:01.120
+So we could try to reduce the contention instead of deleting the mutex.
+
+327
+0:23:01.120 --> 0:23:06.760
+We could skip it, but somehow maybe not lock it so often.
+
+328
+0:23:06.760 --> 0:23:11.320
+Let's combine those two approaches together.
+
+329
+0:23:11.320 --> 0:23:19.400
+Let's take the bounded log-free queue and make unbounded log-based queue of those log-free
+
+330
+0:23:19.400 --> 0:23:21.160
+sub-queues.
+
+331
+0:23:21.160 --> 0:23:26.000
+So it will be like a steady queue, but the blocks are log-free.
+
+332
+0:23:26.000 --> 0:23:29.960
+And the big queue of those blocks is log-based.
+
+333
+0:23:29.960 --> 0:23:36.200
+When the producer, how the producer works, it will push new items to the latest block
+
+334
+0:23:36.200 --> 0:23:37.800
+in the log-free way.
+
+335
+0:23:37.800 --> 0:23:42.600
+When the block becomes full, it takes mutex, appends a new block, fills it in the log-free
+
+336
+0:23:42.600 --> 0:23:44.240
+way, and so on.
+
+337
+0:23:44.240 --> 0:23:49.400
+And the consumers, they do their other thing vice versa, so they consume the first block
+
+338
+0:23:49.400 --> 0:23:51.120
+in the log-free way.
+
+339
+0:23:51.120 --> 0:23:55.400
+When it becomes empty, they take mutex, switch to the next block, consume it in the log-free
+
+340
+0:23:55.400 --> 0:23:57.440
+way, and so on.
+
+341
+0:23:57.440 --> 0:24:03.120
+You see the benefit, imagine like sub-queue size, this block size is not full like on
+
+342
+0:24:03.120 --> 0:24:05.640
+the slide, but it's 10,000.
+
+343
+0:24:05.640 --> 0:24:14.320
+What happens then is we will take mutex lock, not on IV operation, but once per 10,000 operations.
+
+344
+0:24:14.320 --> 0:24:19.400
+Mutex is still here, but it's locked so rarely that its cost is neglectable.
+
+345
+0:24:19.400 --> 0:24:24.840
+You will not see this mutex lock in any flame graphs anymore.
+
+346
+0:24:24.840 --> 0:24:31.880
+The only problem with this is that the consumers will need an explicit state, because if consumer
+
+347
+0:24:31.880 --> 0:24:37.920
+doesn't know which is the first block in this queue of blocks, it will have to locate it.
+
+348
+0:24:37.920 --> 0:24:44.760
+The queue of blocks, it's protected by a mutex, so if consumers don't have a state, if they
+
+349
+0:24:44.760 --> 0:24:50.560
+don't reference the first block having items, then on every pop they would have to find
+
+350
+0:24:50.560 --> 0:24:53.880
+it, keeping the mutex, and that would mean mutex lock on every pop.
+
+351
+0:24:53.880 --> 0:24:57.360
+This is exactly what we wanted to avoid.
+
+352
+0:24:57.360 --> 0:25:02.000
+Consumers need to register themselves, and then they can do the popping.
+
+353
+0:25:02.000 --> 0:25:07.160
+This is not a problem for a task scheduler itself, because it has fixed set of worker
+
+354
+0:25:07.160 --> 0:25:10.200
+threads which you specify at creation.
+
+355
+0:25:10.200 --> 0:25:14.240
+They can register themselves as consumers at start and live just fine with it, so it's
+
+356
+0:25:14.240 --> 0:25:20.080
+just a problem for generic usage of this type of queue, but for task scheduler it is just
+
+357
+0:25:20.080 --> 0:25:22.200
+fine.
+
+358
+0:25:22.200 --> 0:25:27.760
+Let's examine the visual example again.
+
+359
+0:25:27.760 --> 0:25:34.600
+Imagine we have this queue, it's empty, just single block, one producer, two consumers.
+
+360
+0:25:34.600 --> 0:25:39.040
+Producer adds three items in a lock-free way.
+
+361
+0:25:39.040 --> 0:25:41.200
+Everything is lock-free so far.
+
+362
+0:25:41.200 --> 0:25:44.320
+One consumer consumes one item, lock-free.
+
+363
+0:25:44.320 --> 0:25:48.120
+Now producer adds another item, lock-free.
+
+364
+0:25:48.120 --> 0:25:52.400
+It sees that the block became full, so we need to append a new block.
+
+365
+0:25:52.400 --> 0:26:01.200
+We take mutex, append the new block, switch to the next block, release the mutex, and
+
+366
+0:26:01.200 --> 0:26:05.080
+add three more items in the lock-free way.
+
+367
+0:26:05.080 --> 0:26:09.920
+Consumers will work, they will finish consumption of the first block.
+
+368
+0:26:09.920 --> 0:26:16.120
+Consumer A will see that the block is empty, so it takes mutex, switches to next block,
+
+369
+0:26:16.120 --> 0:26:17.320
+releases the mutex.
+
+370
+0:26:17.320 --> 0:26:19.960
+And it continues consumption in a lock-free way.
+
+371
+0:26:19.960 --> 0:26:24.200
+So we take mutex only when we switch from block to block.
+
+372
+0:26:24.200 --> 0:26:29.280
+And the other consumer, when we will try to consume something from it, it will see immediately
+
+373
+0:26:29.280 --> 0:26:34.080
+that its current block is empty because those blocks, they are, as you remember, lock-free
+
+374
+0:26:34.080 --> 0:26:35.080
+bounded queues.
+
+375
+0:26:35.080 --> 0:26:40.560
+There are read and write index, if we see that the read index of this block equals its
+
+376
+0:26:40.560 --> 0:26:44.520
+size it means it's empty, so we don't even need to full scan it.
+
+377
+0:26:44.520 --> 0:26:51.920
+Anyway, Consumer B will then lock mutex, switch to next block, release the mutex, and continue
+
+378
+0:26:51.920 --> 0:26:53.000
+the consumption.
+
+379
+0:26:53.000 --> 0:26:58.580
+And the old blocks, they are completely consumed once, can be discarded.
+
+380
+0:26:58.580 --> 0:27:03.560
+You can free them, you can reuse them, like have a pool of those blocks and append them
+
+381
+0:27:03.560 --> 0:27:05.400
+to beginning again.
+
+382
+0:27:05.400 --> 0:27:10.680
+If you want to, like, it's not cheap to locate blocks having 10,000 items in them, so you
+
+383
+0:27:10.680 --> 0:27:15.680
+might want to pull them, to have a pool of them.
+
+384
+0:27:15.680 --> 0:27:20.120
+About the benchmarks we will see in the end, again, as I said, with everything combined.
+
+385
+0:27:20.120 --> 0:27:26.560
+And our progress so far is that we saw test-cular parts, those queues, and now we can have a
+
+386
+0:27:26.560 --> 0:27:28.480
+glimpse at the routines.
+
+387
+0:27:28.480 --> 0:27:35.640
+Unfortunately, we don't have enough time to dive deep into the implementation, but I can
+
+388
+0:27:35.640 --> 0:27:40.880
+show you some usage examples, show the features they have, and for the implementation, you
+
+389
+0:27:40.880 --> 0:27:46.080
+can look at the source code and ask me questions after the talk.
+
+390
+0:27:46.080 --> 0:27:51.280
+To see why do we need routines again and what features we need from the routines, let's
+
+391
+0:27:51.280 --> 0:27:55.160
+inspect the simplified version of this save games example.
+
+392
+0:27:55.160 --> 0:27:57.840
+This time we have just two steps.
+
+393
+0:27:57.840 --> 0:28:01.080
+Start download of a save game block and then handle the result.
+
+394
+0:28:01.080 --> 0:28:03.720
+This is in just two steps.
+
+395
+0:28:03.720 --> 0:28:10.000
+What we know is that while the task is waiting for response from the network, it shouldn't
+
+396
+0:28:10.000 --> 0:28:14.040
+block other tasks, so it should be able to yield.
+
+397
+0:28:14.040 --> 0:28:16.880
+It should be able to step away.
+
+398
+0:28:16.880 --> 0:28:22.360
+What we also know that we can't, this task, it can't sleep infinitely.
+
+399
+0:28:22.360 --> 0:28:24.360
+There should be some sort of timeout.
+
+400
+0:28:24.360 --> 0:28:29.240
+Requests can't be executing infinitely, so we need some deadline after which the task
+
+401
+0:28:29.240 --> 0:28:33.080
+would be woken up and will cancel the request.
+
+402
+0:28:33.080 --> 0:28:38.440
+So if the response arrives in time before the deadline, we have to wake up the task
+
+403
+0:28:38.440 --> 0:28:40.200
+before the deadline.
+
+404
+0:28:40.200 --> 0:28:44.400
+There should be some sort of explicit wake up for the task which is right now sleeping
+
+405
+0:28:44.400 --> 0:28:46.480
+in the wait queue, so it's not executing.
+
+406
+0:28:46.480 --> 0:28:49.520
+How exactly do we wake it up from there?
+
+407
+0:28:49.520 --> 0:28:50.920
+So we need an explicit wake up.
+
+408
+0:28:50.920 --> 0:28:57.760
+We need yield, deadlines, and wake ups, three main features of those routines.
+
+409
+0:28:57.760 --> 0:29:00.000
+Let's see an example.
+
+410
+0:29:00.000 --> 0:29:03.560
+It's almost exactly like it looks in real code.
+
+411
+0:29:03.560 --> 0:29:10.000
+There will be simplified version of C++, but it's very similar how it looks in reality.
+
+412
+0:29:10.000 --> 0:29:14.760
+We have a global task scheduler in the process and some HTTP client.
+
+413
+0:29:14.760 --> 0:29:20.480
+And imagine like a request from the client arrives, so we wrap it into a task and give
+
+414
+0:29:20.480 --> 0:29:22.720
+it a callback called download.
+
+415
+0:29:22.720 --> 0:29:28.160
+And we post it into the scheduler, so it will go into this front queue.
+
+416
+0:29:28.160 --> 0:29:33.680
+The scheduler will execute our callback in one of the worker trails.
+
+417
+0:29:33.680 --> 0:29:39.200
+This download callback, so what we do here is firstly set what will be the next step.
+
+418
+0:29:39.200 --> 0:29:42.760
+The next step will be handling the result.
+
+419
+0:29:42.760 --> 0:29:45.320
+Then we do the asynchronous HTTP request.
+
+420
+0:29:45.320 --> 0:29:48.640
+Assume that our HTTP client is able to do this.
+
+421
+0:29:48.640 --> 0:29:53.400
+So we start an asynchronous HTTP request and give it a future callback to execute when
+
+422
+0:29:53.400 --> 0:29:58.120
+the request is done, which will call wake up on our task.
+
+423
+0:29:58.120 --> 0:30:01.760
+Well this will be explicit wake up when the request is done.
+
+424
+0:30:01.760 --> 0:30:03.080
+And then we start waiting.
+
+425
+0:30:03.080 --> 0:30:08.120
+So we post ourself back into the scheduler with five seconds deadline.
+
+426
+0:30:08.120 --> 0:30:13.360
+Either the task will wake up in five seconds or it will be woken up explicitly when the
+
+427
+0:30:13.360 --> 0:30:14.920
+request is complete.
+
+428
+0:30:14.920 --> 0:30:19.840
+The task goes into the scheduler, sleeps in the wait queue for some time, and eventually
+
+429
+0:30:19.840 --> 0:30:23.240
+our callback handle result is executed.
+
+430
+0:30:23.240 --> 0:30:24.440
+We have to check what happened.
+
+431
+0:30:24.440 --> 0:30:26.600
+It could be two reasons.
+
+432
+0:30:26.600 --> 0:30:30.960
+Could be that the task is expired, so five seconds passed and we were woken up by the
+
+433
+0:30:30.960 --> 0:30:32.080
+deadline.
+
+434
+0:30:32.080 --> 0:30:35.200
+And we just literally check if it's expired.
+
+435
+0:30:35.200 --> 0:30:40.360
+If it is so, then we cancel the request and we start waiting for the cancellation to be
+
+436
+0:30:40.360 --> 0:30:46.320
+complete, to properly free all the resources and to go back into the scheduler, but now
+
+437
+0:30:46.320 --> 0:30:48.320
+we wait for the cancellation.
+
+438
+0:30:48.320 --> 0:30:52.400
+Otherwise, if it's not expired, that means the request is finally complete.
+
+439
+0:30:52.400 --> 0:30:57.880
+With some result, it could be success, it could be an HTTP error code, or it could be
+
+440
+0:30:57.880 --> 0:31:01.800
+our own cancellation done on the previous wake up a few lines above.
+
+441
+0:31:01.800 --> 0:31:05.480
+Either way, we just handle it and delete the task.
+
+442
+0:31:05.480 --> 0:31:10.200
+This is literally, this is almost exactly how it looks in the source code.
+
+443
+0:31:10.200 --> 0:31:16.240
+There is no spurious wake ups at all, no sleeps, and the request has clear state machine with
+
+444
+0:31:16.240 --> 0:31:19.800
+every state expressed at the callback.
+
+445
+0:31:19.800 --> 0:31:26.400
+And what is better, these entire routine stuff, all those wake ups, post, deadlines, this
+
+446
+0:31:26.400 --> 0:31:27.760
+is all completely locked free.
+
+447
+0:31:27.760 --> 0:31:32.840
+There is no single mutex used to implement the phone.
+
+448
+0:31:32.840 --> 0:31:37.760
+So this is to get you further interested into looking at the source code and asking questions
+
+449
+0:31:37.760 --> 0:31:40.520
+afterwards.
+
+450
+0:31:40.520 --> 0:31:45.520
+This is quite complicated stuff, as you can imagine, especially the implementation.
+
+451
+0:31:45.520 --> 0:31:48.480
+How do we verify such stuff?
+
+452
+0:31:48.480 --> 0:31:54.400
+Of course, there are unit tests, like literally hundreds and thousands of lines of unit tests,
+
+453
+0:31:54.400 --> 0:31:59.840
+but with multi-tradit algorithms, the thing is, even if you have 100% code coverage, it
+
+454
+0:31:59.840 --> 0:32:02.320
+doesn't tell you anything.
+
+455
+0:32:02.320 --> 0:32:08.840
+It's better than, I think, not having 100% coverage, but still there might be bugs, which
+
+456
+0:32:08.840 --> 0:32:13.800
+can stay hidden for literally years, and you will not find them except when this thing
+
+457
+0:32:13.800 --> 0:32:16.160
+explodes in production.
+
+458
+0:32:16.160 --> 0:32:19.960
+There should be a way to at least verify the algorithm, maybe.
+
+459
+0:32:19.960 --> 0:32:26.560
+We can't verify the source code, but we can improve our confidence about the algorithm
+
+460
+0:32:26.560 --> 0:32:27.720
+itself.
+
+461
+0:32:27.720 --> 0:32:29.720
+And the solution is TLA+.
+
+462
+0:32:29.720 --> 0:32:36.520
+TLA+, stands for temporal logic of actions, and it is a combination of mathematics and
+
+463
+0:32:36.520 --> 0:32:37.520
+temporal logic.
+
+464
+0:32:37.520 --> 0:32:42.920
+And it's also a language and runtime of this language.
+
+465
+0:32:42.920 --> 0:32:51.160
+This language allows you to verify literally any algorithms or systems, like you can verify
+
+466
+0:32:51.160 --> 0:32:56.200
+an algorithm of a queue, like I did, or how your microservices interact.
+
+467
+0:32:56.200 --> 0:32:59.160
+Or you can verify how you go to grocery store.
+
+468
+0:32:59.160 --> 0:33:01.640
+If you can algorithmize it, then you can verify it.
+
+469
+0:33:01.640 --> 0:33:06.360
+TLA+, it is suitable for anything like this.
+
+470
+0:33:06.360 --> 0:33:12.880
+So in this TLA+, language, you write a specification and run the verification, and it will allow
+
+471
+0:33:12.880 --> 0:33:20.600
+you to split your algorithm into a set of all the possible states in which this algorithm
+
+472
+0:33:20.600 --> 0:33:27.720
+can be, and verify your own invariance in every reachable state of your system.
+
+473
+0:33:27.720 --> 0:33:34.520
+So firstly, you define the algorithm, then you define what means validness for your algorithm,
+
+474
+0:33:34.520 --> 0:33:38.080
+the invariance, and TLA+, will verify all of them.
+
+475
+0:33:38.080 --> 0:33:43.600
+Let's see an example, like assume you have implemented a queue in any language, and we
+
+476
+0:33:43.600 --> 0:33:46.040
+want to verify the algorithm of this queue.
+
+477
+0:33:46.040 --> 0:33:53.600
+First you have to define what objects exist in your system, what agents you have there.
+
+478
+0:33:53.600 --> 0:33:59.120
+In my queue, I have just pipe for items, some sort of storage, and a couple of counters
+
+479
+0:33:59.120 --> 0:34:00.640
+and limits.
+
+480
+0:34:00.640 --> 0:34:03.320
+Then you have to define actions.
+
+481
+0:34:03.320 --> 0:34:08.520
+In TLA+, every action is a set of mathematical conditions combined with some mathematical
+
+482
+0:34:08.520 --> 0:34:18.520
+operators, like you have operators and or operator, or list or set operator, or complex
+
+483
+0:34:18.520 --> 0:34:23.960
+operators like all items in the set comply with the condition operator, and many more
+
+484
+0:34:23.960 --> 0:34:26.880
+other operators which you can use in your actions.
+
+485
+0:34:26.880 --> 0:34:32.720
+And the first action is always initialization, where you give initial values to your variables.
+
+486
+0:34:32.720 --> 0:34:37.720
+Here I say that storage pipe is an empty list, and my counters of sent and received items
+
+487
+0:34:37.720 --> 0:34:39.240
+are zero.
+
+488
+0:34:39.240 --> 0:34:46.760
+Then I start defining some actual actions doing stuff, like send, or push, or insert,
+
+489
+0:34:46.760 --> 0:34:48.400
+or whatever.
+
+490
+0:34:48.400 --> 0:34:50.120
+And there are ways how to do it.
+
+491
+0:34:50.120 --> 0:34:55.760
+I'm not aware of any standard ways how to do it properly, so I invented my own.
+
+492
+0:34:55.760 --> 0:34:59.520
+Firstly, I split my actions into two groups.
+
+493
+0:34:59.520 --> 0:35:04.640
+The first group of conditions I define when the action is possible.
+
+494
+0:35:04.640 --> 0:35:11.640
+So here I say send is possible when queue is not full, and when I still have items to
+
+495
+0:35:11.640 --> 0:35:14.280
+send, so not everything pushed yet.
+
+496
+0:35:14.280 --> 0:35:20.720
+In the second group, I tell what changes should be done when the first group is true, so when
+
+497
+0:35:20.720 --> 0:35:21.800
+the condition is true.
+
+498
+0:35:21.800 --> 0:35:27.760
+Here I say if the first part is true, then I add a new item to the pipe storage.
+
+499
+0:35:27.760 --> 0:35:33.360
+As items I use numbers, and I increment the number of sent items, of pushed items.
+
+500
+0:35:33.360 --> 0:35:37.600
+The problem is, as you could see, probably there is no really distinction between those
+
+501
+0:35:37.600 --> 0:35:38.600
+two groups.
+
+502
+0:35:38.600 --> 0:35:41.680
+It's imaginary.
+
+503
+0:35:41.680 --> 0:35:45.180
+And the only distinction is this small single quote sign.
+
+504
+0:35:45.180 --> 0:35:47.300
+It means next value of the variable.
+
+505
+0:35:47.300 --> 0:35:53.160
+The problem is, since Thiole passes basically math, in math there is no assignment.
+
+506
+0:35:53.160 --> 0:35:56.840
+There is no action like assign new value to some variable.
+
+507
+0:35:56.840 --> 0:36:03.400
+There is only, the closest thing we have is equal operator enough, but there is no assignment.
+
+508
+0:36:03.400 --> 0:36:09.760
+But you can emulate it saying next value of your variable equals old value and something
+
+509
+0:36:09.760 --> 0:36:10.760
+done with it.
+
+510
+0:36:10.760 --> 0:36:18.160
+So here I say literally last sent next equals last sent old plus one, which effectively
+
+511
+0:36:18.160 --> 0:36:24.520
+results into assignment in programming languages, but here you have to simulate it like this.
+
+512
+0:36:24.520 --> 0:36:26.880
+In Thiole plus there is no separation into groups.
+
+513
+0:36:26.880 --> 0:36:32.960
+It's just several mathematical conditions, but I do separate it for making the specification
+
+514
+0:36:32.960 --> 0:36:34.680
+easier to read.
+
+515
+0:36:34.680 --> 0:36:36.840
+I do the same for the receive action.
+
+516
+0:36:36.840 --> 0:36:43.840
+It's possible when I have items to receive and the changes do receive.
+
+517
+0:36:43.840 --> 0:36:50.360
+And then you have to define what means validness for your system, so the invariance, which
+
+518
+0:36:50.360 --> 0:36:52.520
+will be validated in every original state.
+
+519
+0:36:52.520 --> 0:36:57.040
+So as they say that my queue is valid when all the items in the queue are ordered, like
+
+520
+0:36:57.040 --> 0:37:03.680
+I pushed them, that the queue never overflows and then the items are received in the same
+
+521
+0:37:03.680 --> 0:37:05.640
+order as sent.
+
+522
+0:37:05.640 --> 0:37:12.200
+And then with some technical steps, simple ones, I run the validation and it will give
+
+523
+0:37:12.200 --> 0:37:16.720
+me result like end states are found, like hundreds, thousands of millions of states
+
+524
+0:37:16.720 --> 0:37:23.240
+are found and they are valid or it will say that I found an invalid state.
+
+525
+0:37:23.240 --> 0:37:28.360
+And here is how you get into the state from the initial one following this sequence of
+
+526
+0:37:28.360 --> 0:37:29.720
+actions.
+
+527
+0:37:29.720 --> 0:37:34.400
+And then you can turn those failure traces into unit tests in your actual code.
+
+528
+0:37:34.400 --> 0:37:41.520
+Now, this actually works and they call the bug in the scheduler thanks to this thing.
+
+529
+0:37:41.520 --> 0:37:48.840
+Here by the links you can find the specifications for task scheduler on the whole and for the
+
+530
+0:37:48.840 --> 0:37:54.960
+multi-consumer queue, which was not trivial enough, so I would try to validate it as well.
+
+531
+0:37:54.960 --> 0:38:00.120
+Two specifications, they are quite big, but most of the line documents explain the algorithm.
+
+532
+0:38:00.120 --> 0:38:06.400
+So the specifications, the code part of them is not too complicated.
+
+533
+0:38:06.400 --> 0:38:11.480
+You can read it like easily.
+
+534
+0:38:11.480 --> 0:38:17.040
+And also there are instructions how to install TLA Plus in the source code repository, how
+
+535
+0:38:17.040 --> 0:38:22.080
+to run validation on those models, how to install TLA Plus into the command line.
+
+536
+0:38:22.080 --> 0:38:25.000
+It's not trivial surprisingly.
+
+537
+0:38:25.000 --> 0:38:31.640
+And there is a great course of lectures from the author of TLA Plus, Leslie Lampert.
+
+538
+0:38:31.640 --> 0:38:32.640
+Lectures are quite fun.
+
+539
+0:38:32.640 --> 0:38:38.320
+If you are not even planning to use TLA Plus, they are still worth watching.
+
+540
+0:38:38.320 --> 0:38:41.800
+Great entertaining.
+
+541
+0:38:41.800 --> 0:38:44.440
+All of this can be found in the source code repository.
+
+542
+0:38:44.440 --> 0:38:46.840
+And now about the benchmarks.
+
+543
+0:38:46.840 --> 0:38:50.120
+How I did them, the benchmarks are comparative.
+
+544
+0:38:50.120 --> 0:38:56.400
+So I'm not just running the benchmarks against themselves in vacuum against some random stuff.
+
+545
+0:38:56.400 --> 0:39:02.880
+I compare the improved versions of those, my algorithms against trivial versions, naive
+
+546
+0:39:02.880 --> 0:39:09.240
+versions using mutexes to see if stuff actually improved.
+
+547
+0:39:09.240 --> 0:39:14.480
+Like all the same benchmarks run on my algorithms and on trivial implementations.
+
+548
+0:39:14.480 --> 0:39:18.800
+For example, the smart queues I benchmark against their mutex-locked versions.
+
+549
+0:39:18.800 --> 0:39:24.080
+Or the task scheduler I benchmark against thread pool without coroutines, single queues,
+
+550
+0:39:24.080 --> 0:39:26.640
+single mutex and nothing else.
+
+551
+0:39:26.640 --> 0:39:32.480
+I run this on five different configurations of software and hardware with tens of scenarios
+
+552
+0:39:32.480 --> 0:39:34.440
+and all the reports.
+
+553
+0:39:34.440 --> 0:39:40.200
+While the performance are available on GitHub in human readable markdown format.
+
+554
+0:39:40.200 --> 0:39:44.880
+And you can also run them on your system with just a single line of Python script.
+
+555
+0:39:44.880 --> 0:39:51.440
+It will generate the report for your case and you can read it and see what's up.
+
+556
+0:39:51.440 --> 0:39:53.720
+And so there are quite a lot of results.
+
+557
+0:39:53.720 --> 0:39:56.000
+I can show just a few of them on the slides.
+
+558
+0:39:56.000 --> 0:40:02.040
+I will use Debian Linux with eight cores running in Google Cloud.
+
+559
+0:40:02.040 --> 0:40:04.160
+And I will show just some average results.
+
+560
+0:40:04.160 --> 0:40:10.640
+No shocking, like 100 times faster, although there are extreme cases when algorithms are
+
+561
+0:40:10.640 --> 0:40:14.120
+almost the same or when it's extremely faster.
+
+562
+0:40:14.120 --> 0:40:21.080
+But I will show just some average results which you can actually get in real production.
+
+563
+0:40:21.080 --> 0:40:24.240
+We start from the front queue again.
+
+564
+0:40:24.240 --> 0:40:29.840
+The benchmark uses five producer threads and one consumer thread doing busy loop pushes
+
+565
+0:40:29.840 --> 0:40:35.160
+and pops all the time to get the worst case contention.
+
+566
+0:40:35.160 --> 0:40:37.400
+It's just for one and a half times faster.
+
+567
+0:40:37.400 --> 0:40:40.920
+And this is all considering the two drawbacks which you can remember.
+
+568
+0:40:40.920 --> 0:40:44.440
+So we have restore items as stack in the front queue.
+
+569
+0:40:44.440 --> 0:40:46.080
+We have to reverse them.
+
+570
+0:40:46.080 --> 0:40:50.000
+We can't pop them one by one and still it is one and a half times faster.
+
+571
+0:40:50.000 --> 0:40:55.040
+You should make it 10 producer threads so we have more threads than CPU cores.
+
+572
+0:40:55.040 --> 0:41:00.080
+Worst case for mutex contention, it becomes 2.6 times faster.
+
+573
+0:41:00.080 --> 0:41:01.080
+The red queue.
+
+574
+0:41:01.080 --> 0:41:07.280
+In other benchmark, five consumer threads, one producer thread, one producer thread,
+
+575
+0:41:07.280 --> 0:41:12.840
+again, busy loop, pushes and pops, it becomes 2.6 times faster.
+
+576
+0:41:12.840 --> 0:41:19.920
+Already end you can see that the lock contention is multiple orders lower than in a trivial
+
+577
+0:41:19.920 --> 0:41:21.920
+implementation.
+
+578
+0:41:21.920 --> 0:41:27.840
+This is thanks to us taking mutex lock not on every operation but once per multiple thousand
+
+579
+0:41:27.840 --> 0:41:30.640
+operations and this is the result.
+
+580
+0:41:30.640 --> 0:41:35.880
+Mutex is still here but it almost doesn't affect the results at all.
+
+581
+0:41:35.880 --> 0:41:41.320
+When we make it 10, consumer threads, it becomes already four and a half times faster.
+
+582
+0:41:41.320 --> 0:41:46.240
+The naive queue degrades quite quick in this case.
+
+583
+0:41:46.240 --> 0:41:47.880
+And now everything combined.
+
+584
+0:41:47.880 --> 0:41:55.720
+The task scheduler on the whole in this benchmark tasks are empty so they are just empty C++
+
+585
+0:41:55.720 --> 0:41:56.720
+functions.
+
+586
+0:41:56.720 --> 0:42:01.560
+Not doing anything worst case for contention again.
+
+587
+0:42:01.560 --> 0:42:05.880
+And now we start from single worker thread which will do both the scheduling and tasks.
+
+588
+0:42:05.880 --> 0:42:09.040
+It becomes right away 2.2 times faster.
+
+589
+0:42:09.040 --> 0:42:15.240
+Then a trivial thread pool without routine support, it becomes already 2.2 times faster.
+
+590
+0:42:15.240 --> 0:42:16.560
+And zero lock contention.
+
+591
+0:42:16.560 --> 0:42:20.480
+So lock wasn't contented even once between the worker and producer.
+
+592
+0:42:20.480 --> 0:42:25.040
+When we make it five worker threads, it becomes three times faster.
+
+593
+0:42:25.040 --> 0:42:29.320
+So it scales better than naive implementation when we make it ten worker threads.
+
+594
+0:42:29.320 --> 0:42:32.640
+It becomes seven and a half times faster.
+
+595
+0:42:32.640 --> 0:42:34.440
+And these are not the best results.
+
+596
+0:42:34.440 --> 0:42:36.800
+It can be even better.
+
+597
+0:42:36.800 --> 0:42:44.120
+I'm just not showing extreme cases here but I saw like 15 times speed up as well.
+
+598
+0:42:44.120 --> 0:42:48.080
+It's just not something you will most likely get in production if you start using this
+
+599
+0:42:48.080 --> 0:42:51.600
+but those benchmarks are also available.
+
+600
+0:42:51.600 --> 0:42:56.200
+Now about the real usage, not some random benchmarks in the vacuum, how it affects the
+
+601
+0:42:56.200 --> 0:42:58.480
+actual code.
+
+602
+0:42:58.480 --> 0:43:02.480
+Applied to this save games case from the beginning.
+
+603
+0:43:02.480 --> 0:43:08.240
+We imported one of the microservices from updater, scheduler to task scheduler and we
+
+604
+0:43:08.240 --> 0:43:14.440
+immediately without any further optimizations got ten times speed up.
+
+605
+0:43:14.440 --> 0:43:22.720
+We went from hundreds of PS to bigger than 10,000 of PS and latency dropped five times
+
+606
+0:43:22.720 --> 0:43:28.680
+like right out of the box before we started doing some other optimizations.
+
+607
+0:43:28.680 --> 0:43:30.600
+And the algorithm is extendable.
+
+608
+0:43:30.600 --> 0:43:36.920
+So as you remember there is this big rectangle where only one thread at a time can work.
+
+609
+0:43:36.920 --> 0:43:40.640
+It means this is thread safe space.
+
+610
+0:43:40.640 --> 0:43:44.640
+We can replace the binary heap with waiting task with something more complicated.
+
+611
+0:43:44.640 --> 0:43:50.760
+For instance we can put libf inside or epo or IO completion ports from windows inside
+
+612
+0:43:50.760 --> 0:43:54.480
+and we get multi-threaded event loop.
+
+613
+0:43:54.480 --> 0:44:01.200
+Like multi-threaded libf we can store circuits in tasks and we get circuits with deadlines
+
+614
+0:44:01.200 --> 0:44:04.800
+with yields and this is in fact what we do have in Ubisoft.
+
+615
+0:44:04.800 --> 0:44:10.760
+It's a fork of task scheduler where we just replaced wait queue with epo on Linux and
+
+616
+0:44:10.760 --> 0:44:12.920
+IO completion ports on windows.
+
+617
+0:44:12.920 --> 0:44:17.560
+And we get more than millions of, more than million messages per second with just several
+
+618
+0:44:17.560 --> 0:44:19.440
+threads on sockets.
+
+619
+0:44:19.440 --> 0:44:26.200
+With this thing it's not too complicated to extend scheduler, it's just maybe next time
+
+620
+0:44:26.200 --> 0:44:29.440
+about this multi-threaded event loop.
+
+621
+0:44:29.440 --> 0:44:31.960
+What are the future plans for it?
+
+622
+0:44:31.960 --> 0:44:37.240
+Maybe we could try to run it on ARM, maybe it already runs but I just haven't tried it.
+
+623
+0:44:37.240 --> 0:44:40.000
+Maybe it works, maybe not, I have no idea.
+
+624
+0:44:40.000 --> 0:44:43.960
+This is why it's open source, you can try it, send the pull request if something's not
+
+625
+0:44:43.960 --> 0:44:45.880
+working.
+
+626
+0:44:45.880 --> 0:44:51.520
+Also it's currently implemented only in C++ and it's not even STL although some people
+
+627
+0:44:51.520 --> 0:44:54.040
+might consider it good like me.
+
+628
+0:44:54.040 --> 0:45:00.120
+I don't like STL but it could use a port to STL as well or to some other language.
+
+629
+0:45:00.120 --> 0:45:05.320
+And also there could be optimizations done like the front queue.
+
+630
+0:45:05.320 --> 0:45:10.160
+Maybe there is a way not to store it as a stack, not to reverse the list of items before
+
+631
+0:45:10.160 --> 0:45:14.200
+returning it, I just haven't found a simple way to do it.
+
+632
+0:45:14.200 --> 0:45:18.640
+Which would be worth trying and this is the end, thanks for your attention.
+
+633
+0:45:18.640 --> 0:45:28.000
+And here are the links to the source code and to this talk it will be available with
+
+634
+0:45:28.000 --> 0:45:32.200
+my animated versions with all the slides and my notes online by this link and my other
+
+635
+0:45:32.200 --> 0:45:37.680
+talks and also there are bonus sections which some of you might ask us questions and we
+
+636
+0:45:37.680 --> 0:45:42.720
+will quickly go through them or you can click on them yourself after the talk if you're
+
+637
+0:45:42.720 --> 0:45:44.360
+interested.
+
+638
+0:45:44.360 --> 0:45:45.360
+This is it.
+
+639
+0:45:45.360 --> 0:46:01.800
+Okay, so time for questions.
+
+640
+0:46:01.800 --> 0:46:22.960
+So show of hands and we'll give you a mic.
+
+641
+0:46:22.960 --> 0:46:23.960
+Optimization suggestion.
+
+642
+0:46:23.960 --> 0:46:32.960
+So for the front queue you can use some of the meet review.
+
+643
+0:46:32.960 --> 0:46:37.840
+Much faster than the tribal stack which is the thing you're using.
+
+644
+0:46:37.840 --> 0:46:43.560
+The other thing is for the wait queue, well, you answered this with IOCP, KQ, EPO that
+
+645
+0:46:43.560 --> 0:46:50.720
+will be much more in line with something that uses timer or for networking.
+
+646
+0:46:50.720 --> 0:46:59.840
+And you said that we cannot have single produce, no, multi...
+
+647
+0:46:59.840 --> 0:47:01.240
+Consumer single producer.
+
+648
+0:47:01.240 --> 0:47:03.360
+Yes, you can actually.
+
+649
+0:47:03.360 --> 0:47:10.840
+You can use one of the chase left DQ for the paper for 2013 with verified primitives including
+
+650
+0:47:10.840 --> 0:47:14.960
+arm and those will work for your use case.
+
+651
+0:47:14.960 --> 0:47:18.000
+I know that there exist implementations for such queues.
+
+652
+0:47:18.000 --> 0:47:20.840
+I just couldn't find the simple enough one.
+
+653
+0:47:20.840 --> 0:47:29.280
+The thing is in Ubisoft internally they above all sometimes in the performance can value
+
+654
+0:47:29.280 --> 0:47:30.480
+code simplicity.
+
+655
+0:47:30.480 --> 0:47:36.440
+So it's not an option to use something extremely complicated like hazard pointers or stuff
+
+656
+0:47:36.440 --> 0:47:37.440
+like this.
+
+657
+0:47:37.440 --> 0:47:42.000
+Or for example, I saw implementations of such queues which are not wait free.
+
+658
+0:47:42.000 --> 0:47:45.360
+So they can be lock free, but not wait free.
+
+659
+0:47:45.360 --> 0:47:50.560
+It also wasn't an option because that's basically a spin lock.
+

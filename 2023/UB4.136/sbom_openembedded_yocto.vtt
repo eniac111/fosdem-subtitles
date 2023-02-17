@@ -1,0 +1,1297 @@
+WEBVTT
+
+00:00.000 --> 00:01.000
+All right.
+
+00:01.000 --> 00:02.000
+Hi.
+
+00:02.000 --> 00:10.240
+My name is Joshua Watt and I'm here to talk to you today about automated S-bomb generation
+
+00:10.240 --> 00:13.280
+using a case study of the way that we generate S-bombs in Open Embedded.
+
+00:13.280 --> 00:14.760
+A little bit about me.
+
+00:14.760 --> 00:16.480
+I've been working at Garmin since 2009.
+
+00:16.480 --> 00:19.520
+We've been using Open Embedded in the ARK project to do embedded system development since
+
+00:19.520 --> 00:21.060
+2016.
+
+00:21.060 --> 00:24.560
+I'm a member of the Open Embedded Technical Steering Committee and there's all the ways
+
+00:24.560 --> 00:26.200
+you can contact me if you're interested later.
+
+00:26.200 --> 00:28.780
+I'll post my slides after my talk.
+
+00:28.780 --> 00:32.000
+So we're all hopefully familiar with what an S-bomb is.
+
+00:32.000 --> 00:36.000
+We use it to describe what software components we have in our system, what we know about
+
+00:36.000 --> 00:38.840
+them, what we don't know about them, and importantly, what the relationship between
+
+00:38.840 --> 00:41.640
+them is.
+
+00:41.640 --> 00:43.000
+So why are S-bombs important?
+
+00:43.000 --> 00:47.240
+If we're using software ourselves or allowing other people to use it or shipping it to customers
+
+00:47.240 --> 00:51.000
+or whatever we're doing with it, we want to know what's in our software.
+
+00:51.000 --> 00:56.200
+We want to know where it came from, what versions those things are at a very minimum.
+
+00:56.200 --> 01:00.240
+If there's software licenses, we want to know if we need to do anything to comply with them
+
+01:00.240 --> 01:04.520
+or things like that or make sure they're not being used improperly.
+
+01:04.520 --> 01:08.100
+We don't want to expose ourselves or people using our software or customers or whatever
+
+01:08.100 --> 01:16.800
+it is to risk by having software that's been tampered with either maliciously or unintentionally.
+
+01:16.800 --> 01:21.000
+And we also want to know if any vulnerabilities come up after it's shipped so that we can
+
+01:21.000 --> 01:24.640
+fix them if necessary or if it's vulnerable to exploit.
+
+01:24.640 --> 01:28.360
+And really the question that we want to know is can we trace the binary things that we
+
+01:28.360 --> 01:34.960
+have given to people back to the source code that produced it?
+
+01:34.960 --> 01:40.640
+Often we talk about S-bombs, we talk about them as being nutrition information for software.
+
+01:40.640 --> 01:41.840
+And I really do like this analogy.
+
+01:41.840 --> 01:47.280
+I think it easily encapsulates something that everyone is familiar with, which is a standardized
+
+01:47.280 --> 01:49.920
+way of encoding something.
+
+01:49.920 --> 01:54.240
+For S-bombs, we're trying to standardize the way that we encode information about software
+
+01:54.240 --> 01:59.320
+just like nutrition labels, try to standardize the way that we communicate what's in our
+
+01:59.320 --> 02:00.320
+food.
+
+02:00.320 --> 02:05.800
+So most people can look at a nutrition label and have an understanding of how it works.
+
+02:05.800 --> 02:07.360
+So we want S-bombs to be the same way.
+
+02:07.360 --> 02:11.200
+You can look at the S-bomb and it's a way of encoding what we have.
+
+02:11.200 --> 02:18.240
+I think this is a great analogy, but it is missing a few key pieces.
+
+02:18.240 --> 02:22.880
+And the pieces that it's missing are really the supply chain part of the analysis.
+
+02:22.880 --> 02:26.760
+So it can tell us what's in our software, just like a nutrition label tells us what's
+
+02:26.760 --> 02:29.320
+in our food, but it doesn't tell us how it got there.
+
+02:29.320 --> 02:34.440
+A nutrition label isn't saying this grain came from here or whatever.
+
+02:34.440 --> 02:37.440
+And that's the part that we're sort of missing with S-bombs that we would like to know.
+
+02:37.440 --> 02:41.920
+And that's what this talk is about.
+
+02:41.920 --> 02:48.040
+So I don't have a nice analogy for how to communicate a supply chain that's like the
+
+02:48.040 --> 02:52.600
+nutrition label, but I do come from a consumer manufacturing background, so I do understand
+
+02:52.600 --> 02:54.240
+supply chains.
+
+02:54.240 --> 02:57.640
+So we can relate software supply chains to physical supply chains.
+
+02:57.640 --> 03:01.400
+And when you have physical supply chains, say you're making some consumer electronics,
+
+03:01.400 --> 03:06.960
+you've got all these steps along the path of getting the completed product.
+
+03:06.960 --> 03:11.140
+And you need to know where every component comes from to make sure that all the right
+
+03:11.140 --> 03:15.560
+components are in the right place at the right time to be manufactured.
+
+03:15.560 --> 03:19.640
+You need to know what's being combined in every step for the same reason.
+
+03:19.640 --> 03:23.080
+And you need to know where this combination takes place, because in modern supply chains
+
+03:23.080 --> 03:27.520
+these steps can be spread out geographically all over the world.
+
+03:27.520 --> 03:32.520
+And they can also be spread out over time, so if you produce 10,000 of one thing and
+
+03:32.520 --> 03:36.840
+then put it in storage and then you pull those out, you might need to know, like, are these
+
+03:36.840 --> 03:37.840
+10 years old?
+
+03:37.840 --> 03:38.840
+Are these five years old?
+
+03:38.840 --> 03:39.840
+Like, how old are these parts?
+
+03:39.840 --> 03:42.080
+When were they manufactured?
+
+03:42.080 --> 03:47.940
+And when we talk about software supply chains, we have basically the same questions.
+
+03:47.940 --> 03:52.000
+We need to know where all the components that are in our supply chain came from.
+
+03:52.000 --> 03:56.320
+However, in this case, we're usually talking about things like source code that we've compiled
+
+03:56.320 --> 04:01.760
+and then the tools that we use to compile it instead of physical components.
+
+04:01.760 --> 04:04.160
+We need to know what has been combined at each stage.
+
+04:04.160 --> 04:09.000
+Did we take this library from this other project and put it into what we're currently working
+
+04:09.000 --> 04:10.000
+on?
+
+04:10.000 --> 04:12.720
+You know, does it pull in some dependencies from somewhere?
+
+04:12.720 --> 04:15.960
+Things like that.
+
+04:15.960 --> 04:19.320
+We need to know where this combination takes place, although we're probably less concerned
+
+04:19.320 --> 04:26.920
+with the physical location as much as the build host that's doing the combination.
+
+04:26.920 --> 04:27.920
+And who did it?
+
+04:27.920 --> 04:32.820
+Potentially, we would like to know who did this step of our supply chain.
+
+04:32.820 --> 04:34.500
+And then, you know, when did it occur?
+
+04:34.500 --> 04:36.200
+Was the software compiled 10 years ago?
+
+04:36.200 --> 04:43.300
+It's probably got vulnerabilities that we should take a closer look at.
+
+04:43.300 --> 04:47.500
+To help answer some of these questions, SPDX has a build working group that's been working
+
+04:47.500 --> 04:50.520
+on the build profile.
+
+04:50.520 --> 04:58.420
+And it will hopefully be releasing with SPDX 3 in a couple months or whenever that is soon.
+
+04:58.420 --> 05:02.120
+And it's designed to answer the questions of when a build was done, so it can require
+
+05:02.120 --> 05:05.040
+time stamps for when builds happen.
+
+05:05.040 --> 05:06.960
+Who wanted a build done?
+
+05:06.960 --> 05:12.400
+So this is going to be the person who initiated the build or wanted the build done or did
+
+05:12.400 --> 05:15.400
+the build themselves, depending on the circumstances.
+
+05:15.400 --> 05:20.300
+And that's distinct from who actually performed the build, which might be, could be a person
+
+05:20.300 --> 05:24.640
+if they're manually, you know, typing in the command to do the build, or it could be a
+
+05:24.640 --> 05:26.960
+service like GitHub Actions or something like that.
+
+05:26.960 --> 05:31.160
+And that's why we have the two different who steps in there, or two different who elements
+
+05:31.160 --> 05:34.560
+in there to distinguish between the person who clicked the button and GitHub Actions
+
+05:34.560 --> 05:39.340
+and GitHub Actions that actually did the build, or whatever your service is.
+
+05:39.340 --> 05:40.640
+So how the build was done.
+
+05:40.640 --> 05:44.360
+This is going to be tool specific information about how the build was performed, like the
+
+05:44.360 --> 05:48.600
+command line arguments, things like that.
+
+05:48.600 --> 05:52.520
+It's important to note that the build and run time dependencies are already actually
+
+05:52.520 --> 05:59.120
+captured by the SPDX core specification, so we don't include those explicitly here, but
+
+05:59.120 --> 06:02.480
+they're already included.
+
+06:02.480 --> 06:03.480
+Where the build was done.
+
+06:03.480 --> 06:08.160
+So this is going to be the build host, the computer on which the build was performed.
+
+06:08.160 --> 06:13.040
+So this might be as complicated as an entire and other software bill of materials.
+
+06:13.040 --> 06:16.800
+If you have one that describes the system you're building on, you could link into that
+
+06:16.800 --> 06:20.320
+and know all the information about the build host also.
+
+06:20.320 --> 06:25.320
+But also it would capture the tool used, like if you have compilers or host tools or things
+
+06:25.320 --> 06:29.480
+like that.
+
+06:29.480 --> 06:34.560
+And then the what you're building is already covered by the SPDX core profile, because
+
+06:34.560 --> 06:40.160
+it can describe packages and files and things like that.
+
+06:40.160 --> 06:44.600
+So one of the key points is that it's really important to try to generate build S-bombs
+
+06:44.600 --> 06:47.220
+at actual build time.
+
+06:47.220 --> 06:53.080
+And to try to explain that a little further, I'm going to kind of compare generating S-bombs
+
+06:53.080 --> 06:57.080
+at build time versus two other ways that S-bombs are commonly generated, although these aren't
+
+06:57.080 --> 06:59.000
+the only other ways they're generated.
+
+06:59.000 --> 07:02.440
+So there's source S-bombs, which are generally, this is like reuse or something that's just
+
+07:02.440 --> 07:05.280
+included with the source code, which is really cool.
+
+07:05.280 --> 07:06.800
+And then you've got postmortem S-bomb analysis.
+
+07:06.800 --> 07:11.160
+So this would be the tools that run after you have the final artifact to try to scan
+
+07:11.160 --> 07:14.400
+it and say you're vulnerable to these vulnerabilities and things like that.
+
+07:14.400 --> 07:18.480
+Try to determine information after, from the final artifact.
+
+07:18.480 --> 07:24.920
+And obviously I'm trying to say that we should generate build S-bomb information at build
+
+07:24.920 --> 07:25.920
+time.
+
+07:25.920 --> 07:29.360
+So I'm not trying to say that the other two things are just terrible and never use them.
+
+07:29.360 --> 07:31.160
+They all have their strengths and weaknesses.
+
+07:31.160 --> 07:36.280
+I'm just trying to explain why I think we should build them at build time.
+
+07:36.280 --> 07:39.160
+So we talk about when something can be built.
+
+07:39.160 --> 07:42.160
+Source S-bombs obviously can't know this because they're not worried about when something is
+
+07:42.160 --> 07:44.160
+actually built.
+
+07:44.160 --> 07:47.560
+Build S-bombs should be able to figure this out from when the thing is built.
+
+07:47.560 --> 07:49.480
+You can record time stamps pretty easily.
+
+07:49.480 --> 07:52.560
+And postmortem analysis, my A may not be able to figure this out.
+
+07:52.560 --> 07:57.480
+It just depends on if that information happens to be encoded in whatever you've produced.
+
+07:57.480 --> 08:01.560
+We talk about how, so build time dependencies.
+
+08:01.560 --> 08:04.840
+Source S-bombs might be able to capture this if you're talking about something like a cargo
+
+08:04.840 --> 08:09.880
+or NPM that explicitly encodes specific versions of dependencies in the source code.
+
+08:09.880 --> 08:13.800
+You could very easily figure out and know what the build time dependencies are.
+
+08:13.800 --> 08:17.480
+Otherwise if you're talking about shared libraries or something, it might be able to know those
+
+08:17.480 --> 08:18.980
+but it wouldn't know them concretely.
+
+08:18.980 --> 08:23.400
+So you'd know like I need open SSL but you wouldn't necessarily know the specific version
+
+08:23.400 --> 08:26.600
+of open SSL that it built against.
+
+08:26.600 --> 08:28.360
+Build time, you should know all of this.
+
+08:28.360 --> 08:31.640
+You should be able to know all of this at build time.
+
+08:31.640 --> 08:34.680
+You basically have to in order to correctly build the software.
+
+08:34.680 --> 08:37.840
+So you kind of need to know that.
+
+08:37.840 --> 08:44.120
+For postmortem analysis, you might be able to figure it out probably with some sort of
+
+08:44.120 --> 08:47.480
+heuristically and static libraries are always very problematic with this.
+
+08:47.480 --> 08:51.160
+It can be very difficult to tell if a given executable has a static library in it or not
+
+08:51.160 --> 08:55.320
+because it's not recorded anywhere in the executable.
+
+08:55.320 --> 09:00.080
+So those can always be very tricky to trace back to their origin.
+
+09:00.080 --> 09:02.860
+runtime dependencies are a somewhat similar story.
+
+09:02.860 --> 09:09.160
+So source S-bombs, you could know what they are but probably not concretely again.
+
+09:09.160 --> 09:13.280
+Build S-bombs, you could know this if you're doing complete packaging.
+
+09:13.280 --> 09:20.560
+So if you're generating final packages like Debian packages or Fedora packages or OPK packages
+
+09:20.560 --> 09:33.120
+or whatever, you could know this, know what these runtime dependencies are even concretely.
+
+09:33.120 --> 09:36.240
+And for postmortem analysis, for shared libraries, you can actually figure this out pretty easily
+
+09:36.240 --> 09:38.040
+because it's in the ELF header.
+
+09:38.040 --> 09:42.740
+But for anything that's like runtime dynamically loaded, like if you do DL open or something
+
+09:42.740 --> 09:46.760
+like that, you probably can't figure that out very easily with postmortem analysis.
+
+09:46.760 --> 09:51.520
+In your build environment, I believe source S-bombs don't care about this.
+
+09:51.520 --> 09:53.760
+Build S-bombs, you should be able to know this information.
+
+09:53.760 --> 09:57.480
+And for postmortem analysis, maybe you could figure that out.
+
+09:57.480 --> 10:04.160
+I don't know if it was encoded in the executables, maybe some of that information could be known.
+
+10:04.160 --> 10:08.640
+There's a couple of advantages for generating supply chains from your build tools at build
+
+10:08.640 --> 10:09.640
+time.
+
+10:09.640 --> 10:14.240
+I'd like to say that they're authoritative because they have firsthand knowledge because
+
+10:14.240 --> 10:16.640
+they're the ones actually doing the build.
+
+10:16.640 --> 10:21.240
+So they should know what's actually happening at each step.
+
+10:21.240 --> 10:22.760
+And likewise, they're very accurate.
+
+10:22.760 --> 10:29.240
+There shouldn't need to be a lot of guessing from your build tools about what's going on
+
+10:29.240 --> 10:33.480
+at each step, unlike the postmortem analysis, which tends to, I think, use a lot of heuristics
+
+10:33.480 --> 10:36.320
+or things like that.
+
+10:36.320 --> 10:37.780
+And they're comprehensive.
+
+10:37.780 --> 10:42.040
+They can analyze a lot of different steps in your build, especially if your build, your
+
+10:42.040 --> 10:46.720
+software supply chain is very deep, which I think it is for a lot of things.
+
+10:46.720 --> 10:53.800
+And so they can generate a lot of information about your builds, as we'll see later.
+
+10:53.800 --> 10:58.040
+And they're also able to analyze things that are difficult, if not impossible, to analyze
+
+10:58.040 --> 11:05.160
+at other steps, like particularly static libraries can be very difficult to trace back, at least
+
+11:05.160 --> 11:07.720
+as far as I know.
+
+11:07.720 --> 11:09.920
+So what kind of things could generate this information?
+
+11:09.920 --> 11:14.120
+So starting from the top down, at the highest level, you'd have things like container build
+
+11:14.120 --> 11:15.320
+systems.
+
+11:15.320 --> 11:19.260
+So this would be Docker build or builder or something like that.
+
+11:19.260 --> 11:23.000
+As you move down, you get into what I call the meta or distro build systems.
+
+11:23.000 --> 11:27.560
+This would be open embedded, which is what I'm going to give an example of in just a
+
+11:27.560 --> 11:28.560
+few minutes.
+
+11:28.560 --> 11:31.600
+Debian, Fedora could generate this every time they generate packages.
+
+11:31.600 --> 11:33.280
+That would be a good time to do that.
+
+11:33.280 --> 11:37.680
+And then if you go down even a further step, you've got the package build systems.
+
+11:37.680 --> 11:40.160
+It's not a great name for them.
+
+11:40.160 --> 11:43.160
+But this would be things like mason or CMake or auto tools.
+
+11:43.160 --> 11:48.280
+They could all generate this information also with what they know about builds.
+
+11:48.280 --> 11:51.440
+And you could go down an even further step and say, well, maybe GCC should spit out this
+
+11:51.440 --> 11:54.400
+information and maybe it should.
+
+11:54.400 --> 12:00.440
+That's also something that could happen and then it could sort of flow up the build stack
+
+12:00.440 --> 12:01.440
+as you go.
+
+12:01.440 --> 12:06.240
+So I'm going to give an example of what we do in open embedded.
+
+12:06.240 --> 12:10.120
+I have to generate S bombs.
+
+12:10.120 --> 12:14.080
+If you are unfamiliar with open embedded and the Octo project, open embedded is a community
+
+12:14.080 --> 12:18.000
+driven project that provides the open embedded core layer and the build system, which is
+
+12:18.000 --> 12:21.000
+called BitBake.
+
+12:21.000 --> 12:27.480
+The Octo project is a Linux foundation project that provides the Pocky reference distribution
+
+12:27.480 --> 12:31.620
+and runs a whole bunch of QA tests to make sure everything stays high quality, manages
+
+12:31.620 --> 12:33.040
+some release schedules.
+
+12:33.040 --> 12:38.160
+They provide funding for personnel to work on the project full time and servers and things
+
+12:38.160 --> 12:39.160
+like that.
+
+12:39.160 --> 12:40.720
+And they provide very good, excellent documentation.
+
+12:40.720 --> 12:44.200
+You should go check out our documentation.
+
+12:44.200 --> 12:50.600
+The purpose of these projects is to build primarily but not exclusively embedded systems.
+
+12:50.600 --> 12:54.160
+So we do have our traditional image.
+
+12:54.160 --> 12:57.220
+You could flash in a Raspberry Pi up there colloquially.
+
+12:57.220 --> 12:58.400
+We call these target images.
+
+12:58.400 --> 13:03.280
+But we can produce images for a whole bunch of different things that I'm not going to
+
+13:03.280 --> 13:04.600
+go into in great detail here.
+
+13:04.600 --> 13:10.000
+I've got a bunch of other presentations on this that I have links to later.
+
+13:10.000 --> 13:15.440
+So when people want to build stuff with open embedded, what they start with is they have
+
+13:15.440 --> 13:21.240
+some source code and they have some metadata and they have some policy information and
+
+13:21.240 --> 13:26.160
+they chuck all of this into this magical tool called BitBake and it spits out this target
+
+13:26.160 --> 13:31.760
+image that we talked about and then you flash that on your widget and profit.
+
+13:31.760 --> 13:34.960
+It's great.
+
+13:34.960 --> 13:39.360
+A little deeper under the hood, the way that this works is that we start off with some
+
+13:39.360 --> 13:40.440
+host tools.
+
+13:40.440 --> 13:44.240
+So this is like the minimal set of things that you need to build with BitBake.
+
+13:44.240 --> 13:52.240
+So it's going to be like your host GCC, Python, and a couple other fairly standard dependencies
+
+13:52.240 --> 13:55.200
+that run on your host.
+
+13:55.200 --> 13:59.280
+And we're going to take those host tools and parse some recipe metadata that says how to
+
+13:59.280 --> 14:01.600
+build some source code.
+
+14:01.600 --> 14:06.360
+And that source code is going to be used to build what we call the native tools and the
+
+14:06.360 --> 14:07.360
+cross compilers.
+
+14:07.360 --> 14:11.960
+So the native tools are still tools that are designed to run on your host system.
+
+14:11.960 --> 14:13.880
+And then we also build the cross compiler at the same time.
+
+14:13.880 --> 14:17.120
+So something like an example of this might be like the protobuf compiler.
+
+14:17.120 --> 14:21.720
+We actually build that ourselves and don't require you to provide your own.
+
+14:21.720 --> 14:22.720
+We also build our own cross compilers.
+
+14:22.720 --> 14:28.640
+You don't have any new cross compiler on your host system.
+
+14:28.640 --> 14:34.000
+We then use those native tools and cross compiler to process more recipe metadata that's going
+
+14:34.000 --> 14:36.920
+to take some more source code in.
+
+14:36.920 --> 14:40.400
+And this is actually going to cross compile and build what we call your target packages
+
+14:40.400 --> 14:47.200
+that are designed to run on your final system, be it x86 or ARM or MIPS or PowerPC or RISC-V
+
+14:47.200 --> 14:49.520
+or whatever it is.
+
+14:49.520 --> 14:51.880
+And then we process yet some more metadata.
+
+14:51.880 --> 14:56.160
+And this one says how to combine all these target packages to make your root file system
+
+14:56.160 --> 14:59.400
+and your kernel and all of these other things that you need to actually have your target
+
+14:59.400 --> 15:03.740
+image.
+
+15:03.740 --> 15:08.720
+The way that bitbait keeps all of this sane and tracks the dependencies is it uses a sophisticated
+
+15:08.720 --> 15:17.360
+method of hashing where each step along the way called a task has a hash that is the encapsulation
+
+15:17.360 --> 15:24.720
+of all of the dependencies of that task, all of the variables that affect that task's execution
+
+15:24.720 --> 15:27.920
+and all of the code that it's actually executing.
+
+15:27.920 --> 15:30.300
+And then that gets combined into a single hash.
+
+15:30.300 --> 15:35.200
+And then that hash then is the input as a dependency to every task that depends on that
+
+15:35.200 --> 15:36.200
+one.
+
+15:36.200 --> 15:41.680
+So you get this chain of hashes all the way down following from your recipes that you
+
+15:41.680 --> 15:43.720
+start with to your target image.
+
+15:43.720 --> 15:49.320
+So what happens is if, for example, something about the protobuf recipe changes, that's
+
+15:49.320 --> 15:52.040
+going to change the task hash for that recipe.
+
+15:52.040 --> 15:55.500
+That's going to cause that protobuf tool to be rebuilt.
+
+15:55.500 --> 15:59.320
+And that's also going to change all of the downstream hashes that depend on that all
+
+15:59.320 --> 16:02.640
+the way through any native tool that depends on that, any target packages that depend on
+
+16:02.640 --> 16:06.840
+that and all the way through the root file system that indirectly depends on that.
+
+16:06.840 --> 16:10.760
+And so all of those things will be rebuilt by bitbait when you change that particular
+
+16:10.760 --> 16:11.760
+thing.
+
+16:11.760 --> 16:19.800
+And so just because of this hashing mechanism, OpenEmbedded and bitbait start out with a
+
+16:19.800 --> 16:23.800
+very strong software supply chain because we have these very strict rules about how
+
+16:23.800 --> 16:26.560
+these hashes change and this causes everything to be rebuilt.
+
+16:26.560 --> 16:33.840
+And so you can actually trace it back from your target image to the target source code
+
+16:33.840 --> 16:35.800
+that produced all your target packages.
+
+16:35.800 --> 16:39.720
+And you can even trace that back to your cross compiler and your native tools that we built.
+
+16:39.720 --> 16:43.080
+And there are ways in other presentations I've done that you can see.
+
+16:43.080 --> 16:46.280
+You can even trace the Spectre host tools if you really want to do that and have that
+
+16:46.280 --> 16:49.600
+really deep supply chain.
+
+16:49.600 --> 16:54.760
+So basically what we do in OpenEmbedded is at each step along the way here when we're
+
+16:54.760 --> 17:00.360
+building something, while we're building it, we also spit out this SPDX document that says
+
+17:00.360 --> 17:03.060
+this is what we did here at this step.
+
+17:03.060 --> 17:07.200
+And then at the very end, we take all of the SPDX documents that went into our target image
+
+17:07.200 --> 17:12.720
+and or native tools that were used to build a target image and we put them all into one
+
+17:12.720 --> 17:17.080
+big archive.
+
+17:17.080 --> 17:24.280
+And we have a rich set of dependencies that we actually report when we do this.
+
+17:24.280 --> 17:26.360
+I'm not going to get into too much detail here.
+
+17:26.360 --> 17:31.240
+Again, there's other talks I've given that you can see that describe all of this in more
+
+17:31.240 --> 17:33.680
+detail if you're interested.
+
+17:33.680 --> 17:35.340
+And these are those talks.
+
+17:35.340 --> 17:39.000
+If you want to see those.
+
+17:39.000 --> 17:44.960
+And these talk very a lot more specifically about OpenEmbedded and S-Bombs.
+
+17:44.960 --> 17:52.440
+So when you do this, we can currently generate SPDX 2.2 JSON format.
+
+17:52.440 --> 17:55.520
+And I did this for a minimal QMU AR-64 system.
+
+17:55.520 --> 17:58.700
+So the root file system was 14 megabytes uncompressed.
+
+17:58.700 --> 18:00.260
+The Linux kernel was 20 megabytes.
+
+18:00.260 --> 18:04.680
+And we had 158 megabytes of SPDX document.
+
+18:04.680 --> 18:09.080
+So yeah, it's a lot.
+
+18:09.080 --> 18:12.800
+I was actually going to post up the archive.
+
+18:12.800 --> 18:17.080
+But yeah, so it's a lot of data.
+
+18:17.080 --> 18:19.160
+And we're not even reporting on everything yet.
+
+18:19.160 --> 18:24.200
+Like, you know, it's well, I mean, some of that is the JSON encoding and things like
+
+18:24.200 --> 18:25.200
+that.
+
+18:25.200 --> 18:26.200
+But it's just a ton of data.
+
+18:26.200 --> 18:27.480
+So the question is, do we really need all of this?
+
+18:27.480 --> 18:31.160
+Like, there's a lot of stuff to lug around.
+
+18:31.160 --> 18:34.840
+And I think you can harken it back to that nutrition information.
+
+18:34.840 --> 18:41.080
+Like as a consumer of a given food product, you know, wheat is wheat, right?
+
+18:41.080 --> 18:45.280
+Like I don't necessarily care how the wheat got into my crackers or whatever it is that
+
+18:45.280 --> 18:48.400
+I'm eating.
+
+18:48.400 --> 18:54.540
+But if I'm a manufacturer of that food and I need to track something down that went wrong
+
+18:54.540 --> 18:57.880
+somewhere to do a recall or something, then I really care where that came from.
+
+18:57.880 --> 19:01.680
+And so I think the same analogy could probably be made.
+
+19:01.680 --> 19:07.160
+It's possible your end consumers don't really care about your supply chain.
+
+19:07.160 --> 19:10.800
+But if you're manufacturing something or building something, you probably definitely do so you
+
+19:10.800 --> 19:13.600
+can trace down problems and things like that.
+
+19:13.600 --> 19:19.320
+And you know, there's always the possibility that there could be regulatory requirements
+
+19:19.320 --> 19:21.320
+for this in the future.
+
+19:21.320 --> 19:24.920
+You know, that seems to be a thing that's happening now.
+
+19:24.920 --> 19:30.240
+So yeah, so if you're trying to track down a supply chain attack or, you know, something's
+
+19:30.240 --> 19:34.680
+gone wrong somewhere, then you probably will definitely want this information.
+
+19:34.680 --> 19:41.000
+So if you work on a tool that does something that looks like building, please consider
+
+19:41.000 --> 19:47.480
+adding build profile support to your tool.
+
+19:47.480 --> 19:49.160
+Because it's actually really not that hard.
+
+19:49.160 --> 19:52.040
+Like for OpenEmbedded, we already had all of this information.
+
+19:52.040 --> 19:58.920
+It was just a matter of encoding it, as hopefully it was somewhat clear from what we were doing
+
+19:58.920 --> 19:59.920
+here.
+
+19:59.920 --> 20:00.920
+Like we already had all this information.
+
+20:00.920 --> 20:05.120
+It was just a matter of writing out the document that had it and then combining it at the end.
+
+20:05.120 --> 20:09.880
+And with SPDX3, the combination at the end is going to be a lot better than it was with
+
+20:09.880 --> 20:10.880
+2.
+
+20:10.880 --> 20:13.160
+So and that's all I had.
+
+20:13.160 --> 20:14.160
+Are there any questions?
+
+20:14.160 --> 20:15.160
+Yes, you have many megabytes of SPDX.
+
+20:15.160 --> 20:16.160
+Yes.
+
+20:16.160 --> 20:25.400
+So I suppose you don't have a big file, but you have multiple files related with SPDX
+
+20:25.400 --> 20:26.400
+relationships?
+
+20:26.400 --> 20:27.400
+Yeah, it uses.
+
+20:27.400 --> 20:28.400
+Can you repeat the question for me?
+
+20:28.400 --> 20:29.400
+Oh, sorry.
+
+20:29.400 --> 20:31.880
+Yeah, so we have a whole bunch of documents.
+
+20:31.880 --> 20:34.000
+So we're not generating one big SPDX document.
+
+20:34.000 --> 20:36.840
+We've got a whole bunch of small documents.
+
+20:36.840 --> 20:37.960
+Yes.
+
+20:37.960 --> 20:41.520
+So yes, we do that.
+
+20:41.520 --> 20:44.560
+We use a whole bunch of external document references.
+
+20:44.560 --> 20:48.800
+And then they're in SPDX2, and this will be better in SPDX3, but in SPDX2 there isn't
+
+20:48.800 --> 20:52.200
+a standardized way to combine documents together.
+
+20:52.200 --> 20:55.920
+So we just throw them all into one big tarball.
+
+20:55.920 --> 21:00.480
+It's not the greatest, but it does put them all in one file for consumption.
+
+21:00.480 --> 21:04.200
+They do exist, at the point of build, they do exist on the file system as individual
+
+21:04.200 --> 21:07.600
+documents that you could package up however you want.
+
+21:07.600 --> 21:11.740
+It's just for ease of our end users.
+
+21:11.740 --> 21:14.880
+It's easiest if we just put them all in one big tarball, and they can extract it and do
+
+21:14.880 --> 21:15.880
+whatever they want with it.
+
+21:15.880 --> 21:21.360
+But yeah, a whole bunch of external document references in our output.
+
+21:21.360 --> 21:22.360
+Yes.
+
+21:22.360 --> 21:23.360
+Two questions.
+
+21:23.360 --> 21:29.600
+One slide, if you are not there on the QF presentation, will you be able to do that later?
+
+21:29.600 --> 21:30.920
+Yeah, I will post the slides.
+
+21:30.920 --> 21:31.920
+Yes, I will do that.
+
+21:31.920 --> 21:32.920
+I was, yeah.
+
+21:32.920 --> 21:41.600
+As part of an official release, you give this tarball to the release of your project?
+
+21:41.600 --> 21:47.880
+Yeah, so there's an option you can turn on in your build that will, I don't remember
+
+21:47.880 --> 21:48.960
+if we turn it on by default.
+
+21:48.960 --> 21:50.160
+It's very easy to turn on.
+
+21:50.160 --> 21:53.280
+So you turn it on, and then you just get this tarball as part of your build.
+
+21:53.280 --> 22:00.280
+So what happens in OpenEmbedded is you generate a file system like my file system, and that's
+
+22:00.280 --> 22:01.400
+your root file system.
+
+22:01.400 --> 22:06.280
+And then alongside that, there will be my file system.spdx.tar.jeezy or whatever it
+
+22:06.280 --> 22:07.280
+is.
+
+22:07.280 --> 22:08.280
+I forgot off the top of my head.
+
+22:08.280 --> 22:09.280
+But yeah, it's that simple.
+
+22:09.280 --> 22:12.640
+I think I'm not the answer, given the size of it.
+
+22:12.640 --> 22:15.960
+So you don't deliver the SPDX as part of the image?
+
+22:15.960 --> 22:17.120
+No, yeah.
+
+22:17.120 --> 22:20.760
+We do not deliver the SPDX as part of the image.
+
+22:20.760 --> 22:24.800
+So is SPDX not providing some integrity that you could say?
+
+22:24.800 --> 22:29.640
+So an end consumer just says, I've got this SPDX, and I've got the image, the true things
+
+22:29.640 --> 22:30.640
+are aligned.
+
+22:30.640 --> 22:34.480
+Right, so how do you trace the SPDX back to the image?
+
+22:34.480 --> 22:38.120
+So there's extensive checksumming in the SPDX itself.
+
+22:38.120 --> 22:46.840
+So every file in that root file system is going to be expressed in the SPDX, and the
+
+22:46.840 --> 22:48.080
+SPDX will have its checksum.
+
+22:48.080 --> 22:49.480
+So you can say like, you know.
+
+22:49.480 --> 22:50.720
+So it's at the file level?
+
+22:50.720 --> 22:51.720
+Yeah, at the file level.
+
+22:51.720 --> 22:58.560
+So you can say like, userlib foo.so, and then I go look at that, and the SPDX, are the checksums
+
+22:58.560 --> 22:59.560
+the same?
+
+22:59.560 --> 23:00.560
+Then they're valid, right?
+
+23:00.560 --> 23:01.560
+So who's using the SPDX?
+
+23:01.560 --> 23:02.560
+Have you created this image?
+
+23:02.560 --> 23:03.560
+Is anybody using the SPDX?
+
+23:03.560 --> 23:08.560
+Are you using it?
+
+23:08.560 --> 23:11.800
+No, I'm not.
+
+23:11.800 --> 23:16.560
+Yeah, sorry.
+
+23:16.560 --> 23:20.280
+So he's asking who's using it, and the short answer is I don't know.
+
+23:20.280 --> 23:24.880
+A lot of people ask questions about how to generate it, so I assume they're doing something
+
+23:24.880 --> 23:27.400
+with it.
+
+23:27.400 --> 23:33.920
+But I don't personally generate this yet, but that's just because of where I work, not
+
+23:33.920 --> 23:34.920
+because of it.
+
+23:34.920 --> 23:40.920
+Can you say in relation that there is a list of general health consumption tools that are
+
+23:40.920 --> 23:41.920
+available?
+
+23:41.920 --> 23:45.960
+Yeah, there are a list of, sorry, there is a list of consumption tools available.
+
+23:45.960 --> 23:46.960
+Yeah, sorry.
+
+23:46.960 --> 23:47.960
+Go ahead, I think you're next.
+
+23:47.960 --> 23:48.960
+The build profile stuff, in which the supply chain part, the V looks like the source of
+
+23:48.960 --> 23:59.600
+provenance definition, which, do you also look at that solution?
+
+23:59.600 --> 24:07.600
+Because what I like about that solution is that it's separate from the software development
+
+24:07.600 --> 24:11.480
+material, because it can be consumed in a different way.
+
+24:11.480 --> 24:15.720
+Did you ever look into that first version of the specification?
+
+24:15.720 --> 24:17.440
+Yeah, so the question is, did we look at Salsa?
+
+24:17.440 --> 24:18.440
+Yeah.
+
+24:18.440 --> 24:23.040
+We're from Salsa on the build profile working group, so a lot of what Salsa did fed into
+
+24:23.040 --> 24:26.120
+what we're doing here.
+
+24:26.120 --> 24:33.600
+I think that we wanted it to be more closely integrated with the SPDX core profile, so
+
+24:33.600 --> 24:38.840
+that you could say, this is all the licensing information and the build information and
+
+24:38.840 --> 24:45.080
+the supply chain information, so that's why we're including a build profile.
+
+24:45.080 --> 24:51.400
+I think tooling can come along to, if you wanted to later on, strip out all the build
+
+24:51.400 --> 24:54.680
+profile stuff, because you don't want to ship that, you know, ship gigabytes of data to
+
+24:54.680 --> 24:55.680
+your customers.
+
+24:55.680 --> 25:00.280
+Sure, I think tooling can come along to do that, and that should be fairly trivial.
+
+25:00.280 --> 25:03.520
+But yeah, that's why we chose to do that that way.
+
+25:03.520 --> 25:06.520
+What's the main relationship between the generated SPDX?
+
+25:06.520 --> 25:11.160
+Is it the result from the big bake itself, or is the component that's generated the
+
+25:11.160 --> 25:12.160
+result?
+
+25:12.160 --> 25:13.160
+Sorry.
+
+25:13.160 --> 25:17.080
+I didn't quite understand the question.
+
+25:17.080 --> 25:22.680
+Basically, you have one system, the initial source of information that goes to the SPDX.
+
+25:22.680 --> 25:27.440
+The initial source will be the big bake recipe?
+
+25:27.440 --> 25:28.440
+Correct.
+
+25:28.440 --> 25:30.440
+It will be the component itself.
+
+25:30.440 --> 25:35.680
+The initial, right, so the question is where does the initial information come from, and
+
+25:35.680 --> 25:39.800
+the recipe describes how to build, we report on both, actually.
+
+25:39.800 --> 25:46.280
+So we report on the source code, and the recipe, and the thing it built currently.
+
+25:46.280 --> 25:48.520
+So we can do all of those things.
+
+25:48.520 --> 25:50.520
+And I'm done.
+
+25:50.520 --> 25:51.520
+I'm sorry.
+
+25:51.520 --> 25:54.400
+I can answer more questions, if you want.
+
+25:54.400 --> 25:55.400
+But I got to...
+
+25:55.400 --> 25:56.400
+Thank you very much.
+
+25:56.400 --> 25:57.400
+Thank you.
+
+25:57.400 --> 25:58.400
+Thank you.
+
+25:58.400 --> 26:05.400
+For people living in empty spaces, the last of you know what to do, you can do it.
+
+26:05.400 --> 26:15.280
+And as a reminder, we have chocolate snacks and places to eat, if anybody wants them.

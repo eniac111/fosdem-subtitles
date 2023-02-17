@@ -1,0 +1,408 @@
+1
+0:00:00.000 --> 0:00:16.560
+So, my talk is about modifying the Rust compiler to support Cherry's hardware capabilities.
+
+2
+0:00:16.560 --> 0:00:18.880
+I'm going to start off with a brief introduction.
+
+3
+0:00:18.880 --> 0:00:23.240
+My name is Lewis Revel and I work for a company called Ember Cosm.
+
+4
+0:00:23.240 --> 0:00:28.400
+I work on many things, but I'd say I specialize in developing LLVM backends for constrained
+
+5
+0:00:28.400 --> 0:00:31.840
+or unusual architectures.
+
+6
+0:00:31.840 --> 0:00:35.360
+Ember Cosm itself is a software services company.
+
+7
+0:00:35.360 --> 0:00:40.040
+We operate in the boundary between hardware and software, particularly in the embedded
+
+8
+0:00:40.040 --> 0:00:48.920
+space where you can find many unusual, difficult and interesting problems like writing compilers.
+
+9
+0:00:48.920 --> 0:00:50.320
+So what is Cherry?
+
+10
+0:00:50.320 --> 0:00:54.040
+It's an acronym capability hardware enhanced Rust instructions.
+
+11
+0:00:54.040 --> 0:00:58.560
+It's best described as an instruction set extension which can be adapted and applied
+
+12
+0:00:58.560 --> 0:01:00.720
+to different architectures.
+
+13
+0:01:00.720 --> 0:01:06.120
+The main feature of Cherry is that you can encode access constraints on memory addresses
+
+14
+0:01:06.120 --> 0:01:09.560
+using things called capabilities.
+
+15
+0:01:09.560 --> 0:01:15.720
+Capabilities essentially have metadata alongside memory addresses that allow you to specify
+
+16
+0:01:15.720 --> 0:01:19.160
+these access constraints.
+
+17
+0:01:19.160 --> 0:01:25.280
+These can only be operated on using capability operations which replace the normal pointer
+
+18
+0:01:25.280 --> 0:01:26.600
+operations.
+
+19
+0:01:26.600 --> 0:01:32.920
+These operations utilize the metadata to enforce those access constraints.
+
+20
+0:01:32.920 --> 0:01:36.840
+It's worth pointing out there are two modes of operation for Cherry.
+
+21
+0:01:36.840 --> 0:01:41.720
+There's pure cap mode where all pointers are capabilities.
+
+22
+0:01:41.720 --> 0:01:48.120
+In hybrid mode, you have pointers by default on normal pointers, but capabilities are annotated
+
+23
+0:01:48.120 --> 0:01:51.280
+as such in the source code.
+
+24
+0:01:51.280 --> 0:01:57.640
+So capabilities together with capability operations allow you to enforce spatial, referential
+
+25
+0:01:57.640 --> 0:02:02.280
+and temporal safety in the hardware at run time.
+
+26
+0:02:02.280 --> 0:02:09.160
+Spatial safety is to do with disallowing accesses out of bounds of an original allocation.
+
+27
+0:02:09.160 --> 0:02:15.200
+Referential safety is disallowing accesses without valid provenance.
+
+28
+0:02:15.200 --> 0:02:20.520
+Temporal safety means that if the lifetime of an object is over, you can no longer access
+
+29
+0:02:20.520 --> 0:02:25.320
+it through a capability.
+
+30
+0:02:25.320 --> 0:02:27.480
+What about integrating Cherry and Rust?
+
+31
+0:02:27.480 --> 0:02:32.600
+We're working on this as part of a project led by our customer, CyberHive.
+
+32
+0:02:32.600 --> 0:02:37.880
+They're funded in turn by Digital Security by Design, which is a UK government initiative.
+
+33
+0:02:37.880 --> 0:02:45.440
+CyberHive wants to use Cherry hardware to enhance secure network protocols that are
+
+34
+0:02:45.440 --> 0:02:46.600
+written in Rust.
+
+35
+0:02:46.600 --> 0:02:51.160
+The goal for us is to produce a Rust compiler that's capable of targeting Cherry-based
+
+36
+0:02:51.160 --> 0:02:52.160
+architectures.
+
+37
+0:02:52.160 --> 0:02:57.400
+With the long-term goal of a stable compiler that can produce production-ready code for
+
+38
+0:02:57.400 --> 0:02:59.360
+security purposes.
+
+39
+0:02:59.360 --> 0:03:06.720
+We know that we're initially going to be targeting Arm's Morello platform.
+
+40
+0:03:06.720 --> 0:03:11.400
+Rather than being able to compile existing Rust code for Cherry, what's the motivation
+
+41
+0:03:11.400 --> 0:03:15.200
+between integrating Cherry and Rust?
+
+42
+0:03:15.200 --> 0:03:19.000
+Essentially it boils down to another layer of protection.
+
+43
+0:03:19.000 --> 0:03:26.160
+We know that Rust is good at identifying and enforcing access constraints at compile time.
+
+44
+0:03:26.160 --> 0:03:30.480
+With Cherry you can identify constraints at compile time and enforce them in hardware
+
+45
+0:03:30.480 --> 0:03:32.760
+at run time.
+
+46
+0:03:32.760 --> 0:03:38.800
+A good example is that Rust code annotated with unsafe is often a necessity in many real
+
+47
+0:03:38.800 --> 0:03:46.480
+world projects, which means that it could behave badly but we don't know until run time.
+
+48
+0:03:46.480 --> 0:03:52.320
+With Cherry you can prevent this bad behavior in hardware when it occurs at run time.
+
+49
+0:03:52.320 --> 0:03:56.800
+There's some other small side benefits such as replacing slow software bounds checks with
+
+50
+0:03:56.800 --> 0:04:06.160
+hardware bounds checking and replacing pointer plus length types with Cherry capabilities.
+
+51
+0:04:06.160 --> 0:04:10.720
+To make things more clear I have a motivating example.
+
+52
+0:04:10.720 --> 0:04:16.400
+Say we want to add a dynamic offset to a pointer and then load from that pointer.
+
+53
+0:04:16.400 --> 0:04:21.040
+This needs to be done in an unsafe block because we don't know until run time if it's going
+
+54
+0:04:21.040 --> 0:04:23.120
+to do something bad.
+
+55
+0:04:23.120 --> 0:04:29.360
+Without Cherry you could end up accessing out of range of your original allocated array.
+
+56
+0:04:29.360 --> 0:04:34.920
+With Cherry that access will not occur at run time and the hardware will either panic
+
+57
+0:04:34.920 --> 0:04:42.760
+or give you something, a default value.
+
+58
+0:04:42.760 --> 0:04:48.000
+Now that we know that we want these benefits, how do we go about modifying Rust to get them?
+
+59
+0:04:48.000 --> 0:04:53.040
+The main problem is that we need to account for capability sizes correctly.
+
+60
+0:04:53.040 --> 0:04:57.840
+That is we need to stop assuming that pointer type size is equal to the addressable range
+
+61
+0:04:57.840 --> 0:04:59.880
+of the pointer.
+
+62
+0:04:59.880 --> 0:05:04.560
+Because capabilities have metadata this isn't the case.
+
+63
+0:05:04.560 --> 0:05:12.920
+Also in LLVM, in the Cherry LLVM fork, capabilities are pointers in address space 200 whereas
+
+64
+0:05:12.920 --> 0:05:19.200
+in Rust we assume that all pointers to data are in address space zero.
+
+65
+0:05:19.200 --> 0:05:23.520
+Also if we want to support hybrid mode we need to be able to specify different pointer
+
+66
+0:05:23.520 --> 0:05:26.920
+type sizes for different address spaces.
+
+67
+0:05:26.920 --> 0:05:33.660
+So address space zero will have different sizes from address space 200.
+
+68
+0:05:33.660 --> 0:05:38.520
+One thing I hope doesn't require many changes is that we need provenance and bounds to be
+
+69
+0:05:38.520 --> 0:05:43.360
+propagated through the compiler because they need to be attached to capabilities.
+
+70
+0:05:43.360 --> 0:05:49.920
+And of course if we want the optional bonus stuff we need to implement that as well.
+
+71
+0:05:49.920 --> 0:05:50.920
+Progress so far.
+
+72
+0:05:50.920 --> 0:05:57.040
+So the data layout changes are completed which means that we can correctly specify capability
+
+73
+0:05:57.040 --> 0:06:05.160
+sizes, both the type size and the addressable range for both pure cap and hybrid mode.
+
+74
+0:06:05.160 --> 0:06:10.880
+I have modified APIs which produce pointer types to get rid of the assumption that pointers
+
+75
+0:06:10.880 --> 0:06:18.280
+are in address space zero and now these APIs require an explicit address space parameter.
+
+76
+0:06:18.280 --> 0:06:25.160
+And the biggest change is that for APIs where we have a where we report a size for a type
+
+77
+0:06:25.160 --> 0:06:32.960
+this is replaced with a total type size and a size of the value that you can represent.
+
+78
+0:06:32.960 --> 0:06:40.640
+And yeah, this means that like I said before we can support cherry capabilities.
+
+79
+0:06:40.640 --> 0:06:46.920
+There's also in the strict provenance API there is an explicit unsafe method of producing
+
+80
+0:06:46.920 --> 0:06:53.520
+pointers with no provenance from a U size.
+
+81
+0:06:53.520 --> 0:06:59.040
+And for cherry we need to use cherry operations to set the address of a null capability to
+
+82
+0:06:59.040 --> 0:07:01.560
+achieve the same result.
+
+83
+0:07:01.560 --> 0:07:05.480
+What I'm currently working through is trawling through assertion failures that come up when
+
+84
+0:07:05.480 --> 0:07:11.600
+building the core libraries with this modified compiler.
+
+85
+0:07:11.600 --> 0:07:12.840
+What still needs to be done?
+
+86
+0:07:12.840 --> 0:07:17.680
+Well there's almost definitely going to be modifications to the libraries to remove any
+
+87
+0:07:17.680 --> 0:07:21.720
+assumptions that break for cherry.
+
+88
+0:07:21.720 --> 0:07:26.960
+There's also the question of how do we specify capability types in hybrid mode?
+
+89
+0:07:26.960 --> 0:07:33.760
+And because I don't think that Rust annotations are the right tool to specify a specific pointer
+
+90
+0:07:33.760 --> 0:07:39.160
+as being a capability I think this requires a library solution.
+
+91
+0:07:39.160 --> 0:07:45.800
+For APIs where I have replaced a size with a type size and added a size of the value
+
+92
+0:07:45.800 --> 0:07:51.840
+that you can represent we need to go through all of those uses of the type size and see
+
+93
+0:07:51.840 --> 0:07:54.680
+if they should really be using the size of the value that you can represent.
+
+94
+0:07:54.680 --> 0:08:01.320
+Because this is the main cause of the errors that I'm seeing in building the libraries.
+
+95
+0:08:01.320 --> 0:08:07.760
+And of course a lot of testing and polishing is going to be required.
+
+96
+0:08:07.760 --> 0:08:12.320
+Before I finish the talk I do need to mention that there's ongoing and past work that is
+
+97
+0:08:12.320 --> 0:08:13.320
+in this same area.
+
+98
+0:08:13.320 --> 0:08:18.200
+There was a master's thesis from the University of Cambridge and there's another government
+
+99
+0:08:18.200 --> 0:08:22.880
+funded project from the University of Kent.
+
+100
+0:08:22.880 --> 0:08:25.080
+And thank you for listening.
+
+101
+0:08:25.080 --> 0:08:28.680
+Please feel free to check out the code on GitHub or ask me any questions outside.
+
+102
+0:08:28.680 --> 0:08:53.680
+Thank you.
+

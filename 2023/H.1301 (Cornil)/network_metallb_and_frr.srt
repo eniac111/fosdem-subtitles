@@ -1,0 +1,1328 @@
+1
+0:00:00.000 --> 0:00:26.880
+Okay.
+
+2
+0:00:26.880 --> 0:00:30.680
+So thanks everyone for coming.
+
+3
+0:00:30.680 --> 0:00:32.960
+Today I'm going to talk about two projects.
+
+4
+0:00:32.960 --> 0:00:39.680
+One is Metal-B, which I'm currently maintaining, and the other one is FRR, which kind of started
+
+5
+0:00:39.680 --> 0:00:44.280
+integrating in Metal-B more or less one year and a half ago.
+
+6
+0:00:44.280 --> 0:00:46.560
+Is anyone using Metal-B?
+
+7
+0:00:46.560 --> 0:00:47.560
+Awesome.
+
+8
+0:00:47.560 --> 0:00:48.560
+Okay.
+
+9
+0:00:48.560 --> 0:00:56.320
+So if you found it less stable in the past two years, that's because of me.
+
+10
+0:00:56.320 --> 0:01:02.880
+So again, the agenda today is I'll describe what Metal-B is, what matters in the context
+
+11
+0:01:02.880 --> 0:01:04.840
+of Kubernetes.
+
+12
+0:01:04.840 --> 0:01:10.920
+Then I'll introduce FRR and then I'll talk about the integration between the two.
+
+13
+0:01:10.920 --> 0:01:12.040
+Some quick words about me.
+
+14
+0:01:12.040 --> 0:01:13.040
+I'm Federico.
+
+15
+0:01:13.040 --> 0:01:20.800
+I work for Red Hat almost for four years now, and I'm part of this networking team on the
+
+16
+0:01:20.800 --> 0:01:26.880
+OpenShift platform that is in charge of making it suitable to run telco workloads that we
+
+17
+0:01:26.880 --> 0:01:31.920
+know have slightly different requirements from regular application that runs on the
+
+18
+0:01:31.920 --> 0:01:32.920
+cloud environments.
+
+19
+0:01:32.920 --> 0:01:38.680
+Due to that, I contributed to a variety of network related projects.
+
+20
+0:01:38.680 --> 0:01:42.960
+I touched our primary CNI, which is a BNK.
+
+21
+0:01:42.960 --> 0:01:50.000
+I wrote a simple CNI plugin for using VRFs.
+
+22
+0:01:50.000 --> 0:01:55.560
+I put some code in Kubernetes itself and lately my primary focus is on Metal-B.
+
+23
+0:01:55.560 --> 0:02:00.600
+But please don't think that I'm a networking expert because I'm not.
+
+24
+0:02:00.600 --> 0:02:03.440
+Who doesn't know anything about Kubernetes?
+
+25
+0:02:03.440 --> 0:02:05.000
+Okay.
+
+26
+0:02:05.000 --> 0:02:12.400
+So I'll very briefly introduce the concept of services for those that don't know anything
+
+27
+0:02:12.400 --> 0:02:14.840
+about Kubernetes.
+
+28
+0:02:14.840 --> 0:02:22.240
+We have our application deployed as multiple pods where we want to scale our traffic against.
+
+29
+0:02:22.240 --> 0:02:27.880
+And the concept that Kubernetes gives us is services.
+
+30
+0:02:27.880 --> 0:02:31.000
+And with the service, we get two things.
+
+31
+0:02:31.000 --> 0:02:36.400
+One is a cluster IP that is a virtual IP accessible from inside the cluster, and the other part
+
+32
+0:02:36.400 --> 0:02:38.320
+is the balancing part.
+
+33
+0:02:38.320 --> 0:02:45.680
+So the client tries to hit the service and then the cluster CNI in some way balances
+
+34
+0:02:45.680 --> 0:02:47.800
+the traffic across the different endpoints.
+
+35
+0:02:47.800 --> 0:02:48.920
+It's more than this.
+
+36
+0:02:48.920 --> 0:02:53.920
+We have IP families, we have parts, but that's the main idea.
+
+37
+0:02:53.920 --> 0:02:57.540
+What if we want to expose our application outside the cluster?
+
+38
+0:02:57.540 --> 0:03:03.400
+Because there might be use cases where we want to expose them inside, but it makes sense
+
+39
+0:03:03.400 --> 0:03:05.400
+to access them from outside.
+
+40
+0:03:05.400 --> 0:03:12.160
+And the main construct that Kubernetes gives us is a service of type load balancer.
+
+41
+0:03:12.160 --> 0:03:17.120
+This is the definition taken from the Kubernetes documentation.
+
+42
+0:03:17.120 --> 0:03:24.400
+A service of type load balancer is exposed externally using a cloud provider's load balancer.
+
+43
+0:03:24.400 --> 0:03:29.460
+As we saw in the talk before, like there is the cloud provider, Google, AWS, that gives
+
+44
+0:03:29.460 --> 0:03:38.880
+us an IP that is accessible from outside and that drives the traffic towards our application.
+
+45
+0:03:38.880 --> 0:03:43.460
+And again, the emphasis here is on the cloud provider.
+
+46
+0:03:43.460 --> 0:03:46.080
+What happens when we create a service of type load balancer?
+
+47
+0:03:46.080 --> 0:03:52.440
+We get an external IP that is accessible from outside and we get the load the balancing
+
+48
+0:03:52.440 --> 0:03:53.440
+part.
+
+49
+0:03:53.440 --> 0:03:59.960
+If we try to access our application, the network infrastructure of the cloud provider will
+
+50
+0:03:59.960 --> 0:04:07.920
+drive the traffic toward all the nodes of our cluster so that the CNI can do its part.
+
+51
+0:04:07.920 --> 0:04:14.040
+And this is important to understand how MetalDB works once the traffic gets to the node.
+
+52
+0:04:14.040 --> 0:04:18.280
+All the rest is handled by the cluster CNI.
+
+53
+0:04:18.280 --> 0:04:21.600
+And in this case, this is a real network load balancer.
+
+54
+0:04:21.600 --> 0:04:27.000
+Again, where we don't have control and it's controlled by the provider.
+
+55
+0:04:27.000 --> 0:04:33.960
+So just to iterate, we get two things from a load balancer service.
+
+56
+0:04:33.960 --> 0:04:39.760
+We get a stable IP that we can pin our DNS entries to and we get the load balancing across
+
+57
+0:04:39.760 --> 0:04:41.200
+all the different nodes.
+
+58
+0:04:41.200 --> 0:04:45.680
+So now let's move to bare metal and see what happens there.
+
+59
+0:04:45.680 --> 0:04:51.140
+The first thing that we see when we try to create a service of this type on bare metal
+
+60
+0:04:51.140 --> 0:04:55.760
+is the fact that the external IP, we are not getting an external IP because there is no
+
+61
+0:04:55.760 --> 0:04:58.560
+one that is giving that to us.
+
+62
+0:04:58.560 --> 0:05:03.280
+And the second part is even if we had that IP, who is routing the traffic to the nodes
+
+63
+0:05:03.280 --> 0:05:07.800
+as the cloud provider's network infrastructure is doing?
+
+64
+0:05:07.800 --> 0:05:14.880
+And these very same two issues are the issues that MetalDB tries to solve.
+
+65
+0:05:14.880 --> 0:05:19.580
+MetalDB is a community project now under the CNCF umbrella.
+
+66
+0:05:19.580 --> 0:05:23.040
+It was originally started by David Anderson.
+
+67
+0:05:23.040 --> 0:05:30.000
+Then there was a handoff to one red actor, Russell Bryant, and two folks working out
+
+68
+0:05:30.000 --> 0:05:34.680
+at Kinvalk, Rodrigo Campos and Johannes Lieberman.
+
+69
+0:05:34.680 --> 0:05:39.240
+And during that phase, MetalDB went more or less in maintenance mode.
+
+70
+0:05:39.240 --> 0:05:46.880
+They were replying to issues and stuff like that, but it wasn't evolving too much.
+
+71
+0:05:46.880 --> 0:05:54.160
+And at some point, because things went in a different way, I started leading the project
+
+72
+0:05:54.160 --> 0:05:55.640
+basically.
+
+73
+0:05:55.640 --> 0:05:59.200
+One nice thing about MetalDB is this dichotomy.
+
+74
+0:05:59.200 --> 0:06:06.680
+It's used a lot in home clusters, around Raspberry Pi's, but it's also used by enterprise users
+
+75
+0:06:06.680 --> 0:06:11.120
+in very complex scenarios.
+
+76
+0:06:11.120 --> 0:06:19.000
+So the first and most disappointing thing about MetalDB, but please don't run away,
+
+77
+0:06:19.000 --> 0:06:25.400
+don't leave the room, is the fact that MetalDB is not a network load balancer.
+
+78
+0:06:25.400 --> 0:06:28.160
+This was disappointing when I started digging into it.
+
+79
+0:06:28.160 --> 0:06:33.880
+But let's keep in mind those two issues that we want to solve and see how MetalDB tries
+
+80
+0:06:33.880 --> 0:06:39.240
+to solve them in a, I think in a very elegant way, interacting with an existing network
+
+81
+0:06:39.240 --> 0:06:41.240
+infrastructure.
+
+82
+0:06:41.240 --> 0:06:45.360
+And the first part is the address, advertisement, assignment, sorry.
+
+83
+0:06:45.360 --> 0:06:47.320
+And this part is probably the most boring one.
+
+84
+0:06:47.320 --> 0:06:53.000
+We have a Kubernetes controller listens for services in the need of an IP and tries to
+
+85
+0:06:53.000 --> 0:06:54.240
+assign them the IP.
+
+86
+0:06:54.240 --> 0:06:59.000
+But what IPs are we talking about?
+
+87
+0:06:59.000 --> 0:07:00.600
+Here we are not on the cloud provider.
+
+88
+0:07:00.600 --> 0:07:03.440
+We don't have control over the IPs.
+
+89
+0:07:03.440 --> 0:07:10.080
+And so in this case, the cluster administrator is the entity in charge of providing a pool
+
+90
+0:07:10.080 --> 0:07:15.800
+of IPs to MetalDB so it can use them and give them to the various services.
+
+91
+0:07:15.800 --> 0:07:24.720
+And those can be ranges, can be full-siders, we can add multiple ranges and IPv4 and IPv6.
+
+92
+0:07:24.720 --> 0:07:35.360
+And then there is the probably most networky part of MetalDB, which is address advertisement.
+
+93
+0:07:35.360 --> 0:07:42.960
+So we have the address and we need to find a way to attract the traffic to the nodes
+
+94
+0:07:42.960 --> 0:07:47.240
+so that the CNI itself can do its part.
+
+95
+0:07:47.240 --> 0:07:49.560
+And MetalDB works in two modes.
+
+96
+0:07:49.560 --> 0:07:54.960
+L2, I briefly described how it works, is more or less like a KIPA-LIV.
+
+97
+0:07:54.960 --> 0:08:01.400
+It collects one node as the leader of the IP, it replies to R-ProQuest, sends out gratuitous
+
+98
+0:08:01.400 --> 0:08:04.720
+RPs when a failover happens.
+
+99
+0:08:04.720 --> 0:08:08.240
+And you can only have one node as the entry point for the service.
+
+100
+0:08:08.240 --> 0:08:14.640
+And then there is the part that I'll dig more into today, which is the BGP mode.
+
+101
+0:08:14.640 --> 0:08:24.800
+And BGP will leverage the interaction with BGP-enabled routers in order to advertise them.
+
+102
+0:08:24.800 --> 0:08:32.880
+So this is taken from the BGP RFC, the primary function of a BGP-speaking system is to exchange
+
+103
+0:08:32.880 --> 0:08:35.680
+network reachability information with other BGP systems.
+
+104
+0:08:35.680 --> 0:08:38.520
+So this is exactly what we need.
+
+105
+0:08:38.520 --> 0:08:43.240
+We need to find a way to say, hey, if you want to reach the service IP which I'm assigning
+
+106
+0:08:43.240 --> 0:08:48.640
+to my load balancer service, then you should go through this set of nodes because then
+
+107
+0:08:48.640 --> 0:08:51.920
+again the CNI can do its part.
+
+108
+0:08:51.920 --> 0:08:56.360
+And this is exactly how MetalDB works.
+
+109
+0:08:56.360 --> 0:09:03.640
+Each node acts as a mini router establishing BGP sessions with externally configured routers.
+
+110
+0:09:03.640 --> 0:09:11.160
+You need to make MetalDB aware of the existence of those routers with some configuration.
+
+111
+0:09:11.160 --> 0:09:16.600
+And then when we create a service, it will start advertising the routes to the router
+
+112
+0:09:16.600 --> 0:09:23.480
+so that the, and this is a bit bigger for those in the back, so that the router knows
+
+113
+0:09:23.480 --> 0:09:32.200
+that in order to reach this virtual IP, it needs to route the traffic towards this node.
+
+114
+0:09:32.200 --> 0:09:38.360
+So again, the traffic gets to the node, thus the end does the rest.
+
+115
+0:09:38.360 --> 0:09:47.320
+And in this case, compared to the L2 mode, we get fully load balancing through ECMP routes.
+
+116
+0:09:47.320 --> 0:09:49.880
+And the scenarios can be more complex.
+
+117
+0:09:49.880 --> 0:09:53.320
+We can have multiple routers.
+
+118
+0:09:53.320 --> 0:09:59.360
+We have some knobs to drive which routers, which peers we want to advertise a given service.
+
+119
+0:09:59.360 --> 0:10:05.160
+We have other knobs to say, hey, I want this BGP session to be established only from this
+
+120
+0:10:05.160 --> 0:10:10.440
+set of nodes because maybe they belong to different, to different RAs.
+
+121
+0:10:10.440 --> 0:10:16.600
+And of course we can have cascading routers and this is like regular BGP.
+
+122
+0:10:16.600 --> 0:10:20.200
+The configuration looks something like this.
+
+123
+0:10:20.200 --> 0:10:28.560
+We still need the set of IPs to get to MetalDB in order to have our services assigned to,
+
+124
+0:10:28.560 --> 0:10:31.280
+to have them assigned to our services.
+
+125
+0:10:31.280 --> 0:10:37.640
+And then we have this other item which tries to describe the properties of the BGP session
+
+126
+0:10:37.640 --> 0:10:42.240
+that needs to be established with the different routers.
+
+127
+0:10:42.240 --> 0:10:44.680
+And we have a few features here.
+
+128
+0:10:44.680 --> 0:10:49.560
+We have BFD support.
+
+129
+0:10:49.560 --> 0:10:50.880
+We have node selectors.
+
+130
+0:10:50.880 --> 0:10:55.960
+We support IBGP, NDBGP, single and multi-hop.
+
+131
+0:10:55.960 --> 0:11:03.120
+Not even if we are acting as a mini router because MetalDB's purpose is only to advertise
+
+132
+0:11:03.120 --> 0:11:04.120
+routes outside.
+
+133
+0:11:04.120 --> 0:11:10.680
+We refuse any incoming route to do node because again, that is not MetalDB's purpose.
+
+134
+0:11:10.680 --> 0:11:14.760
+How it works under the hood.
+
+135
+0:11:14.760 --> 0:11:16.440
+The architecture is pretty simple.
+
+136
+0:11:16.440 --> 0:11:23.520
+We have one single pod that is the controller that is in charge of the IPAM part of MetalDB.
+
+137
+0:11:23.520 --> 0:11:30.400
+So it's in charge of reconciliation the services and the configuration with those services,
+
+138
+0:11:30.400 --> 0:11:33.000
+with those IPs that needs to be assigned to the service.
+
+139
+0:11:33.000 --> 0:11:36.880
+And again, there is not too much network in this side.
+
+140
+0:11:36.880 --> 0:11:38.720
+The other part is the speaker.
+
+141
+0:11:38.720 --> 0:11:43.960
+And the speaker is the part that is in charge of handling the networking side.
+
+142
+0:11:43.960 --> 0:11:45.400
+We run it as a demo set.
+
+143
+0:11:45.400 --> 0:11:47.280
+It runs on each node.
+
+144
+0:11:47.280 --> 0:11:48.680
+It runs on the host network.
+
+145
+0:11:48.680 --> 0:11:53.920
+So it is in control of the configuration of the host networking.
+
+146
+0:11:53.920 --> 0:11:56.760
+And it handles the announcement part.
+
+147
+0:11:56.760 --> 0:12:02.160
+So both the L2 and the BGP1.
+
+148
+0:12:02.160 --> 0:12:07.200
+And now I will talk a bit about the history.
+
+149
+0:12:07.200 --> 0:12:14.280
+Originally, the BGP part was done using a native Go implementation that was implementing
+
+150
+0:12:14.280 --> 0:12:21.160
+a subset of the BGP protocol.
+
+151
+0:12:21.160 --> 0:12:27.120
+This was before I started to maintain and to contribute the project.
+
+152
+0:12:27.120 --> 0:12:34.680
+And at some point, there were a bunch of features that were being asked by the users.
+
+153
+0:12:34.680 --> 0:12:41.440
+And the people that were maintaining the project at the time had this discussion about should
+
+154
+0:12:41.440 --> 0:12:47.240
+we start extending the Go BGP implementation to cover all these scenarios that the users
+
+155
+0:12:47.240 --> 0:12:49.480
+are asking.
+
+156
+0:12:49.480 --> 0:12:51.840
+And the result was we shouldn't.
+
+157
+0:12:51.840 --> 0:12:54.200
+We should not reinvent the wheel.
+
+158
+0:12:54.200 --> 0:12:58.580
+We should leverage something that is already doing that for us.
+
+159
+0:12:58.580 --> 0:13:00.560
+And that thing was FRR.
+
+160
+0:13:00.560 --> 0:13:09.400
+FRR is Internet Routing Protocol Suite for Linux that is well established.
+
+161
+0:13:09.400 --> 0:13:14.840
+And it implements all the stuff that we were looking for to add to Metal.ib.
+
+162
+0:13:14.840 --> 0:13:22.600
+So as the result of this discussion, Metal.ib was extended with an alternative mode that
+
+163
+0:13:22.600 --> 0:13:32.280
+is turned on by a configuration flag where all the BGP part is handled by FRR.
+
+164
+0:13:32.280 --> 0:13:41.640
+And after our configuration looks like this, we describe our autonomous system number.
+
+165
+0:13:41.640 --> 0:13:47.680
+We describe the properties of the neighbors.
+
+166
+0:13:47.680 --> 0:13:54.060
+And then we describe the prefixes that we want to advertise around.
+
+167
+0:13:54.060 --> 0:13:56.520
+And we can do more.
+
+168
+0:13:56.520 --> 0:14:02.400
+We can set rules for each neighbor.
+
+169
+0:14:02.400 --> 0:14:07.760
+And associated to those rules, we can say, hey, if the IP belongs to this set of IPs,
+
+170
+0:14:07.760 --> 0:14:09.960
+then we can add communities.
+
+171
+0:14:09.960 --> 0:14:12.320
+We can have local preferences.
+
+172
+0:14:12.320 --> 0:14:18.160
+We can block this IP for this particular neighbor.
+
+173
+0:14:18.160 --> 0:14:22.200
+And this is all the stuff that we had to do.
+
+174
+0:14:22.200 --> 0:14:23.560
+We required in Metal.ib.
+
+175
+0:14:23.560 --> 0:14:29.800
+So now in BGP mode, the way Metal.ib works is that we are running multiple containers
+
+176
+0:14:29.800 --> 0:14:33.740
+inside the speaker pod as we had before.
+
+177
+0:14:33.740 --> 0:14:36.760
+And one of them is running FRR.
+
+178
+0:14:36.760 --> 0:14:43.360
+And because all the containers share the host network namespace, then what we need to do
+
+179
+0:14:43.360 --> 0:14:51.200
+now is to apply some configuration, to apply the proper configuration to FRR so that it
+
+180
+0:14:51.200 --> 0:14:54.720
+can do its part.
+
+181
+0:14:54.720 --> 0:14:58.480
+So this is what we have.
+
+182
+0:14:58.480 --> 0:15:04.780
+On one side, we have all these continuously evolving configurations that we received from
+
+183
+0:15:04.780 --> 0:15:06.480
+the Kubernetes API.
+
+184
+0:15:06.480 --> 0:15:08.980
+We have the services that come and go.
+
+185
+0:15:08.980 --> 0:15:11.800
+We have the new routers that we want to configure.
+
+186
+0:15:11.800 --> 0:15:19.480
+We have this BGP advertisement that allows us to set some properties on the advertisement
+
+187
+0:15:19.480 --> 0:15:22.480
+itself on one side.
+
+188
+0:15:22.480 --> 0:15:30.160
+What we want to achieve is the corresponding FRR configuration so that FRR can do its part.
+
+189
+0:15:30.160 --> 0:15:37.240
+And this is done by some code that renders all this changing stuff and continuously reconciles
+
+190
+0:15:37.240 --> 0:15:39.920
+it in some sort of internal data.
+
+191
+0:15:39.920 --> 0:15:45.880
+We pass it through the Go template engine.
+
+192
+0:15:45.880 --> 0:15:53.480
+We then generate the configuration for FRR that we want, but we are not finished yet
+
+193
+0:15:53.480 --> 0:15:57.840
+because then we need to instruct FRR to apply the new changes.
+
+194
+0:15:57.840 --> 0:16:09.160
+And luckily, what we can leverage is this Python script, FRR.reload, that does a lot
+
+195
+0:16:09.160 --> 0:16:10.160
+of stuff for us.
+
+196
+0:16:10.160 --> 0:16:16.720
+So this comes together with FRR and calculates all the delta between the current configuration
+
+197
+0:16:16.720 --> 0:16:21.960
+and the configuration that we want to achieve and applies all those commands to FRR.
+
+198
+0:16:21.960 --> 0:16:29.600
+And so again, we get to the right configuration corresponding to the Kubernetes configuration
+
+199
+0:16:29.600 --> 0:16:34.160
+assuming that we are doing our part here.
+
+200
+0:16:34.160 --> 0:16:44.600
+So I don't generally add memes to talks, but I thought that this was particularly relevant
+
+201
+0:16:44.600 --> 0:16:51.520
+because leveraging FRR allowed us to focus on the business logic on what our users were
+
+202
+0:16:51.520 --> 0:16:59.320
+asking to us without having to worry too much about the protocol implementations.
+
+203
+0:16:59.320 --> 0:17:01.700
+And that helped us a lot.
+
+204
+0:17:01.700 --> 0:17:07.360
+In order to add new features to the project, we added the BFD support seamlessly.
+
+205
+0:17:07.360 --> 0:17:09.960
+We added the VRF support.
+
+206
+0:17:09.960 --> 0:17:19.720
+IPv6 and dual stack were something that were missing in Metal-L-B and they came out naturally.
+
+207
+0:17:19.720 --> 0:17:27.160
+But this doesn't mean that we don't have challenges.
+
+208
+0:17:27.160 --> 0:17:33.360
+Basically the biggest challenge is the fact that on one side we had an existing API that
+
+209
+0:17:33.360 --> 0:17:39.680
+was already there and was fitting well with the Metal-L-B use case where the focus was
+
+210
+0:17:39.680 --> 0:17:40.680
+the service.
+
+211
+0:17:40.680 --> 0:17:45.240
+So I want to apply all these services to all this logic to the service.
+
+212
+0:17:45.240 --> 0:17:50.960
+On the other hand, FRR thinks in a slightly different way.
+
+213
+0:17:50.960 --> 0:17:57.920
+So there is a good amount of logic in doing this API contortionism in order to have one
+
+214
+0:17:57.920 --> 0:17:59.560
+API to fit the other.
+
+215
+0:17:59.560 --> 0:18:06.320
+And again, that's because we wanted to be backward compatible.
+
+216
+0:18:06.320 --> 0:18:13.040
+And probably the second most interesting challenge was the fact that Metal-L-B was known to be
+
+217
+0:18:13.040 --> 0:18:15.280
+super stable.
+
+218
+0:18:15.280 --> 0:18:22.800
+We came and replaced the core mechanism about the interaction with the routers and we wanted
+
+219
+0:18:22.800 --> 0:18:26.200
+to make sure that we weren't breaking too much.
+
+220
+0:18:26.200 --> 0:18:29.600
+On top of that, we started also to add new features.
+
+221
+0:18:29.600 --> 0:18:34.680
+And again, we were changing a lot in very few times.
+
+222
+0:18:34.680 --> 0:18:42.720
+And at the time there wasn't a proper CI mechanism that was covering all the cases.
+
+223
+0:18:42.720 --> 0:18:48.400
+So that was quite a challenge because again, Metal-L-B users were used to having something
+
+224
+0:18:48.400 --> 0:18:54.840
+that was stable and we were promising that we were replacing the implementation in a
+
+225
+0:18:54.840 --> 0:18:56.600
+compatible way.
+
+226
+0:18:56.600 --> 0:19:02.720
+So the problem was we want to be able to test something like this where we have multiple
+
+227
+0:19:02.720 --> 0:19:03.760
+servers.
+
+228
+0:19:03.760 --> 0:19:05.400
+You have one router.
+
+229
+0:19:05.400 --> 0:19:16.640
+You might have multi-hops and you have all the configuration knobs that Metal-L-B has.
+
+230
+0:19:16.640 --> 0:19:18.500
+And then you have node selectors.
+
+231
+0:19:18.500 --> 0:19:20.960
+You have the BFT that we're adding.
+
+232
+0:19:20.960 --> 0:19:23.600
+We have communities and a lot of stuff.
+
+233
+0:19:23.600 --> 0:19:34.960
+And it was like this was something that wasn't keeping me sleepy.
+
+234
+0:19:34.960 --> 0:19:42.440
+So we started thinking how do we set up a proper CI for this.
+
+235
+0:19:42.440 --> 0:19:46.060
+And we use kind.
+
+236
+0:19:46.060 --> 0:19:48.240
+Does anyone know what kind is?
+
+237
+0:19:48.240 --> 0:19:49.240
+Of course.
+
+238
+0:19:49.240 --> 0:19:50.240
+Okay.
+
+239
+0:19:50.240 --> 0:19:56.920
+So basically in kind we have, with kind we are able, and with kind and with FRR we are
+
+240
+0:19:56.920 --> 0:19:59.840
+able to replace something like this with something like this.
+
+241
+0:19:59.840 --> 0:20:07.120
+So each node is running inside the container, the external router is now replaced by FRR.
+
+242
+0:20:07.120 --> 0:20:13.720
+So we use FRR both inside Metal-L-B to do the implementation but also outside to validate
+
+243
+0:20:13.720 --> 0:20:15.280
+that everything is working.
+
+244
+0:20:15.280 --> 0:20:23.520
+And now we have even control on this kind of network because this is the Docker bridge.
+
+245
+0:20:23.520 --> 0:20:33.840
+So these allowed us to add the test suite where we apply the Metal-L-B configuration
+
+246
+0:20:33.840 --> 0:20:39.560
+and the FRR configuration corresponding to that Metal-L-B configuration.
+
+247
+0:20:39.560 --> 0:20:45.800
+And we can inspect the external router so that all the advertisement, all the sessions
+
+248
+0:20:45.800 --> 0:20:49.360
+are up and all that kind of stuff.
+
+249
+0:20:49.360 --> 0:20:53.160
+And obviously we can even access the service from outside.
+
+250
+0:20:53.160 --> 0:20:57.200
+And we can test more complex scenarios.
+
+251
+0:20:57.200 --> 0:21:02.840
+We can test multi-hops, we can test IPv4, IPv6, dual stack and so on.
+
+252
+0:21:02.840 --> 0:21:07.060
+And most importantly, this can run on our laptop.
+
+253
+0:21:07.060 --> 0:21:13.980
+So even the development phase is now easier to move forward.
+
+254
+0:21:13.980 --> 0:21:23.760
+And also we are able to run this in the AppSim CI as under GitHub actions.
+
+255
+0:21:23.760 --> 0:21:35.400
+So wrapping up, FRR made us able to focus on the business logic of our applications
+
+256
+0:21:35.400 --> 0:21:40.760
+instead of having to re-implement all those protocols.
+
+257
+0:21:40.760 --> 0:21:47.320
+To the point that sometimes writing this test suite takes more time than implementing the
+
+258
+0:21:47.320 --> 0:21:51.880
+feature itself.
+
+259
+0:21:51.880 --> 0:21:58.000
+And I think this is a nice example of the interaction between two different projects.
+
+260
+0:21:58.000 --> 0:22:01.840
+These are some resources.
+
+261
+0:22:01.840 --> 0:22:04.800
+The first section is about Metal-L-B.
+
+262
+0:22:04.800 --> 0:22:09.760
+We are trying to be active as much as we can on the Kubernetes luck channel.
+
+263
+0:22:09.760 --> 0:22:12.480
+We always monitor upstream issues.
+
+264
+0:22:12.480 --> 0:22:17.040
+If you want to ask questions, that's the right place to do.
+
+265
+0:22:17.040 --> 0:22:21.000
+Again I'm responding on a daily basis.
+
+266
+0:22:21.000 --> 0:22:27.160
+And I think that can be said also for the FRR community.
+
+267
+0:22:27.160 --> 0:22:31.000
+They are super active in their luck channel.
+
+268
+0:22:31.000 --> 0:22:37.360
+And with that I want to thank them because they made our life super easy.
+
+269
+0:22:37.360 --> 0:22:41.640
+And I'm done for today.
+
+270
+0:22:41.640 --> 0:22:45.560
+Any questions?
+
+271
+0:22:45.560 --> 0:22:47.320
+Hello.
+
+272
+0:22:47.320 --> 0:23:06.520
+Is it possible in a few words to explain when I should use ARP or PGP?
+
+273
+0:23:06.520 --> 0:23:14.680
+Like if you are working locally, if you have a home lab and you don't have a BGP enabled
+
+274
+0:23:14.680 --> 0:23:24.520
+router, that means that the only alternative that you have is L2 and ARP.
+
+275
+0:23:24.520 --> 0:23:33.360
+Otherwise the BGP mode requires routers but also gives you more power because you have
+
+276
+0:23:33.360 --> 0:23:36.720
+proper load balancing across all the different nodes.
+
+277
+0:23:36.720 --> 0:23:40.560
+One more question here.
+
+278
+0:23:40.560 --> 0:23:46.920
+Hi, thanks for your call.
+
+279
+0:23:46.920 --> 0:23:51.080
+We have Metal-L-B running on our worker nodes.
+
+280
+0:23:51.080 --> 0:23:57.560
+And our worker nodes are talking BGP to the host, routing to the host.
+
+281
+0:23:57.560 --> 0:24:03.160
+So FRR is running on the Metal machines as well.
+
+282
+0:24:03.160 --> 0:24:09.360
+So can we configure Metal-L-B with FRR routing without conflicting ports?
+
+283
+0:24:09.360 --> 0:24:10.360
+Because we already have...
+
+284
+0:24:10.360 --> 0:24:11.360
+Yeah, correct.
+
+285
+0:24:11.360 --> 0:24:12.560
+You can't.
+
+286
+0:24:12.560 --> 0:24:18.080
+And that's something that we are trying to think to solve.
+
+287
+0:24:18.080 --> 0:24:22.600
+One of the ideas that I have in mind, but like this is super early stages.
+
+288
+0:24:22.600 --> 0:24:31.800
+Again, having Metal-L-B able to use an existing FRR instance, but that comes with challenges
+
+289
+0:24:31.800 --> 0:24:37.840
+because it expects to reconfigure all the configuration and it might have conflicts
+
+290
+0:24:37.840 --> 0:24:40.400
+with what you have currently.
+
+291
+0:24:40.400 --> 0:24:45.560
+So the go-to solution now is to have different ports, I guess.
+
+292
+0:24:45.560 --> 0:24:48.840
+Okay, thank you.
+
+293
+0:24:48.840 --> 0:24:54.560
+I have a user having a namespace where he uses a lot of IP addresses without...
+
+294
+0:24:54.560 --> 0:24:55.560
+A lot?
+
+295
+0:24:55.560 --> 0:24:56.560
+Sorry?
+
+296
+0:24:56.560 --> 0:25:02.640
+I have some users that are allocated separate namespaces, Kubernetes, and some of them are
+
+297
+0:25:02.640 --> 0:25:05.200
+using a lot of IP addresses.
+
+298
+0:25:05.200 --> 0:25:08.720
+Can you limit the IP addresses that Metal...
+
+299
+0:25:08.720 --> 0:25:09.720
+For a namespace?
+
+300
+0:25:09.720 --> 0:25:10.720
+Yeah.
+
+301
+0:25:10.720 --> 0:25:11.720
+Yeah.
+
+302
+0:25:11.720 --> 0:25:16.560
+So one of the things that we added over the past year are...
+
+303
+0:25:16.560 --> 0:25:21.240
+And I think it's gonna go out in the next release.
+
+304
+0:25:21.240 --> 0:25:24.880
+It's merged domain, but it's not released yet.
+
+305
+0:25:24.880 --> 0:25:29.280
+It's namespace selectors and service selectors in the IP address pool.
+
+306
+0:25:29.280 --> 0:25:32.080
+So by doing that, it will solve your...
+
+307
+0:25:32.080 --> 0:25:37.000
+That's meant to solve the multi-tenant problem where you want to have a given set of pools
+
+308
+0:25:37.000 --> 0:25:40.400
+associated with a given tenant and not more.
+
+309
+0:25:40.400 --> 0:25:48.280
+So we are trying to remove the control from the service itself, as it was before, where
+
+310
+0:25:48.280 --> 0:25:53.840
+you had to set the fixed IP or the pool that you were pulling inside the service and having
+
+311
+0:25:53.840 --> 0:25:58.640
+it as part of the cluster configuration so that the cluster administrator can do that.
+
+312
+0:25:58.640 --> 0:26:04.800
+And there won't be cases where applications are abusing of the cluster.
+
+313
+0:26:04.800 --> 0:26:10.320
+One more here.
+
+314
+0:26:10.320 --> 0:26:11.320
+Thanks for your talk, also.
+
+315
+0:26:11.320 --> 0:26:17.880
+I have a question about the possibility to have Metal-LB coexisting with Calico, because
+
+316
+0:26:17.880 --> 0:26:21.360
+I think in that case, we have two BGP speakers on the same node.
+
+317
+0:26:21.360 --> 0:26:24.360
+And I had issues with that in the past.
+
+318
+0:26:24.360 --> 0:26:25.640
+Yeah.
+
+319
+0:26:25.640 --> 0:26:31.640
+I'm not a Calico expert, so I know that the existing configuration suggested to disable
+
+320
+0:26:31.640 --> 0:26:36.760
+the Metal-LB BGP part and let Calico advertise the services.
+
+321
+0:26:36.760 --> 0:26:41.800
+But that's all I know, and I haven't dug into that thing.
+
+322
+0:26:41.800 --> 0:26:47.240
+One more.
+
+323
+0:26:47.240 --> 0:26:52.040
+Just to follow up on the last question, is it possible to run Metal-LB on a different
+
+324
+0:26:52.040 --> 0:26:55.080
+port for BGP?
+
+325
+0:26:55.080 --> 0:26:57.280
+Yeah.
+
+326
+0:26:57.280 --> 0:27:06.920
+Actually, it should be, but I don't remember, because it has to be a process parameter.
+
+327
+0:27:06.920 --> 0:27:08.840
+I should check.
+
+328
+0:27:08.840 --> 0:27:11.840
+If you catch me out later, I will tell you.
+
+329
+0:27:11.840 --> 0:27:18.840
+Because for the neighbor part, yes, it's like that is clear, for the Metal-LB part, I don't
+
+330
+0:27:18.840 --> 0:27:20.840
+remember.
+
+331
+0:27:20.840 --> 0:27:22.720
+Okay.
+
+332
+0:27:22.720 --> 0:27:43.400
+Thank you.
+

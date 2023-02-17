@@ -1,0 +1,607 @@
+WEBVTT
+
+00:00.000 --> 00:09.960
+Hi everyone, I'm Jeroen. Well, I'm going to tell you something about parsing some files
+
+00:09.960 --> 00:21.600
+really fast and I work for NL Netlabs. Oh, yeah, yeah, so some numbers. There's some
+
+00:21.600 --> 00:27.480
+caveats here. So the 50, I did not do measurements because I made finished slides like 2.8. So
+
+00:27.480 --> 00:33.160
+I did the measurements on the train. So, but I think the 50 megabytes is actually slower. I'm
+
+00:33.160 --> 00:40.360
+pretty sure the 700 megabytes is correct and we will go beyond and I'm going to tell you how. So,
+
+00:40.360 --> 00:46.760
+yeah, so basically the motivation is that currently the parser NSD isn't very fast and
+
+00:46.760 --> 00:52.360
+we have an operator where someone only takes the better part of an hour and at that point it's,
+
+00:52.360 --> 01:02.680
+well, it stops being practical. So, yeah, that's the motivation. And I'd actually like to take you
+
+01:02.680 --> 01:07.240
+on a journey so that I went through. I will also show you the new algorithms but I also want to
+
+01:07.240 --> 01:14.160
+show, tell you why parsing some files currently in NSD at least is really slow. And to do that,
+
+01:14.160 --> 01:19.960
+we have to, I have to tell you a bit on parsing. So I've included an example with a whole world
+
+01:19.960 --> 01:26.680
+C program and the NSD parser is based on Lex and Yack and that's really useful if you want to parse
+
+01:26.680 --> 01:33.880
+things like a computer language where each token has a meaning of it in and of itself. For some
+
+01:33.880 --> 01:41.920
+files, however, that is definitely not the case. So if you look at the, also in this case I provide
+
+01:41.920 --> 01:47.480
+as an example but everyone in the room will probably make out that on the last line I try
+
+01:47.480 --> 01:52.280
+to define an A record with a corresponding IP address and then what the zone parser actually
+
+01:52.280 --> 01:58.080
+does is it takes the A, it makes that the owner and then throws a syntax error because, well,
+
+01:58.080 --> 02:07.840
+an IP address is not really a valid record type obviously. So, yeah, Lex and Yack is not a,
+
+02:07.840 --> 02:14.440
+is really not a good choice but then there's also the fact that I think zone files are only more or
+
+02:14.440 --> 02:23.920
+less standardized, they're not really standardized and putting in MALI and when you combine the two
+
+02:23.920 --> 02:33.520
+that, yeah, that just leads to a lot of trouble. And, well, first thing I did was analyze why the
+
+02:33.520 --> 02:38.200
+current parser is slow and the current parser is slow. Well, it's actually inherent to the tool
+
+02:38.200 --> 02:44.520
+because they're just not a good fit. Because what the lecture does is it gives you each token and
+
+02:44.520 --> 02:52.720
+then passes on to the parser but it does so by matching a whole bunch of inputs and then taking
+
+02:52.720 --> 03:00.080
+the longest one, the longest match and then executing corresponding action in which in the
+
+03:00.080 --> 03:05.320
+case of the NSD zone file parser means that you can, that it copies the token then tries to
+
+03:05.320 --> 03:10.800
+unescape it and for names it tries to, it needs the dots right because they have meaning in domain
+
+03:10.800 --> 03:17.360
+names and what it does there is that it actually splits the input and passes each label separately.
+
+03:17.360 --> 03:24.320
+That is, of course, copied and the parser then concatenates that all back together and that is
+
+03:24.320 --> 03:32.640
+not really a fast process. So, my first thought was, well, what if I just changed the process a bit
+
+03:32.640 --> 03:41.000
+and scrap Alex and Yack and got all the memory allocations. That gave us better numbers but
+
+03:41.000 --> 03:47.400
+they're not the numbers that I wanted to see, right, because under the eight megabytes is, I mean,
+
+03:47.400 --> 03:52.680
+you can express it in gigabytes a second but then it becomes even less impressive, right,
+
+03:52.680 --> 04:03.640
+than 100 megabytes a second. So, yeah, I started looking into that and I will show you the
+
+04:03.640 --> 04:10.160
+algorithms that we, or that I used and I came up with in a minute but to make you understand
+
+04:10.160 --> 04:15.640
+why these algorithms work, it's important that each and every one of you knows that your CPU
+
+04:15.640 --> 04:23.160
+is a pipeline CPU and all modern CPUs are pipeline CPUs and what that means is that each executing
+
+04:23.160 --> 04:29.760
+each instruction is not a single step, it's actually a multi-stage process. So, there's a fetch and
+
+04:29.760 --> 04:36.480
+decode step and there's a lot more to it in practice but this is a mechanism that was designed
+
+04:36.480 --> 04:45.800
+so that you optimize performance in CPU and the premise on getting fast code is that you keep the
+
+04:45.800 --> 04:54.280
+pipeline nice and full. That does not always happen, especially, or one case where that doesn't
+
+04:54.280 --> 05:00.040
+happen is when you get a pipeline stall and that happens essentially when there's, when the next
+
+05:00.040 --> 05:04.840
+instruction that you want to execute depends on the result of the instruction that you're currently
+
+05:04.840 --> 05:13.800
+executing and in that case the CPU has to stall the pipeline, it has to wait until the result is
+
+05:13.800 --> 05:21.680
+written back, it can then go on to decode and then only then execute your instruction and you'll
+
+05:21.680 --> 05:29.520
+take a hit of a couple cycles. Then there's of course the well-known pipeline flashes and those
+
+05:29.520 --> 05:37.880
+happen essentially if you, if there's a conditional jump, for instance, a NIF statement and the CPU
+
+05:37.880 --> 05:42.480
+goes on to load the instructions that come after that and if it turns out it actually needs to
+
+05:42.480 --> 05:48.520
+execute other instructions then it needs to flush the pipeline and only then can it go on to execute
+
+05:48.520 --> 05:56.680
+your code and there's branch prediction that is used to improve the flow and modern CPUs actually
+
+05:56.680 --> 06:01.760
+do a pretty good job of that but well it's prediction so it's not a, it's not always right
+
+06:01.760 --> 06:12.120
+and it turns out so if we look at that information then we can analyze why parser is, the process of
+
+06:12.120 --> 06:17.480
+parsing is just inherently slow because if we go over it byte by byte like the NSD shown parser
+
+06:17.480 --> 06:23.600
+for example then before you can analyze the next byte you have to wait until you know you have to
+
+06:23.600 --> 06:32.200
+resolve the new state of your current byte and also it turns out that as far as the CPU is
+
+06:32.200 --> 06:37.880
+concerned the zone files are just random right that anything can happen at any time so it's hard
+
+06:37.880 --> 06:48.680
+to predict branches in that case. Right so the base of the new instructions that I'm using at
+
+06:48.680 --> 06:56.280
+base is a thing called a SIMD or single instruction multiple data and my interest in all of this was
+
+06:56.280 --> 07:02.200
+really sparked by the SIMD JSON project and it caught my intention because they expressed their
+
+07:02.200 --> 07:07.000
+throughput in gigabytes a second. Now in the next slide I'm going to tell you something about the
+
+07:07.000 --> 07:12.120
+algorithms but I'm not going to go into them in grade depth because there's not a whole lot of
+
+07:12.120 --> 07:19.000
+time so if you want to know more on that then I would advise you to watch the talk or just read
+
+07:19.000 --> 07:25.480
+the paper. But yes in D what that is is actually an instruction set and what it does is it adds
+
+07:25.480 --> 07:33.160
+factor registers and instructions to operate on those registers and what that allows us to do is
+
+07:33.160 --> 07:42.520
+to classify blocks instead of just bytes. There's some trickery involved and there's a super simple
+
+07:42.520 --> 07:52.520
+example on the slide but basically we can classify 16, 32 or 64 bytes in one go depending on your CPU
+
+07:52.520 --> 07:59.120
+and then we repeat that multiple times for each input that we actually want to know about and the
+
+07:59.120 --> 08:08.920
+ideas that we can cut branches and dependencies. So what's good to know about SIMD is that it's
+
+08:08.920 --> 08:18.680
+all vertical non-horizontal so it's really an instruction that is executed for each of the
+
+08:18.680 --> 08:27.400
+inputs so you can actually do logic in SIMD and the way to work around that is to convert the
+
+08:27.400 --> 08:37.800
+inputs to a mask so we would get a 64 bit mask for each of the inputs that we checked and with
+
+08:37.800 --> 08:42.560
+those bit masks in hand then the first thing that we are going to do is to classify all the escape
+
+08:42.560 --> 08:49.960
+bits because there's so many files allowed for escaping and this is actually an algorithm that
+
+08:49.960 --> 08:59.040
+the SIMD JSON guys came up with and basically what we do is that for each uneven number of backslashes
+
+08:59.040 --> 09:07.920
+we take the next character and so that bit then represents the character that has actually escaped
+
+09:07.920 --> 09:15.400
+and we need that information so that we can identify the quoted sections or in the case of
+
+09:15.400 --> 09:25.360
+some zone files also the comment sections and this was actually kind of a hard problem because
+
+09:25.360 --> 09:32.560
+they don't have this problem in JSON documents but in zone files comments can cancel out quoted
+
+09:32.560 --> 09:40.400
+sections and quoted sections can contain semi-colons and then new lines they delimit comments but we
+
+09:40.400 --> 09:45.960
+only want the new lines that actually delimits comment because what we really want to do is
+
+09:45.960 --> 09:54.600
+that we want to find out which of the characters that we identify as structural characters are
+
+09:54.600 --> 10:02.680
+contained in quoted sequences or in comments and there's a simple example in the bottom there so
+
+10:02.680 --> 10:13.600
+oh yeah what I did a number of experiments but in the end it turned out that if there's a semi-colon
+
+10:13.600 --> 10:22.200
+in there in the input we just branch so we have a slow path assuming that there's not too many
+
+10:22.200 --> 10:29.440
+comments in zone files which for generated zone files I guess it's okay and once we have that
+
+10:29.440 --> 10:35.840
+information all the bits that remain automatically belong to the non-quoted are non-quoted strings
+
+10:35.840 --> 10:43.320
+and then and this is oversimplifying it but if we shift right and do it on XOR then that would get
+
+10:43.320 --> 10:54.880
+us all the transitions and with that information we can then go on to create indexes of those
+
+10:54.880 --> 11:02.040
+because your CPU does not only provide SIMD instructions it's also provides bit manipulation
+
+11:02.040 --> 11:07.680
+instructions really fast bit manipulation instructions so the first thing that it does
+
+11:07.680 --> 11:12.760
+is it takes it takes the population count to find out how many transitions are actually in your
+
+11:12.760 --> 11:19.440
+input block and then we use the trailing zero count to find out the relative position of the
+
+11:19.440 --> 11:26.320
+bit and if we combine it with the index then that should give us the pointer to the exact input
+
+11:26.320 --> 11:37.920
+byte and there's there's some more trickery involved here because of course for zone files
+
+11:37.920 --> 11:43.400
+if there's an error we want to report that error and to do that we need the line count and quoted
+
+11:43.400 --> 11:48.600
+sections of course may contain just new lines but we don't want to worry about those in the
+
+11:48.600 --> 11:56.720
+parser because that would that would mean that each parse function would possibly need to update
+
+11:56.720 --> 12:02.960
+the line count and that would just not be very convenient so what we do there is we take an
+
+12:02.960 --> 12:09.280
+unlikely branch if there's new line in a quoted section which really doesn't happen it's it's an
+
+12:09.280 --> 12:16.120
+edge case in the case of sum files and we take the slope off to count all the new lines in the
+
+12:16.120 --> 12:23.400
+input or at least the one in the quoted sections and then once we generate a token for the actual
+
+12:23.400 --> 12:33.160
+delimiting new line we add the number of new lines that we found in quoted sections. Yeah and that
+
+12:33.160 --> 12:39.680
+gives us basically that gives us a fast scanner in my initial measurements and I think it's a
+
+12:39.680 --> 12:45.320
+little bit fast now that would get me a scanning of two gigabytes a second for sum files at least
+
+12:45.320 --> 12:52.680
+with an older.com zone etc etc so there's caveats there too but it turns but it turns out that the
+
+12:52.680 --> 12:57.560
+rest of the DNS data because we of course we have to parse it we only now tokenized it we also have
+
+12:57.560 --> 13:07.800
+to parse it the rest of the DNS data allows for optimizations using SIMD as well and of course we
+
+13:07.800 --> 13:14.640
+want to start with the data that occurs the most and there's of course domain names and with the
+
+13:14.640 --> 13:20.560
+SIMD instruction we actually just repeat the scanning process we quickly identify all the dots
+
+13:20.560 --> 13:26.400
+we turn that into a bitmask and then use the bit manipulation instructions to go over the domain
+
+13:26.400 --> 13:31.360
+name because most of the time if we just fill in the length on the dot then that would give us a
+
+13:31.360 --> 13:39.040
+proper Y format and of course there's a slow path for edge cases as well there and next of course
+
+13:39.040 --> 13:49.280
+this is the record type and normally I guess you would hash I initially just used binary search
+
+13:49.280 --> 13:57.280
+which is faster than just linear search of course but that took away quite some performance
+
+13:58.640 --> 14:05.520
+so we want a perfect actually we want a hash but then a hash table is pretty big and so I figured
+
+14:05.520 --> 14:12.560
+I want a perfect hash and it turns out we can do we can do that so if you take the first character
+
+14:12.560 --> 14:18.000
+of the records because there's not that many record types right and there's certainly if you
+
+14:18.000 --> 14:24.720
+take the first character there's never more than that many records never more than like eight or
+
+14:24.720 --> 14:29.520
+nine record types I start with the first letter so if you then take the last character and at the
+
+14:29.520 --> 14:37.840
+length then it turns out that doesn't give me any collisions so we can also the hash if collisions
+
+14:37.840 --> 14:44.080
+occur but I mean for all the record types and what for four years it doesn't give me collisions
+
+14:44.080 --> 14:52.400
+so I guess we're good on that front um this is a weird width type with a number no for each record
+
+14:52.400 --> 15:04.240
+type someone asked if this only works for record types and then the number and answer is no it
+
+15:04.240 --> 15:10.640
+works for all record types because they're all closely they're all really close together right
+
+15:10.640 --> 15:15.840
+so they're in their alpha numeric most of the time sometimes there's numbers so if you just
+
+15:15.840 --> 15:22.320
+uh I think I could case or down case it and then multiply together a good distribution
+
+15:22.320 --> 15:28.400
+and then just add length and that gives me a that gives that gives me a unique key without
+
+15:28.400 --> 15:33.840
+collisions and from there I can just do a use in the instruction to do compare equal
+
+15:35.120 --> 15:39.680
+so I can do the exact right string compare and that gives me a really nice nice speed up
+
+15:39.680 --> 15:50.560
+um yeah and it and the people who worked on SIMD JSON actually do a lot of did a lot of projects
+
+15:50.560 --> 15:59.440
+like using SIMD for for decoding base 64 so the plan is to incorporate all those things as well
+
+15:59.440 --> 16:09.920
+um and then there's one tricky part um your cpu actually supports multiple instruction
+
+16:09.920 --> 16:14.160
+sets at least if you have modern cpu if you have like a pending forwarding you only get sse for
+
+16:14.160 --> 16:19.920
+the two but we want our software to be able to run on all those devices without recompiling
+
+16:19.920 --> 16:30.560
+so we actually compiled it four times in the case of x x86 then use the cpu id instruction to pick
+
+16:30.560 --> 16:42.720
+the right one and then well it's still in progress projects I hope to be a little bit further along
+
+16:42.720 --> 16:47.920
+but unfortunately not um it will be a standalone library because it might actually be useful to
+
+16:47.920 --> 16:54.080
+other people um and that will make it easy to integrate into other projects it was initially
+
+16:54.080 --> 17:01.200
+just intended for nsd um yeah the numbers are so far pretty good at least quite a bit better than
+
+17:01.200 --> 17:06.720
+what we have now um I think it's possible to go to one gigabytes a second
+
+17:09.440 --> 17:11.600
+yeah so if you want to check it out there's a link in there
+
+17:13.040 --> 17:17.600
+and finally I want to uh there's a slide with acknowledgement because these people help me a
+
+17:17.600 --> 17:22.880
+lot I just send them unsolicited email at first and then I happen to get answers back and they
+
+17:22.880 --> 17:28.960
+help me and they even took a look at my presentation help me there as well um so thanks to uh Jeff
+
+17:28.960 --> 17:37.200
+Daniel and all the simdiation people and with that I actually finished in time uh it's time for
+
+17:37.200 --> 17:47.440
+questions yes maybe my question was clear what I'm wondering about is the hash collations of the
+
+17:48.640 --> 17:55.200
+name the type which are encoded as the word type followed by a number oh no but that's that's a
+
+17:55.200 --> 18:00.000
+slow path that they're and exactly they're the hashtags more but that's a slow path
+
+18:00.640 --> 18:06.960
+so we do a slow path sorry I should repeat the question what um the person in the audience was
+
+18:06.960 --> 18:13.360
+actually referring to what happens if you we use a generic type notation where we start the type by
+
+18:13.360 --> 18:19.760
+type followed by a number and obviously it doesn't work there but it does the slow path so we have a
+
+18:19.760 --> 18:29.280
+slow path there yeah is the parcel so complete that you can parse an output and you get same
+
+18:29.280 --> 18:39.840
+output as you parse them uh really good because I would yeah so if the parser is uh good enough
+
+18:39.840 --> 18:46.000
+that uh to give you the exact same output as you put in um no it does not do that there's
+
+18:49.760 --> 18:56.320
+well you you I mean do you mean by x to wide space exact or just
+
+18:56.320 --> 19:01.200
+just yeah no it doesn't do that no but it's also not the
+
+19:01.200 --> 19:06.880
+it's so if you see white space but it doesn't strip comments it does also strip comments yes
+
+19:06.880 --> 19:07.520
+yes yes yes
+
+19:11.680 --> 19:18.400
+yes how do you handle uh escape decimals because in the example you gave you strip and you have
+
+19:18.400 --> 19:22.160
+look where the back slashes are yeah and then take the next character but if you have like backslash
+
+19:22.160 --> 19:28.320
+003 then you need those four characters as a single unit to encode in the final um I'm not
+
+19:28.320 --> 19:36.480
+actually I just do the uh I just uh really good yeah you're gonna have to I hope there's no more
+
+19:36.480 --> 19:46.480
+questions because you're gonna have to keep doing that but um what I do so what happens if um I guess
+
+19:46.480 --> 19:55.600
+for a certain type of input I record uh record data you can stick like a backslash 003 which
+
+19:55.600 --> 20:00.880
+encodes the bytes with a value three single byte yeah how do you do that with your algorithm that
+
+20:00.880 --> 20:06.560
+just takes the next character when you have backslashes um but that's just to just just to
+
+20:06.560 --> 20:12.800
+so the question is what do I do with escape characters or with escape sequences um and so
+
+20:12.800 --> 20:18.800
+what I explained on the um what I do what happens with backslashes is just to tokenize so I don't
+
+20:18.800 --> 20:24.320
+strip any data I just mark out the starts and the ends of each string field and then the parsing
+
+20:24.320 --> 20:37.200
+comes after that so there's no data actually stripped yeah question over there yeah sorry if
+
+20:37.200 --> 20:42.800
+I missed it but what's the output format is this just memory or is this to store in a database like
+
+20:42.800 --> 20:49.520
+in a binary format yeah um so the question is um so the question is what's the output format
+
+20:50.240 --> 20:57.040
+and the output format in this case is just DNS wire format so the um the id here is that for each
+
+20:57.040 --> 21:02.800
+record it will invoke a callback and it will just give you wire format with pointers to where all
+
+21:02.800 --> 21:08.240
+the fields are in the like an internal description of the field so that you know the length and you
+
+21:08.240 --> 21:17.280
+know the type of the field yeah using the same method you used to convert to cine instructions
+
+21:25.280 --> 21:29.520
+there is definitely value to large effectors because it takes less instructions so if you
+
+21:29.520 --> 21:37.760
+can do something so um I did not look into using the GPU um but yeah that might benefit so if you
+
+21:43.200 --> 21:44.640
+no I have not no
+
+21:44.640 --> 21:48.720
+no
+
+21:57.440 --> 22:00.000
+so the question is this is really good
+
+22:01.680 --> 22:08.560
+why do why does parsing zone files have to be fast well um because they're they get
+
+22:08.560 --> 22:15.280
+reloaded quite a lot of times each time there's an update uh to a zone you need to reload you
+
+22:15.280 --> 22:24.560
+need to reload the zone um so we wonder yeah so that happens multiple times like an hour it
+
+22:24.560 --> 22:31.360
+it's differs per zone right but in our case um if it takes more than an hour and the operator
+
+22:31.360 --> 22:36.640
+actually or it takes the better part of an hour and the operator wants to leave more wants to
+
+22:36.640 --> 22:44.800
+reload more often then that becomes a problem right so we just need to be faster but then there's
+
+22:44.800 --> 22:51.280
+all the and so there's other benefits as well so nsd for instance we support zone verification
+
+22:51.280 --> 22:58.960
+where just before the zone goes live um you can have a focal program uh to verify that your dns
+
+22:58.960 --> 23:08.960
+seg data is is correct and there you can use an axfr or you can let the nsd feed you the zone data
+
+23:08.960 --> 23:15.280
+in which case you just get text representation and if the zone is big enough then you want that to
+
+23:15.280 --> 23:22.640
+be fast because it's in the critical path right last question over there yeah it's splitting the
+
+23:22.640 --> 23:29.520
+files and multi-threading something you considered uh well actually uh if the question was if splitting
+
+23:29.520 --> 23:34.880
+the files and multi-threading is something that we considered well splitting the files no um but
+
+23:38.240 --> 23:46.800
+split on them yeah well new lines um yeah that can be tricky because some files can contain
+
+23:46.800 --> 23:53.040
+parentheses which would then mean that if the record continues on the next line um but a colleague
+
+23:53.040 --> 24:00.960
+actually did uh did do a parallel uh zone loading implementation um and i guess we can even do that
+
+24:00.960 --> 24:07.600
+with uh with this implementation right um because there the it was actually quite a bit faster um
+
+24:09.040 --> 24:14.160
+but the scanning process still takes a long time because you go over it by by byte but now that we
+
+24:14.160 --> 24:20.240
+have a fast scanner there's no reason why we cannot also include like parallel parsing yeah that could
+
+24:20.240 --> 24:28.240
+work yeah did you do any experiments of actually saving this into the database like something
+
+24:28.240 --> 24:44.560
+relational maybe and if you did what impact did that happen um so the question is if we did

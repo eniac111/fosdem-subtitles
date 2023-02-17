@@ -1,0 +1,1580 @@
+1
+0:00:00.000 --> 0:00:11.660
+So we continue with our next talk again about CODEC, this time about DVC with two projects
+
+2
+0:00:11.660 --> 0:00:13.760
+about encoding and decoding DVC.
+
+3
+0:00:13.760 --> 0:00:15.780
+Please welcome Adam.
+
+4
+0:00:15.780 --> 0:00:24.140
+Hi everyone, so today I want to introduce you to VBENC and VBdec.
+
+5
+0:00:24.140 --> 0:00:28.240
+Those are open source implementations for VBC.
+
+6
+0:00:28.240 --> 0:00:34.520
+Now to pick everyone up about VBC, so VBC is this new CODEC that was finalized just
+
+7
+0:00:34.520 --> 0:00:36.360
+over two years ago.
+
+8
+0:00:36.360 --> 0:00:41.080
+And if you want to know one thing about VBC, basically VBC allows you to have the same
+
+9
+0:00:41.080 --> 0:00:44.160
+quality as HEVC at half the bit rate.
+
+10
+0:00:44.160 --> 0:00:49.740
+And on top of that it was developed by the JVET, which is the joint video experts group.
+
+11
+0:00:49.740 --> 0:00:53.520
+And it's called versatile because it's applicable in versatile scenarios, right?
+
+12
+0:00:53.520 --> 0:01:00.080
+We have support for screen content, HDR as we heard in the previous talk, immersive 8K
+
+13
+0:01:00.080 --> 0:01:05.560
+and we can do some fancy stuff like doing adaptive streaming with open scope.
+
+14
+0:01:05.560 --> 0:01:14.320
+All right, so now let me talk you through a little bit of the background of our projects,
+
+15
+0:01:14.320 --> 0:01:16.280
+VBdec and VBENC.
+
+16
+0:01:16.280 --> 0:01:21.880
+So of course those are both very, those are team efforts, right?
+
+17
+0:01:21.880 --> 0:01:27.640
+They are developed by a whole team of researchers at the front of our HHI, mostly in the video
+
+18
+0:01:27.640 --> 0:01:29.060
+coding systems group.
+
+19
+0:01:29.060 --> 0:01:34.040
+Now front of our HHI, if you don't know it, like modern video coding probably wouldn't
+
+20
+0:01:34.040 --> 0:01:37.160
+be what it is if it wasn't for HHI.
+
+21
+0:01:37.160 --> 0:01:42.840
+And HHI is part of a biggest European research organization, the Fraunhofer Society, which
+
+22
+0:01:42.840 --> 0:01:45.440
+is a big German nonprofit.
+
+23
+0:01:45.440 --> 0:01:47.280
+And then about me, so I'm Adam Iskowski.
+
+24
+0:01:47.280 --> 0:01:49.160
+I've been at HHI since 2016.
+
+25
+0:01:49.160 --> 0:01:55.080
+I've been leading the project since 2019 and since about a year I'm also the co-head of
+
+26
+0:01:55.080 --> 0:01:58.760
+the video coding systems group.
+
+27
+0:01:58.760 --> 0:02:00.800
+So why did we even start the software project?
+
+28
+0:02:00.800 --> 0:02:07.520
+So basically, you know, there was HVC for which the test model was HM and HVC is a square
+
+29
+0:02:07.520 --> 0:02:08.520
+block.
+
+30
+0:02:08.520 --> 0:02:14.480
+So they had this method of indexing blocks within, like within the frames using this
+
+31
+0:02:14.480 --> 0:02:18.880
+set index method, which is really amazing for square blocks.
+
+32
+0:02:18.880 --> 0:02:25.240
+And then, you know, they were exploring VVC based on the exploration model, which was
+
+33
+0:02:25.240 --> 0:02:29.320
+still based on HM, except VVC supports rectangular blocks, right?
+
+34
+0:02:29.320 --> 0:02:30.640
+So it's more than only square blocks.
+
+35
+0:02:30.640 --> 0:02:35.360
+And there were really a lot of code for working around the set index thingy.
+
+36
+0:02:35.360 --> 0:02:37.940
+And at HHI we wanted to do even more than that.
+
+37
+0:02:37.940 --> 0:02:42.340
+So we started work on our own partitioner and we just decided this is not going to work.
+
+38
+0:02:42.340 --> 0:02:46.800
+And what we had to do, we basically had to write our own software to deal with it, which
+
+39
+0:02:46.800 --> 0:02:54.160
+we very creatively named the next software, which later became the VTM 1.0.
+
+40
+0:02:54.160 --> 0:02:58.820
+And basically the biggest difference is we had one big map that was mapping the position
+
+41
+0:02:58.820 --> 0:03:04.280
+within a frame to like an object that was describing the current coding block.
+
+42
+0:03:04.280 --> 0:03:09.480
+So the next software, it became the VTM, which is the reference software for the VVC standard.
+
+43
+0:03:09.480 --> 0:03:13.800
+And you can see there in the graph how the VTM was developing over time with regards
+
+44
+0:03:13.800 --> 0:03:19.320
+to the gains over HM with the encoding time, decoding time.
+
+45
+0:03:19.320 --> 0:03:24.100
+And here you can also see how we started our implementation projects from VTM.
+
+46
+0:03:24.100 --> 0:03:28.720
+So from the VTM 3.0 super early, we already started work on the VVDec.
+
+47
+0:03:28.720 --> 0:03:35.240
+And then from VTM 6.0, we started the work on VVENC.
+
+48
+0:03:35.240 --> 0:03:39.920
+Then in the early 2020, Benjamin Pross became my boss.
+
+49
+0:03:39.920 --> 0:03:44.600
+Like we basically started the VCS group and he brought up the idea maybe we can do the
+
+50
+0:03:44.600 --> 0:03:51.480
+projects open source, which we did initially end of 2020 under a little bit shaky license.
+
+51
+0:03:51.480 --> 0:03:55.720
+But with some back and forth with the headquarters, we were able to change it to like a modified
+
+52
+0:03:55.720 --> 0:03:57.040
+BSD3 license.
+
+53
+0:03:57.040 --> 0:04:02.200
+And after some more back and forth, we actually have an unmodified, like a standard open source
+
+54
+0:04:02.200 --> 0:04:04.640
+license, the clear BSD3.
+
+55
+0:04:04.640 --> 0:04:07.360
+All right.
+
+56
+0:04:07.360 --> 0:04:11.560
+So let's talk some more about the projects.
+
+57
+0:04:11.560 --> 0:04:12.720
+You know, some hard facts.
+
+58
+0:04:12.720 --> 0:04:15.880
+So as I already mentioned, they are based of VTM.
+
+59
+0:04:15.880 --> 0:04:21.720
+They are both written fully in C++, but we do have like a pure C interface.
+
+60
+0:04:21.720 --> 0:04:29.160
+So you can integrate it into frameworks or just use it from a pure C code.
+
+61
+0:04:29.160 --> 0:04:30.840
+Those are C++ projects, right?
+
+62
+0:04:30.840 --> 0:04:33.760
+So they are object based, but it's kept very simple.
+
+63
+0:04:33.760 --> 0:04:39.520
+We try to not hide anything, no getters, no setters, and like have all the control over
+
+64
+0:04:39.520 --> 0:04:42.000
+what is happening in the memory.
+
+65
+0:04:42.000 --> 0:04:48.320
+Contrary to some other projects, we do not do assembler at all.
+
+66
+0:04:48.320 --> 0:04:53.440
+We do only vectorization using intrinsics, which of course has the advantage that we
+
+67
+0:04:53.440 --> 0:05:00.640
+get stuff like ARM support for free through this amazing Cindy Everywhere library.
+
+68
+0:05:00.640 --> 0:05:07.520
+Also support for Wasm cross-compilation, so WebAssembly, which we also did.
+
+69
+0:05:07.520 --> 0:05:11.400
+And what we try to do, we try to make those projects as simple as possible.
+
+70
+0:05:11.400 --> 0:05:16.800
+So basically we only expose options that are use case relevant, but like the coding options,
+
+71
+0:05:16.800 --> 0:05:22.200
+everything that's like connected to efficiency, we try to define it for the user to just have
+
+72
+0:05:22.200 --> 0:05:24.720
+the simplest experience possible.
+
+73
+0:05:24.720 --> 0:05:31.080
+Yeah, they're both available on GitHub under the PSD3 closed clear license, as I already
+
+74
+0:05:31.080 --> 0:05:32.080
+mentioned.
+
+75
+0:05:32.080 --> 0:05:34.160
+All right, so how do we do the development?
+
+76
+0:05:34.160 --> 0:05:37.520
+The development is done internally without HHIs.
+
+77
+0:05:37.520 --> 0:05:46.360
+We have our own main Git repo that we basically, from which we push squashed updates to the
+
+78
+0:05:46.360 --> 0:05:47.360
+GitHub repo.
+
+79
+0:05:47.360 --> 0:05:48.360
+Why is it internal?
+
+80
+0:05:48.360 --> 0:05:53.960
+I know many people find it a little bit, you know, there might be issues with that, but
+
+81
+0:05:53.960 --> 0:05:59.480
+here on the right you can see, or maybe you cannot see, a typical magic list that I would
+
+82
+0:05:59.480 --> 0:06:02.440
+do on the internal stuff, on the internal repo.
+
+83
+0:06:02.440 --> 0:06:07.240
+And I think this is just not something that is ready to be released to the public, you
+
+84
+0:06:07.240 --> 0:06:08.240
+know.
+
+85
+0:06:08.240 --> 0:06:15.520
+So I would rather hide those kind of hiccups and it just takes too much time to make stuff
+
+86
+0:06:15.520 --> 0:06:18.840
+nice for being public.
+
+87
+0:06:18.840 --> 0:06:24.160
+And I also think not everyone at HHI might be comfortable, you know, being like a public
+
+88
+0:06:24.160 --> 0:06:25.160
+developer.
+
+89
+0:06:25.160 --> 0:06:29.520
+But yeah, all of the stuff that we have internally eventually goes to the public repo, either
+
+90
+0:06:29.520 --> 0:06:35.000
+for new releases to fix bugs or issues, you know, if we develop a big new feature, we
+
+91
+0:06:35.000 --> 0:06:36.640
+would push it.
+
+92
+0:06:36.640 --> 0:06:41.400
+And you know, if someone was to make a large contribution, of course, to rebase the code.
+
+93
+0:06:41.400 --> 0:06:46.780
+All right, so VB Deck, the decoder project.
+
+94
+0:06:46.780 --> 0:06:51.120
+All the highlights, it's fully compliant with the main 10 profile of VVC.
+
+95
+0:06:51.120 --> 0:06:52.920
+Of course, give or take a few bugs.
+
+96
+0:06:52.920 --> 0:06:56.800
+So actually it was supposed to be fully compliant since the version 1.0.
+
+97
+0:06:56.800 --> 0:07:00.720
+But you know, stuff happens, we find bugs, we fix the bugs.
+
+98
+0:07:00.720 --> 0:07:04.120
+But basically there is no feature that is really missing.
+
+99
+0:07:04.120 --> 0:07:09.560
+It's multi-platform, so it works on all the major, all the major OSes.
+
+100
+0:07:09.560 --> 0:07:13.940
+And it also works on different architectures, thanks to ZMD Everywhere, as mentioned.
+
+101
+0:07:13.940 --> 0:07:21.360
+So we have like x86 support, ERM, I also saw people, you know, doing builds for RISC-V.
+
+102
+0:07:21.360 --> 0:07:23.240
+So this is very nice.
+
+103
+0:07:23.240 --> 0:07:28.400
+Also one thing I'm kind of proud of also is that from the first version we have like a
+
+104
+0:07:28.400 --> 0:07:30.220
+unified thread pool.
+
+105
+0:07:30.220 --> 0:07:32.520
+So also something that was already talked about.
+
+106
+0:07:32.520 --> 0:07:38.720
+Basically everything is like all the tasks are collected within this one thread pool
+
+107
+0:07:38.720 --> 0:07:40.160
+that just balances itself, right?
+
+108
+0:07:40.160 --> 0:07:44.920
+There is like no frame threads, slice threads, which also means we are multi-threading is
+
+109
+0:07:44.920 --> 0:07:46.960
+independent of bit-stream features, right?
+
+110
+0:07:46.960 --> 0:07:50.520
+We don't need tiles, slices to be able to parallelize.
+
+111
+0:07:50.520 --> 0:07:53.560
+So I think this is a really nice feature.
+
+112
+0:07:53.560 --> 0:07:56.740
+All right, let's look a little bit into the development history.
+
+113
+0:07:56.740 --> 0:08:01.800
+So this on the left is like the performance graph for, you know, different resolutions,
+
+114
+0:08:01.800 --> 0:08:05.240
+different coding conditions, so like random access or all-intro.
+
+115
+0:08:05.240 --> 0:08:12.400
+And you know, major milestones mentioned 1.0 full compliance with the standard in version
+
+116
+0:08:12.400 --> 0:08:13.400
+1.3.
+
+117
+0:08:13.400 --> 0:08:18.080
+We did a three times memory reduction and, you know, I was also asking myself how could
+
+118
+0:08:18.080 --> 0:08:23.520
+we ever release any other version, how could we have ever released any other version?
+
+119
+0:08:23.520 --> 0:08:27.600
+But yeah, at least we managed to get it better.
+
+120
+0:08:27.600 --> 0:08:33.880
+1.4 we got a major performance boost based of external contributions in GitHub.
+
+121
+0:08:33.880 --> 0:08:35.480
+So this was really nice to see.
+
+122
+0:08:35.480 --> 0:08:39.480
+And in between, we really had a lot of, you know, small improvements.
+
+123
+0:08:39.480 --> 0:08:42.520
+And as you can see in the graphs, it does add up.
+
+124
+0:08:42.520 --> 0:08:47.280
+All right, about the VVENC.
+
+125
+0:08:47.280 --> 0:08:49.560
+So VVENC, you know, it's an encoder project.
+
+126
+0:08:49.560 --> 0:08:52.760
+Of course, it's way more complex, way more interesting.
+
+127
+0:08:52.760 --> 0:08:54.280
+It has way more degrees of freedom, right?
+
+128
+0:08:54.280 --> 0:08:59.720
+Like the decoder just does this one thing, and has zero degree of freedom, right?
+
+129
+0:08:59.720 --> 0:09:05.080
+Maybe the standard tells us exactly what to do, and the encoder has all of those choices
+
+130
+0:09:05.080 --> 0:09:07.800
+that it has to do.
+
+131
+0:09:07.800 --> 0:09:12.080
+And what I like to say is, you know, it's basically the best open source encoder out
+
+132
+0:09:12.080 --> 0:09:13.080
+there.
+
+133
+0:09:13.080 --> 0:09:16.240
+As you can see here on the right, it's runtime versus efficiency.
+
+134
+0:09:16.240 --> 0:09:21.160
+So you know, for a given runtime, we can have the best efficiency.
+
+135
+0:09:21.160 --> 0:09:26.800
+And for any of our working points, we can get this efficiency the fastest.
+
+136
+0:09:26.800 --> 0:09:30.080
+Of course, you know, it's not the best encoder if you want to encode UHD live.
+
+137
+0:09:30.080 --> 0:09:31.760
+We're not quite there yet.
+
+138
+0:09:31.760 --> 0:09:36.880
+But you know, at those slower working points, it really doesn't get better than that.
+
+139
+0:09:36.880 --> 0:09:39.040
+At least not that I am aware of.
+
+140
+0:09:39.040 --> 0:09:44.520
+All right, so we have five presets on the encoder from faster to slower.
+
+141
+0:09:44.520 --> 0:09:47.000
+And you can see, this is a single-threaded graph.
+
+142
+0:09:47.000 --> 0:09:53.120
+You can see more or less how those presets compare to IxO65 in orange.
+
+143
+0:09:53.120 --> 0:09:57.400
+We have very efficient multithreading, at least like between, you know, up to eight
+
+144
+0:09:57.400 --> 0:10:00.320
+threads or up to 16 threads with some additional options.
+
+145
+0:10:00.320 --> 0:10:05.000
+I'm going to talk about this a little bit in two slides.
+
+146
+0:10:05.000 --> 0:10:10.400
+And we have very good optimization for human visual system based on the XPS and R metric,
+
+147
+0:10:10.400 --> 0:10:12.320
+which I'm also going to mention a little bit later.
+
+148
+0:10:12.320 --> 0:10:13.840
+We have really excellent rate control.
+
+149
+0:10:13.840 --> 0:10:20.560
+So you know, with bit-rate deviations, rarely more than 2%, and like almost never more than
+
+150
+0:10:20.560 --> 0:10:22.320
+5%.
+
+151
+0:10:22.320 --> 0:10:28.640
+As I mentioned, simple interface and it's, you know, this thing can be used for academic,
+
+152
+0:10:28.640 --> 0:10:30.760
+amateur, commercial users.
+
+153
+0:10:30.760 --> 0:10:32.840
+The license really allows it all.
+
+154
+0:10:32.840 --> 0:10:35.560
+All right, so we have those five presets.
+
+155
+0:10:35.560 --> 0:10:36.960
+How do we derive those presets?
+
+156
+0:10:36.960 --> 0:10:41.600
+Like from an academic point of view, this is actually done in a very interesting way.
+
+157
+0:10:41.600 --> 0:10:46.720
+So we take all not use case related options of the encoder and we do like large-scale
+
+158
+0:10:46.720 --> 0:10:47.720
+optimization.
+
+159
+0:10:47.720 --> 0:10:53.520
+We start with a very simple, very fast working point and then we try to derive which option
+
+160
+0:10:53.520 --> 0:10:56.520
+should be changed as the next one.
+
+161
+0:10:56.520 --> 0:11:00.800
+And this is always the option which basically gives incrementally the next best working
+
+162
+0:11:00.800 --> 0:11:02.440
+point, right?
+
+163
+0:11:02.440 --> 0:11:03.800
+And this is a huge optimization.
+
+164
+0:11:03.800 --> 0:11:05.520
+It takes really a lot of compute time.
+
+165
+0:11:05.520 --> 0:11:10.920
+So we don't do it so often, like every two or three versions, or if we know one tool
+
+166
+0:11:10.920 --> 0:11:16.840
+got implemented way better, we can like try to only optimize for this tool within the
+
+167
+0:11:16.840 --> 0:11:20.040
+options space from the last optimization.
+
+168
+0:11:20.040 --> 0:11:26.800
+We target HD and UHD, natural content, but we do sanity checks for a resolution and like
+
+169
+0:11:26.800 --> 0:11:30.640
+screen content or, you know, HDR.
+
+170
+0:11:30.640 --> 0:11:36.760
+And the one issue that we still have is, you know, at the beginning here, you can see that
+
+171
+0:11:36.760 --> 0:11:38.840
+our curve gets a little bit steeper, right?
+
+172
+0:11:38.840 --> 0:11:44.160
+So we cannot go too fast because at some point for like every two times speed up, we're just
+
+173
+0:11:44.160 --> 0:11:45.880
+losing too much efficiency.
+
+174
+0:11:45.880 --> 0:11:48.760
+This is because, you know, we started from the reference software which was designed
+
+175
+0:11:48.760 --> 0:11:54.720
+for readability and the efficiency still work in progress.
+
+176
+0:11:54.720 --> 0:11:58.400
+All right, about the multitreading.
+
+177
+0:11:58.400 --> 0:12:03.420
+So our multitreading is also, I would say done differently than in many other encoders.
+
+178
+0:12:03.420 --> 0:12:07.000
+So we do the multitreading over CTUs.
+
+179
+0:12:07.000 --> 0:12:15.440
+So like the modern macro blocks and CTU lines, like we simulate a wavefront parallel processing
+
+180
+0:12:15.440 --> 0:12:19.920
+without using the syntax and we parallelize independent frames, right?
+
+181
+0:12:19.920 --> 0:12:23.560
+If like two frames are independent of each other and the references are already done,
+
+182
+0:12:23.560 --> 0:12:29.760
+we can do those in parallel, which of course means that, you know, how much we can parallelize
+
+183
+0:12:29.760 --> 0:12:35.360
+depends on the number of CTUs that are available, which are always more in high resolution or
+
+184
+0:12:35.360 --> 0:12:37.840
+with smaller CTU sizes.
+
+185
+0:12:37.840 --> 0:12:42.640
+That's why the faster and fast presets which have smaller CTUs, they parallelize a little
+
+186
+0:12:42.640 --> 0:12:49.320
+bit better, which you can see on the top right there in the full HD parallelization efficiency
+
+187
+0:12:49.320 --> 0:12:50.320
+plot, right?
+
+188
+0:12:50.320 --> 0:12:55.960
+You can see like after eight, it's kind of, well, it doesn't saturate, but like after
+
+189
+0:12:55.960 --> 0:13:04.240
+eight threads, there might be better ways to utilize the resources than to just enable
+
+190
+0:13:04.240 --> 0:13:06.120
+more threads.
+
+191
+0:13:06.120 --> 0:13:07.640
+Exactly.
+
+192
+0:13:07.640 --> 0:13:10.200
+And how can we improve the scaling?
+
+193
+0:13:10.200 --> 0:13:14.440
+So we can improve the scaling by enabling normative features of VBC.
+
+194
+0:13:14.440 --> 0:13:20.240
+So either doing tiles, that is independent regions within the picture, or enabling the
+
+195
+0:13:20.240 --> 0:13:27.360
+normative wavefront, which allows us to kill one dependency within encoding.
+
+196
+0:13:27.360 --> 0:13:30.200
+And this is on the bottom right.
+
+197
+0:13:30.200 --> 0:13:35.280
+So you can see, if we enable those additional features, the multi-threading scaling actually
+
+198
+0:13:35.280 --> 0:13:42.680
+gets much better, but it costs between three to 5% of bitrate overhead.
+
+199
+0:13:42.680 --> 0:13:47.480
+But still, even with those added features, the encoder is not ready yet for more than
+
+200
+0:13:47.480 --> 0:13:49.600
+let's say 32 threads.
+
+201
+0:13:49.600 --> 0:13:56.120
+So if you have a really, really big server, that encoder will not be able to utilize all
+
+202
+0:13:56.120 --> 0:13:57.360
+the cores.
+
+203
+0:13:57.360 --> 0:13:58.360
+Yeah.
+
+204
+0:13:58.360 --> 0:14:05.080
+And about our optimization for the human visual system, it's based on the XPSNR, which is
+
+205
+0:14:05.080 --> 0:14:07.800
+a new metric that a colleague at HHI developed.
+
+206
+0:14:07.800 --> 0:14:11.320
+It has a really high correlation with MOS based on some public datasets.
+
+207
+0:14:11.320 --> 0:14:13.960
+There are publications you can look up.
+
+208
+0:14:13.960 --> 0:14:16.760
+There are mentioned on the bottom left.
+
+209
+0:14:16.760 --> 0:14:19.800
+And it has been contributed to FFmpeg as filter.
+
+210
+0:14:19.800 --> 0:14:26.960
+And I think it is somewhere in the backlog of FFmpeg waiting to be looked at.
+
+211
+0:14:26.960 --> 0:14:29.280
+You can see on the right here a lot of graphs.
+
+212
+0:14:29.280 --> 0:14:33.600
+So basically, in the last JVET meeting, no, the JVET meeting one before last, there was
+
+213
+0:14:33.600 --> 0:14:41.600
+a verification test with actual human subjects where VTM was tested with the new compression
+
+214
+0:14:41.600 --> 0:14:46.560
+technology and we submitted VVENC to be tested alongside of it in the slow preset.
+
+215
+0:14:46.560 --> 0:14:49.600
+So the slower preset has around the efficiency of VTM.
+
+216
+0:14:49.600 --> 0:14:53.480
+Slow preset is objectively 5% behind.
+
+217
+0:14:53.480 --> 0:15:00.960
+And as you can see in the graphs, VVENC in orange matches or outperforms VTM, which means
+
+218
+0:15:00.960 --> 0:15:07.200
+that our visual optimization is well able to at least close this 5% gap, if not even
+
+219
+0:15:07.200 --> 0:15:13.720
+add more in terms of visual, like subject to visual quality.
+
+220
+0:15:13.720 --> 0:15:16.000
+So yeah, that's really nice.
+
+221
+0:15:16.000 --> 0:15:17.560
+All right.
+
+222
+0:15:17.560 --> 0:15:19.600
+VVENC in practice.
+
+223
+0:15:19.600 --> 0:15:23.720
+Everyone asks in the end, so what kind of FPS can you achieve?
+
+224
+0:15:23.720 --> 0:15:30.400
+So we did some encodes onto mobile workstation kind of computers, encodes using all defaults,
+
+225
+0:15:30.400 --> 0:15:33.360
+which means eight threads.
+
+226
+0:15:33.360 --> 0:15:39.400
+And for HD versus live, it's like for faster is around times four, like live times four.
+
+227
+0:15:39.400 --> 0:15:43.680
+So around 15 FPS, medium around lifetime times 30.
+
+228
+0:15:43.680 --> 0:15:44.680
+All right.
+
+229
+0:15:44.680 --> 0:15:50.200
+So around two FPS, I'm talking about HD, 60 FPS is live.
+
+230
+0:15:50.200 --> 0:15:56.360
+For UHD, the faster can do like 15 times live, fast 30 and medium, well, let's just say medium
+
+231
+0:15:56.360 --> 0:16:01.080
+would only be of interest for like large scale VOD encodings, right?
+
+232
+0:16:01.080 --> 0:16:06.040
+But you know, FPS also depends on many other factors like bitrate content, you know, your
+
+233
+0:16:06.040 --> 0:16:08.120
+actual CPU and stuff like that.
+
+234
+0:16:08.120 --> 0:16:11.080
+So this is more like ballpark numbers.
+
+235
+0:16:11.080 --> 0:16:15.080
+Excuse me, is this HDR content?
+
+236
+0:16:15.080 --> 0:16:17.840
+It is not HDR content, but it's 10 bit.
+
+237
+0:16:17.840 --> 0:16:22.080
+So it should be roughly the same for HDR.
+
+238
+0:16:22.080 --> 0:16:25.940
+We only do, we only test with 10 bit usually.
+
+239
+0:16:25.940 --> 0:16:29.160
+It works for eight bit, but it's kind of 10 bit native.
+
+240
+0:16:29.160 --> 0:16:30.520
+All right.
+
+241
+0:16:30.520 --> 0:16:35.800
+Also some version history for the VVNK thing, for the VVNK project.
+
+242
+0:16:35.800 --> 0:16:40.320
+So our first major milestone was the 0.3 where we added frame threading.
+
+243
+0:16:40.320 --> 0:16:45.200
+And you can see on this multi-threaded efficiency versus speed graph that it was, you know,
+
+244
+0:16:45.200 --> 0:16:47.040
+a huge leap for us.
+
+245
+0:16:47.040 --> 0:16:54.200
+In the 1.0, we added a pure C interface, allowing, you know, the integrations into pure C frameworks.
+
+246
+0:16:54.200 --> 0:16:59.520
+1.4, sync at detection, 1.5, we added like arbitrary intra period, so it doesn't have
+
+247
+0:16:59.520 --> 0:17:01.320
+to be aligned to anything.
+
+248
+0:17:01.320 --> 0:17:05.880
+We added a fast decode preset and in the newest version, the thing that I really like about
+
+249
+0:17:05.880 --> 0:17:08.320
+it is that we added the ARM support.
+
+250
+0:17:08.320 --> 0:17:13.840
+And you know, every version we add improved ray control, things also to, you know, great
+
+251
+0:17:13.840 --> 0:17:14.840
+community feedback.
+
+252
+0:17:14.840 --> 0:17:19.560
+And you know, from one version to another, your encode might be 10% faster.
+
+253
+0:17:19.560 --> 0:17:24.600
+But if you had the ray control problem and it got fixed, it's going to be, you know,
+
+254
+0:17:24.600 --> 0:17:26.640
+like, way, way better.
+
+255
+0:17:26.640 --> 0:17:32.560
+So this is like, this hard to quantify improvements are actually one of the most important ones.
+
+256
+0:17:32.560 --> 0:17:34.440
+And you know, you can see how the curve behaves.
+
+257
+0:17:34.440 --> 0:17:39.520
+So extrapolating, I'm sure we're going to get even faster and better in the future.
+
+258
+0:17:39.520 --> 0:17:40.880
+All right.
+
+259
+0:17:40.880 --> 0:17:45.360
+About the ecosystem and the community, of course, you know, this is raw video encoding and decoding.
+
+260
+0:17:45.360 --> 0:17:49.200
+This is really only of academic interest, right?
+
+261
+0:17:49.200 --> 0:17:51.200
+It doesn't really bring you anything.
+
+262
+0:17:51.200 --> 0:17:55.520
+That's why we have been looking into FFmpeg support for a long time.
+
+263
+0:17:55.520 --> 0:18:00.120
+There was an open access paper over one half years ago that described how to do it for
+
+264
+0:18:00.120 --> 0:18:01.640
+the decoder.
+
+265
+0:18:01.640 --> 0:18:04.000
+There are some patches in the pipeline with FFmpeg.
+
+266
+0:18:04.000 --> 0:18:08.800
+We also put in our wiki how to apply them manually if you, you know, if you want to
+
+267
+0:18:08.800 --> 0:18:13.600
+build it, you know, I've talked about this a lot, but the thing is, you know, if it's
+
+268
+0:18:13.600 --> 0:18:21.440
+not in FFmpeg, it doesn't exist, that's why, you know, we put up a like how to for you
+
+269
+0:18:21.440 --> 0:18:22.440
+on how to do it.
+
+270
+0:18:22.440 --> 0:18:23.440
+All right.
+
+271
+0:18:23.440 --> 0:18:28.080
+About playback, once you get this FFmpeg with VBC included, you can just link whatever
+
+272
+0:18:28.080 --> 0:18:31.240
+player uses FFmpeg as its backend and it's going to work.
+
+273
+0:18:31.240 --> 0:18:36.760
+As far as I know for VLC, you might force it to use the FFmpeg as the demaxer.
+
+274
+0:18:36.760 --> 0:18:37.760
+Not sure about it.
+
+275
+0:18:37.760 --> 0:18:38.760
+I'll test it myself.
+
+276
+0:18:38.760 --> 0:18:41.160
+It comes like from community feedback.
+
+277
+0:18:41.160 --> 0:18:45.320
+I know there are some exo player integrations going around which allow you to, you know,
+
+278
+0:18:45.320 --> 0:18:48.360
+to use it in Android apps more easily.
+
+279
+0:18:48.360 --> 0:18:53.160
+We have a toy web browser example, but it's nothing like the VLC.js.
+
+280
+0:18:53.160 --> 0:18:54.880
+It's really a toy example.
+
+281
+0:18:54.880 --> 0:18:58.480
+And for maxing and demaxing, you can just use G pack.
+
+282
+0:18:58.480 --> 0:19:04.280
+Sorry, for maxing, you can just use G pack since the version 2.0 and I think it also
+
+283
+0:19:04.280 --> 0:19:09.440
+needs to be linked to an FFmpeg with VBC support.
+
+284
+0:19:09.440 --> 0:19:10.440
+All right.
+
+285
+0:19:10.440 --> 0:19:15.800
+For the community, we do are open to external contributions and we wish to get some.
+
+286
+0:19:15.800 --> 0:19:20.020
+That's also why I'm talking to you, to get some interest.
+
+287
+0:19:20.020 --> 0:19:26.120
+So we try to make this more easy by stating that the authors of VVENC are also retained
+
+288
+0:19:26.120 --> 0:19:27.200
+the copyright.
+
+289
+0:19:27.200 --> 0:19:31.560
+We don't have like a contributors agreement, so this is like the only way we can make it
+
+290
+0:19:31.560 --> 0:19:32.840
+happen.
+
+291
+0:19:32.840 --> 0:19:38.320
+We are interested in all kinds of contributions, you know, efficiencies, speed up, and we're
+
+292
+0:19:38.320 --> 0:19:44.440
+going to try to review this, test, generate, result, whatever is needed, give proper feedback,
+
+293
+0:19:44.440 --> 0:19:45.440
+merge.
+
+294
+0:19:45.440 --> 0:19:46.760
+So, yeah.
+
+295
+0:19:46.760 --> 0:19:48.880
+Please do if you're interested.
+
+296
+0:19:48.880 --> 0:19:53.760
+To conclude, you know, if you just enter the room, I talked to you about our open source
+
+297
+0:19:53.760 --> 0:19:59.560
+implementations of the VVC standard and I'm looking forward to, you know, contributions,
+
+298
+0:19:59.560 --> 0:20:04.280
+also results, tests, if you want to try it out, and general feedback.
+
+299
+0:20:04.280 --> 0:20:05.280
+Thanks a lot.
+
+300
+0:20:05.280 --> 0:20:10.280
+Any questions in the room?
+
+301
+0:20:10.280 --> 0:20:12.280
+Yeah, no problem.
+
+302
+0:20:12.280 --> 0:20:19.280
+What confused me, because I know a little bit about the backstory, so H.265, right?
+
+303
+0:20:19.280 --> 0:20:20.280
+Yeah.
+
+304
+0:20:20.280 --> 0:20:26.280
+Was it super proprietary and the royalties and the Alliance for Media Alarm, the AV-ROM
+
+305
+0:20:26.280 --> 0:20:27.280
+cabinet?
+
+306
+0:20:27.280 --> 0:20:28.280
+Yes.
+
+307
+0:20:28.280 --> 0:20:31.960
+And now the eukaryotes is open source and free, right?
+
+308
+0:20:31.960 --> 0:20:36.960
+So to recap...
+
+309
+0:20:36.960 --> 0:20:44.640
+To recap the question, the question was H.265 was a proprietary codec with licensing, AV-1
+
+310
+0:20:44.640 --> 0:20:54.880
+is a non-propertory codec, and then I'm talking about VVC, which is the successor of H.265.
+
+311
+0:20:54.880 --> 0:21:01.120
+And there is a small confusion, so I'm not talking about the codec as being open source.
+
+312
+0:21:01.120 --> 0:21:02.880
+It's about the implementations of it, right?
+
+313
+0:21:02.880 --> 0:21:07.440
+So you have to differentiate between implementations and the technology itself.
+
+314
+0:21:07.440 --> 0:21:12.640
+There will be licensing for the technology itself, but there are still open source implementations
+
+315
+0:21:12.640 --> 0:21:14.120
+also of H.B.C.
+
+316
+0:21:14.120 --> 0:21:21.880
+So that's kind of the way I would like to see it, you know?
+
+317
+0:21:21.880 --> 0:21:27.840
+So it won't be like with MP3, but for all of us, it will be completely free to use,
+
+318
+0:21:27.840 --> 0:21:28.840
+for everyone?
+
+319
+0:21:28.840 --> 0:21:29.840
+No, it won't.
+
+320
+0:21:29.840 --> 0:21:37.160
+I mean, the software is free to use, but if you build your streaming service based on
+
+321
+0:21:37.160 --> 0:21:42.240
+the technology independent of which software you use, you have to pay royalties for the
+
+322
+0:21:42.240 --> 0:21:43.240
+technology.
+
+323
+0:21:43.240 --> 0:21:47.160
+Because you have bad patents, bad patent issues.
+
+324
+0:21:47.160 --> 0:21:53.280
+Yes, I mean, there is this technology cost stuff to develop and people want to get their
+
+325
+0:21:53.280 --> 0:21:54.280
+investment back.
+
+326
+0:21:54.280 --> 0:22:01.960
+Okay, disclaimer, I'm doing this in the optimizations for video codecs in general.
+
+327
+0:22:01.960 --> 0:22:09.560
+My focus is on, and my comment to you is using a library like Cinq everywhere it works.
+
+328
+0:22:09.560 --> 0:22:13.040
+It's going to give you the initial results that you want, but you will never get the
+
+329
+0:22:13.040 --> 0:22:16.560
+optimal performance out of your hardware.
+
+330
+0:22:16.560 --> 0:22:22.560
+We had some really good examples of code, particular algorithms like O-instructions,
+
+331
+0:22:22.560 --> 0:22:28.160
+Intrinsics, MoveMask type of Intrinsics, but I view it very commonly popular in Intel.
+
+332
+0:22:28.160 --> 0:22:34.560
+If you try to port them with Cinq everywhere or some kind of obstruction layer to one,
+
+333
+0:22:34.560 --> 0:22:36.560
+you're going to have to emulate this behavior.
+
+334
+0:22:36.560 --> 0:22:43.840
+So ideally, you have to provide some way to provide optimized functions for ARM or any
+
+335
+0:22:43.840 --> 0:22:45.840
+other future architecture.
+
+336
+0:22:45.840 --> 0:22:51.960
+Otherwise, you're just going to have your Intel layer transferred, translated to one.
+
+337
+0:22:51.960 --> 0:22:56.760
+It will work, but you will never optimize your software.
+
+338
+0:22:56.760 --> 0:23:05.120
+To recap the comment, there was a comment that Cinq everywhere works, gives a nice initial
+
+339
+0:23:05.120 --> 0:23:08.680
+deliverable, but will never match hand-optimized assembler.
+
+340
+0:23:08.680 --> 0:23:09.680
+We are...
+
+341
+0:23:09.680 --> 0:23:14.320
+It's even a C, C with the corresponding ARM Intrinsics.
+
+342
+0:23:14.320 --> 0:23:18.600
+When I say assembler, I mean Intrinsics.
+
+343
+0:23:18.600 --> 0:23:23.400
+We are aware of it, and we are looking a little bit of it.
+
+344
+0:23:23.400 --> 0:23:27.960
+There are different kinds of intrinsic kernels that are implemented there.
+
+345
+0:23:27.960 --> 0:23:31.960
+Sometimes you have two pieces of memory that needs to be added up and stored somewhere
+
+346
+0:23:31.960 --> 0:23:32.960
+else.
+
+347
+0:23:32.960 --> 0:23:39.280
+There, everywhere works really nice, but when it's like lookup tables, shuffles, it works
+
+348
+0:23:39.280 --> 0:23:40.280
+worse.
+
+349
+0:23:40.280 --> 0:23:41.280
+We are aware.
+
+350
+0:23:41.280 --> 0:23:45.440
+We are looking into identifying the kernels where there's the biggest potential for improvement
+
+351
+0:23:45.440 --> 0:23:46.760
+and doing those manually.
+
+352
+0:23:46.760 --> 0:23:52.120
+We are looking into HDR implementation of VBX.
+
+353
+0:23:52.120 --> 0:23:57.200
+I'm doing the VNFT optimizations for that.
+
+354
+0:23:57.200 --> 0:24:02.680
+The way to do the transpose, for example, in 10 is completely different to the way VNFT
+
+355
+0:24:02.680 --> 0:24:04.480
+is looking, especially with...
+
+356
+0:24:04.480 --> 0:24:07.480
+Because for AVX2, you have 256 bitwise registers.
+
+357
+0:24:07.480 --> 0:24:12.920
+You don't have that with me, but you have other instructions to help you try to tackle
+
+358
+0:24:12.920 --> 0:24:13.920
+the outcome.
+
+359
+0:24:13.920 --> 0:24:22.440
+My point is that if you are open to contributions with specific optimizations, then you might
+
+360
+0:24:22.440 --> 0:24:24.440
+find people to help prepare you that.
+
+361
+0:24:24.440 --> 0:24:31.920
+But if you restrict yourself to only using the library and only use Intel Intrinsics
+
+362
+0:24:31.920 --> 0:24:36.680
+and then translate that one using the library, you might lose some performance.
+
+363
+0:24:36.680 --> 0:24:38.240
+A lot.
+
+364
+0:24:38.240 --> 0:24:41.360
+We are not restricting ourselves to only using this.
+
+365
+0:24:41.360 --> 0:24:43.760
+It's just because we only have so many resources.
+
+366
+0:24:43.760 --> 0:24:45.280
+This was the fastest way to do it.
+
+367
+0:24:45.280 --> 0:24:47.720
+We can play it out on...
+
+368
+0:24:47.720 --> 0:24:52.320
+Actually, this thing can play out VBC videos with our software.
+
+369
+0:24:52.320 --> 0:24:57.600
+But totally, I think there would need to be some changes to the build process, maybe to
+
+370
+0:24:57.600 --> 0:25:02.120
+the structure of the project to enable this.
+
+371
+0:25:02.120 --> 0:25:05.720
+But this is something really very interesting, and I think there will be a lot of research
+
+372
+0:25:05.720 --> 0:25:07.200
+going on in that direction.
+
+373
+0:25:07.200 --> 0:25:08.200
+Thanks.
+
+374
+0:25:08.200 --> 0:25:09.200
+One last question.
+
+375
+0:25:09.200 --> 0:25:10.200
+How does it compare?
+
+376
+0:25:10.200 --> 0:25:21.640
+What are the advantages of AV1 in terms of compression or computation?
+
+377
+0:25:21.640 --> 0:25:26.440
+The question is, what are the advantages of VBC or VV-ENC?
+
+378
+0:25:26.440 --> 0:25:32.080
+VBC over AV1.
+
+379
+0:25:32.080 --> 0:25:37.760
+What are the advantages of VBC over AV1?
+
+380
+0:25:37.760 --> 0:25:39.440
+VBC is the successor to HVBC.
+
+381
+0:25:39.440 --> 0:25:46.000
+It was done by people who were really knowledgeable on how to make a standard work.
+
+382
+0:25:46.000 --> 0:25:52.200
+The one thing, it just provides the additional bitrate savings.
+
+383
+0:25:52.200 --> 0:26:01.480
+Here, you still see 20% additional bitrate savings over the best case of AV1.
+
+384
+0:26:01.480 --> 0:26:04.000
+There isn't so many of these initial hiccups.
+
+385
+0:26:04.000 --> 0:26:06.520
+The HDR support just works.
+
+386
+0:26:06.520 --> 0:26:08.600
+Immersive stuff just works.
+
+387
+0:26:08.600 --> 0:26:11.640
+A lot of those things, they just work.
+
+388
+0:26:11.640 --> 0:26:17.560
+Then we can do stuff on top of that, like doing open-gop adaptive streaming, which allows
+
+389
+0:26:17.560 --> 0:26:22.920
+you to reduce the bitrate by another 10% on top of that.
+
+390
+0:26:22.920 --> 0:26:27.800
+With all the other standards, I think the adaptive streaming can only be done with closed
+
+391
+0:26:27.800 --> 0:26:34.600
+gops, with a prediction break.
+
+392
+0:26:34.600 --> 0:26:40.360
+I would say more mature, but I know there are different views of it, more compression
+
+393
+0:26:40.360 --> 0:26:47.400
+efficiency and really versatile mature usability.
+
+394
+0:26:47.400 --> 0:26:48.400
+Thank you, Adam.
+
+395
+0:26:48.400 --> 0:27:04.840
+Thanks.
+

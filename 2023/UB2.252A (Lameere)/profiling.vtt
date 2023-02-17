@@ -1,0 +1,880 @@
+WEBVTT
+
+00:00.000 --> 00:16.200
+Hi, everyone. My name is Christian Simon and I'm going to be talking about continuous profiling.
+
+00:16.200 --> 00:23.380
+So we heard a lot about observability today already and I'm going to want to introduce
+
+00:23.380 --> 00:30.700
+maybe an additional signal there. So maybe quickly about me. So I'm working at Grafana
+
+00:30.700 --> 00:37.240
+Labs. I'm a software engineer there and worked on our databases for observability. So I worked
+
+00:37.240 --> 00:44.840
+on Cortex slash Mimir now. I worked on Loki and most recently I switched to the FLA team
+
+00:44.840 --> 00:53.840
+and I'm 50% of the FLA team and we work on a continuous profiling database. There's not
+
+00:53.840 --> 01:00.040
+going to be a particular focus on FLA today. So basically what I want to talk today is
+
+01:00.040 --> 01:04.980
+kind of introduce how it's measured, what you can achieve with it and then maybe as
+
+01:04.980 --> 01:12.120
+I learn more at the next first time I can go more into detail and yeah, like look at
+
+01:12.120 --> 01:20.640
+a very specific language is there. So when we talk about observability, like what are
+
+01:20.640 --> 01:27.120
+our common goals? Obviously we want to ensure that the user journeys of our users are successful,
+
+01:27.120 --> 01:38.520
+that we maybe even can be proactively find problems before a user notices it. And like,
+
+01:38.520 --> 01:44.600
+we want to be as quickly as possible when those problems happen to disrupt less of those
+
+01:44.600 --> 01:51.600
+user journeys. And observability provides us like an objective way of getting some insights
+
+01:51.600 --> 01:57.680
+into the state of our system in production. And even after a certain event has happened,
+
+01:57.680 --> 02:04.040
+we found the roadway, reboot, and it's all up again. I think it might be able to help
+
+02:04.040 --> 02:10.240
+us understand what exactly happened when we want to figure out the root cause of something.
+
+02:10.240 --> 02:20.840
+So one of the, I guess, easiest and probably oldest observability signals is logs. So like,
+
+02:20.840 --> 02:26.720
+I guess it starts with a kind of print hello somewhere in your code and I guess you probably
+
+02:26.720 --> 02:31.200
+don't need a show of hands who's using it, like I guess everyone somehow uses logs or
+
+02:31.200 --> 02:38.920
+is asleep if they don't show a hand. So basically like your application doesn't need any specific
+
+02:38.920 --> 02:45.640
+SDK. It can probably just log based on the standard library of your languages. One of
+
+02:45.640 --> 02:53.120
+the challenges, most of the time the format is rather varied. So like even in terms of
+
+02:53.120 --> 02:58.960
+time stamps, it can be really, really hard to get a common understanding of your log
+
+02:58.960 --> 03:04.760
+lines there. And also like when you then want to aggregate them, they are quite costly.
+
+03:04.760 --> 03:12.480
+So like it spides, you need to convert them to ints, floats, and so on. And also something
+
+03:12.480 --> 03:17.560
+that can happen is that you have so many logs that you can't find the ones that you're actually
+
+03:17.560 --> 03:25.640
+interested in. So like a grab error, for example, could be, yeah, could be maybe helpful. But
+
+03:25.640 --> 03:33.360
+also like there might be just too many errors. And you kind of lose the important ones. So
+
+03:33.360 --> 03:38.600
+also like if you want to learn more about logs, my colleagues, Owen and Kavi, they're
+
+03:38.600 --> 03:44.800
+going to speak about Loki, so definitely stay in the room. And I'm going to move on to the
+
+03:44.800 --> 03:49.120
+next signal, so metrics. I'm also assuming pretty much everyone has come across them
+
+03:49.120 --> 03:55.040
+and is using them. So in this case, you kind of avoid that problem I mentioned before.
+
+03:55.040 --> 03:59.840
+You have the actual integers exposed. You maybe know about those integers that you care
+
+03:59.840 --> 04:07.320
+about them. So to get a metric, most of the time you have to do some kind of the final
+
+04:07.320 --> 04:12.640
+list of metrics you care about, and then you can collect them. So it might be you might
+
+04:12.640 --> 04:16.640
+be having kind of an outage and didn't have that metric that you care about. And so you
+
+04:16.640 --> 04:22.220
+need to kind of constantly improve on the exposure of the metrics. Obviously, like Pro
+
+04:22.220 --> 04:30.720
+3 is the kind of main tool in that space. And very often we talk about web services,
+
+04:30.720 --> 04:36.400
+I guess, when we think about those applications. So the red method, so like get the rate of
+
+04:36.400 --> 04:42.880
+your requests, get the error rate of your request and get the latency duration of the
+
+04:42.880 --> 04:49.360
+request can already cover quite a lot of cases. And obviously, like as it's kind of just integers
+
+04:49.360 --> 04:56.600
+or floats, you can aggregate them quite efficiently across like, yeah, a multitude of pods or
+
+04:56.600 --> 05:06.060
+like a really huge set up of services. And then if you get more into that kind of micro
+
+05:06.060 --> 05:11.000
+services architecture that has kind of evolved over the last couple of years, you will find
+
+05:11.000 --> 05:18.700
+yourself kind of having a really complex composition of services being involved in answering requests.
+
+05:18.700 --> 05:23.440
+And so like you might even struggle to understand what's slowing you down or where the error
+
+05:23.440 --> 05:29.720
+is coming from, why do I have this time out here? And distributed tracing can help you
+
+05:29.720 --> 05:34.360
+a lot with kind of getting an understanding of what your service is doing. It also might
+
+05:34.360 --> 05:38.820
+be that, like, maybe the service is actually doing way too much and you're calculating
+
+05:38.820 --> 05:45.280
+things over and over again. So that is super helpful to get a bit more like the kind of
+
+05:45.280 --> 05:52.880
+flow of the data in your system. So, like, the challenge there might be, like, you might
+
+05:52.880 --> 05:59.520
+have a lot of requests. And while it's somewhat cheap to get the tracing, you might not cover
+
+05:59.520 --> 06:03.960
+all the requests. So, for example, in our production system, I think maybe someone needs
+
+06:03.960 --> 06:10.640
+to correct me if I'm wrong. But, like, when we receive a graphana cloud, like logs and
+
+06:10.640 --> 06:19.080
+metric data, we only cover 1% of those with traces while we cover 100% of our queries.
+
+06:19.080 --> 06:26.560
+So like, you need to make a selective decision if it's worth investing that. Like, obviously,
+
+06:26.560 --> 06:31.680
+logs data looks always the same. It comes every second and so on. So, like, we see more
+
+06:31.680 --> 06:37.320
+value in having all of those queries where there's a complex kind of caching and all
+
+06:37.320 --> 06:43.200
+sorts of systems interacting with it. And so that allows us, yeah, to look a bit deeper
+
+06:43.200 --> 06:50.880
+and even then find that one service that maybe is the bottleneck there. So maybe looking
+
+06:50.880 --> 06:57.640
+at a bit of a real problem. So I'm having an online shop. I'm selling socks. And a user
+
+06:57.640 --> 07:03.000
+is complaining about getting some time out when wanting to check out. That's obviously
+
+07:03.000 --> 07:09.280
+not great because I'm not selling the socks. But at least the user got, like, some trace
+
+07:09.280 --> 07:15.160
+ID and isn't complaining to our customer service. Then starting from there, I might figure out,
+
+07:15.160 --> 07:20.600
+hmm, it's the location service that actually was the one that cost the time out in the
+
+07:20.600 --> 07:26.480
+end. And then, like, looking at the metrics of the location service, I might find, oh,
+
+07:26.480 --> 07:32.960
+like, there's actually 5% of the requests timing out. So maybe 5% of my users are not
+
+07:32.960 --> 07:40.240
+able to buy their socks monthly or whatever. And so what are the next steps? I guess scaling
+
+07:40.240 --> 07:45.160
+up is always good. So, like, maybe the service is just overloaded. The person that wrote
+
+07:45.160 --> 07:50.240
+it left years ago. So we have no idea. So we just scale it up. Obviously it comes with
+
+07:50.240 --> 07:57.760
+a cost. And so I think always the first thing would be fixing the bleeds, making sure no
+
+07:57.760 --> 08:01.920
+more timeouts. So scaling up is definitely the right option here. But then if you do
+
+08:01.920 --> 08:07.040
+that over years, you might suddenly find yourself having a lot more extra costs attached to
+
+08:07.040 --> 08:14.320
+the location service. And so that's kind of where I think we need another signal. And
+
+08:14.320 --> 08:19.640
+I think that signal should be profiling. So I guess most people might have come across
+
+08:19.640 --> 08:30.040
+profiling. And it basically measures your code and how long it executes, for example,
+
+08:30.040 --> 08:37.760
+what kind of bytes it allocates in memory. And it basically helps you maybe understand
+
+08:37.760 --> 08:45.040
+your program even more or someone else's program in the location service case. So, and that
+
+08:45.040 --> 08:50.200
+eventually can translate in, like, cost savings if you find out where the problem lies. Like,
+
+08:50.200 --> 08:55.640
+you can maybe fix it or can get some ideas. Maybe you can also look at the fix and see
+
+08:55.640 --> 09:03.800
+if it's gotten worse or better. And, yeah, like, that basically, like, gives you a better
+
+09:03.800 --> 09:11.400
+understanding of how your code behaves. And so another question is how is, like, kind
+
+09:11.400 --> 09:16.680
+of actually what is actually measured in a profile? So I created, like, a bit of a program.
+
+09:16.680 --> 09:21.520
+I don't know. I hope everyone can see it. So it's basically like a program that has
+
+09:21.520 --> 09:26.320
+a main function and then calls out other functions. So you can see, like, there's a do a lot and
+
+09:26.320 --> 09:32.080
+there's a do little function and both of them then call prepare. So, and obviously in the
+
+09:32.080 --> 09:37.400
+comments there's some work going on. And obviously the work could be allocating memory, like,
+
+09:37.400 --> 09:46.920
+using the CPU, something like that. So let's say we use CPU. So when the function starts,
+
+09:46.920 --> 09:53.280
+like we are first going to do something within the main, let's say we spend three CPU cycles,
+
+09:53.280 --> 09:58.880
+which is not a lot. But that then gets recorded, like, yes, we took us three CPU cycles in
+
+09:58.880 --> 10:06.280
+main. We then go into the prepare method through do a lot. Then we spend another five CPU cycles.
+
+10:06.280 --> 10:12.880
+And those kind of stack traces then, they are recorded in the profile. And going through
+
+10:12.880 --> 10:19.800
+the program, like, we will end up with that kind of measurement of stack traces. And while
+
+10:19.800 --> 10:25.560
+it kind of works with ten lines of code, you can maybe spot where the problem is. Like,
+
+10:25.560 --> 10:30.340
+there's the 20 and do a lot. It definitely, like, kind of breaks down when you're speaking
+
+10:30.340 --> 10:36.860
+about, like, a lot of services or, like, a lot of code base that is happened or happens
+
+10:36.860 --> 10:41.880
+to be hot and actively used. And so, like, there are a couple of ways of visualizing
+
+10:41.880 --> 10:51.120
+them. I think one of the first things you would find is kind of a top table. So, like,
+
+10:51.120 --> 10:56.960
+in that table, you can order it by different values. Like, so this is kind of an example
+
+10:56.960 --> 11:02.080
+from Pprof, like, which is kind of the go tool. And you can see kind of clearly do a
+
+11:02.080 --> 11:10.520
+lot is the method that comes out on top. And, like, there are now different ways how you
+
+11:10.520 --> 11:15.240
+can look at the values. You have the flat count, which is the function itself only.
+
+11:15.240 --> 11:22.440
+You can see the 20 that we had before. 20 CPU cycles. But we also have the cumulative
+
+11:22.440 --> 11:27.320
+measurement which also includes the prepare that is going to get caught from do a lot.
+
+11:27.320 --> 11:34.720
+And so, like, we already can see we spent 52% of our program in do a lot. So, maybe we
+
+11:34.720 --> 11:38.680
+already can stop looking at the table and just look at do a lot. Because if we fix do
+
+11:38.680 --> 11:44.840
+a lot or get rid of it, we need half of the CPU less. And that's that kind of it's kind
+
+11:44.840 --> 11:48.680
+of represented by the sum. So, the sum will always change depending on how you order the
+
+11:48.680 --> 11:55.480
+table in that particular example. So, in this case, like, we have 100% already at row number
+
+11:55.480 --> 12:03.960
+four because we only have four functions. So, and to get a bit more of a visual sense
+
+12:03.960 --> 12:10.360
+of what's going on, there are the so-called flame graphs. And I think the most confusing
+
+12:10.360 --> 12:16.720
+thing for me about them was the colouring. So, obviously, like, red is always not great.
+
+12:16.720 --> 12:24.080
+Should we look at main? No, we shouldn't. So, basically, like, the colouring, I think,
+
+12:24.080 --> 12:28.400
+is random or uses some kind of hashing. And basically, it's only meant to look like a
+
+12:28.400 --> 12:33.320
+flame. So, like, the red here doesn't mean anything. So, like, if you colour blind, that's
+
+12:33.320 --> 12:41.560
+perfect for flame graphs. So, what we actually want to look at is this kind of, like, at
+
+12:41.560 --> 12:46.600
+the leaf end is basically where the program would spend things. Like, you can see the
+
+12:46.600 --> 12:54.440
+three CPU cycles main here. So, there's nothing below. So, main uses 100% through methods
+
+12:54.440 --> 12:58.200
+that are called by main. And then there's nothing beyond this here. So, like, here we
+
+12:58.200 --> 13:04.200
+spend something in main. And in the same way, in do little, we can see the five. And in
+
+13:04.200 --> 13:10.760
+do a lot, we can see the 20 quite wide. And then the prepares with five each as well.
+
+13:10.760 --> 13:17.040
+And now, obviously, if you look across a really huge program, you basically, like, can spot
+
+13:17.040 --> 13:22.520
+kind of what's going on quite quickly. And then if you have, like, similar width, like,
+
+13:22.520 --> 13:27.100
+root in main, like, you basically can ignore that, but it helps you maybe locate which
+
+13:27.100 --> 13:32.920
+component of your program you want to look at. Because, like, maybe you're not good at
+
+13:32.920 --> 13:37.680
+naming and you call everything prepare and you tell and it would still tell you roughly
+
+13:37.680 --> 13:47.480
+where it gets called and how the program gets there. So, how do we get that profile? And
+
+13:47.480 --> 13:53.960
+that can be kind of quite, there can be quite a lot of challenges how to get that. So, I
+
+13:53.960 --> 14:00.600
+think I would say, like, there's, like, roughly two ways. Like, either your ecosystem supports
+
+14:00.600 --> 14:07.240
+kind of profiles fairly natively. Then you instrument the profile, you add maybe a library
+
+14:07.240 --> 14:16.640
+and an SDK. And, like, basically, like, the run time within your environment will maybe
+
+14:16.640 --> 14:22.800
+expose the information. So, like, it's not available for all languages. There's, I guess,
+
+14:22.800 --> 14:30.800
+a lot of work going on that it becomes more and more available. And the kind of other
+
+14:30.800 --> 14:36.840
+approach is more like through an agent. And EPPF has been quite hyped. I'm not very familiar
+
+14:36.840 --> 14:41.920
+with EPPF myself. I have used the agents but haven't written any code. But basically what
+
+14:41.920 --> 14:45.520
+we would use, it would use an outside view of it. So, you wouldn't need to change the
+
+14:45.520 --> 14:51.400
+binary running, really. Like, you would just, yeah, kind of look at the information you
+
+14:51.400 --> 14:57.960
+get from the Linux kernel. Like, you hook into, I don't know, often enough when the
+
+14:57.960 --> 15:06.160
+CPU runs to then find out what is currently running. So, there are different languages.
+
+15:06.160 --> 15:12.480
+Like, for example, in a compiled language, you would be having a lot more information.
+
+15:12.480 --> 15:18.520
+The memory addresses are the same. You can kind of use the information within the symbol
+
+15:18.520 --> 15:25.440
+table to figure out where your program is and what is currently running. In, like, I
+
+15:25.440 --> 15:29.600
+don't know, like an interpreted language like Ruby, Python, this might be a bit harder and
+
+15:29.600 --> 15:34.640
+that information might not be accessible to the kernel without further work. Like, it
+
+15:34.640 --> 15:40.960
+also, when you compile, you might drop the symbol tables, like, so that you really need
+
+15:40.960 --> 15:52.320
+to kind of be preparing your application a bit for that. And then basically, like, yeah,
+
+15:52.320 --> 16:00.240
+I want to look into the kind of prime example. I'm mostly a Go developer over the last couple
+
+16:00.240 --> 16:09.000
+of years. So, Go has quite a kind of mature set of tools in that area. So, basically,
+
+16:09.000 --> 16:15.760
+the standard library allows you to expose that information. It supports, like, CPU memory.
+
+16:15.760 --> 16:22.160
+And especially garbage collected language. Memory is quite a thing to also non-garbage
+
+16:22.160 --> 16:31.080
+collected languages. But memory is really important to understand the usage there. I
+
+16:31.080 --> 16:36.240
+have a quick example of a program. So, you basically, like, just expose an HTTP port
+
+16:36.240 --> 16:42.880
+where you can download the profile whenever you want. And you have that Pprof tool that
+
+16:42.880 --> 16:47.600
+you can point to it. So, like, in that kind of first line example, you would just get
+
+16:47.600 --> 16:54.440
+a two second long profile. So, CPU profile that looks at the CPU for two seconds. And
+
+16:54.440 --> 16:59.120
+basically records, like, whatever is running, how long on the CPU. And then you get the
+
+16:59.120 --> 17:06.560
+URL. And Pprof will allow you to visualize it through that table, for example. So, what
+
+17:06.560 --> 17:11.240
+I forgot to mention as well. So, later, you can maybe go to that URL and look at that
+
+17:11.240 --> 17:22.080
+profile that I had as an example. And in the same way, you can get the memory allocations.
+
+17:22.080 --> 17:27.800
+And Pprof also allows you to launch an HTTP server to be a bit more interactive and select
+
+17:27.800 --> 17:36.040
+certain code paths. So, that is, like, quite a lot in the Go docs, Go.dev about profiling.
+
+17:36.040 --> 17:44.320
+So, I definitely leave it there. So, you can also look at kind of maybe if you are Go developer,
+
+17:44.320 --> 17:51.520
+like, use that and play around yourself. But now I want to speak about why profiling might
+
+17:51.520 --> 17:56.480
+be actually quite difficult. So, the example I had, like, I had three CPU cycles. And if
+
+17:56.480 --> 18:03.040
+you think about it, that's not very much. So, and just to record what the program was
+
+18:03.040 --> 18:08.720
+doing in those three CPU cycles probably takes, I have no idea, about thousands of CPU cycles.
+
+18:08.720 --> 18:16.320
+And so, you really want to be careful what you want to record. So, if you really would
+
+18:16.320 --> 18:20.440
+record all of that, like, your program would probably have, like, a massive overhead, would
+
+18:20.440 --> 18:25.960
+slow down by profiling and behave completely different. And you also would have a lot more
+
+18:25.960 --> 18:32.520
+data to store, to analyze. And then if you think about microservices and replica count
+
+18:32.520 --> 18:40.120
+500, you might get quite a lot of data that is actually not that useful to you. Because
+
+18:40.120 --> 18:48.200
+are you really caring about three CPU cycles? Probably not. And because of that, to allow
+
+18:48.200 --> 18:57.560
+continuous profiling, to do that in production across, like, a wide set of deployments, like,
+
+18:57.560 --> 19:02.120
+think Google were the first ones to do that, and they were starting to sample those profiling.
+
+19:02.120 --> 19:08.360
+So, instead of looking at really every code that runs, Go, for example, looks 100 times
+
+19:08.360 --> 19:15.880
+a second what is currently running on the CPU and then records it. And, obviously, maybe
+
+19:15.880 --> 19:22.640
+like an integer adder will not be on the CPU if you don't run it all the time. And so,
+
+19:22.640 --> 19:28.720
+you get a really accurate representation what is really taking your CPU time. And the way
+
+19:28.720 --> 19:34.080
+that works, you also need to be kind of aware that, like, some things, the actual program
+
+19:34.080 --> 19:39.280
+might not be on the CPU because it might be waiting for I.O. And so, like, when you kind
+
+19:39.280 --> 19:43.760
+of collect a profile and the profile is not having that many seconds, you really need
+
+19:43.760 --> 19:48.480
+to think about is this really what I want to optimise or maybe I'm not seeing what I
+
+19:48.480 --> 20:00.720
+actually want to see. With that kind of statistical approach, like, I don't have any kind of sources
+
+20:00.720 --> 20:06.280
+to say, but, like, I think generally you say that it's like a 2 to 3% overhead that gets
+
+20:06.280 --> 20:10.800
+added on top of your program execution. So, that's, I guess, a lot more reasonable than
+
+20:10.800 --> 20:19.240
+the full approach with recording everything. And so, what you generally kind of would do,
+
+20:19.240 --> 20:22.320
+obviously, if you first need to ship your application somewhere and run it, then you
+
+20:22.320 --> 20:29.400
+can look at the profiles. And, yeah, think about it, look at it, like, maybe you are
+
+20:29.400 --> 20:34.440
+the owner of that code, maybe you have a bit more understanding and those profiles maybe
+
+20:34.440 --> 20:39.400
+can give you a bit more of an idea of what you're actually doing there or how the system
+
+20:39.400 --> 20:46.760
+is reacting to your code. And so, basically, like, for that green box, multiple solutions
+
+20:46.760 --> 20:51.720
+exist. So, I'm obviously a bit biased, but I also have to say our project is fairly young
+
+20:51.720 --> 21:01.600
+and evolving. So, for example, there's, like, CNCF-Pixie, EBPF-based, there's a polar signals
+
+21:01.600 --> 21:09.640
+marker, like, people are in the room, and kind of our solution. I think they're all
+
+21:09.640 --> 21:14.520
+great, like, you can all use them and start using them and exploring, like, maybe just
+
+21:14.520 --> 21:19.680
+your benchmarks for a start. And then, as you get more familiar with it, like, you might
+
+21:19.680 --> 21:27.680
+kind of discover more and more of the value there. So, I'm still going to use Flair now
+
+21:27.680 --> 21:42.120
+for my quick demo. So, let me just see. So, I guess most of you are kind of familiar
+
+21:42.120 --> 21:56.480
+with Grafana and Explore. Why is it so huge? And so, basically, that's kind of the entry
+
+21:56.480 --> 22:03.080
+point you're going to see in the Explore. You have the kind of typical time range selection.
+
+22:03.080 --> 22:08.760
+So, let's say we want to see the last 15 minutes now. And here we can see the profile types
+
+22:08.760 --> 22:13.360
+collected. So, that's just a docker compose running locally on my laptop, hopefully, running
+
+22:13.360 --> 22:19.960
+locally on my laptop since I started to talk. And, for example, we can hear look at the
+
+22:19.960 --> 22:28.400
+CPU. So, that's kind of the nanoseconds on the CPU. And you can kind of see the flame
+
+22:28.400 --> 22:32.560
+graph from earlier and maybe some bug. It looks a bit bigger than it usually should
+
+22:32.560 --> 22:39.400
+be. But we can see that kind of top table. We can see the aggregation of all the services.
+
+22:39.400 --> 22:44.680
+So, I'm running, like, five pods or something like that, different languages. So, you can
+
+22:44.680 --> 22:50.840
+see, like, for example, this here is like a Python main module where it's doing some
+
+22:50.840 --> 22:57.080
+prime numbers. So, what I first want to kind of break down here is by label. And that's
+
+22:57.080 --> 23:01.280
+really the only kind of functionality that we have in terms of querying. So, here we
+
+23:01.280 --> 23:10.680
+would look at the different instances. And we kind of see the CPU time spent, like, I
+
+23:10.680 --> 23:14.920
+don't know, there's, like, a rust pod and they are both blue, so I don't know which
+
+23:14.920 --> 23:23.240
+switch. But I guess flair is doing more. So, that might be the flair one. And for my example
+
+23:23.240 --> 23:30.880
+now, I want to look at, yeah, just, like, a small program that I wrote to show, like,
+
+23:30.880 --> 23:37.120
+how, like, the aspect. So, like, here we can see kind of the timeline. So, this is like
+
+23:37.120 --> 23:42.080
+a profile gets collected, I think, every 15 seconds. And that's basically a dot. And then
+
+23:42.080 --> 23:46.440
+the flame graph and the top table below would kind of just aggregate that. So, like, there's
+
+23:46.440 --> 23:54.720
+no time component in here. That's also important to understand. And so, like, while we were
+
+23:54.720 --> 24:07.560
+looking at memory, I'm now going to kind of switch to the allocated space. And here we
+
+24:07.560 --> 24:12.760
+have some label selection, like, that you might be familiar. And this random pod here
+
+24:12.760 --> 24:19.600
+you can see, like, the allocation, so the amount of memory that gets allocated is, like,
+
+24:19.600 --> 24:26.160
+around 6 megabytes. But then every couple of every five minutes roughly, you can see,
+
+24:26.160 --> 24:33.120
+like, some peak. And so, if you already look in the flame graph, there's already some kind
+
+24:33.120 --> 24:42.600
+of big red box and the colors don't matter. But basically, like, you can see this kind
+
+24:42.600 --> 24:47.080
+of piece of code is doing kind of majority of the allocations. And now you could even
+
+24:47.080 --> 24:53.160
+kind of zoom in here if you really want to figure out, and then it even gets bigger.
+
+24:53.160 --> 25:00.720
+You can see some more of what's going on. And so now, if you actually want to look at
+
+25:00.720 --> 25:14.760
+the kind of code for this. And if flare is maybe in version 0.6, we could even see the
+
+25:14.760 --> 25:20.840
+line of code that we should look at. Right now you can. But basically, like, it would
+
+25:20.840 --> 25:25.600
+show us allocations in line 21. And I guess most of you can see what this kind of program
+
+25:25.600 --> 25:32.040
+is doing. So every five minutes it will kind of have some peak of allocations. And you
+
+25:32.040 --> 25:35.400
+only see that kind of because you have the time component, you can select it and then
+
+25:35.400 --> 25:44.240
+see the flame graph aggregation. Cool. Yeah, that was almost my talk. Like, I have one
+
+25:44.240 --> 25:49.360
+more slide that I should just quickly want to... So in the latest Go version 120, there
+
+25:49.360 --> 25:55.240
+is profile guided optimizations. And I think that might be a really big topic. So what
+
+25:55.240 --> 25:59.400
+it does, it looks at kind of your profile, and that can come from production or from
+
+25:59.400 --> 26:06.240
+benchmarks or whatever, and tries to do the better decisions during compile time of what
+
+26:06.240 --> 26:10.920
+things to do with your code like, for example, the only thing that it does right now is making
+
+26:10.920 --> 26:16.200
+inlining decisions. But basically, like, if it sees this method is called a lot and is
+
+26:16.200 --> 26:20.840
+in the hot path, it would then make the decisions to inline the method. Maybe if it's a bit
+
+26:20.840 --> 26:26.520
+colder, it would not do it. And you can be a lot more accurate as a compiler if you have
+
+26:26.520 --> 26:31.280
+that kind of data, if you know that method is in the hot path or not. Okay. That was
+
+26:31.280 --> 26:32.280
+it.
+
+26:32.280 --> 26:52.040
+Thank you. Thanks a lot. That was awesome. Questions? Thank you. Thank you for the talk.
+
+26:52.040 --> 26:57.520
+Just wondering how would the profiling work with very multi-threaded code? Is there ability
+
+26:57.520 --> 27:03.640
+to drill down into that level? Yeah. So, like, maybe, so, like, in terms of multi-threading,
+
+27:03.640 --> 27:08.400
+like, obviously, we only have the main method in that example. So you can see root and then
+
+27:08.400 --> 27:13.960
+mine is 100%. And, like, if it's multi-threaded, you would have kind of maybe more. So it's
+
+27:13.960 --> 27:19.200
+basically only the stack trace that gets recorded. Like, you would not see kind of maybe the
+
+27:19.200 --> 27:24.320
+connections where the thread is spreading off and things like that. You would get the
+
+27:24.320 --> 27:32.080
+stack trace. Called stack. Have you looked into any other profiling formats than Bprof
+
+27:32.080 --> 27:38.200
+ingestion? I know OpenTelemetry has been doing some stuff about introducing a profiling
+
+27:38.200 --> 27:44.520
+format that people can standardize on, but I don't know if you've looked at that at all.
+
+27:44.520 --> 27:54.160
+Yes. Can you, like, I haven't seen you. Like, sorry, can you repeat like I struggled to
+
+27:54.160 --> 27:58.000
+do. So I was wondering if you've looked at any other profiling ingestion formats other
+
+27:58.000 --> 28:06.040
+than Bprof? No. Like, right now we use Bprof personally with a bit of a flair. So I think
+
+28:06.040 --> 28:12.760
+there's a lot of kind of improvements to be had over the format there. And that's, like,
+
+28:12.760 --> 28:18.240
+as far as I know, some active work around OpenTelemetry to come to, I guess, a better
+
+28:18.240 --> 28:23.440
+format in the sense to not send symbols over and over again and reduce interest. But, nah,
+
+28:23.440 --> 28:32.800
+that's the accurate and short answer. So thank you for the talk. And my question
+
+28:32.800 --> 28:36.120
+is that looking at the flair architecture, it's currently a pull model. So the flair
+
+28:36.120 --> 28:39.880
+agent is scraping the profiling data from the applications that they configure it to
+
+28:39.880 --> 28:44.000
+scrape. My question is, is there an eventual plan to also add maybe a push gateway or a
+
+28:44.000 --> 28:49.280
+similar API for applications where this might be suitable? Yeah, like, definitely, like,
+
+28:49.280 --> 28:54.200
+I think I also can see kind of the push use case for maybe if you want to get your micro
+
+28:54.200 --> 29:01.320
+benchmarks from CI CD in. So, like, the API, in theory, allows it, but tooling is missing.
+
+29:01.320 --> 29:06.720
+But I definitely think it's a valid, like, push use case as well. I think in terms of
+
+29:06.720 --> 29:16.520
+scalability, I think pull will be better. But, yeah, I agree. Thanks for the talk. I
+
+29:16.520 --> 29:26.720
+have a small question. Did you try to implement this tooling in the end of the CI, CD and
+
+29:26.720 --> 29:34.680
+CO continuous optimization? No, like, so we're not using it yet for that. I think it's definitely
+
+29:34.680 --> 29:39.880
+a super useful thing. Because, like, yeah, like, you want to see maybe how a pull request
+
+29:39.880 --> 29:44.760
+behaves, like, maybe how your application allocates more or less in different parts.
+
+29:44.760 --> 29:48.480
+And if the tradeoffs are right there. But, yeah, I think it definitely can and should
+
+29:48.480 --> 30:05.480
+be used for that. But no tooling right now. Yeah, no, I fully agree as well. Yeah.
+
+30:05.480 --> 30:13.880
+Hello. Thank you. So, if I understand correctly, profiles such as traces combined with OS metrics,
+
+30:13.880 --> 30:21.480
+right? So, at a concrete specific time, we can see how much CPU you used and so on, right?
+
+30:21.480 --> 30:27.960
+Yeah, I guess it looks a bit more at the actual line of code rather than, I don't know, I
+
+30:27.960 --> 30:31.640
+haven't used, like, tracing where it automatically finds the function. Maybe that also tells
+
+30:31.640 --> 30:39.440
+you the line of code. But, yeah, like, it definitely adds some metrics to it, like,
+
+30:39.440 --> 30:43.800
+without you doing much, I guess, other than making sure it can read the simple tables
+
+30:43.800 --> 30:49.560
+and the function names. Yeah. So, I just had, like, a dumb question or, like, dumb idea.
+
+30:49.560 --> 30:54.840
+Couldn't you just combine, for example, you already have node exporter which exposes metrics
+
+30:54.840 --> 31:02.160
+at all times? So, you have OS metrics and you have traces, for example. So, couldn't
+
+31:02.160 --> 31:07.480
+you just have some kind of integration graphana or somewhere else that just combines traces
+
+31:07.480 --> 31:11.080
+with metrics? Yeah, so, like, I think that was also the, like, people that worked longer
+
+31:11.080 --> 31:16.280
+at continuous profiling software, they tried to kind of reuse Prometheus and I think where
+
+31:16.280 --> 31:22.240
+you end up kind of in, it's just a very high cardinality. It's too many lines of codes
+
+31:22.240 --> 31:27.880
+and that's kind of where it stops. But, like, in theory, like, I guess most PROMQL constructs
+
+31:27.880 --> 31:32.920
+and functions are maybe something we need to implement on top of that in a similar way
+
+31:32.920 --> 31:39.720
+because, yeah, you just get metrics out of it and so, basically, the problem was too
+
+31:39.720 --> 31:44.440
+many lines of code, too much changing over time and, like, you just get too much serious
+
+31:44.440 --> 32:05.240
+churn through that. So, thanks a lot. Yeah, thank you for coming.

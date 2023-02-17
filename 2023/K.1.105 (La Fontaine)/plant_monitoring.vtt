@@ -1,0 +1,2008 @@
+WEBVTT
+
+00:00.000 --> 00:12.080
+So, for this talk, we're going to be learning how to build a plant monitoring app with InfluxDB,
+
+00:12.080 --> 00:17.920
+Python, and Flask with edge to cloud replication being an option onto this project.
+
+00:17.920 --> 00:20.720
+So, first things first.
+
+00:20.720 --> 00:21.920
+My name is Zoe Steinkamp.
+
+00:21.920 --> 00:27.200
+I'm a developer advocate for Influx data, which means I have a large empathy for developers
+
+00:27.200 --> 00:28.200
+myself.
+
+00:28.200 --> 00:33.960
+I was a front-end software engineer for eight years before I decided I wanted to listen
+
+00:33.960 --> 00:39.680
+to people's issues and fix them instead of hear them come down from the product team.
+
+00:39.680 --> 00:44.000
+If you guys have any questions, I will be allowing some time for Q&A during this presentation
+
+00:44.000 --> 00:45.000
+at the end.
+
+00:45.000 --> 00:49.280
+But if you want to reach out at any point or you just like to be friends with people
+
+00:49.280 --> 00:51.720
+on LinkedIn, this is my QR code.
+
+00:51.720 --> 00:53.080
+My name is relatively unique.
+
+00:53.080 --> 00:55.960
+I'm easy to find.
+
+00:55.960 --> 00:57.280
+The overview.
+
+00:57.280 --> 01:03.160
+So, in this presentation, we're going to be walking through a few different pieces for
+
+01:03.160 --> 01:05.200
+this project.
+
+01:05.200 --> 01:09.040
+The first thing we're going to be walking through is the IoT hardware setup.
+
+01:09.040 --> 01:14.200
+So, if you guys are not super familiar with, like, IoT devices and stuff, not to worry,
+
+01:14.200 --> 01:17.360
+I'll break it down and then we can kind of figure it out.
+
+01:17.360 --> 01:21.160
+Also, all of this is available on GitHub, all this code examples.
+
+01:21.160 --> 01:22.240
+There's lots of instructions.
+
+01:22.240 --> 01:24.280
+This is a very well fleshed out project.
+
+01:24.280 --> 01:27.780
+So at the end, I'm going to be linking that as well so you can do it yourself at home
+
+01:27.780 --> 01:29.600
+very easily.
+
+01:29.600 --> 01:33.240
+We're going to go over the tools that we're going to be using for this project.
+
+01:33.240 --> 01:39.880
+We're going to go over a short overview of InfluxDB just so that people who don't understand
+
+01:39.880 --> 01:43.160
+how it works will understand how it works in this project.
+
+01:43.160 --> 01:50.520
+The data ingestion setup, flux and SQL, setting up edge data replication and data requests,
+
+01:50.520 --> 01:52.920
+which are kind of comboed together somewhat.
+
+01:52.920 --> 01:58.360
+And then finally at the end, the GitHub code base, links to other, like, community links
+
+01:58.360 --> 02:03.520
+and such, and then Q&A as well.
+
+02:03.520 --> 02:07.860
+So setting up your IoT devices.
+
+02:07.860 --> 02:12.520
+So this is a handy little diagram to show roughly how this is going to work in real
+
+02:12.520 --> 02:13.520
+life.
+
+02:13.520 --> 02:16.900
+But basically, you have a plant and you're going to be monitoring it.
+
+02:16.900 --> 02:20.320
+You're going to need some kind of microcontroller to receive this information.
+
+02:20.320 --> 02:24.240
+I'll show a haphazard photo in a second of how that's going to look.
+
+02:24.240 --> 02:28.480
+But basically from that plant, we're going to get data roughly about, I like to say,
+
+02:28.480 --> 02:30.480
+how the plant is feeling.
+
+02:30.480 --> 02:36.120
+You know, if it's thirsty or hot or just doesn't like you in particular, it'll let us know.
+
+02:36.120 --> 02:41.440
+From there, we put that data into our open source, our OSS instance.
+
+02:41.440 --> 02:45.200
+So InfluxDB is available open source so you can just easily download it off GitHub and
+
+02:45.200 --> 02:47.080
+get it running locally.
+
+02:47.080 --> 02:50.200
+So in that, we're going to go ahead and store our data.
+
+02:50.200 --> 02:52.800
+We're going to use a telegraph, that's what that little tiger is, we're going to use a
+
+02:52.800 --> 02:55.820
+telegraph agent to get the data inside.
+
+02:55.820 --> 03:00.640
+From there, if we want, we can go ahead and use our edge data replication feature to go
+
+03:00.640 --> 03:02.760
+ahead and push it to cloud.
+
+03:02.760 --> 03:08.000
+And then the idea here is that you can also host this locally, like you can host a little
+
+03:08.000 --> 03:09.440
+website with graphs and such.
+
+03:09.440 --> 03:12.520
+I'll be showing this as we go and the code is available.
+
+03:12.520 --> 03:17.020
+But basically the idea here is that you store your data locally, you use edge data replication
+
+03:17.020 --> 03:22.040
+to push it up into the cloud for longer term storage or just, you know, to have less data
+
+03:22.040 --> 03:27.240
+loss and then from there you can pull that data back out to actually start graphing and
+
+03:27.240 --> 03:30.640
+visualizing it.
+
+03:30.640 --> 03:32.920
+As promised, haphazard photo.
+
+03:32.920 --> 03:37.960
+So for this project, you need in no particular order a plant, preferably alive, those are
+
+03:37.960 --> 03:42.860
+the best to monitor, a particle boron microcontroller or another compatible one.
+
+03:42.860 --> 03:48.840
+We have the schematics and the details for an Arduino, that would be your preference.
+
+03:48.840 --> 03:53.640
+At least one IoT sensor for your plant and a breadboard with jump wires and terminal
+
+03:53.640 --> 03:57.040
+strips.
+
+03:57.040 --> 04:00.520
+As promised, this is what the schematics look like.
+
+04:00.520 --> 04:04.240
+So basically you can just kind of follow these schematics to the tee and that helps you just
+
+04:04.240 --> 04:05.340
+get everything set up.
+
+04:05.340 --> 04:11.960
+We especially had certain issues with some of our sensors interfering with other ones.
+
+04:11.960 --> 04:15.840
+From that, I have four sensors for my project, those are the four that I just happened to
+
+04:15.840 --> 04:18.040
+buy off Amazon, which we do list.
+
+04:18.040 --> 04:22.800
+So you can, depending on your country, it will change, but these sensors are like 25
+
+04:22.800 --> 04:25.960
+cents a pop, so they're really cheap and easy to get.
+
+04:25.960 --> 04:31.980
+I have temperature and humidity, I have light, I have soil moisture, and I have temperature.
+
+04:31.980 --> 04:36.800
+So with all four of these, I can go ahead and hook them up to my breadboard and my microcontroller
+
+04:36.800 --> 04:42.120
+and I can start getting some of that data.
+
+04:42.120 --> 04:45.320
+So the tools we're going to be using today.
+
+04:45.320 --> 04:49.280
+So we are going to be using Flask, which for those of you guys who are not aware is a micro
+
+04:49.280 --> 04:51.360
+web framework written in Python.
+
+04:51.360 --> 04:55.000
+It's going to be doing some of the heavy lifting for the project, specifically it's going to
+
+04:55.000 --> 05:00.600
+be running the local application and allowing us to have some built in routing.
+
+05:00.600 --> 05:04.960
+We're going to be using InfluxDB for actually storing the data that we get from our IoT
+
+05:04.960 --> 05:06.560
+sensors from our plant.
+
+05:06.560 --> 05:10.520
+It comes with an API and tool set that's going to be easy for ingesting and querying that
+
+05:10.520 --> 05:12.120
+data back out.
+
+05:12.120 --> 05:15.440
+It's highly performance, so we don't have to worry about it running up when it's open
+
+05:15.440 --> 05:16.440
+sourced.
+
+05:16.440 --> 05:19.680
+It doesn't cost us anything outside of the server we're running on locally, but in general
+
+05:19.680 --> 05:22.640
+we want our data to be stored efficiently.
+
+05:22.640 --> 05:25.860
+And then it also has obviously our community and ecosystem.
+
+05:25.860 --> 05:29.760
+People like me there to help answer questions and come up with these awesome little projects,
+
+05:29.760 --> 05:32.840
+like monitoring your plant at home.
+
+05:32.840 --> 05:36.160
+Telegraph is a completely open source ingestion agent.
+
+05:36.160 --> 05:40.760
+It has over 300 plus different plugins depending on what you need and desire.
+
+05:40.760 --> 05:45.960
+For this project we use the exact deprocessor plugin to get the data into our open source.
+
+05:45.960 --> 05:50.240
+I'm also going to be showing code for what I'll actually I'm going to explain that later.
+
+05:50.240 --> 05:52.240
+But basically this is super nice to use.
+
+05:52.240 --> 05:58.120
+It has a very wide range of open source plugins supported by sometimes companies, sometimes
+
+05:58.120 --> 05:59.560
+community members.
+
+05:59.560 --> 06:04.720
+You'll find serious ones like Azure monitoring or AWS monitoring to the more fun ones like
+
+06:04.720 --> 06:08.920
+Minecraft or CSGO.
+
+06:08.920 --> 06:13.360
+If for some reason you do not want to use telegraph, maybe it just doesn't have a configuration
+
+06:13.360 --> 06:18.280
+that works for your device or your project, a lot of people are just going to go to the
+
+06:18.280 --> 06:22.760
+client libraries, which I'll be showing a code example on how to use these as well.
+
+06:22.760 --> 06:27.000
+And this does live inside the project, so you don't have to worry about going and finding
+
+06:27.000 --> 06:28.000
+it.
+
+06:28.000 --> 06:30.280
+We just left it there just in case people want to use it.
+
+06:30.280 --> 06:33.280
+So obviously it's got a few different options here.
+
+06:33.280 --> 06:37.680
+We're going to be using the Python one because that's the one I work in and that's what the
+
+06:37.680 --> 06:41.680
+project is written in.
+
+06:41.680 --> 06:45.240
+Another thing that I used when I built up this project is the flux extension for VS
+
+06:45.240 --> 06:46.240
+code.
+
+06:46.240 --> 06:50.560
+It's really nice in that it allows me to write my flux queries and it kind of tells me if
+
+06:50.560 --> 06:52.960
+I'm misspelling or writing things wrong.
+
+06:52.960 --> 06:55.400
+It's just like any other extension that you're going to get in VS code.
+
+06:55.400 --> 07:00.520
+It highlights things and helps you realize when you're making mistakes.
+
+07:00.520 --> 07:03.120
+Finally we're going to be using Plotly for graphing.
+
+07:03.120 --> 07:08.560
+It is a completely free and open source graphing library, which is always our favorite.
+
+07:08.560 --> 07:13.000
+It's really nice and easy to work with and very colorful, which I appreciate.
+
+07:13.000 --> 07:18.560
+So, a really quick overview.
+
+07:18.560 --> 07:24.160
+For those of you guys who are not quite familiar with it, time series data is a very specific
+
+07:24.160 --> 07:25.480
+type of data.
+
+07:25.480 --> 07:30.160
+It's what we're going to be getting from our plant because IoT sensors tend to give you
+
+07:30.160 --> 07:35.800
+the time series data and the fact that it is metrics regularly intervolved at time.
+
+07:35.800 --> 07:41.260
+What that means is that you want to know at what point the plant got thirsty or you want
+
+07:41.260 --> 07:44.680
+to know how many hours a day did it get sunlight.
+
+07:44.680 --> 07:45.800
+That's all time series data.
+
+07:45.800 --> 07:50.020
+That's data that you want to know about on a time scale.
+
+07:50.020 --> 07:53.280
+We normally see these as metrics at regular time intervals.
+
+07:53.280 --> 07:55.600
+Occasionally we see things like events.
+
+07:55.600 --> 07:59.360
+You can think of things also like the stock exchange or weather conditions as other great
+
+07:59.360 --> 08:02.120
+examples of this type of data.
+
+08:02.120 --> 08:06.840
+We tend to find these in multiple different applications.
+
+08:06.840 --> 08:10.360
+The software infrastructure is probably the most common and most people here would understand
+
+08:10.360 --> 08:12.160
+where that comes from.
+
+08:12.160 --> 08:16.400
+Obviously for this one we're going to be using IoT data.
+
+08:16.400 --> 08:21.180
+One thing to note is if you had multiple plants at home, you might want to store that data.
+
+08:21.180 --> 08:26.120
+You might want to know that you have six orchids and seven aloe vera's.
+
+08:26.120 --> 08:28.440
+You'd store that kind of data in a relational.
+
+08:28.440 --> 08:29.440
+You'd name them.
+
+08:29.440 --> 08:32.760
+You'd say this is the one that lives in window on the north side of the house.
+
+08:32.760 --> 08:35.320
+This is the one that lives in the window on the south.
+
+08:35.320 --> 08:37.780
+By the way, one of my coworkers totally did this.
+
+08:37.780 --> 08:40.680
+He has like 100 plants in his house.
+
+08:40.680 --> 08:46.040
+He organized it in his SQL DB, his relational, because this was a lot of plant data.
+
+08:46.040 --> 08:49.480
+Then when he was actually monitoring all of these plants, which I really don't know how
+
+08:49.480 --> 08:51.760
+he set this, his house is just full of cords.
+
+08:51.760 --> 08:53.760
+It's just cords everywhere.
+
+08:53.760 --> 08:58.160
+When he set this up to actually start monitoring all of these, that would be time series data.
+
+08:58.160 --> 09:03.680
+That's going to be all of those timestamp metrics coming in.
+
+09:03.680 --> 09:07.360
+This is how the entire platform looks when it's all put together.
+
+09:07.360 --> 09:12.200
+As you can see, you have your data sources, then you have telegraph in the client libraries
+
+09:12.200 --> 09:16.560
+as well as things like native ecosystems, which we're not going to go into today.
+
+09:16.560 --> 09:18.800
+Those are the ways of getting the data in.
+
+09:18.800 --> 09:25.320
+From there, you can use InfluxDB to set up things like triggers and alerts, things like
+
+09:25.320 --> 09:31.480
+I have it set up to send me a text, if my plant needs some water.
+
+09:31.480 --> 09:34.880
+I use it quite often at my job and then promptly ignore the text.
+
+09:34.880 --> 09:37.120
+It doesn't work out very well for the plant or me.
+
+09:37.120 --> 09:40.720
+If I actually paid attention, this is very useful to use.
+
+09:40.720 --> 09:46.800
+Finally, obviously with these kind of data, what's the data stored once we have it being
+
+09:46.800 --> 09:52.560
+used, maybe downsampling it, we can actually start seeing some results.
+
+09:52.560 --> 09:58.960
+Usually infrastructure insights isn't quite what this is, but more like plant insights.
+
+09:58.960 --> 10:05.760
+When it comes to data ingestion setup, I'm not going to go super in depth on how to set
+
+10:05.760 --> 10:09.320
+up your microcontroller because depending on the one you're using, it's going to be
+
+10:09.320 --> 10:10.320
+different.
+
+10:10.320 --> 10:12.280
+They're all going to be very varied.
+
+10:12.280 --> 10:14.720
+You're just going to have to follow the instructions on that one.
+
+10:14.720 --> 10:19.800
+If you happen to have an Arduino or a Boron microcontroller, you could probably follow
+
+10:19.800 --> 10:24.160
+our directions anyways, but those are probably going to be pretty easy to set up because
+
+10:24.160 --> 10:25.720
+we talk about it.
+
+10:25.720 --> 10:29.360
+This is just an example of how the data tends to come in.
+
+10:29.360 --> 10:33.960
+As you can see, I've got my port set up and then I start to get these data results.
+
+10:33.960 --> 10:40.080
+For example, if I remember correctly, this one is the humidity one, this one is the temperature.
+
+10:40.080 --> 10:44.640
+As you can see, this is like the first, I'm going to call it the first flush.
+
+10:44.640 --> 10:49.480
+Sometimes the data comes in as zeros at first and then it starts to actually give you values.
+
+10:49.480 --> 10:53.560
+One thing to note, and I'm not going to go over it in this presentation, but you can
+
+10:53.560 --> 10:57.320
+see it in the GitHub, in the repository, in the code.
+
+10:57.320 --> 11:00.520
+We do tend to do a little bit of cleanup on these values.
+
+11:00.520 --> 11:04.880
+The data sensors are not exactly friendly in how they send you data, is how I'm going
+
+11:04.880 --> 11:06.200
+to put it.
+
+11:06.200 --> 11:09.720
+We did have to do a little bit of our own cleanup in Python, which luckily we supply
+
+11:09.720 --> 11:10.720
+to you.
+
+11:10.720 --> 11:15.680
+If you're using roughly the same ones, you can go ahead and just use what we have.
+
+11:15.680 --> 11:19.460
+For example, our temperature came in a little bit weird and we had to change it so it actually
+
+11:19.460 --> 11:21.960
+read in a more human readable way.
+
+11:21.960 --> 11:27.400
+We haven't yet fixed the light one, so it just looks really strange.
+
+11:27.400 --> 11:31.280
+Interesting.
+
+11:31.280 --> 11:33.640
+I expected my video to show up.
+
+11:33.640 --> 11:37.440
+Well, oh wait, it is up there.
+
+11:37.440 --> 11:38.440
+Aha.
+
+11:38.440 --> 11:43.000
+Let's see, can I get this to work?
+
+11:43.000 --> 11:44.000
+Not quite.
+
+11:44.000 --> 11:46.520
+Sorry, guys.
+
+11:46.520 --> 11:47.520
+Technical difficulties.
+
+11:47.520 --> 11:54.480
+Well, go figure.
+
+11:54.480 --> 12:00.560
+This was working on my own machine five minutes ago, but that means nothing.
+
+12:00.560 --> 12:05.160
+I'm going to try and press, is there a play button or something on here?
+
+12:05.160 --> 12:07.080
+I'm just going to give up.
+
+12:07.080 --> 12:11.800
+Basically what this shows is how to set up your bucket and token, which I can actually
+
+12:11.800 --> 12:13.160
+probably just pull up.
+
+12:13.160 --> 12:14.840
+I'll do it at the end of this presentation.
+
+12:14.840 --> 12:16.240
+We're going to do this on the fly.
+
+12:16.240 --> 12:19.880
+I'll show it at the end, but basically it just shows you in the UI how you set up your
+
+12:19.880 --> 12:22.000
+bucket, which is just your database.
+
+12:22.000 --> 12:25.160
+You can pick for how long it wants to have a retention policy.
+
+12:25.160 --> 12:26.920
+That's how long you want to store the data.
+
+12:26.920 --> 12:28.800
+Maybe you only want to store it for a day.
+
+12:28.800 --> 12:30.060
+Maybe you want to store it for 30 days.
+
+12:30.060 --> 12:32.120
+You pick that at the beginning.
+
+12:32.120 --> 12:36.600
+Then it also gives you the option to do a explicit or implicit schema.
+
+12:36.600 --> 12:41.320
+What that means is implicit just basically builds the schema off what you send us.
+
+12:41.320 --> 12:44.560
+If you start streaming in data, we'll build it for you.
+
+12:44.560 --> 12:48.720
+Explicit is you tell us exactly how you want your data to be formatted, and we will reject
+
+12:48.720 --> 12:51.440
+any data that doesn't meet that schema.
+
+12:51.440 --> 12:55.400
+Obviously in a project like this, which I like to call pretty low risk, like it's not
+
+12:55.400 --> 13:00.280
+a big deal if the data's not quite perfect, just do the implicit, make life easy for yourself.
+
+13:00.280 --> 13:06.200
+We give explicit as for more professional projects, I suppose you could say, where it
+
+13:06.200 --> 13:09.680
+really does matter that you reject that bad schema data.
+
+13:09.680 --> 13:13.440
+The other thing I showed is just how to make a quick token, because obviously you're going
+
+13:13.440 --> 13:16.040
+to need a token to actually get your data in and back out.
+
+13:16.040 --> 13:18.320
+You need those authentications.
+
+13:18.320 --> 13:21.600
+One thing to note, we do offer a all access token.
+
+13:21.600 --> 13:22.760
+We kind of warn against it.
+
+13:22.760 --> 13:26.760
+It even has a big warning on the screen saying please don't do this, because it allows you
+
+13:26.760 --> 13:32.040
+full access to all of your buckets, all your databases, and it allows you to delete them.
+
+13:32.040 --> 13:36.920
+So if that tech one ever falls into the wrong hands, or maybe you make a mistake, or your
+
+13:36.920 --> 13:42.400
+coworker makes a mistake, you know somebody else, that can obviously cause a lot of problems.
+
+13:42.400 --> 13:45.520
+We like to call it basically creating your own big red button.
+
+13:45.520 --> 13:46.520
+You don't need to do that.
+
+13:46.520 --> 13:51.080
+So we also give you the option to pick, write, and read tokens where you specify which buckets
+
+13:51.080 --> 13:52.640
+you want them to have access to.
+
+13:52.640 --> 13:55.080
+Again, I'll just show this a little bit later.
+
+13:55.080 --> 13:58.800
+And you can do it in the CLI as well, but normally when the video loads, the UI is a
+
+13:58.800 --> 14:02.800
+little bit more fun to visually see.
+
+14:02.800 --> 14:04.360
+So let's see if, there we go.
+
+14:04.360 --> 14:10.960
+So for this code example, it's pretty straightforward as to how to actually set this up.
+
+14:10.960 --> 14:14.480
+As you can see, we have the influx DB client.point.
+
+14:14.480 --> 14:17.680
+The influx DB client is already set up in this example.
+
+14:17.680 --> 14:21.880
+Basically all you give it is your bucket and your token.
+
+14:21.880 --> 14:27.680
+You just basically say, this is where I want my data to go, and I have the authority authorization
+
+14:27.680 --> 14:28.880
+to actually do it.
+
+14:28.880 --> 14:31.200
+It's very straightforward and easy to set up.
+
+14:31.200 --> 14:32.880
+It takes like a second.
+
+14:32.880 --> 14:37.200
+But basically once you have all your authentication going, you can actually start sending those
+
+14:37.200 --> 14:39.000
+points up to your database.
+
+14:39.000 --> 14:42.440
+So with this one, we're calling the point sensor data.
+
+14:42.440 --> 14:43.880
+We're setting the user.
+
+14:43.880 --> 14:46.840
+It says it's not visually here, but it says like Zoe.
+
+14:46.840 --> 14:47.840
+It just says my name.
+
+14:47.840 --> 14:50.400
+It's not very special.
+
+14:50.400 --> 14:53.720
+Then we have the tag, which is the device ID.
+
+14:53.720 --> 14:56.320
+And then finally the sensor name with the value.
+
+14:56.320 --> 15:01.480
+So that's going to be something like humidity value 30.
+
+15:01.480 --> 15:06.000
+And basically from this, this is running in a Python file script that just is pretty much
+
+15:06.000 --> 15:12.240
+running as long as we're getting data.
+
+15:12.240 --> 15:14.960
+But basically this is a straightforward way to get it in.
+
+15:14.960 --> 15:19.220
+And this is using the Python client library.
+
+15:19.220 --> 15:22.080
+This is part of the telegraph config file.
+
+15:22.080 --> 15:27.060
+This file has like, it's computer generated, so you don't need to write 200 lines of code,
+
+15:27.060 --> 15:30.400
+but the actual config file is like 200 lines of code.
+
+15:30.400 --> 15:34.800
+This is just a small snippet at the end of it that basically says that we're using the
+
+15:34.800 --> 15:38.160
+execd processor plugin.
+
+15:38.160 --> 15:42.280
+And from here we're just telling it what measurements and what tagged keys to accept.
+
+15:42.280 --> 15:45.840
+Again, inside of the GitHub project, we kind of go a little bit more in depth.
+
+15:45.840 --> 15:50.000
+But the big thing is that every telegraph config file and instructions are slightly
+
+15:50.000 --> 15:51.040
+different.
+
+15:51.040 --> 15:55.320
+So there's no necessary reason for me to show you the execd one when you could be using
+
+15:55.320 --> 15:57.280
+a different one for your own project.
+
+15:57.280 --> 16:00.240
+But basically just follow the documentations for this.
+
+16:00.240 --> 16:01.560
+It's super simple.
+
+16:01.560 --> 16:02.560
+And it's very well documented.
+
+16:02.560 --> 16:05.320
+Well, I guess I shouldn't say that since it's open source.
+
+16:05.320 --> 16:09.600
+So some of them are less well documented, but most of them are great.
+
+16:09.600 --> 16:12.660
+And this is a table example of the resulting data points.
+
+16:12.660 --> 16:17.160
+So as you can see, we have our sensor data with a field of this one.
+
+16:17.160 --> 16:19.260
+We have light and soil moisture.
+
+16:19.260 --> 16:21.080
+We have our value.
+
+16:21.080 --> 16:25.080
+And as I told you before, the values kind of come in a little bit weird.
+
+16:25.080 --> 16:31.600
+I don't know how soil moisture can be 1,372 point, many zeros and fives, but it can be.
+
+16:31.600 --> 16:35.660
+And then finally the actual timestamp value, which says that obviously this value was from
+
+16:35.660 --> 16:44.640
+last year in like I can't even think September, August, sometime in the early fall.
+
+16:44.640 --> 16:46.080
+So flux and SQL.
+
+16:46.080 --> 16:49.480
+So I've said this word before, and I haven't really explained it.
+
+16:49.480 --> 16:54.000
+But basically what flux is, is it is the querying language of MfluxDB.
+
+16:54.000 --> 16:57.940
+So basically what it allows you to do is query for your time series data.
+
+16:57.940 --> 17:00.400
+It can do a lot of really awesome things.
+
+17:00.400 --> 17:03.520
+It can do things like the alerts, the management.
+
+17:03.520 --> 17:07.120
+But for right now we're just going to focus on the querying because that's the most straightforward
+
+17:07.120 --> 17:09.920
+thing and that's the main thing that you're going to end up doing.
+
+17:09.920 --> 17:15.720
+So in this versioning right here, basically what it's saying is from bucket, which again
+
+17:15.720 --> 17:19.320
+is just from database, go ahead and give me smart city.
+
+17:19.320 --> 17:20.320
+Give me the range.
+
+17:20.320 --> 17:21.320
+This is a range of one day.
+
+17:21.320 --> 17:23.400
+It's got a start and a stop.
+
+17:23.400 --> 17:24.800
+You do not have to give it a range.
+
+17:24.800 --> 17:27.780
+You could literally just do from bucket, give me everything.
+
+17:27.780 --> 17:32.000
+We normally suggest you try to use a range because obviously, I mean if your bucket only
+
+17:32.000 --> 17:34.280
+has like one day of data, it's probably not a big deal.
+
+17:34.280 --> 17:39.320
+But if it has the past three years of data, that's going to be a while to come in.
+
+17:39.320 --> 17:43.040
+And that's going to probably crash a lot.
+
+17:43.040 --> 17:44.560
+And then you have your filters.
+
+17:44.560 --> 17:50.280
+So with this one, what they're saying in more human terms is they're saying give me all
+
+17:50.280 --> 17:54.160
+the bicycles that have come through with the neighborhood ID of three.
+
+17:54.160 --> 17:58.080
+And what they're doing down here at this aggregate window is they're saying give me the mean
+
+17:58.080 --> 17:59.760
+for every one hour.
+
+17:59.760 --> 18:05.040
+So because this is one day, this is a one day range, this will return 24 data points.
+
+18:05.040 --> 18:09.760
+It will give you the mean amount of bikes that came through every hour in this neighborhood
+
+18:09.760 --> 18:11.640
+with the ID of three.
+
+18:11.640 --> 18:15.440
+And the one below it is doing the exact same, but it's doing it for the ID neighborhood
+
+18:15.440 --> 18:16.640
+of four.
+
+18:16.640 --> 18:22.440
+And then finally at the end, it's comparing them and it's getting a difference value.
+
+18:22.440 --> 18:26.440
+It's saying how many more bikes go through neighborhood three versus neighborhood four
+
+18:26.440 --> 18:28.400
+or vice versa.
+
+18:28.400 --> 18:32.000
+And so that's just one of the quick queries that you can do.
+
+18:32.000 --> 18:36.480
+The aggregate window is super great, especially for a project like this where you maybe, although
+
+18:36.480 --> 18:41.840
+your IoT sensors will send you data every single nanosecond, let's get real here.
+
+18:41.840 --> 18:45.040
+Your plant, you don't need to know exactly what was happening to it.
+
+18:45.040 --> 18:49.000
+It's better to just get an average of how thirsty it is or average amount of light.
+
+18:49.000 --> 18:51.200
+You could bring it down even to five minutes.
+
+18:51.200 --> 18:54.280
+It does not need to be quite as in depth.
+
+18:54.280 --> 18:57.480
+And even for this one, they just wanted to know the mean amount of bikes that were coming
+
+18:57.480 --> 19:02.200
+through the city in these neighborhoods.
+
+19:02.200 --> 19:04.360
+This is how it actually looks like in our project.
+
+19:04.360 --> 19:08.920
+So the reason that you're seeing all these empty brackets is this is a reusable query.
+
+19:08.920 --> 19:14.600
+So we can say from different types of plant buddy buckets, or we can say different device
+
+19:14.600 --> 19:16.880
+IDs or different fields.
+
+19:16.880 --> 19:24.400
+So again, the field is going to be things like the humidity, the temperature, the moisture.
+
+19:24.400 --> 19:28.260
+And device ID, I actually, for my project at least, it's always the same because I only
+
+19:28.260 --> 19:30.320
+have one setup.
+
+19:30.320 --> 19:34.560
+But if I had multiple plants with multiple values, I would have the device ID basically
+
+19:34.560 --> 19:40.600
+being probably really the plant names, but I could say like Arduino one or Arduino two.
+
+19:40.600 --> 19:48.400
+But for this project, it's relatively smaller, so it's just easier.
+
+19:48.400 --> 19:51.700
+So change is here.
+
+19:51.700 --> 19:56.080
+So this doesn't really matter if you decide to do this project all in the open source.
+
+19:56.080 --> 19:58.460
+It won't matter really for you for a while.
+
+19:58.460 --> 20:03.280
+But one thing to note is if you do choose to do edge data replication, InfluxDB cloud
+
+20:03.280 --> 20:05.760
+is now going to be allowing SQL.
+
+20:05.760 --> 20:10.320
+So you're going to be able to query your data back out using SQL instead of flux.
+
+20:10.320 --> 20:13.980
+And we're also going to be supporting flight SQL plugins which will allow you to connect
+
+20:13.980 --> 20:17.480
+to things like Apache superset and Grafana.
+
+20:17.480 --> 20:21.240
+I'm obviously going to be showing plot leaf for this one, but these are going to be options
+
+20:21.240 --> 20:22.480
+for you in the future.
+
+20:22.480 --> 20:26.080
+So it's just something to keep in mind.
+
+20:26.080 --> 20:29.160
+So let's get into edge data replication.
+
+20:29.160 --> 20:47.440
+I'm going to leave this up for just one sec.
+
+20:47.440 --> 20:53.160
+So normally when I say edge data replication, people kind of think of varying things depending
+
+20:53.160 --> 20:57.280
+on your job or depending on where you've heard it said before.
+
+20:57.280 --> 21:02.280
+Some people think of a solar panel in the middle of nowhere in the woods.
+
+21:02.280 --> 21:07.240
+That's the edge device because it's, I don't know, at the edge of civilization basically.
+
+21:07.240 --> 21:10.520
+But an edge device can be something as simple as a cell phone.
+
+21:10.520 --> 21:13.080
+It can be an ATM sitting at a bank.
+
+21:13.080 --> 21:19.320
+It can be a factory that just happens to have intermittent Wi-Fi because today or this week
+
+21:19.320 --> 21:22.080
+got an ice storm and the internet went out.
+
+21:22.080 --> 21:26.520
+So an edge device can really be almost, it's more broad than what we normally think of.
+
+21:26.520 --> 21:30.760
+It can be almost any device that it's important that it always stays connected, but that doesn't
+
+21:30.760 --> 21:32.520
+mean that it will.
+
+21:32.520 --> 21:37.000
+Or in the case of some people, it's your work server that happens to be sitting in your
+
+21:37.000 --> 21:40.880
+office that goes out because the power went out at the office and now somebody's getting
+
+21:40.880 --> 21:45.040
+the phone call at 2 a.m. to go to that office and fix the server.
+
+21:45.040 --> 21:47.800
+That's why cloud computing is great.
+
+21:47.800 --> 21:53.880
+So basically what edge data replication allows is it allows you to run your influx DB OSS
+
+21:53.880 --> 22:00.760
+instance, your edge, and basically it has a disk back queue which holds that data.
+
+22:00.760 --> 22:03.880
+So as you can see here, you have your bucket, you have your queue.
+
+22:03.880 --> 22:06.420
+There are limits to how much data you can hold.
+
+22:06.420 --> 22:10.040
+You can check out the documentation to find out all the nitty gritty.
+
+22:10.040 --> 22:16.560
+But basically from there, if you ever have like, you know, you ever have internet blackouts,
+
+22:16.560 --> 22:21.280
+you ever have power loss, you will have that data backed up and then when it reconnects,
+
+22:21.280 --> 22:24.360
+it goes ahead and sends it to the cloud.
+
+22:24.360 --> 22:30.040
+Now obviously I would hope that nobody has plants that are so important that they necessarily
+
+22:30.040 --> 22:36.120
+need to back up their data, but I also like doing this because I monitor these plants
+
+22:36.120 --> 22:40.800
+at like conferences, like they come with me when I'm doing like basically what the people
+
+22:40.800 --> 22:42.880
+outside of this room are doing.
+
+22:42.880 --> 22:47.920
+Sometimes I have a plant at our booth where I monitor it, and although this conference
+
+22:47.920 --> 22:52.560
+has been really great for Wi-Fi, not all of them are so wonderful.
+
+22:52.560 --> 22:56.640
+And so it's actually not uncommon for me and my plant to lose Wi-Fi and then I can use
+
+22:56.640 --> 23:00.700
+the edge data replication to still push that data up to the cloud once I reconnect.
+
+23:00.700 --> 23:04.320
+Or I close my laptop when I go to lunch and then it stops running.
+
+23:04.320 --> 23:05.920
+Also not super great.
+
+23:05.920 --> 23:11.920
+But basically this is pretty easy to set up and get going on.
+
+23:11.920 --> 23:15.800
+So these are part of the setup instructions that are in this project's read me.
+
+23:15.800 --> 23:21.040
+So as you can see, we're running our influx DB-OSS edge on Docker.
+
+23:21.040 --> 23:24.960
+So it's a Docker hosted OSS.
+
+23:24.960 --> 23:30.720
+And basically what the command in the second portion does is it just sets it up to be an
+
+23:30.720 --> 23:31.720
+edge device.
+
+23:31.720 --> 23:35.000
+It's just saying like, hey, do the config create, plant buddy edge.
+
+23:35.000 --> 23:36.840
+This is going to be where it's coming from.
+
+23:36.840 --> 23:38.760
+It's the open source version.
+
+23:38.760 --> 23:44.640
+And then the rest of these instructions are basically just for the USB ports and such.
+
+23:44.640 --> 23:51.280
+Like I said before, we have some pretty in-depth documentation on how to get this project going.
+
+23:51.280 --> 23:53.560
+And then these are the two big commands that you run.
+
+23:53.560 --> 23:55.560
+And they're pretty straightforward.
+
+23:55.560 --> 24:00.080
+Basically all you need to do is just have all of your information for your OSS.
+
+24:00.080 --> 24:04.400
+So that's going to be that bucket that we named before.
+
+24:04.400 --> 24:06.880
+You're going to need to create that remote connection.
+
+24:06.880 --> 24:11.360
+And then finally you need to do the replication command where you're saying replicate between
+
+24:11.360 --> 24:14.160
+the local bucket ID and the remote bucket ID.
+
+24:14.160 --> 24:17.880
+So as I said before, I'll show how you actually create the buckets.
+
+24:17.880 --> 24:22.480
+But for the cloud as well as the open source is the exact same.
+
+24:22.480 --> 24:23.680
+You just basically create the bucket.
+
+24:23.680 --> 24:25.120
+You need to get the ID for it.
+
+24:25.120 --> 24:28.480
+And then you're basically just saying this is my local bucket.
+
+24:28.480 --> 24:29.560
+This is my cloud bucket.
+
+24:29.560 --> 24:34.880
+Please make sure the data goes up in that direction.
+
+24:34.880 --> 24:39.760
+So data requests and visualizations.
+
+24:39.760 --> 24:45.760
+So when we are querying data back out, this is using again the Python client library.
+
+24:45.760 --> 24:51.520
+Which although telegraph does have a few output plug-ins, they're not relevant for this specific
+
+24:51.520 --> 24:52.520
+project.
+
+24:52.520 --> 24:57.360
+You could check them out if you wanted to send your data to a different way, different
+
+24:57.360 --> 24:58.800
+website or such.
+
+24:58.800 --> 25:03.960
+But basically all we're doing here is we are using one of those flux queries, the same
+
+25:03.960 --> 25:07.640
+one that I showed from an earlier slide where it's basically just saying give me the data
+
+25:07.640 --> 25:12.280
+for the past roughly day for this bucket with this value.
+
+25:12.280 --> 25:16.400
+And from there you have your params, your bucket, your sensor name and your device ID
+
+25:16.400 --> 25:18.760
+which can be submitted.
+
+25:18.760 --> 25:21.320
+Like I said before, it's like a drop down that you can pick from.
+
+25:21.320 --> 25:24.840
+And basically once you do the query and you do the open dot read, you're going to receive
+
+25:24.840 --> 25:27.560
+that data back.
+
+25:27.560 --> 25:31.280
+And you can receive this data back in different ways, but we're doing it in a data frame because
+
+25:31.280 --> 25:35.720
+that's the easiest for graphing in Plotly.
+
+25:35.720 --> 25:40.920
+This is currently in what's the word?
+
+25:40.920 --> 25:41.920
+We're working on it.
+
+25:41.920 --> 25:46.600
+So we're currently working on getting this project to be integrated with SQL.
+
+25:46.600 --> 25:51.040
+That's going to be my task when I get home tomorrow on Monday or Tuesday whenever my
+
+25:51.040 --> 25:52.440
+flight lands.
+
+25:52.440 --> 25:55.840
+But basically from here this is how it's going to be instead executed.
+
+25:55.840 --> 26:00.080
+You're basically just going to be using a SQL command and getting a very similar read
+
+26:00.080 --> 26:01.080
+back.
+
+26:01.080 --> 26:04.760
+With this one we're just getting a straight read.
+
+26:04.760 --> 26:06.840
+We're not doing it into a data frame.
+
+26:06.840 --> 26:09.400
+But that is going to be something we're going to set up and be an option.
+
+26:09.400 --> 26:13.920
+So if you do want to use this in the future, just wait by the end of the week and we'll
+
+26:13.920 --> 26:20.080
+have that project up as a part of the Plant Buddy repo.
+
+26:20.080 --> 26:22.440
+And finally, actually graphing the data.
+
+26:22.440 --> 26:25.480
+So it's pretty easy to graph the data inside of Plotly.
+
+26:25.480 --> 26:29.960
+So as you can see, we have a few different line graphs which are set for soil moisture,
+
+26:29.960 --> 26:31.440
+air temperature.
+
+26:31.440 --> 26:35.280
+But as you can see, we're setting a few, like these are the values that we're setting here,
+
+26:35.280 --> 26:37.240
+like the graph default device ID.
+
+26:37.240 --> 26:39.080
+We're sending in that air temperature.
+
+26:39.080 --> 26:42.680
+And we're getting it back in a graph format.
+
+26:42.680 --> 26:45.680
+And this is going to be another case where we're going to see if we can get this to work
+
+26:45.680 --> 26:47.760
+because I really want this one to work.
+
+26:47.760 --> 26:51.520
+Darn it.
+
+26:51.520 --> 26:57.200
+I actually wonder...
+
+26:57.200 --> 26:59.240
+We're going to try something a little bit weird.
+
+26:59.240 --> 27:03.280
+See if we can get this out of the presenter view.
+
+27:03.280 --> 27:05.280
+Oh no.
+
+27:05.280 --> 27:07.280
+Escape.
+
+27:07.280 --> 27:08.280
+There we go.
+
+27:08.280 --> 27:09.780
+Okay.
+
+27:09.780 --> 27:14.760
+This is not really ideal, but we're just going to have to go with it, I think.
+
+27:14.760 --> 27:15.760
+Maybe.
+
+27:15.760 --> 27:18.040
+Man, it's really just not liking it, huh?
+
+27:18.040 --> 27:19.640
+I don't know why.
+
+27:19.640 --> 27:20.640
+What is this?
+
+27:20.640 --> 27:24.400
+Oh, well, that's not helpful at all.
+
+27:24.400 --> 27:25.400
+Darn.
+
+27:25.400 --> 27:31.840
+One second, I'm going to drag this onto my screen and just see if I can do it.
+
+27:31.840 --> 27:39.120
+I guess it just doesn't like the HDMI today.
+
+27:39.120 --> 27:42.000
+I'm on the FOSDAM one.
+
+27:42.000 --> 27:47.000
+This one?
+
+27:47.000 --> 27:49.200
+Yes.
+
+27:49.200 --> 27:50.200
+You think it's Internet?
+
+27:50.200 --> 27:53.200
+Not every Google thing likes IPv6.
+
+27:53.200 --> 27:57.800
+I'll also refresh this really quick.
+
+27:57.800 --> 28:07.560
+See if that helps at all.
+
+28:07.560 --> 28:14.560
+Yeah, just really...
+
+28:14.560 --> 28:19.120
+It's so funny that, yeah, it was working before, but now it's just not liking me.
+
+28:19.120 --> 28:20.120
+All right.
+
+28:20.120 --> 28:21.120
+So be it.
+
+28:21.120 --> 28:27.840
+Oh, you've got to be kidding me.
+
+28:27.840 --> 28:29.840
+All right.
+
+28:29.840 --> 28:30.840
+I've got it working.
+
+28:30.840 --> 28:33.120
+I think I just actually need to change my share settings.
+
+28:33.120 --> 28:34.120
+All right.
+
+28:34.120 --> 28:41.320
+We're going to go ahead and change the way this is shared.
+
+28:41.320 --> 29:09.600
+Do you know how to change the settings by any chance?
+
+29:09.600 --> 29:13.960
+I thought it would just change it, but it didn't just change it to just look at this.
+
+29:13.960 --> 29:14.960
+Just look at this screen.
+
+29:14.960 --> 29:16.960
+Oh, I don't think...
+
+29:16.960 --> 29:17.960
+No?
+
+29:17.960 --> 29:18.960
+Okay.
+
+29:18.960 --> 29:19.960
+Hmm.
+
+29:19.960 --> 29:20.960
+Fair enough.
+
+29:20.960 --> 29:23.560
+Yeah, it's just like it's not...
+
+29:23.560 --> 29:26.640
+All right.
+
+29:26.640 --> 29:27.640
+Here we go.
+
+29:27.640 --> 29:28.640
+Mirror display.
+
+29:28.640 --> 29:30.240
+It's all these new updates.
+
+29:30.240 --> 29:32.240
+I never know where anything is anymore.
+
+29:32.240 --> 29:35.320
+Okay, so it really is just the display thing, I think.
+
+29:35.320 --> 29:38.200
+I think it just doesn't want to work.
+
+29:38.200 --> 29:40.640
+There we go.
+
+29:40.640 --> 29:43.640
+Okay, cool.
+
+29:43.640 --> 29:45.600
+So...
+
+29:45.600 --> 29:46.600
+I'm so sorry, guys.
+
+29:46.600 --> 29:48.680
+I didn't realize it didn't like my share.
+
+29:48.680 --> 29:49.680
+Okay.
+
+29:49.680 --> 29:51.080
+So I'm going to go ahead and full screen this.
+
+29:51.080 --> 29:53.880
+And we'll just go back to the other video, because why not?
+
+29:53.880 --> 29:56.360
+So this is how it actually looks in the end.
+
+29:56.360 --> 30:00.000
+So as you can see, it starts to actually make a little bit more sense.
+
+30:00.000 --> 30:02.060
+But basically, you can pick your fields.
+
+30:02.060 --> 30:05.720
+So this is like a graph where you can kind of change it as you desire.
+
+30:05.720 --> 30:10.560
+And you could also pick your bucket as well, which I might show in a second here on this
+
+30:10.560 --> 30:11.560
+video.
+
+30:11.560 --> 30:12.560
+There we go.
+
+30:12.560 --> 30:15.100
+Yeah, so you could pick one of these many buckets.
+
+30:15.100 --> 30:16.840
+Most of these are not relevant to my project.
+
+30:16.840 --> 30:21.760
+They're just the buckets I have in my cloud account, or rather my open source.
+
+30:21.760 --> 30:23.400
+And so as you can see, these are the two...
+
+30:23.400 --> 30:26.820
+I'm going to go back to this part of the video.
+
+30:26.820 --> 30:29.100
+These are the two hard coded graphs.
+
+30:29.100 --> 30:33.520
+So as I said before, the original values sometimes come in really weird.
+
+30:33.520 --> 30:36.640
+I don't know why the heck humidity went all the way up to 90 and then dropped all the
+
+30:36.640 --> 30:37.880
+way back down.
+
+30:37.880 --> 30:42.320
+We normally do a first flush of a lot of this data when it first hits, because it just kind
+
+30:42.320 --> 30:43.320
+of comes in funny.
+
+30:43.320 --> 30:44.960
+Or maybe I breathed on it.
+
+30:44.960 --> 30:45.960
+Who knows?
+
+30:45.960 --> 30:47.520
+They're relatively sensitive.
+
+30:47.520 --> 30:49.040
+It really does happen.
+
+30:49.040 --> 30:53.080
+But also, we had to do a little bit of exponential smoothing as well.
+
+30:53.080 --> 30:57.320
+So we smoothed out the soil moisture, because it used to look like the air temperature does.
+
+30:57.320 --> 30:59.840
+It used to just kind of jump around like a crazy thing.
+
+30:59.840 --> 31:03.760
+The plant did not move between the frigid air to back inside.
+
+31:03.760 --> 31:06.780
+It's just these sensors can be a little bit temperamental.
+
+31:06.780 --> 31:08.760
+We bought the cheapest ones off Amazon.
+
+31:08.760 --> 31:10.240
+We can only expect so much.
+
+31:10.240 --> 31:15.720
+If you spend a little more money, you're going to get a nicer setup.
+
+31:15.720 --> 31:21.200
+So let me get out of full screen, please.
+
+31:21.200 --> 31:24.000
+And I can just not win today.
+
+31:24.000 --> 31:26.680
+All right.
+
+31:26.680 --> 31:29.000
+Nope.
+
+31:29.000 --> 31:30.760
+Now you just want to play.
+
+31:30.760 --> 31:34.520
+So these are some of the new visualization options for FlightSql.
+
+31:34.520 --> 31:37.840
+We're also going to be adding these into the project, so you can check it out.
+
+31:37.840 --> 31:40.500
+We already have pretty good integration with Grafana as well.
+
+31:40.500 --> 31:44.300
+So if you would prefer to use them for your visualizations instead of Plotly, you're more
+
+31:44.300 --> 31:46.800
+than welcome to.
+
+31:46.800 --> 31:52.040
+And then these are those further resources I mentioned before.
+
+31:52.040 --> 31:53.780
+So this is the Try It Yourself.
+
+31:53.780 --> 31:55.880
+So this is where the actual project lives.
+
+31:55.880 --> 31:59.120
+This is the QR code as well as the GitHub.
+
+31:59.120 --> 32:02.540
+If you look up PlantBuddy on the internet, you'll find this.
+
+32:02.540 --> 32:06.040
+And then we have a few different versions depending on what you want to do, including
+
+32:06.040 --> 32:09.600
+the edge data replication version, which I've mentioned here.
+
+32:09.600 --> 32:13.400
+Oh, I almost forgot about the other video.
+
+32:13.400 --> 32:17.120
+Let me go back up to it really quick.
+
+32:17.120 --> 32:20.680
+I like the videos because it means I don't normally have to jump around super crazily
+
+32:20.680 --> 32:23.400
+and go in and out of the cloud UI.
+
+32:23.400 --> 32:25.600
+Too bad it sometimes comes in as like, it's funny.
+
+32:25.600 --> 32:30.520
+Except for the high quality, but it never really is.
+
+32:30.520 --> 32:33.280
+And go back to slide show if you would be so kind.
+
+32:33.280 --> 32:36.160
+There we go.
+
+32:36.160 --> 32:39.260
+So as I was saying before, the Create bucket is pretty straightforward.
+
+32:39.260 --> 32:40.460
+You just name it.
+
+32:40.460 --> 32:45.320
+And then as you can see, the delete data is set for never or older than a certain amount
+
+32:45.320 --> 32:46.760
+of days or time.
+
+32:46.760 --> 32:50.720
+And then that advanced configuration is the schema that you can pick.
+
+32:50.720 --> 32:53.920
+And then finally, the API tokens, also pretty straightforward.
+
+32:53.920 --> 32:57.360
+You can do the read write, which is what I do suggest.
+
+32:57.360 --> 33:00.640
+This all accents is the big red button that I mentioned earlier.
+
+33:00.640 --> 33:03.240
+As you can see, it's got the warning to don't do this.
+
+33:03.240 --> 33:06.200
+I do it because I don't care.
+
+33:06.200 --> 33:08.600
+I like to live life on the edge.
+
+33:08.600 --> 33:10.640
+Ha ha.
+
+33:10.640 --> 33:11.640
+Horrible jokes.
+
+33:11.640 --> 33:12.800
+It's a great specialty of mine.
+
+33:12.800 --> 33:15.920
+But if you decide to do this the right way, this is how you would normally do it.
+
+33:15.920 --> 33:18.680
+You can pick your buckets for read and write.
+
+33:18.680 --> 33:23.080
+And you do need to have read and write if you want to use it in this context.
+
+33:23.080 --> 33:24.920
+If you just have read, it won't do you any good.
+
+33:24.920 --> 33:28.480
+If you don't have, I guess you could do one, but then your data is stuck inside and you
+
+33:28.480 --> 33:29.480
+can't do anything with it.
+
+33:29.480 --> 33:31.200
+So you need both.
+
+33:31.200 --> 33:32.760
+So that's that video.
+
+33:32.760 --> 33:36.000
+So I'm going to go back to the end of this.
+
+33:36.000 --> 33:37.000
+It's great.
+
+33:37.000 --> 33:38.000
+This thing never escapes.
+
+33:38.000 --> 33:41.640
+There we go.
+
+33:41.640 --> 33:44.640
+Awesome.
+
+33:44.640 --> 33:47.160
+So this is our community Slack.
+
+33:47.160 --> 33:51.560
+I'm also going to have a slide next that will have all of the, like it's the one to take
+
+33:51.560 --> 33:52.560
+a photo of.
+
+33:52.560 --> 33:54.520
+I don't want to take any photos of like this one.
+
+33:54.520 --> 33:57.760
+But basically you can come join us in our Slack community.
+
+33:57.760 --> 33:58.760
+I'm there.
+
+33:58.760 --> 33:59.760
+My coworkers are there.
+
+33:59.760 --> 34:03.800
+We love to hang out and talk to people and take feedback as well as questions.
+
+34:03.800 --> 34:04.920
+It's pretty active.
+
+34:04.920 --> 34:06.800
+We get like 100 messages a day.
+
+34:06.800 --> 34:09.740
+So we're always busy in there.
+
+34:09.740 --> 34:14.860
+And then for getting started yourself, you can obviously head to the influx community.
+
+34:14.860 --> 34:18.320
+It has a lot of projects as well as the influx code base.
+
+34:18.320 --> 34:22.240
+So you can go ahead and download that open source versioning.
+
+34:22.240 --> 34:24.280
+And if you want to get started, that's our website.
+
+34:24.280 --> 34:28.480
+This is also where you're going to find things like our documentation.
+
+34:28.480 --> 34:31.160
+And this is that slide that I promised that kind of has like everything.
+
+34:31.160 --> 34:32.800
+It makes it really easy.
+
+34:32.800 --> 34:37.840
+So the getting started is for getting started on cloud if you would like.
+
+34:37.840 --> 34:40.400
+The community is both the forums and Slack.
+
+34:40.400 --> 34:42.000
+Slack is our more active community.
+
+34:42.000 --> 34:49.040
+Our forums are because we can only pay for such an upgraded amount of Slack history storage.
+
+34:49.040 --> 34:51.800
+So we put all of our old questions in the forum.
+
+34:51.800 --> 34:54.480
+So they are a resource that you can kind of search through.
+
+34:54.480 --> 34:58.560
+And if you don't search through it, that's where I search when I answer questions.
+
+34:58.560 --> 35:00.920
+And then we also do have the influx community as well.
+
+35:00.920 --> 35:04.440
+It's basically the one on GitHub where you can find projects that people have worked
+
+35:04.440 --> 35:06.640
+on, including ourselves.
+
+35:06.640 --> 35:10.620
+Our book, which basically just goes into things like why you want to use it.
+
+35:10.620 --> 35:14.720
+The documentation, which I've mentioned multiple times because it really goes in depth on how
+
+35:14.720 --> 35:17.480
+to get this project set up and going.
+
+35:17.480 --> 35:19.520
+Blogs where you see things.
+
+35:19.520 --> 35:23.000
+They have some of our new stuff as well as just in general.
+
+35:23.000 --> 35:26.240
+We like to highlight some of the projects that people are working on.
+
+35:26.240 --> 35:29.120
+And finally, just our university where you can learn more.
+
+35:29.120 --> 35:33.520
+It's completely free and go at your own pace.
+
+35:33.520 --> 35:41.040
+So now that we've gotten through everything, if anybody has any questions.
+
+35:41.040 --> 35:43.680
+Yes.
+
+35:43.680 --> 35:50.680
+Yeah, so I'll go ahead.
+
+35:50.680 --> 36:01.000
+Oh, that's not what I wanted.
+
+36:01.000 --> 36:03.880
+No, it's just taking me back to the stupid drive video.
+
+36:03.880 --> 36:04.880
+There we go.
+
+36:04.880 --> 36:08.960
+So yeah, so this is that influx community plant buddy project.
+
+36:08.960 --> 36:10.040
+So the master branch.
+
+36:10.040 --> 36:15.640
+And then we also have, so like, for example, down here we talk about the control boards.
+
+36:15.640 --> 36:17.600
+So we've got the Arduino or the Boron.
+
+36:17.600 --> 36:19.780
+And then we have an entire sensor list.
+
+36:19.780 --> 36:24.040
+So for example, if I click on this one, it kind of it harassed me for cookies.
+
+36:24.040 --> 36:26.820
+It goes into the temperature sensor.
+
+36:26.820 --> 36:31.820
+So you can go ahead and learn about all the different sensors that we use for this project.
+
+36:31.820 --> 36:36.960
+And you can also obviously search them up on the internet and buy them if you desire.
+
+36:36.960 --> 36:40.600
+And you can use many different types of sensors, but these just happen to be the four that
+
+36:40.600 --> 36:43.440
+we just wanted to end up using.
+
+36:43.440 --> 36:46.720
+And like I said before, in this project, we have, yes, the master branch.
+
+36:46.720 --> 36:52.320
+And then we also have things like EDR, which is edge data replication, Kafka, and then
+
+36:52.320 --> 36:54.120
+a few others.
+
+36:54.120 --> 36:56.160
+I normally end up in the master branch.
+
+36:56.160 --> 36:59.960
+It's kind of like the main versioning of the project.
+
+36:59.960 --> 37:04.780
+And yeah, and then in the future, the sequel one that I was telling you about, that's going
+
+37:04.780 --> 37:06.160
+to be EDR IOCs.
+
+37:06.160 --> 37:09.680
+It's still currently being worked on as I speak, actually.
+
+37:09.680 --> 37:15.000
+So that one is not to be touched yet until it's all done.
+
+37:15.000 --> 37:17.160
+Yes.
+
+37:17.160 --> 37:31.040
+Yeah, so the question was, how is InfluxDB different than OpenTSB?
+
+37:31.040 --> 37:33.040
+Sorry, TSTB?
+
+37:33.040 --> 37:35.140
+There we go.
+
+37:35.140 --> 37:39.600
+So from what I understand, TSTB is also an open source time series database, just like
+
+37:39.600 --> 37:40.600
+we are.
+
+37:40.600 --> 37:44.520
+I think the biggest difference is going to be how much functionality it comes out of
+
+37:44.520 --> 37:45.520
+the box with.
+
+37:45.520 --> 37:50.200
+I would obviously have to go to their actual code and check it out a little bit further.
+
+37:50.200 --> 37:57.640
+But normally, the big thing that's our differentiator is the fact that we can...
+
+37:57.640 --> 37:59.340
+We actually have our own visualizations.
+
+37:59.340 --> 38:03.800
+We have our own ability with Flux to do things like alerting, like that moisture alerting
+
+38:03.800 --> 38:05.840
+that I was talking about before.
+
+38:05.840 --> 38:09.160
+And then with the new sequel integration, that will also be very nice for people who
+
+38:09.160 --> 38:12.680
+want to query in a language most people are already familiar with querying in when it
+
+38:12.680 --> 38:15.080
+comes to working with databases.
+
+38:15.080 --> 38:19.640
+But to be honest, a lot of time series DBs can be pretty comparable when it actually
+
+38:19.640 --> 38:21.440
+comes to the storage.
+
+38:21.440 --> 38:26.280
+So it's going to depend somewhat on your project and which one you want to, I suppose, work
+
+38:26.280 --> 38:27.280
+with.
+
+38:27.280 --> 38:28.480
+A lot of people normally like to...
+
+38:28.480 --> 38:32.720
+I normally do get told that we have pretty good documentation and a good community where
+
+38:32.720 --> 38:35.400
+we're very easy to work with and work through problems.
+
+38:35.400 --> 38:42.800
+And that's not always the case with every open source community.
+
+38:42.800 --> 38:50.280
+If anybody else has any other questions?
+
+38:50.280 --> 38:55.120
+If not, that's totally fine too, because that all gives you guys time to run off to the
+
+38:55.120 --> 39:01.040
+next talks or maybe go grab some lunch from the food trucks.
+
+39:01.040 --> 39:04.520
+Thank you.

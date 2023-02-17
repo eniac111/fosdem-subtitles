@@ -1,0 +1,2644 @@
+1
+0:00:00.000 --> 0:00:12.160
+All right. So, we move on to our next talk. We have Udo here with the Nova Micro-Hypervisor
+
+2
+0:00:12.160 --> 0:00:14.000
+update. Udo, please.
+
+3
+0:00:14.000 --> 0:00:19.000
+Thank you, Arsan. Good morning, everybody. Welcome to my talk at Fostem. It's good to
+
+4
+0:00:19.000 --> 0:00:25.760
+be back here after three years. The last time I presented at Fostem, I gave a talk about
+
+5
+0:00:25.760 --> 0:00:32.360
+the Nova Micro-Hypervisor on ARMv8, and this talk will cover the things that happened in
+
+6
+0:00:32.360 --> 0:00:37.720
+an over ecosystem since then. So, just a brief overview of the agenda. For all of those who
+
+7
+0:00:37.720 --> 0:00:43.000
+might not be familiar with Nova, I'll give a very brief architecture overview and explain
+
+8
+0:00:43.000 --> 0:00:47.280
+the Nova building blocks. Then we look at all the recent innovations that happened in
+
+9
+0:00:47.280 --> 0:00:52.360
+Nova in the last three years. I'll talk a bit about the code unification between ARM
+
+10
+0:00:52.360 --> 0:00:57.360
+and x86, the two architectures that we support at this point. Then I'll spend the majority
+
+11
+0:00:57.360 --> 0:01:03.160
+of the talk going into details, into all the advanced security features, particularly in
+
+12
+0:01:03.160 --> 0:01:10.840
+x86, that we added to Nova recently. Towards the end, I'll talk a little bit about performance,
+
+13
+0:01:10.840 --> 0:01:14.360
+and hopefully we'll have some time for questions.
+
+14
+0:01:14.360 --> 0:01:21.480
+The architecture in Nova is similar to the micro-carbon-based systems that you've seen
+
+15
+0:01:21.480 --> 0:01:27.200
+before. At the bottom, we have a kernel which is not just a micro-kernel, it's actually
+
+16
+0:01:27.200 --> 0:01:33.160
+a micro-hypervisor called the Nova Micro-Hypervisor. On top of it, we have this component-based
+
+17
+0:01:33.160 --> 0:01:38.600
+multi-server user mode environment. G-node would be one instantiation of it, and Martin
+
+18
+0:01:38.600 --> 0:01:43.960
+has explained that most micro-kernel-based systems have this structure. In our case,
+
+19
+0:01:43.960 --> 0:01:48.720
+the hostOS consists of all these colorful boxes. We have a master controller which is
+
+20
+0:01:48.720 --> 0:01:53.160
+sort of the init process, which manages all the resources that the micro-hypervisor does
+
+21
+0:01:53.160 --> 0:02:00.800
+not need for itself. We have a bunch of drivers. All the device drivers run in user mode, deprivileged.
+
+22
+0:02:00.800 --> 0:02:05.640
+We have a platform manager which primarily deals with resource enumeration and power
+
+23
+0:02:05.640 --> 0:02:15.240
+management. You can run arbitrary host applications, many of them, and there's a bunch of multiplexers.
+
+24
+0:02:15.240 --> 0:02:20.100
+You want multiplexer that everybody can get a serial console and you have a single interface
+
+25
+0:02:20.100 --> 0:02:25.920
+to it, or a network multiplexer which acts as some sort of virtual switch. Virtualization
+
+26
+0:02:25.920 --> 0:02:31.640
+is provided by virtual machine monitors, which are also user mode applications. We have this
+
+27
+0:02:31.640 --> 0:02:38.560
+special configuration or this special design principle that every virtual machine uses
+
+28
+0:02:38.560 --> 0:02:43.200
+its own instance of a virtual machine monitor. They don't all have to be the same. For example,
+
+29
+0:02:43.200 --> 0:02:48.200
+if you run a unique kernel in VM as shown to the far right, the virtual machine monitor
+
+30
+0:02:48.200 --> 0:02:52.600
+could be much smaller because it doesn't need to deal with all the complexity that you would
+
+31
+0:02:52.600 --> 0:03:05.400
+find in an OS like Linux or Windows. The entire hostOS consisting of the Nova micro-hypervisor
+
+32
+0:03:05.400 --> 0:03:12.440
+and the hostOS, the user mode portion of it is what bedrock calls the ultra-visor, which
+
+33
+0:03:12.440 --> 0:03:20.240
+is a product that we ship. Once you have virtualization there that is very small, very secure, and
+
+34
+0:03:20.240 --> 0:03:25.760
+basically sits outside the guest operating system, you can build interesting features
+
+35
+0:03:25.760 --> 0:03:31.620
+like virtual machine introspection or virtualization assisted security which uses features like
+
+36
+0:03:31.620 --> 0:03:39.080
+nested paging, breakpoints, and patch-tivver overrides to harden the security of the guest
+
+37
+0:03:39.080 --> 0:03:45.080
+operating systems like protecting critical data structures, introspecting memory, and
+
+38
+0:03:45.080 --> 0:03:52.480
+also features in the virtual switch for doing access control between the different virtual
+
+39
+0:03:52.480 --> 0:03:57.080
+machines and the outside world as to who can send what types of packets. All of that is
+
+40
+0:03:57.080 --> 0:04:03.640
+another product which is called ultra-security. The whole stack, not just the kernel, the
+
+41
+0:04:03.640 --> 0:04:09.960
+whole stack is undergoing rigorous formal verification and one of the properties that
+
+42
+0:04:09.960 --> 0:04:14.880
+this formal verification effort is proving is what we call the bare metal property. The
+
+43
+0:04:14.880 --> 0:04:23.360
+bare metal property basically says that combining all these virtual machines on a single hypervisor
+
+44
+0:04:23.360 --> 0:04:29.960
+has the same behavior as if you were running these as separate physical machines connected
+
+45
+0:04:29.960 --> 0:04:35.920
+by a real ethernet switch so that whatever happens in a virtual machine could have happened
+
+46
+0:04:35.920 --> 0:04:42.640
+on a real physical machine that was not virtualized. That's what the bare metal property says.
+
+47
+0:04:42.640 --> 0:04:49.720
+So the building blocks of NOVA are those that you would find in an ordinary microkernel.
+
+48
+0:04:49.720 --> 0:04:55.980
+It's basically address spaces, threads, and IPC. In NOVA address spaces are called protection
+
+49
+0:04:55.980 --> 0:05:04.200
+domains or PD, and threads or virtual CPUs are called execution contacts, short EC. For
+
+50
+0:05:04.200 --> 0:05:09.480
+those of you who don't know NOVA very well, I've just given a very brief introductory
+
+51
+0:05:09.480 --> 0:05:14.480
+slide for how all these mechanisms interact. So let's say you have two protection domains,
+
+52
+0:05:14.480 --> 0:05:21.120
+PD, A, and B. Each of them have one or more threads inside, and obviously at some point
+
+53
+0:05:21.120 --> 0:05:25.880
+you want to intentionally cross these protection domain boundaries because these components
+
+54
+0:05:25.880 --> 0:05:30.880
+somehow need to communicate, and that's what IPC is for. So assume that this client thread
+
+55
+0:05:30.880 --> 0:05:35.560
+wants to send a message to the server thread. It has a thread control block, which is like
+
+56
+0:05:35.560 --> 0:05:41.480
+a message box, puts the message in there, invokes a call, an IPC call to the hypervisor,
+
+57
+0:05:41.480 --> 0:05:47.040
+it vectors through a portal which routes that IPC to the server protection domain, and then
+
+58
+0:05:47.040 --> 0:05:53.840
+the server receives the message in its UTCB. As part of this control and data transfer,
+
+59
+0:05:53.840 --> 0:05:58.800
+the scheduling context, which is a time slice coupled with a priority, is donated to the
+
+60
+0:05:58.800 --> 0:06:03.360
+other side, and as you can see on the right, that's the situation after the IPC call has
+
+61
+0:06:03.360 --> 0:06:09.200
+gone through. So now the server is executing on the scheduling context of the client. The
+
+62
+0:06:09.200 --> 0:06:15.920
+server computes a reply, puts it in its UTCB, issues a hypercall called IPC reply, and the
+
+63
+0:06:15.920 --> 0:06:20.960
+data goes back, the reply goes back to the client, the scheduling context donation is
+
+64
+0:06:20.960 --> 0:06:26.280
+reverted, and the client gets its time slice back. So what you get with that is very fast
+
+65
+0:06:26.280 --> 0:06:30.880
+synchronous IPC with time donation and priority inheritance, and it's very fast because there's
+
+66
+0:06:30.880 --> 0:06:38.320
+no scheduling decision on that path. Also, NOVA is a capability-based microkernel or
+
+67
+0:06:38.320 --> 0:06:44.800
+hypervisor, which means all operations that user components do with the kernel have capabilities
+
+68
+0:06:44.800 --> 0:06:51.360
+as parameters, and capabilities have the nice property that they both name a resource and
+
+69
+0:06:51.360 --> 0:06:56.720
+at the same time have to convey what access you have on that resource. So it's a very
+
+70
+0:06:56.720 --> 0:07:04.280
+powerful access control primitive. So that said, let's look at all the things that happened
+
+71
+0:07:04.280 --> 0:07:10.840
+in NOVA over the last two and a half or so years, and we are now on a release cadence
+
+72
+0:07:10.840 --> 0:07:16.960
+where we put out a new release of NOVA approximately every two months. So it's always the year
+
+73
+0:07:16.960 --> 0:07:23.000
+and the week of the year where we do releases, and this shows what we added in NOVA in 21,
+
+74
+0:07:23.000 --> 0:07:28.840
+22, and what we'll add to the first release of this year at the end of this month. So
+
+75
+0:07:28.840 --> 0:07:37.040
+we started out at the beginning of 21 by unifying the code base between x86 and ARM, making
+
+76
+0:07:37.040 --> 0:07:43.160
+the load address flexible, adding power management like suspend resume, then extended that support
+
+77
+0:07:43.160 --> 0:07:51.120
+to ARM. And later in 22, when that unification was complete, we started adding a lot of,
+
+78
+0:07:51.120 --> 0:07:57.560
+let's say advanced security features in x86 like control flow enforcement, code patching,
+
+79
+0:07:57.560 --> 0:08:04.880
+cache allocation technology, multiple spaces, multi-key total memory encryption, and recently
+
+80
+0:08:04.880 --> 0:08:10.280
+we've added some APIC virtualization. So the difference between the things that are listed
+
+81
+0:08:10.280 --> 0:08:14.800
+in bold here and those that are not listed in bold, everything in bold I'll try to cover
+
+82
+0:08:14.800 --> 0:08:20.800
+in this talk, which is a lot, so hopefully we'll have enough time to go through all this.
+
+83
+0:08:20.800 --> 0:08:25.200
+First of all, the design goals that we have in NOVA, and Martine already mentioned that
+
+84
+0:08:25.200 --> 0:08:30.360
+not all micro-chronas have the same design goals. Our design goal is that we want to
+
+85
+0:08:30.360 --> 0:08:35.680
+provide the same or at least similar functionality across all architectures, which means the
+
+86
+0:08:35.680 --> 0:08:41.200
+API is designed in such a way that it abstracts from architectural differences as much as
+
+87
+0:08:41.200 --> 0:08:48.440
+possible, that you get a uniform experience, whether you're on x86 and ARM, you can create
+
+88
+0:08:48.440 --> 0:08:53.960
+a thread and you don't have to worry about details of instructions that registers that
+
+89
+0:08:53.960 --> 0:08:58.860
+page table format. NOVA tries to abstract all of that away. We want to have really simple
+
+90
+0:08:58.860 --> 0:09:07.040
+build infrastructure, and you'll see in a moment what the directory layout looks like,
+
+91
+0:09:07.040 --> 0:09:10.880
+but suffice it to say that you can build NOVA with a very simple make command, where you
+
+92
+0:09:10.880 --> 0:09:16.760
+say make architecture equals x86 or ARM, and in some cases board equals, I don't know,
+
+93
+0:09:16.760 --> 0:09:24.800
+raspberry pi or NXP, I'm x8, whatever, and it runs for maybe five seconds and then you
+
+94
+0:09:24.800 --> 0:09:34.040
+get a binary. We use standardized processes, like the standardized boot process and standardized
+
+95
+0:09:34.040 --> 0:09:39.480
+resource enumeration as much as possible, because that allows for a great reuse of code.
+
+96
+0:09:39.480 --> 0:09:46.640
+So we use multi-boot version two or one, and UEFI for booting, we use ACPI for resource
+
+97
+0:09:46.640 --> 0:09:52.800
+enumeration, we can also use the FDT, but that's more of a fallback, and for ARM there's
+
+98
+0:09:52.800 --> 0:09:59.080
+this interface called PSCI for power state coordination that's also abstracting this
+
+99
+0:09:59.080 --> 0:10:03.880
+functionality across many different ARM boards. So we try to use these interfaces as much
+
+100
+0:10:03.880 --> 0:10:10.880
+as possible. The code is designed in such a way that it is formally verifiable, and
+
+101
+0:10:10.880 --> 0:10:16.720
+in our particular case that means formally verifying highly concurrent C++ code, not
+
+102
+0:10:16.720 --> 0:10:22.300
+C code, not assembler code, but C++ code, and even weakly ordered memory, because ARM
+
+103
+0:10:22.300 --> 0:10:30.400
+V8 is weak memory. And obviously we want to be, we want Nova to be modern, small, and
+
+104
+0:10:30.400 --> 0:10:37.400
+fast, best in class security and performance. And we'll see how we did on that. So first,
+
+105
+0:10:37.400 --> 0:10:42.440
+let me talk about the code structure, and Martin mentioned in this talk this morning
+
+106
+0:10:42.440 --> 0:10:47.160
+that using directories to your advantage can really help. So on the right you see the directory
+
+107
+0:10:47.160 --> 0:10:55.120
+structure that we have in the unified Nova code base. We have generic Inc directory and
+
+108
+0:10:55.120 --> 0:10:59.440
+the generic source directory, those are the ones listed in green, and then we have architecture
+
+109
+0:10:59.440 --> 0:11:07.240
+specific subdirectories for ARX64 and X8664, and we have architecture specific build directories.
+
+110
+0:11:07.240 --> 0:11:11.100
+There's also a doc directory in which you will find the Nova interface specification
+
+111
+0:11:11.100 --> 0:11:16.960
+and there's a single makefile unified. And when we looked at the source code and we discussed
+
+112
+0:11:16.960 --> 0:11:22.560
+them with our formal message engineers, we recognized that basically all the functions
+
+113
+0:11:22.560 --> 0:11:29.360
+can be categorized into three different buckets. The first one is what we call the same API
+
+114
+0:11:29.360 --> 0:11:34.320
+and same implementation. This is totally generic code. All the system calls are totally generic
+
+115
+0:11:34.320 --> 0:11:39.360
+code. All the memory allocators are totally generic code. Surprisingly, even page tables
+
+116
+0:11:39.360 --> 0:11:44.460
+can be totally generic code. So these can all share the source files, the header files,
+
+117
+0:11:44.460 --> 0:11:49.760
+and the spec files, which basically describe the interface pre and post conditions. The
+
+118
+0:11:49.760 --> 0:11:55.240
+second bucket is functions that have the same API, but maybe a different implementation.
+
+119
+0:11:55.240 --> 0:11:59.840
+And an example of that would be a timer where the API could be set a deadline for when a
+
+120
+0:11:59.840 --> 0:12:04.880
+timer interrupt should fire. So the API for all callers is the same. So you can potentially
+
+121
+0:12:04.880 --> 0:12:09.760
+share the header or the spec file, but the implementation might be different on each
+
+122
+0:12:09.760 --> 0:12:14.840
+architecture or it's very likely different. And the final bucket is those functions that
+
+123
+0:12:14.840 --> 0:12:19.800
+have a different API and implementation and you can't share anything. So the code structure
+
+124
+0:12:19.800 --> 0:12:25.120
+is such that architecture specific code lives in the architecture specific sub directories
+
+125
+0:12:25.120 --> 0:12:29.840
+and generic code lives in the sort of parent directories of that. And whenever you have
+
+126
+0:12:29.840 --> 0:12:34.640
+an architecture specific file with the same name as a generic file, the architecture specific
+
+127
+0:12:34.640 --> 0:12:40.720
+file takes precedence and basically overrides or shadows the generic file. And that makes
+
+128
+0:12:40.720 --> 0:12:48.760
+it very easy to move files from architecture specific to generic and back. So the unified
+
+129
+0:12:48.760 --> 0:12:53.500
+code base that we ended up with, and these are the numbers from the very recent upcoming
+
+130
+0:12:53.500 --> 0:13:02.160
+release 23.08, which will come out at the end of this month, shows sort of what we ended
+
+131
+0:13:02.160 --> 0:13:06.200
+up with in terms of architecture specific versus generic code. So in the middle of the
+
+132
+0:13:06.200 --> 0:13:11.800
+green part is the generic code that's shared between all architectures and it's 4,300 lines
+
+133
+0:13:11.800 --> 0:13:22.520
+today. X86 adds 7,000 and some lines specific code and ARM to the right adds some 5,600
+
+134
+0:13:22.520 --> 0:13:28.420
+lines. So if you sum that up for X86, it's roughly 11,500 lines and for ARM it's less
+
+135
+0:13:28.420 --> 0:13:37.840
+than 10,000 lines of code. So it's very small. And if you look at it, ballpark 40% of the
+
+136
+0:13:37.840 --> 0:13:42.440
+code for each architecture is generic and shareable. And that's really great not just
+
+137
+0:13:42.440 --> 0:13:47.320
+from a maintainability perspective, but also from a verifiability perspective because you
+
+138
+0:13:47.320 --> 0:13:54.200
+have to specify and verify those generic portions only once. If you compile that into binaries,
+
+139
+0:13:54.200 --> 0:14:02.200
+then the resulting binaries are also very small, like a little less than 70K in code
+
+140
+0:14:02.200 --> 0:14:07.160
+size. And obviously if you use a different compiler version or a different Nova version,
+
+141
+0:14:07.160 --> 0:14:11.560
+these numbers will slightly differ, but it gives you an idea of how small the code base
+
+142
+0:14:11.560 --> 0:14:20.720
+and how small the binaries will be. So let's look at some interesting aspects of the architecture
+
+143
+0:14:20.720 --> 0:14:25.240
+because assume you've downloaded Nova, you've built such a small binary from source code
+
+144
+0:14:25.240 --> 0:14:31.440
+and now you want to boot it. And typical boot procedure, both on X86 and ARM, which are
+
+145
+0:14:31.440 --> 0:14:37.800
+converging towards using UFI as firmware, will basically have this structure where UFI
+
+146
+0:14:37.800 --> 0:14:42.000
+firmware runs first and then invokes some bootloader passing some information like an
+
+147
+0:14:42.000 --> 0:14:47.360
+image handle and the system table. And then the bootloader runs and invokes a Nova micro
+
+148
+0:14:47.360 --> 0:14:56.600
+hypervisor passing also the image handle and the system table maybe adding multi-boot information.
+
+149
+0:14:56.600 --> 0:15:01.600
+And at some point there will have to be a platform handover of all the hardware from
+
+150
+0:15:01.600 --> 0:15:07.080
+firmware to the operating system, in our case Nova. And this handover point is called exit
+
+151
+0:15:07.080 --> 0:15:12.840
+boot services. It's basically the very last function that you call as either a bootloader
+
+152
+0:15:12.840 --> 0:15:19.600
+or a kernel in firmware and that's the point where firmware stops accessing all the hardware
+
+153
+0:15:19.600 --> 0:15:24.440
+and the ownership of the hardware basically transitions over to the kernel. And the unfortunate
+
+154
+0:15:24.440 --> 0:15:31.040
+situation is that as you call exit boot services, firmware, which may have enabled the IOMU
+
+155
+0:15:31.040 --> 0:15:37.400
+or SMU at boot time to protect against DMA attacks, drops it at this point, which sounds
+
+156
+0:15:37.400 --> 0:15:43.480
+kind of silly, but that's what happens. And the reason if you ask those who are familiar
+
+157
+0:15:43.480 --> 0:15:49.280
+with UFI is for legacy OS support because UFI assumes that maybe the next stage is a
+
+158
+0:15:49.280 --> 0:15:54.960
+legacy OS which can't deal with DMA protections so it gets turned off, which is really unfortunate
+
+159
+0:15:54.960 --> 0:16:00.920
+because between the point where you call exit boot services to take over the platform hardware
+
+160
+0:16:00.920 --> 0:16:06.880
+and the point where Nova can actually enable the IOMU, there is this window of opportunity
+
+161
+0:16:06.880 --> 0:16:13.240
+shown in red here where there's no DMA protections and that's the point. It's very small, maybe
+
+162
+0:16:13.240 --> 0:16:19.240
+a few nanoseconds or microseconds where an attacker could perform a DMA attack. And for
+
+163
+0:16:19.240 --> 0:16:25.040
+that reason Nova takes complete control of the exit boot services flow so it's not the
+
+164
+0:16:25.040 --> 0:16:30.800
+bootloader who calls exit boot services. Nova actually drives the UFI infrastructure and
+
+165
+0:16:30.800 --> 0:16:36.040
+it disables all bus master activity before calling exit boot services so that we eliminate
+
+166
+0:16:36.040 --> 0:16:44.440
+this window of opportunity. That was a very aggressive change in Nova because it means
+
+167
+0:16:44.440 --> 0:16:50.840
+Nova has to comprehend UFI. The next thing that we added was a flexible
+
+168
+0:16:50.840 --> 0:16:55.600
+load address. So when the bootloader wants to put a binary into physical memory it invokes
+
+169
+0:16:55.600 --> 0:17:00.760
+it with paging being disabled, which means you have to load it at some physical address.
+
+170
+0:17:00.760 --> 0:17:04.680
+And you can define an arbitrary physical address but it would be good if whatever physical
+
+171
+0:17:04.680 --> 0:17:10.080
+address you define worked on all the boards. And that is simply impossible, especially
+
+172
+0:17:10.080 --> 0:17:15.680
+in the ARM ecosystem. So on ARM some platforms have the DRAM starting at physical address
+
+173
+0:17:15.680 --> 0:17:21.560
+zero, some have MMIO starting at address zero so you will not find a single physical address
+
+174
+0:17:21.560 --> 0:17:26.880
+range that works across all ARM platforms where you can say always load Nova at two
+
+175
+0:17:26.880 --> 0:17:33.520
+megabytes, one gigabyte, whatever. So we made the load address flexible. Also the bootloader
+
+176
+0:17:33.520 --> 0:17:38.400
+might want to move Nova to a dedicated point in memory like at the very top so that the
+
+177
+0:17:38.400 --> 0:17:43.640
+bottom portion can be given one to one to a VM. So the load address is now flexible
+
+178
+0:17:43.640 --> 0:17:49.400
+for Nova. Not fully flexible but you can move Nova up down by arbitrary multiples of two
+
+179
+0:17:49.400 --> 0:17:57.120
+megabytes so at super page boundaries. And the interesting insight into this is for pulling
+
+180
+0:17:57.120 --> 0:18:03.240
+this off there is no L3 location complexity required. Nova consists of two sections, a
+
+181
+0:18:03.240 --> 0:18:08.400
+very small init section which is mapped, which is identity map, which means virtual addresses
+
+182
+0:18:08.400 --> 0:18:12.920
+equal physical addresses and that's the code that initializes the platform up to the point
+
+183
+0:18:12.920 --> 0:18:18.960
+where you can enable paging. And then there's a runtime section which runs paged so it has
+
+184
+0:18:18.960 --> 0:18:23.960
+virtual to physical memory mappings. And for those virtual to physical memory mappings,
+
+185
+0:18:23.960 --> 0:18:29.040
+if you run this paging enabled, the physical addresses that back these virtual memory ranges
+
+186
+0:18:29.040 --> 0:18:35.000
+simply don't matter. So paging is basically some form of relocation. You only need to
+
+187
+0:18:35.000 --> 0:18:39.440
+deal with relocation for the init section and you can solve that by making the init
+
+188
+0:18:39.440 --> 0:18:45.040
+section be position independent code. And it's assembler anyway so making that position
+
+189
+0:18:45.040 --> 0:18:51.120
+independent is not hard. We actually didn't make the code just position independent, it
+
+190
+0:18:51.120 --> 0:18:57.200
+is also mode independent which means no matter if you EFI starts you in 32 bit mode or 64
+
+191
+0:18:57.200 --> 0:19:04.440
+bit mode, that code is dealing with all these situations. There's a limit, an artificial
+
+192
+0:19:04.440 --> 0:19:09.480
+limit of you still have to load Nova below four gigabytes because multi-boot has been
+
+193
+0:19:09.480 --> 0:19:15.720
+defined in such a way that you can't express addresses above four gigabytes because some
+
+194
+0:19:15.720 --> 0:19:21.560
+of these structures are still 32 bit and that little emoticon expresses what we think of
+
+195
+0:19:21.560 --> 0:19:29.560
+that. So then after we had figured this out, we wanted to do some power management and
+
+196
+0:19:29.560 --> 0:19:35.520
+this is an overview of all the power management that ACPI defines. So ACPI defines a few global
+
+197
+0:19:35.520 --> 0:19:42.360
+states like working, sleeping and off. Those aren't all that interesting. The really interesting
+
+198
+0:19:42.360 --> 0:19:47.040
+states are the sleep states and the things that have this black bold border around it
+
+199
+0:19:47.040 --> 0:19:52.040
+is the state in which the system is when it's fully up and running, no idling, no sleeping,
+
+200
+0:19:52.040 --> 0:19:58.240
+no nothing. It's called the S0 working state and then there's some sleep state. You might
+
+201
+0:19:58.240 --> 0:20:04.280
+know suspend to run, suspend to disk and soft off. And when you're in the S0 working state
+
+202
+0:20:04.280 --> 0:20:09.040
+you can have a bunch of idle states and in the C0 idle state you can have a bunch of
+
+203
+0:20:09.040 --> 0:20:14.800
+performance state which roughly correspond to voltage and frequency scaling so ramping
+
+204
+0:20:14.800 --> 0:20:20.160
+up the clock speed up and down. So unfortunately we don't have a lot of time to go into all
+
+205
+0:20:20.160 --> 0:20:28.080
+the details of these sleep states but I want to still say a few words about this. We implemented
+
+206
+0:20:28.080 --> 0:20:38.160
+suspend resume on both x86 and ARM and there's two ways you can go about it. One which is
+
+207
+0:20:38.160 --> 0:20:42.240
+I would say a brute force approach and the other which is the smart approach. And the
+
+208
+0:20:42.240 --> 0:20:47.120
+brute force approach basically goes like you look at all the devices that lose their state
+
+209
+0:20:47.120 --> 0:20:52.000
+during a suspend resume transition and you save the entire register state. And that's
+
+210
+0:20:52.000 --> 0:20:56.040
+a significant amount of state that you have to manage and it may even be impossible to
+
+211
+0:20:56.040 --> 0:21:00.320
+manage it because if you have devices with hidden internal state you may not be able
+
+212
+0:21:00.320 --> 0:21:06.240
+to get at it or if the device has a hidden internal state machine you may not know what
+
+213
+0:21:06.240 --> 0:21:11.080
+the internal state of that device is at that point. So it may be suitable for some generic
+
+214
+0:21:11.080 --> 0:21:16.600
+devices like if you wanted to save the configuration space of every PCI device that's generic enough
+
+215
+0:21:16.600 --> 0:21:22.400
+that you could do that. But for some interrupt controllers or SMUs with internal state that's
+
+216
+0:21:22.400 --> 0:21:28.440
+not smart. So for that you can actually use the second approach which Nova uses which
+
+217
+0:21:28.440 --> 0:21:33.680
+is to save a high level configuration and you initialize the device based on that. So
+
+218
+0:21:33.680 --> 0:21:41.120
+as an example say you had an interrupt routed to core zero in edge triggered mode. You would
+
+219
+0:21:41.120 --> 0:21:45.760
+save that as a high level information and that's sufficient to re-initialize all the
+
+220
+0:21:45.760 --> 0:21:50.480
+interrupt controllers all the redirection entries all the trigger modes based on just
+
+221
+0:21:50.480 --> 0:21:56.440
+this bit of information. So there's lots less information to maintain. Saving becomes basically
+
+222
+0:21:56.440 --> 0:22:02.920
+a no-op. Restoring can actually use the same code pass that you used to initially bring
+
+223
+0:22:02.920 --> 0:22:07.480
+up that particular device. And that's the approach for all the interrupt controllers
+
+224
+0:22:07.480 --> 0:22:15.040
+all the SMUs all the devices managed by Nova. The next thing I want to briefly talk about
+
+225
+0:22:15.040 --> 0:22:23.160
+is P-states performance states which are these gears for ramping up the clock speed on x86
+
+226
+0:22:23.160 --> 0:22:30.920
+and Nova can now deal with all these P-states. The interesting aspect is that most modern
+
+227
+0:22:30.920 --> 0:22:37.200
+x86 processors have something called turbo mode and turbo mode allows one or more processors
+
+228
+0:22:37.200 --> 0:22:44.320
+to exceed the nominal clock speed to actually turbo up higher if other cores are idle. So
+
+229
+0:22:44.320 --> 0:22:49.760
+if other cores are not using their thermal or power headroom a selected set of cores
+
+230
+0:22:49.760 --> 0:22:54.120
+maybe just one core maybe a few other cores can actually turbo up many bins and this is
+
+231
+0:22:54.120 --> 0:22:59.240
+shown here on active core zero which basically gets the thermal headroom of core one core
+
+232
+0:22:59.240 --> 0:23:05.360
+two and core three to clock up higher. So Nova will exploit that feature when it's available
+
+233
+0:23:05.360 --> 0:23:10.040
+but there are situations where you want predictable performance where you want every core to run
+
+234
+0:23:10.040 --> 0:23:13.760
+at its guaranteed high frequency mode and there's a command line parameter that you
+
+235
+0:23:13.760 --> 0:23:21.240
+can set that basically clamps the maximum speed to the guaranteed frequency. You could
+
+236
+0:23:21.240 --> 0:23:29.140
+also lower the frequency to something less than the guaranteed frequency. There's a point
+
+237
+0:23:29.140 --> 0:23:33.600
+an operating point it's called maximum efficiency and there's even points below that where you
+
+238
+0:23:33.600 --> 0:23:38.360
+can clock really high but then it's actually less efficient than this point. So all of
+
+239
+0:23:38.360 --> 0:23:44.720
+that is also supported. So as an overview from a feature comparison perspective ARM
+
+240
+0:23:44.720 --> 0:23:50.520
+versus x86 we support P-states on x86 not on ARM because there is no generic interface
+
+241
+0:23:50.520 --> 0:23:59.880
+on ARM yet. We support all the S-states on x86 like stop clock, suspend resume, hibernation
+
+242
+0:23:59.880 --> 0:24:06.940
+power off, platform reset. On ARM there's no such concept as S1 but we also support
+
+243
+0:24:06.940 --> 0:24:14.400
+suspend resume and suspend to disk if it's supported and what does it mean if it's supported
+
+244
+0:24:14.400 --> 0:24:20.280
+it means if platform firmware like PSCI implements it and there are some features that are mandatory
+
+245
+0:24:20.280 --> 0:24:25.000
+and some features that are optional. Suspend resume for example works great on the NXP
+
+246
+0:24:25.000 --> 0:24:30.480
+IMAX8M that Stefan had for his demo. It doesn't work so great on Raspberry Pi because the
+
+247
+0:24:30.480 --> 0:24:37.080
+firmware simply has no support for jumping back to the operating system after a suspend.
+
+248
+0:24:37.080 --> 0:24:43.800
+So it's not a Nova limitation. There's a new suspend feature called low power idle which
+
+249
+0:24:43.800 --> 0:24:47.880
+we don't support yet because it requires way more support than just Nova. It basically
+
+250
+0:24:47.880 --> 0:24:52.720
+requires powering down the GPU, powering down all the devices, powering down all the links
+
+251
+0:24:52.720 --> 0:24:59.240
+so this is a concerted platform effort. But from a hypercore perspective the hypercore
+
+252
+0:24:59.240 --> 0:25:05.800
+that you would invoke to transition the platform to a sleep set is called control hardware
+
+253
+0:25:05.800 --> 0:25:10.320
+and whenever you try to invoke it with something that's not supported it returns bad feature
+
+254
+0:25:10.320 --> 0:25:16.960
+and for the hypercalls that assign devices or interrupts the state that the system had
+
+255
+0:25:16.960 --> 0:25:23.160
+when you assigned devices or interrupts to particular domains will completely be preserved
+
+256
+0:25:23.160 --> 0:25:29.160
+across the suspend resume calls using this safety high-level state approach.
+
+257
+0:25:29.160 --> 0:25:36.000
+So next I'll talk about some radical API change that we made and being a microkernel and not
+
+258
+0:25:36.000 --> 0:25:42.720
+being Linux we don't have to remain backward compatible so that's one of these major API
+
+259
+0:25:42.720 --> 0:25:50.920
+changes that took quite a lot of time to implement. What we had in the past was basically an interface
+
+260
+0:25:50.920 --> 0:25:55.280
+with five kernel objects, protection domains, execution context, scheduling context, portals
+
+261
+0:25:55.280 --> 0:26:00.520
+and summer force and every protection domain looked as shown on this slide. It actually
+
+262
+0:26:00.520 --> 0:26:08.000
+had six resource spaces built into it. An object space which hosts capabilities to all
+
+263
+0:26:08.000 --> 0:26:13.000
+the kernel objects that you have access to, a host space which represents the stage one
+
+264
+0:26:13.000 --> 0:26:19.800
+page table, a guest space which represents the stage two guest page table, the M.A. space
+
+265
+0:26:19.800 --> 0:26:26.440
+for memory transactions that are remapped by the IOMU, port I.O. space and an MSR space.
+
+266
+0:26:26.440 --> 0:26:31.240
+So all of these existed in one single instance in every protection domain and when you created
+
+267
+0:26:31.240 --> 0:26:36.320
+a host EC, a guest EC like a virtual CPU or device they were automatically bound to the
+
+268
+0:26:36.320 --> 0:26:43.360
+PD and picking up the spaces that they needed. And that is, that worked great for us for
+
+269
+0:26:43.360 --> 0:26:48.640
+more than ten years but it turned out to be suboptimal for some more advanced use cases
+
+270
+0:26:48.640 --> 0:26:54.200
+like nested virtualization. If you run a hypervisor inside a virtual machine and that hypervisor
+
+271
+0:26:54.200 --> 0:27:00.340
+creates multiple guests itself then you suddenly need more than one guest space. You need one
+
+272
+0:27:00.340 --> 0:27:07.080
+guest space per sub-guest. So you need multiple of these yellow guest spaces. Or when you
+
+273
+0:27:07.080 --> 0:27:12.600
+virtualize the SMMU and the SMMU has multiple contexts and every context has its own page
+
+274
+0:27:12.600 --> 0:27:17.720
+table then you suddenly need more than one DMA space. So you need more of these blue
+
+275
+0:27:17.720 --> 0:27:23.000
+boxes and the same can be said for port I.O. and MSR spaces. So how do we get more than
+
+276
+0:27:23.000 --> 0:27:30.280
+one if the protection domain has all these singleton? So what we did and it was quite
+
+277
+0:27:30.280 --> 0:27:36.440
+a major API in internal reshuffling is we separated these spaces from the protection
+
+278
+0:27:36.440 --> 0:27:43.040
+domain. There are now new first class objects. So Nova just got six new kernel objects that
+
+279
+0:27:43.040 --> 0:27:48.400
+you get when you create them you get individual capabilities for them and you can manage them
+
+280
+0:27:48.400 --> 0:27:54.720
+independently from the protection domain. So the way that this works is first you create
+
+281
+0:27:54.720 --> 0:28:00.560
+a protection domain with create PD then you create one or more of these spaces again with
+
+282
+0:28:00.560 --> 0:28:05.520
+create PD so that's a sub-function of create PD and then you create an EC like a host EC
+
+283
+0:28:05.520 --> 0:28:11.200
+and it binds to those spaces that are relevant for host EC. So host EC like a hyper spread
+
+284
+0:28:11.200 --> 0:28:16.440
+needs capabilities so it needs an object space it binds to that it needs a stage one page
+
+285
+0:28:16.440 --> 0:28:22.040
+table so it binds to that and it needs access to ports so it binds to that on x86 only because
+
+286
+0:28:22.040 --> 0:28:29.160
+on ARM there's no such thing. So for host thread all these assignments are static. We
+
+287
+0:28:29.160 --> 0:28:34.400
+could make them flexible but we have not found a need. It gets more interesting for a guest
+
+288
+0:28:34.400 --> 0:28:39.680
+EC which is a virtual CPU that runs in a guest. So again the sequence is the same you first
+
+289
+0:28:39.680 --> 0:28:44.640
+create a protection domain then you create one or more of these spaces and when you create
+
+290
+0:28:44.640 --> 0:28:49.240
+the virtual CPU it binds to those spaces that it urgently needs which is the object space
+
+291
+0:28:49.240 --> 0:28:54.920
+and the host space. It does not yet bind to any of the flexible spaces shown to the right
+
+292
+0:28:54.920 --> 0:29:04.280
+and that binding is established on the startup IPC during IPC reply you pass selectors capability
+
+293
+0:29:04.280 --> 0:29:09.880
+selectors to these spaces that you want to attach to and then you flexibly bind to those
+
+294
+0:29:09.880 --> 0:29:16.880
+spaces as denoted by these dashed lines and that assignment can be changed on every event
+
+295
+0:29:16.880 --> 0:29:22.960
+so every time you take a VM exit Nova synthesizes an exception IPC or architectural IPC sends
+
+296
+0:29:22.960 --> 0:29:29.480
+it to the VM for handling and when the VM replies it can set a bit in the message transfer
+
+297
+0:29:29.480 --> 0:29:34.480
+descriptor to say I want to change the space assignment it passes new selectors and then
+
+298
+0:29:34.480 --> 0:29:40.360
+you can flexibly switch between those spaces and that allows us to implement for example
+
+299
+0:29:40.360 --> 0:29:46.960
+nested virtualization. The same for a device which in x86 is represented by a bus device
+
+300
+0:29:46.960 --> 0:29:54.040
+function or an arm is represented by a stream ID the assigned depth hypercall can flexibly
+
+301
+0:29:54.040 --> 0:30:01.760
+rebind the device to a DMA space at any time. So that took quite a while to implement but
+
+302
+0:30:01.760 --> 0:30:07.520
+it gives us so much more flexibility and I heard that some of the Nova forks have come
+
+303
+0:30:07.520 --> 0:30:13.320
+across the same problem so maybe that's something that could work for you too.
+
+304
+0:30:13.320 --> 0:30:18.240
+So let's talk about page tables and I mentioned earlier that page tables are actually generic
+
+305
+0:30:18.240 --> 0:30:24.520
+code which is somewhat surprising. Nova manages three page tables per architecture the stage
+
+306
+0:30:24.520 --> 0:30:30.080
+one which is a host page table the stage two which is the guest page table and a DMA page
+
+307
+0:30:30.080 --> 0:30:34.440
+table which is used by the IOMU and these correspond to the three memory spaces that
+
+308
+0:30:34.440 --> 0:30:39.320
+I showed in the previous slide. And the way we made this page table code architecture
+
+309
+0:30:39.320 --> 0:30:45.920
+independent is by using a template base class which is completely logless so it's very scalable
+
+310
+0:30:45.920 --> 0:30:51.400
+and the reason why it can be logless is because the IOMU doesn't honor any software logs anyway
+
+311
+0:30:51.400 --> 0:30:55.120
+so if you put a log around your page table infrastructure the IOMU wouldn't know anything
+
+312
+0:30:55.120 --> 0:31:01.520
+about those logs. So it has to be written in a way that it does atomic transformations
+
+313
+0:31:01.520 --> 0:31:08.200
+anyway so that the IOMU never sees an inconsistent state. And once you have this there's also
+
+314
+0:31:08.200 --> 0:31:13.920
+no need to put the log around it for any software updates so that's completely log free. And
+
+315
+0:31:13.920 --> 0:31:17.800
+that architecture independent base class deals with all the complexities of allocating and
+
+316
+0:31:17.800 --> 0:31:24.120
+deallocating page tables splitting super pages into page tables or over mapping page tables
+
+317
+0:31:24.120 --> 0:31:31.600
+with super pages and you can derive architecture specific subclasses from it and the subclasses
+
+318
+0:31:31.600 --> 0:31:36.800
+themselves inject themselves as a parameter to the base class that's called the Curiously
+
+319
+0:31:36.800 --> 0:31:41.680
+Recurring Template Pattern. And the subclasses then do the transformation between the high
+
+320
+0:31:41.680 --> 0:31:46.720
+level attributes like this page is readable, writable, user accessible, whatever into the
+
+321
+0:31:46.720 --> 0:31:53.000
+individual bits encoding of the page table entries as that architecture needs it. And
+
+322
+0:31:53.000 --> 0:31:58.040
+also there are some coherency requirements on ARM and some coherency requirements between
+
+323
+0:31:58.040 --> 0:32:03.680
+SMUs that don't snoop the caches so these architecture specific subclasses deal with
+
+324
+0:32:03.680 --> 0:32:10.040
+all that complexity but it allows us to share the page table class and to specify and verify
+
+325
+0:32:10.040 --> 0:32:15.560
+it only once. So let's look at page tables in a little bit more detail because there
+
+326
+0:32:15.560 --> 0:32:22.440
+are some interesting stuff you need to do on ARM. So most of you who've been in an OS
+
+327
+0:32:22.440 --> 0:32:27.280
+or who've written a microkernel will have come across this page table format where an
+
+328
+0:32:27.280 --> 0:32:32.080
+input address like a host virtual or guest physical address is split up into an offset
+
+329
+0:32:32.080 --> 0:32:40.200
+portion into the final page 12 bits and then you have 9 bits indexing into the individual
+
+330
+0:32:40.200 --> 0:32:46.040
+levels of the page table. So when an address is transformed by the MMU into a virtual address
+
+331
+0:32:46.040 --> 0:32:52.080
+into a physical address the MMU first uses bits 30 to 38 to index into the level 2 page
+
+332
+0:32:52.080 --> 0:32:58.400
+table to find the level 1 and then to find the level 0 and the walk can terminate early
+
+333
+0:32:58.400 --> 0:33:03.560
+you can have a leaf page at any level so it gives you 1 gigabyte, 2 megabyte or 4k super
+
+334
+0:33:03.560 --> 0:33:09.600
+patches. And with that page table structure like this, 3 levels you can create an address
+
+335
+0:33:09.600 --> 0:33:17.200
+space of 512 gigabytes of size and that should be good enough but it turns out we came across
+
+336
+0:33:17.200 --> 0:33:23.080
+several ARM platforms which have an address space size of 1 terabyte. So twice that they
+
+337
+0:33:23.080 --> 0:33:29.840
+need one extra bit which you can't represent with 39 bits so you have a 40 bit address
+
+338
+0:33:29.840 --> 0:33:36.480
+space. So what would you do if you were designing a chip? You would expect that it would just
+
+339
+0:33:36.480 --> 0:33:43.680
+open a new level here and that you get a 4 level page table. But ARM decided differently
+
+340
+0:33:43.680 --> 0:33:48.760
+because they said if I just add one bit the level 3 page table would have just two entries
+
+341
+0:33:48.760 --> 0:33:56.280
+and that's not worse building basically another level into it. So what they did is they came
+
+342
+0:33:56.280 --> 0:34:00.880
+up with a concept called the concatenated page table and it makes the level 2 page table
+
+343
+0:34:00.880 --> 0:34:06.120
+twice as large by adding another bit at the top. So now suddenly the level 2 page table
+
+344
+0:34:06.120 --> 0:34:13.480
+has 10 bits of indexing and the backing page table has 1024 entries and it's 8k in size.
+
+345
+0:34:13.480 --> 0:34:18.080
+And this concept was extended so if you go to 41 address space again you get one additional
+
+346
+0:34:18.080 --> 0:34:24.400
+bit and the page table gets larger and this keeps going on. It can extend to up to 4 bits
+
+347
+0:34:24.400 --> 0:34:33.080
+that the level 2 page table is 64k in size. And there's no way around it. The only time
+
+348
+0:34:33.080 --> 0:34:39.040
+at which you can actually open the level 3 is when you exceed 44 bits and then when you
+
+349
+0:34:39.040 --> 0:34:46.400
+get 44 bits you can go to a 4 level and it looks like this. So the functionality that
+
+350
+0:34:46.400 --> 0:34:52.520
+we also had to add to Nova is to comprehend this concatenated page table format so that
+
+351
+0:34:52.520 --> 0:34:58.000
+we can deal with arbitrary address space sizes on ARM. And we actually had a device, I think
+
+352
+0:34:58.000 --> 0:35:05.560
+it was a Xilinx DCU102 which had something mapped above 512 gigabytes and just below
+
+353
+0:35:05.560 --> 0:35:09.080
+1 terabyte and you can't pass that through to a guest if you don't have concatenated
+
+354
+0:35:09.080 --> 0:35:15.400
+page chips. So the generic page table cluster we have right now is so flexible that it can
+
+355
+0:35:15.400 --> 0:35:21.960
+basically do what's shown on this slide. And the simple case is x86. You have 3 level,
+
+356
+0:35:21.960 --> 0:35:27.240
+4 level of high level page tables with a uniform structure of 9 bits per level and 12 offset
+
+357
+0:35:27.240 --> 0:35:33.640
+bits. 39 isn't used by the MMU but might be used by the SMMU and the MMU typically uses
+
+358
+0:35:33.640 --> 0:35:43.800
+4 levels and in high end boxes like servers for 57. On ARM, depending on what type of
+
+359
+0:35:43.800 --> 0:35:53.480
+SOC you have, it either has something between 32 or up to 52 physical address bits and the
+
+360
+0:35:53.480 --> 0:35:58.120
+table shows the page table level split, the indexing split that Nova has to do and all
+
+361
+0:35:58.120 --> 0:36:06.120
+these colored boxes are basically instances of concatenated page tables. So 42 would require
+
+362
+0:36:06.120 --> 0:36:10.880
+3 bits to be concatenated. Here we have 4, here we have 1, here we have 2. So we really
+
+363
+0:36:10.880 --> 0:36:17.720
+have to exercise all of those and we support all of those. And unlike the past where Nova
+
+364
+0:36:17.720 --> 0:36:23.640
+said page tables is so many levels per so many bits, we now have turned this around
+
+365
+0:36:23.640 --> 0:36:29.120
+by saying the page table covers so many bits and we can compute the number of bits per
+
+366
+0:36:29.120 --> 0:36:36.520
+level and the concatenation at the top level automatically in the code. So that was another
+
+367
+0:36:36.520 --> 0:36:45.040
+fairly invasive change. While we were at re-architecting all the page tables, we took advantage of
+
+368
+0:36:45.040 --> 0:36:51.160
+a new feature that Intel added to Ice Lake servers and to all the Lake desktop platforms
+
+369
+0:36:51.160 --> 0:36:56.760
+which is called total memory encryption with multiple keys. And what Intel did there is
+
+370
+0:36:56.760 --> 0:37:02.520
+they repurposed certain bits of the physical address in the page table entry, the top bits
+
+371
+0:37:02.520 --> 0:37:08.760
+shown here as key ID bits. And so it's stealing some bits from the physical address and the
+
+372
+0:37:08.760 --> 0:37:17.800
+key ID bits indexed into a key programming table shown here that basically select a slot
+
+373
+0:37:17.800 --> 0:37:24.440
+and let's say you have 4 key bits that gives you 16 keys, 2 to the power 4. So your key
+
+374
+0:37:24.440 --> 0:37:29.280
+indexing or your key programming table would have the opportunity to program 16 different
+
+375
+0:37:29.280 --> 0:37:36.000
+keys. We've also come across platforms that have 6 bits. It's basically flexible how many
+
+376
+0:37:36.000 --> 0:37:41.680
+bits are stolen from the physical address can vary per platform depending on how many
+
+377
+0:37:41.680 --> 0:37:46.400
+keys are supported. And those keys are used by a component called the memory encryption
+
+378
+0:37:46.400 --> 0:37:55.240
+engine. The memory encryption engine sits at the perimeter of the package or the socket,
+
+379
+0:37:55.240 --> 0:38:01.000
+basically at the boundary where data leaves the chip that you plug in the socket and enters
+
+380
+0:38:01.000 --> 0:38:07.280
+the interconnect and enters RAM. So inside this green area which is inside the SOC, everything
+
+381
+0:38:07.280 --> 0:38:12.200
+is unencrypted in the cores, in the caches, in the internal data structure. But as it
+
+382
+0:38:12.200 --> 0:38:17.600
+leaves the die and moves out to the interconnect, it gets encrypted automatically by the memory
+
+383
+0:38:17.600 --> 0:38:23.960
+encryption engine with the key. And this example shows a separate key being used for each virtual
+
+384
+0:38:23.960 --> 0:38:28.280
+machine which is a typical use case but it's actually way more flexible than that. You
+
+385
+0:38:28.280 --> 0:38:34.480
+can select the key on a per page basis. So you could even say if there was a need for
+
+386
+0:38:34.480 --> 0:38:38.800
+these two VMs to share some memory that some blue pages would appear here and some yellow
+
+387
+0:38:38.800 --> 0:38:45.400
+pages would appear here. That's possible. So we added support in the page tables for
+
+388
+0:38:45.400 --> 0:38:52.000
+encoding these key ID bits. We added support for using the P-config instruction for programming
+
+389
+0:38:52.000 --> 0:38:57.720
+keys into the memory encryption engine. And the keys can come in two forms. You can either
+
+390
+0:38:57.720 --> 0:39:02.140
+randomly generate them, in which case Nova will also drive the digital random number
+
+391
+0:39:02.140 --> 0:39:08.040
+generator to generate entropy, or you can program tenant keys. So you can say I want
+
+392
+0:39:08.040 --> 0:39:13.400
+to use this particular AS key for encrypting the memory. And that's useful for things like
+
+393
+0:39:13.400 --> 0:39:20.640
+VM migration where you want to take an encrypted VM and move it from one machine to another.
+
+394
+0:39:20.640 --> 0:39:26.600
+And the reason why Intel introduced this feature is for confidential computing but also because
+
+395
+0:39:26.600 --> 0:39:33.520
+DRAM is slowly moving towards non-volatile RAM. And an offline either made a tag or so
+
+396
+0:39:33.520 --> 0:39:39.440
+where somebody unplugs your RAM or takes your non-volatile RAM and then looks at it in another
+
+397
+0:39:39.440 --> 0:39:46.880
+computer is a big problem. And they can still unplug your RAM but they would only see ciphertext.
+
+398
+0:39:46.880 --> 0:39:53.920
+So next thing we looked at was, so this was more of a confidentiality improvement. Next
+
+399
+0:39:53.920 --> 0:40:03.480
+thing we looked at is improving the availability. And we added some support for dealing with
+
+400
+0:40:03.480 --> 0:40:07.920
+noisy neighbor domains. So what are noisy neighbor domains? Let's say you have a quad
+
+401
+0:40:07.920 --> 0:40:12.720
+core system as shown on this slide. And you have a bunch of virtual machines as shown
+
+402
+0:40:12.720 --> 0:40:18.560
+at the top. On some cores you may over provision the cores, run more than one VM, like on core
+
+403
+0:40:18.560 --> 0:40:24.960
+0 and core 1. For some use cases you might want to run a single VM on a core only like
+
+404
+0:40:24.960 --> 0:40:31.880
+a real-time VM which is exclusively assigned to core 2. But then on some cores like shown
+
+405
+0:40:31.880 --> 0:40:37.080
+on the far right you may have a VM that's somewhat misbehaving. And somewhat misbehaving
+
+406
+0:40:37.080 --> 0:40:43.040
+means it uses excessive amounts of memory and basically evicts everybody else out of
+
+407
+0:40:43.040 --> 0:40:48.680
+the cache. So if you look at the last level cache portion here, the amount of cache that
+
+408
+0:40:48.680 --> 0:40:54.840
+is assigned to the noisy VM is very disproportionate to the amount of cache given to the other
+
+409
+0:40:54.840 --> 0:41:02.160
+VM simply because this is trampling all over memory. And this is very undesirable from
+
+410
+0:41:02.160 --> 0:41:06.920
+a predictability perspective, especially if you have a VM like the green one that's real-time
+
+411
+0:41:06.920 --> 0:41:11.520
+which may want to have most of its working set in the cache. So is there something we
+
+412
+0:41:11.520 --> 0:41:19.960
+can do about it? And yes, there is. It's called CAT. CAT is Intel's acronym for Cache Allocation
+
+413
+0:41:19.960 --> 0:41:26.400
+Technology and what they added in the hardware is a concept called Class of Service. And
+
+414
+0:41:26.400 --> 0:41:31.360
+you can think of Class of Service as a number and again like the key ID there's a limited
+
+415
+0:41:31.360 --> 0:41:37.760
+number of classes of service available like 4 or 16 and you can assign this Class of Service
+
+416
+0:41:37.760 --> 0:41:42.120
+number to each entity that shares the cache. So you could make it a property of a protection
+
+417
+0:41:42.120 --> 0:41:49.640
+domain or a property of a thread. And for each of the classes of service you can program
+
+418
+0:41:49.640 --> 0:41:55.960
+a capacity bitmask which says what proportion of the cache can this Class of Service use?
+
+419
+0:41:55.960 --> 0:42:02.880
+Can it use 20%, 50% and even which portion? There are some limitations like the bitmask
+
+420
+0:42:02.880 --> 0:42:10.120
+must be contiguous but they can overlap for sharing and there's a model specific register
+
+421
+0:42:10.120 --> 0:42:14.360
+which is not cheap to program where you can say this is the active class of service on
+
+422
+0:42:14.360 --> 0:42:17.560
+this core right now. So this is something you would have to contact switch to say I'm
+
+423
+0:42:17.560 --> 0:42:22.720
+now using something else. And when you use this it improves the predictability like the
+
+424
+0:42:22.720 --> 0:42:27.560
+worst case execution time quite nicely and that's what it was originally designed for
+
+425
+0:42:27.560 --> 0:42:33.800
+but it turns out it also helps tremendously with dealing with cache side channel attacks
+
+426
+0:42:33.800 --> 0:42:39.640
+because if you can partition your cache in such a way that your attacker doesn't allocate
+
+427
+0:42:39.640 --> 0:42:46.480
+into the same ways as the VM you're trying to protect then all the flush and reload attacks
+
+428
+0:42:46.480 --> 0:42:55.160
+simply don't work. So here's an example for how this works and to the right I've shown
+
+429
+0:42:55.160 --> 0:43:06.320
+an example number of six classes of service and a cache which has 20 ways. And you can
+
+430
+0:43:06.320 --> 0:43:10.960
+program and this is again just an example you can program the capacity bitmask for each
+
+431
+0:43:10.960 --> 0:43:16.200
+class of service for example to create full isolation. So you could say class of service
+
+432
+0:43:16.200 --> 0:43:23.660
+gets 40% of the cache, ways 0 through 7 and class of service 1 gets 20% and everybody
+
+433
+0:43:23.660 --> 0:43:30.240
+else gets 10% and these capacity bitmas don't overlap at all which means you get zero interference
+
+434
+0:43:30.240 --> 0:43:38.400
+through the level 3 cache. You could also program them to overlap. There's another mode
+
+435
+0:43:38.400 --> 0:43:43.920
+which is called CDP, code and data prioritization, which splits the number of classes of service
+
+436
+0:43:43.920 --> 0:43:49.480
+in half and basically redefines the meaning of these bitmas to say those with an even
+
+437
+0:43:49.480 --> 0:43:54.680
+number are for data and those with an odd number are for code. So you can even discriminate
+
+438
+0:43:54.680 --> 0:43:59.400
+how the cache is being used between code and data. It gives you more fine-grained control
+
+439
+0:43:59.400 --> 0:44:08.080
+and the Nova API forces users to declare upfront whether they want to use cat or CDP to partition
+
+440
+0:44:08.080 --> 0:44:12.440
+their cache and only after you've made that decision can you actually configure the capacity
+
+441
+0:44:12.440 --> 0:44:17.360
+bitmas. So with CDP it would look like this. You get three classes of service instead of
+
+442
+0:44:17.360 --> 0:44:24.680
+six distinguished between D and C, data and code and you could for example say class of
+
+443
+0:44:24.680 --> 0:44:33.080
+service 1 as shown on the right gets 20% of the cache for data, 30% of cache for the code
+
+444
+0:44:33.080 --> 0:44:38.200
+so 50% of the capacity in total exclusively assigned to anybody who is class of service
+
+445
+0:44:38.200 --> 0:44:43.280
+1 and the rest shares capacity bitmas and here you see an example of how the bitmas
+
+446
+0:44:43.280 --> 0:44:49.400
+can overlap and wherever they overlap the cache capacity is being competitively shared.
+
+447
+0:44:49.400 --> 0:44:55.640
+So that's also a new feature that we support right now. Now the question is class of service
+
+448
+0:44:55.640 --> 0:45:01.360
+is something you need to assign to cache sharing entities to what type of object do you assign
+
+449
+0:45:01.360 --> 0:45:06.440
+that and you could assign it to a protection domain. You could say every box on the architecture
+
+450
+0:45:06.440 --> 0:45:12.140
+slide gets assigned a certain class of service and the question is then what do you assign
+
+451
+0:45:12.140 --> 0:45:18.000
+to a server that has multiple clients. It's really unfortunate and what it also means
+
+452
+0:45:18.000 --> 0:45:22.920
+is if you have a protection domain that spends multiple cores and you say I want this protection
+
+453
+0:45:22.920 --> 0:45:27.880
+domain to use 40% of the cache you have to program the class of service settings on all
+
+454
+0:45:27.880 --> 0:45:33.240
+cores the same way. So it's really a loss of flexibility. So that wasn't our favorite
+
+455
+0:45:33.240 --> 0:45:38.800
+choice and you said maybe we should assign class of service to execution contexts instead
+
+456
+0:45:38.800 --> 0:45:43.320
+and again the question is what class of service do you assign to a server execution context
+
+457
+0:45:43.320 --> 0:45:48.560
+that does work on behalf of clients and the actual killer argument was that you would
+
+458
+0:45:48.560 --> 0:45:53.200
+need to set the class of service in this model specific register again during each context
+
+459
+0:45:53.200 --> 0:46:00.120
+switch which is really bad for performance. So even option two is not what we went for.
+
+460
+0:46:00.120 --> 0:46:04.640
+Instead we made the class of service a property of the scheduling context and it has very
+
+461
+0:46:04.640 --> 0:46:09.480
+nice properties. We only need to conduct switches during scheduling decisions so the cost of
+
+462
+0:46:09.480 --> 0:46:16.680
+reprogramming that MSR is really not relevant anymore and it extends the already existing
+
+463
+0:46:16.680 --> 0:46:21.920
+model of time and priority donation with class of service donation. So a server does not
+
+464
+0:46:21.920 --> 0:46:26.600
+need to have a class of service assigned to it at all. It uses the class of service of
+
+465
+0:46:26.600 --> 0:46:34.600
+its clients. So if let's say your server implements some file system then the amount of cache
+
+466
+0:46:34.600 --> 0:46:38.840
+that it can use depends on whether your client can use a lot of cache or whether your client
+
+467
+0:46:38.840 --> 0:46:44.000
+cannot use a lot of cache. So it's a nice extension of an existing feature and the additional
+
+468
+0:46:44.000 --> 0:46:49.360
+benefit is that the class of service can be programmed differently per core. So eight
+
+469
+0:46:49.360 --> 0:46:54.800
+cores times six classes of service gives you 48 classes of service in total instead of
+
+470
+0:46:54.800 --> 0:47:05.000
+six. So that was a feature for availability. We also added some features for integrity.
+
+471
+0:47:05.000 --> 0:47:10.280
+And if you look at the history there's a long history of features being added to paging
+
+472
+0:47:10.280 --> 0:47:16.400
+that improve the integrity of code against injection attacks. And it all started out
+
+473
+0:47:16.400 --> 0:47:23.680
+many years ago with these 64 bit architecture where you could mark pagers non-executable
+
+474
+0:47:23.680 --> 0:47:30.080
+and you could basically enforce that pagers are either writable or executable but never
+
+475
+0:47:30.080 --> 0:47:35.700
+both. So there's no confusion between data and code. And then over the years more features
+
+476
+0:47:35.700 --> 0:47:42.240
+were added like supervisor mode execution prevention where if you use that feature kernel
+
+477
+0:47:42.240 --> 0:47:48.000
+code can never jump into a user page and be confused as executing some user code. And
+
+478
+0:47:48.000 --> 0:47:51.800
+then there's another feature called supervisor mode access prevention which even says kernel
+
+479
+0:47:51.800 --> 0:47:57.680
+code can never without explicitly declaring that it wants to do that read some user data
+
+480
+0:47:57.680 --> 0:48:04.560
+page. So all of these tighten the security and naturally Nova supports them. There's
+
+481
+0:48:04.560 --> 0:48:10.520
+a new one called mode based execution control which is only relevant for guest page tables
+
+482
+0:48:10.520 --> 0:48:15.480
+or stage two which gives you two separate execution bits. So there's not a single X
+
+483
+0:48:15.480 --> 0:48:22.280
+bit there's no executable for user and executable for super user. And that is a feature that
+
+484
+0:48:22.280 --> 0:48:27.120
+ultra security can for example use where we can say even if the guest screws up its page
+
+485
+0:48:27.120 --> 0:48:34.480
+tables its stage one page tables the stage two page tables can still say Linux user applications
+
+486
+0:48:34.480 --> 0:48:43.080
+or Linux kernel code can never execute Linux user application code if it's marked as XS
+
+487
+0:48:43.080 --> 0:48:47.160
+in the stage two page tables. So it's again a feature that can tighten the security of
+
+488
+0:48:47.160 --> 0:48:53.040
+guest operating systems from the host. But even if you have all that there's still opportunities
+
+489
+0:48:53.040 --> 0:48:58.600
+for code injection and these classes of attacks basically reuse existing code snippets and
+
+490
+0:48:58.600 --> 0:49:05.480
+chain them together in interesting ways using control flow hijacking like ROP attacks and
+
+491
+0:49:05.480 --> 0:49:10.520
+I'm not sure who's familiar with ROP attacks it's basically you create a call stack with
+
+492
+0:49:10.520 --> 0:49:15.160
+lots of return addresses that chain together simple code snippets like at this register
+
+493
+0:49:15.160 --> 0:49:20.720
+return multiply this register return jump to this function return and by chaining them
+
+494
+0:49:20.720 --> 0:49:26.000
+all together you can build programs out of existing code snippets that do what the attacker
+
+495
+0:49:26.000 --> 0:49:30.480
+wants you don't have to inject any code you simply find snippets in existing code that
+
+496
+0:49:30.480 --> 0:49:36.440
+do what you want. And this doesn't work so well on ARM it still works on ARM but on ARM
+
+497
+0:49:36.440 --> 0:49:42.320
+the instruction length is fixed to four bytes so you can't jump into the middle of instructions
+
+498
+0:49:42.320 --> 0:49:49.220
+but on x86 with the flexible instruction size you can even jump into the middle of instructions
+
+499
+0:49:49.220 --> 0:49:55.320
+and completely reinterpret what existing code looks like and that's quite unfortunate so
+
+500
+0:49:55.320 --> 0:50:01.920
+there's a feature that tightens the security around that and it's called control flow enforcement
+
+501
+0:50:01.920 --> 0:50:10.160
+technology or CET and that feature adds integrity to the control flow graph both to the forward
+
+502
+0:50:10.160 --> 0:50:15.600
+edge and to the backward edge and forward edge basically means you protect jumps or
+
+503
+0:50:15.600 --> 0:50:20.560
+calls that jump from one location forward to somewhere else and the way that this works
+
+504
+0:50:20.560 --> 0:50:27.120
+is that the legitimate jump destination where you want the jump to land this landing pad
+
+505
+0:50:27.120 --> 0:50:31.980
+must have a specific end branch instruction placed there and if you try to jump to a place
+
+506
+0:50:31.980 --> 0:50:37.520
+which doesn't have an end branch landing pad then you get the control flow violation exception
+
+507
+0:50:37.520 --> 0:50:42.640
+so you need the help of the compiler to put that landing pad at the beginning of every
+
+508
+0:50:42.640 --> 0:50:48.480
+legitimate function and luckily GCC and other compilers have had that support for quite
+
+509
+0:50:48.480 --> 0:50:55.040
+a while so GCC since 8 and we are now at 12 so that works for forward edges. For backward
+
+510
+0:50:55.040 --> 0:50:59.560
+edges there's another feature called shadow stack and that protects the return addresses
+
+511
+0:50:59.560 --> 0:51:07.160
+on your stack and we'll have an example later and it basically has a shadow call stack which
+
+512
+0:51:07.160 --> 0:51:13.960
+you can't write to. It's protected by paging and if it's writable then it won't be usable
+
+513
+0:51:13.960 --> 0:51:21.440
+as a shadow stack and you can independently compile Nova with branch protection, with
+
+514
+0:51:21.440 --> 0:51:27.880
+return address protection or both. So let's look at indirect branch tracking and I try
+
+515
+0:51:27.880 --> 0:51:33.640
+to come up with a good example and I actually found a function in Nova which is suitable
+
+516
+0:51:33.640 --> 0:51:40.480
+to explaining how this works. Nova has a body allocator that can allocate contiguous chunks
+
+517
+0:51:40.480 --> 0:51:45.480
+of memory and that body allocator has a free function where you basically return an address
+
+518
+0:51:45.480 --> 0:51:52.080
+and say free this block and the function is really as simple as shown there. It just consists
+
+519
+0:51:52.080 --> 0:51:56.920
+of these few instructions because it's a tail call that jumps to some coalescing function
+
+520
+0:51:56.920 --> 0:52:02.160
+here later and you don't have to understand all the complicated assembler but suffice
+
+521
+0:52:02.160 --> 0:52:06.880
+it to say that there's a little test here of these two instructions which performs some
+
+522
+0:52:06.880 --> 0:52:13.040
+meaningful check and you know that you can't free a null pointer. So this test checks if
+
+523
+0:52:13.040 --> 0:52:17.600
+the address passed as the first parameter is a null pointer and if so it jumps out right
+
+524
+0:52:17.600 --> 0:52:22.960
+here so basically the function does nothing, does no harm, it's basically a knob. Let's
+
+525
+0:52:22.960 --> 0:52:27.720
+say an attacker actually wanted to compromise memory and instead of jumping to the beginning
+
+526
+0:52:27.720 --> 0:52:32.600
+of this function it wanted to jump past that check to this red instruction to bypass the
+
+527
+0:52:32.600 --> 0:52:37.120
+check and then corrupt memory. Without control flow enforcement that would be possible if
+
+528
+0:52:37.120 --> 0:52:42.160
+the attacker could gain execution but with control flow it wouldn't work because when
+
+529
+0:52:42.160 --> 0:52:47.400
+you do a call or jump you have to land on an end branch instruction and the compiler
+
+530
+0:52:47.400 --> 0:52:52.560
+has put that instruction there. So if an attacker managed to get control and try to jump to
+
+531
+0:52:52.560 --> 0:52:59.720
+a vtable or some indirect pointer to this address you would immediately crash. So this
+
+532
+0:52:59.720 --> 0:53:07.320
+is how indirect branch tracking works. Shadow stacks work like this. With a normal data
+
+533
+0:53:07.320 --> 0:53:10.960
+stack you have your local variables on your stack, you have the parameters for the next
+
+534
+0:53:10.960 --> 0:53:14.960
+function on the stack so the green function wants to call the blue function and then when
+
+535
+0:53:14.960 --> 0:53:19.040
+you do the call instruction the return address gets put on your stack. Then the blue function
+
+536
+0:53:19.040 --> 0:53:23.160
+puts its local variables on the stack, wants to call the yellow function, puts the parameters
+
+537
+0:53:23.160 --> 0:53:26.760
+for the yellow function on the stack, calls the yellow function so the return address
+
+538
+0:53:26.760 --> 0:53:31.440
+for the blue function gets put on a stack. And you see in the stack goes downward and
+
+539
+0:53:31.440 --> 0:53:35.920
+you see that the return address always lives above the local variables. So if you're local
+
+540
+0:53:35.920 --> 0:53:41.600
+variables if you allocate an array on a stack and you don't have proper bounce checking
+
+541
+0:53:41.600 --> 0:53:46.320
+it's possible to overwrite the return address by writing pass the array and this is a popular
+
+542
+0:53:46.320 --> 0:53:52.460
+attack technique buffer overflow exploits that you find in the wild. So if you have
+
+543
+0:53:52.460 --> 0:53:59.280
+code that is potentially susceptible to these kind of return address overwrites then you
+
+544
+0:53:59.280 --> 0:54:03.280
+could benefit from shadow stacks. And the way that this works is there's a separate
+
+545
+0:54:03.280 --> 0:54:09.480
+stack this shadow stack which is protected by paging so you can't write to it with any
+
+546
+0:54:09.480 --> 0:54:14.080
+ordinary memory instructions it's basically invisible and the only instructions that can
+
+547
+0:54:14.080 --> 0:54:19.280
+write to it are call and read instructions and some shadow management instructions. And
+
+548
+0:54:19.280 --> 0:54:23.440
+when the green function calls the blue function the return address will not just be put on
+
+549
+0:54:23.440 --> 0:54:28.200
+the ordinary data stack but will additionally be put on a shadow stack and likewise with
+
+550
+0:54:28.200 --> 0:54:32.360
+the blue and the yellow return address. And whenever you execute a return instruction
+
+551
+0:54:32.360 --> 0:54:36.320
+the hardware will compare the two return addresses that it pops off the two stacks and if they
+
+552
+0:54:36.320 --> 0:54:44.400
+don't match you again get a control flow violation. So that way you can protect the backward edge
+
+553
+0:54:44.400 --> 0:54:48.960
+of the control flow graph also using shadow stacks and that's a feature that Nova uses
+
+554
+0:54:48.960 --> 0:54:56.040
+on Tiger Lake and all the lake and platforms beyond that that have this feature. But there's
+
+555
+0:54:56.040 --> 0:55:05.560
+a problem and the problem is that using shadow stack instructions is possible on newer CPUs
+
+556
+0:55:05.560 --> 0:55:09.800
+that have these instructions that basically have this ISA extension but if you have a
+
+557
+0:55:09.800 --> 0:55:15.200
+binary containing those instructions it would crash on all the CPUs that don't comprehend
+
+558
+0:55:15.200 --> 0:55:20.800
+that. And luckily it will define the end branch instruction to be a knob but some shadow stack
+
+559
+0:55:20.800 --> 0:55:27.920
+instructions are not knobs. So if you try to execute a CET enabled Nova binary on something
+
+560
+0:55:27.920 --> 0:55:35.880
+older without other effort it might crash. So obviously we don't want that. So what Nova
+
+561
+0:55:35.880 --> 0:55:44.520
+does instead it detects at runtime whether CET is supported and if CET is not supported
+
+562
+0:55:44.520 --> 0:55:52.000
+it patches out all these CET instructions in the existing binary to turn them into knobs.
+
+563
+0:55:52.000 --> 0:55:56.520
+And obviously being a microkernel we try to generalize the mechanism. So we generalize
+
+564
+0:55:56.520 --> 0:56:01.280
+that mechanism to be able to rewrite arbitrary assembler snippets from one version to another
+
+565
+0:56:01.280 --> 0:56:05.960
+version. And there's other examples for newer instructions that do better work than older
+
+566
+0:56:05.960 --> 0:56:11.240
+instructions like the X-Save feature set which can save supervisor state or save floating
+
+567
+0:56:11.240 --> 0:56:18.520
+point state in a compact format. And the binary as you build it originally always uses the
+
+568
+0:56:18.520 --> 0:56:23.520
+most sophisticated version. So it uses the most advanced instruction that you can find.
+
+569
+0:56:23.520 --> 0:56:28.400
+And if you run that on some CPU which doesn't support the instruction or which supports
+
+570
+0:56:28.400 --> 0:56:33.440
+some older instruction then we use code patching to rewrite the newer instruction into the
+
+571
+0:56:33.440 --> 0:56:40.200
+older one. So the binary automatically adjusts to the feature set of the underlying hardware.
+
+572
+0:56:40.200 --> 0:56:45.960
+The newer your CPU the less patching occurs but it works quite well. And the reason we
+
+573
+0:56:45.960 --> 0:56:50.120
+chose this approach because the alternatives aren't actually great. So the alternatives
+
+574
+0:56:50.120 --> 0:56:55.320
+would have been that you put some if devs in your code and you say if dev CET use the
+
+575
+0:56:55.320 --> 0:56:59.720
+CET instructions and otherwise don't. And then you force your customers or your community
+
+576
+0:56:59.720 --> 0:57:04.560
+to always compile the binary the right way and that doesn't scale. The other option
+
+577
+0:57:04.560 --> 0:57:09.680
+could have been that you put some if then else. You say if CET is supported do this
+
+578
+0:57:09.680 --> 0:57:15.280
+otherwise do that. And that would be a runtime check every time and that runtime check is
+
+579
+0:57:15.280 --> 0:57:20.360
+prohibitive in certain code paths like NT paths where you simply don't have any register
+
+580
+0:57:20.360 --> 0:57:26.840
+free for doing this check because you have to save them all. But in order to save them
+
+581
+0:57:26.840 --> 0:57:32.320
+you already need to know whether shadow stacks are supported or not. So doing this feature
+
+582
+0:57:32.320 --> 0:57:36.960
+check at boot time and rewriting the binary to the suitable instruction is what we do
+
+583
+0:57:36.960 --> 0:57:43.680
+and that works great. So the way it works is you declare some assembler snippets like
+
+584
+0:57:43.680 --> 0:57:48.760
+XSaf S is the preferred version. If XSaf S is not supported the snippet gets rewritten
+
+585
+0:57:48.760 --> 0:57:57.320
+to XSaf or a shadow stack instruction gets rewritten to a knob. We don't need to patch
+
+586
+0:57:57.320 --> 0:58:03.520
+any high level C++ functions because they never compile to those complicated instructions
+
+587
+0:58:03.520 --> 0:58:13.080
+and we basically have a binary that automatically adjusts. So finally let's take a look at performance
+
+588
+0:58:13.080 --> 0:58:19.480
+because IPC performance is still a relevant metric if you want to be not just small but
+
+589
+0:58:19.480 --> 0:58:27.280
+also fast. And the blue bars here in the slide show Nova's baseline performance on modern
+
+590
+0:58:27.280 --> 0:58:32.800
+Intel platforms like NUC12 with Alder Lake and NUC11 with Tiger Lake. And you can see
+
+591
+0:58:32.800 --> 0:58:37.840
+that if you do an IPC between two threads in the same address space it's really in the
+
+592
+0:58:37.840 --> 0:58:43.560
+low nanosecond range like 200 and some cycles. If you cross address spaces you have to switch
+
+593
+0:58:43.560 --> 0:58:52.160
+page tables, you have to maybe switch class of service, then it takes 536 cycles and it's
+
+594
+0:58:52.160 --> 0:58:55.760
+comparable on other microarchitectures. But the interesting thing that I want to show
+
+595
+0:58:55.760 --> 0:59:02.240
+with this slide is that there's overhead for control flow protection. So if you just enable
+
+596
+0:59:02.240 --> 0:59:11.280
+indirect branch tracking the performance overhead is some 13 to 15 percent. If you enable shadow
+
+597
+0:59:11.280 --> 0:59:16.920
+stacks the performance overhead is increased some more and if you enable the full control
+
+598
+0:59:16.920 --> 0:59:22.400
+flow protection the performance overhead is in the relevant case which is the cross address
+
+599
+0:59:22.400 --> 0:59:27.760
+space case it's up to 30 percent. So users can freely choose through these compile time
+
+600
+0:59:27.760 --> 0:59:34.040
+options what level of control flow protection they are willing to trade for what in decrease
+
+601
+0:59:34.040 --> 0:59:40.000
+in performance. So the numbers are basically just ballpark figures to give people feeling
+
+602
+0:59:40.000 --> 0:59:46.040
+for if I use this feature how much IPC performance do I lose. So with that I'm at the end of
+
+603
+0:59:46.040 --> 0:59:50.240
+my talk. There are some links here where you can download releases where you can find more
+
+604
+0:59:50.240 --> 1:00:01.080
+information and now I'll open it up for questions. Thank you so much. We have time for some questions.
+
+605
+1:00:01.080 --> 1:00:12.120
+Yeah. And then you'll part in it. Thank you. It was really nice to see how many new things
+
+606
+1:00:12.120 --> 1:00:20.560
+are in Nova. One thing I would like to ask is you mentioned that page table code is formally
+
+607
+1:00:20.560 --> 1:00:27.040
+verified and that it's also lock free. What tools did you use for formally verification
+
+608
+1:00:27.040 --> 1:00:33.000
+especially in regards of memory model for verification. Thank you. So I must say that
+
+609
+1:00:33.000 --> 1:00:37.200
+I'm not a formal verification expert but I obviously have regular meetings and discussions
+
+610
+1:00:37.200 --> 1:00:44.200
+of people and the tools that we are using is the Coq theorem for basically doing the
+
+611
+1:00:44.200 --> 1:00:51.040
+proofs but for concurrent verification there's a tool called Iris that implements separation
+
+612
+1:00:51.040 --> 1:00:59.040
+logic. Well the form of the memory model that we verify depends on whether you're talking
+
+613
+1:00:59.040 --> 1:01:10.000
+about x86 or ARM. For ARM they're using multi copy atomic memory model. Also thanks for
+
+614
+1:01:10.000 --> 1:01:15.040
+the talk and it's great to see such a nice progress. Just a quick question. In the beginning
+
+615
+1:01:15.040 --> 1:01:21.440
+of the talk you said that you have this command line option to clamp the CPU frequency to
+
+616
+1:01:21.440 --> 1:01:26.960
+disable the turbo boosting. Why can't you do that at runtime? Why can't you configure
+
+617
+1:01:26.960 --> 1:01:33.000
+it at runtime? We could configure it at runtime too but we haven't added an API yet because
+
+618
+1:01:33.000 --> 1:01:38.080
+the code that would have to do that simply doesn't exist yet but there's no technical
+
+619
+1:01:38.080 --> 1:01:45.320
+reason for why userland couldn't control the CPU frequency at arbitrary points in time.
+
+620
+1:01:45.320 --> 1:02:01.640
+Okay wonderful thanks. Any other questions? Yeah just say, sorry Jonathan it's going to
+
+621
+1:02:01.640 --> 1:02:09.640
+be a lot. Yeah just very quickly I am on the point of the DMA attack. Were you talking
+
+622
+1:02:09.640 --> 1:02:17.800
+about the guest or the host? The question was for the DMA attack that I showed in the
+
+623
+1:02:17.800 --> 1:02:24.320
+slide here and you'll find the slides online after the talk. This is not a DMA attack of
+
+624
+1:02:24.320 --> 1:02:28.960
+guest versus host. This is a boot time DMA attack. You can really think of this as a
+
+625
+1:02:28.960 --> 1:02:34.440
+timeline. Firmware starts, bootloader starts, Nova starts and at the time that Nova turns
+
+626
+1:02:34.440 --> 1:02:41.680
+on the IOMU both guest and host will be DMA protected but Nova itself could be susceptible
+
+627
+1:02:41.680 --> 1:02:46.360
+to a DMA attack if we didn't disable Busmaster simply because the firmware does this legacy
+
+628
+1:02:46.360 --> 1:02:53.200
+backward compatible shenanigans that we don't like. And I bet a lot of other micro kernels
+
+629
+1:02:53.200 --> 1:02:58.920
+are susceptible to problems like this too and the fix would work for them as well. Thanks
+
+630
+1:02:58.920 --> 1:03:06.760
+Udo for the talk. I would like to know can you approximate how much percentage of the
+
+631
+1:03:06.760 --> 1:03:21.280
+architecture specific code is now added because of the security measures? So most of the security
+
+632
+1:03:21.280 --> 1:03:27.280
+measures that I talked about are x86 specific and ARM has similar features like they have
+
+633
+1:03:27.280 --> 1:03:32.280
+a guarded control stack specified in ARMv9 but I don't think you can buy any hardware
+
+634
+1:03:32.280 --> 1:03:40.120
+yet. You can take the difference between x86 and ARX64 as a rough ballpark figure but it's
+
+635
+1:03:40.120 --> 1:03:45.840
+really not all that much. For example, the multi key total memory encryption that's just
+
+636
+1:03:45.840 --> 1:03:51.920
+a few lines of code added to the x86 specific pitch level class because it was already built
+
+637
+1:03:51.920 --> 1:04:00.120
+into the generic class to begin with. Control flow enforcement is probably 400 lines of
+
+638
+1:04:00.120 --> 1:04:07.420
+assembler code in entry, pass and the switching. I did a quick test as to how many end branch
+
+639
+1:04:07.420 --> 1:04:12.320
+instructions a compiler would actually inject into the code. It's like 500 or so because
+
+640
+1:04:12.320 --> 1:04:16.760
+you get one for every interrupt entry and then one for every function and it also inflates
+
+641
+1:04:16.760 --> 1:04:21.160
+the size of the binary a bit but not much. And the performance decrease for indirect
+
+642
+1:04:21.160 --> 1:04:25.400
+branch checking among other things comes from the fact that the code gets inflated and is
+
+643
+1:04:25.400 --> 1:04:26.560
+not as dense anymore.
+
+644
+1:04:26.560 --> 1:04:31.520
+Okay. Yeah, final question please because Red is one of them. Yeah.
+
+645
+1:04:31.520 --> 1:04:41.520
+You were saying that you were able to achieve an L binary without rotations. Can you elaborate
+
+646
+1:04:41.520 --> 1:04:46.560
+a little bit on how did you do that? Which link are you using?
+
+647
+1:04:46.560 --> 1:04:54.200
+So it's the normal new LD but you could also use gold or mold or any of the normal linkers.
+
+648
+1:04:54.200 --> 1:05:00.880
+So the reason for why no relocation is needed is for the page code as long as you put the
+
+649
+1:05:00.880 --> 1:05:05.840
+right physical address in your page table, the virtual address is always the same. So
+
+650
+1:05:05.840 --> 1:05:09.600
+virtual memory is some form of relocation where you say no matter where I've run in
+
+651
+1:05:09.600 --> 1:05:14.680
+physical memory, the virtual memory is always the same. But for the un-paged code which
+
+652
+1:05:14.680 --> 1:05:19.640
+doesn't know at which physical address it was actually launched, you have to use position
+
+653
+1:05:19.640 --> 1:05:24.880
+independent code. Basically say I don't care at which physical address I run. I can run
+
+654
+1:05:24.880 --> 1:05:30.680
+it in arbitrary address because all my data structures are addressed relative or something
+
+655
+1:05:30.680 --> 1:05:33.680
+like that. And at some point you need to know what the offset is between where you want
+
+656
+1:05:33.680 --> 1:05:38.000
+it to run and where you do actually run. But that's simple. It's like you call your next
+
+657
+1:05:38.000 --> 1:05:41.480
+instruction, you pop the return address of the stack, you compute the difference and
+
+658
+1:05:41.480 --> 1:05:42.480
+then you know.
+
+659
+1:05:42.480 --> 1:05:45.280
+Thank you so much, Judo.
+
+660
+1:05:45.280 --> 1:05:46.280
+Thank you.
+
+661
+1:05:46.280 --> 1:06:13.120
+The slides are online. The little recording as well.
+

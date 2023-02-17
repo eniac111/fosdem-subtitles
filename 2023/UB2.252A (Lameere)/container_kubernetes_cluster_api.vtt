@@ -1,0 +1,715 @@
+WEBVTT
+
+00:00.000 --> 00:10.680
+You're going to talk about cluster API operating Kubernetes with Kubernetes.
+
+00:10.680 --> 00:11.680
+How?
+
+00:11.680 --> 00:12.680
+Hello.
+
+00:12.680 --> 00:14.120
+Thank you for coming.
+
+00:14.120 --> 00:15.120
+My name is Alex.
+
+00:15.120 --> 00:16.560
+I'm a software engineer.
+
+00:16.560 --> 00:18.900
+I work at Suzy on the run chair.
+
+00:18.900 --> 00:23.160
+I do a lot of stuff related to cluster lifecycle.
+
+00:23.160 --> 00:30.200
+And today I'm going to talk about cluster API and operating Kubernetes with Kubernetes.
+
+00:30.200 --> 00:31.720
+Hope it will be fun.
+
+00:31.720 --> 00:36.320
+Here is a short summary of what we are going to talk about today.
+
+00:36.320 --> 00:43.120
+I'll try to explain the problem of managing the Kubernetes cluster lifecycle.
+
+00:43.120 --> 00:48.880
+I'll try to explain what is cluster API, how does it approach this problem.
+
+00:48.880 --> 00:52.960
+And we'll take a look at some building blocks of cluster API.
+
+00:52.960 --> 00:55.440
+And also I'll be doing a demo.
+
+00:55.440 --> 01:00.120
+And because I don't have enough time, the demo will be done simultaneously with the
+
+01:00.120 --> 01:01.120
+talk.
+
+01:01.120 --> 01:02.720
+So it's a live demo.
+
+01:02.720 --> 01:03.720
+Nothing is recorded.
+
+01:03.720 --> 01:05.720
+Hopefully everything will be fine.
+
+01:05.720 --> 01:08.160
+I already had some problems with networking today.
+
+01:08.160 --> 01:11.560
+But let's see.
+
+01:11.560 --> 01:14.560
+So let's move on to the next slide.
+
+01:14.560 --> 01:19.120
+So cluster lifecycle is complicated and why is that?
+
+01:19.120 --> 01:23.960
+What if you have to manage more than one cluster, say you have 10 Kubernetes cluster or maybe
+
+01:23.960 --> 01:31.240
+100 Kubernetes clusters, then the problem becomes similar to managing containers and
+
+01:31.240 --> 01:34.160
+why we invented Kubernetes.
+
+01:34.160 --> 01:43.720
+And cluster API tries to solve like this problem of managing multiple clusters and
+
+01:43.720 --> 01:50.680
+also sometimes you have to manage the underlying infrastructure and that also somehow needs
+
+01:50.680 --> 01:54.360
+to be done in a nice and consistent way.
+
+01:54.360 --> 01:56.400
+Then you also have to upgrade clusters.
+
+01:56.400 --> 02:01.040
+Sometimes you have to upgrade multiple clusters and upgrading clusters is not always easy,
+
+02:01.040 --> 02:04.120
+especially when it comes to control planes.
+
+02:04.120 --> 02:08.000
+And you want to deploy your clusters on different infrastructure.
+
+02:08.000 --> 02:10.680
+Let's say you have something running on AWS.
+
+02:10.680 --> 02:16.520
+Then you have some bare metal things running and you also need to somehow manage that.
+
+02:16.520 --> 02:20.480
+And you don't want to use different tools that depend on your infrastructure.
+
+02:20.480 --> 02:25.080
+You want to use something that is a single point of management and is consistent.
+
+02:25.080 --> 02:31.920
+It provides some nice experience and it's easy to use and automate.
+
+02:31.920 --> 02:33.640
+So what is cluster API?
+
+02:33.640 --> 02:42.520
+Cluster API takes this approach where we install it, it's an extension to Kubernetes API that
+
+02:42.520 --> 02:48.920
+allows you to provision, upgrade and operate your cluster and you install it on Kubernetes.
+
+02:48.920 --> 02:54.440
+Then you use what we call management cluster to manage workload clusters.
+
+02:54.440 --> 02:57.520
+I guess you can do this on different infrastructure provider.
+
+02:57.520 --> 03:03.200
+You can have one management cluster managing stuff running on AWS when you can have the
+
+03:03.200 --> 03:07.560
+same cluster managing your clusters on Azure.
+
+03:07.560 --> 03:12.320
+So this is the basic idea of cluster API.
+
+03:12.320 --> 03:21.400
+And next we are going to take a look at the building blocks of KPI and I will start my
+
+03:21.400 --> 03:22.400
+demo.
+
+03:22.400 --> 03:29.440
+But before this, let me switch to the terminal and show you what I have prepared in advance.
+
+03:29.440 --> 03:38.120
+So I deployed a management cluster where I already installed KPI so we don't lose time.
+
+03:38.120 --> 03:40.560
+Everything should be up and running.
+
+03:40.560 --> 03:44.520
+And yeah, let's move on.
+
+03:44.520 --> 03:50.280
+The main entity in the cluster API is called cluster and it represents a Kubernetes cluster.
+
+03:50.280 --> 03:52.680
+It's not tied to some kind infrastructure.
+
+03:52.680 --> 03:55.880
+So it's just a generic Kubernetes cluster.
+
+03:55.880 --> 04:02.960
+And to make it more clear, I will show you how it looks like.
+
+04:02.960 --> 04:08.200
+As you can see, it's a normal Kubernetes object that has some kind metadata.
+
+04:08.200 --> 04:11.880
+But what's interesting for us is the spec here.
+
+04:11.880 --> 04:16.200
+You can see the spec references to things.
+
+04:16.200 --> 04:17.200
+Yeah.
+
+04:17.200 --> 04:23.440
+The first reference is a reference to infrastructure.
+
+04:23.440 --> 04:27.480
+For this demo, I'm going to use Docker as infrastructure provider because I don't want
+
+04:27.480 --> 04:33.120
+to make any requests to some cloud because of a network.
+
+04:33.120 --> 04:35.920
+I wasn't sure if it's going to work properly.
+
+04:35.920 --> 04:39.920
+So I decided to use Docker as our infrastructure provider.
+
+04:39.920 --> 04:43.720
+It's an infrastructure provider we use for development and testing.
+
+04:43.720 --> 04:49.840
+And the second interesting reference is a reference to what we call control pane providers.
+
+04:49.840 --> 04:55.560
+And because control planes are harder to manage than worker machines, we require a specific
+
+04:55.560 --> 04:57.000
+resource for that.
+
+04:57.000 --> 05:01.800
+And this control pane provider is based on a tool called Qt-QPADM, which is a default
+
+05:01.800 --> 05:04.680
+that you can use with KAPI.
+
+05:04.680 --> 05:12.440
+So let me create this cluster and we can take a look at the objects that are referenced
+
+05:12.440 --> 05:13.640
+inside.
+
+05:13.640 --> 05:20.600
+The first reference you saw is a reference to Docker cluster.
+
+05:20.600 --> 05:23.880
+It's also what we call an infrastructure cluster.
+
+05:23.880 --> 05:30.880
+And it's responsible for all prerequisites that are required to run your cluster on any
+
+05:30.880 --> 05:31.880
+infrastructure.
+
+05:31.880 --> 05:36.880
+So, for example, if you're running it on public cloud, it will provision all networks, load
+
+05:36.880 --> 05:41.760
+balancer, security groups, VPCs, and whatever else you need.
+
+05:41.760 --> 05:49.240
+And this is like this reference is actually what makes cluster API plugable.
+
+05:49.240 --> 05:53.880
+So if you want to add your own provider, you just have to follow a documentation implement
+
+05:53.880 --> 05:57.160
+API with some rules and then you can reference it.
+
+05:57.160 --> 06:01.720
+And that's how you plug in your own provider.
+
+06:01.720 --> 06:05.160
+Let me show you how Docker cluster looks in our case.
+
+06:05.160 --> 06:06.160
+It's pretty simple.
+
+06:06.160 --> 06:08.520
+There is no real infrastructure to run.
+
+06:08.520 --> 06:12.720
+So I'm going to create it too.
+
+06:12.720 --> 06:18.440
+Okay, that's done.
+
+06:18.440 --> 06:23.440
+Then the next reference we saw in cluster object was a reference to what we call a control
+
+06:23.440 --> 06:25.360
+pane provider.
+
+06:25.360 --> 06:32.120
+What it does, it creates a control pane machine, generates cloud config, and also is responsible
+
+06:32.120 --> 06:36.400
+for any other actions related to control pane management.
+
+06:36.400 --> 06:43.520
+Not like, you know, at CD, Core DNS, or whatever you implement or want to enable.
+
+06:43.520 --> 06:44.760
+Let me show you how it looks like.
+
+06:44.760 --> 06:50.240
+This will be so far the biggest object we have there because it contains some configurations
+
+06:50.240 --> 06:53.280
+we require for our control pane.
+
+06:53.280 --> 07:00.280
+But as you can see, you can customize some Kubernetes components there using Kubernetes
+
+07:00.280 --> 07:01.280
+API.
+
+07:01.280 --> 07:07.720
+If you can just specify anything you need here to provision control planes, you can
+
+07:07.720 --> 07:19.320
+also specify a replica set, and you also need Kubernetes version there.
+
+07:19.320 --> 07:27.320
+Now maybe I forgot to create it.
+
+07:27.320 --> 07:33.200
+Yeah.
+
+07:33.200 --> 07:34.520
+Okay.
+
+07:34.520 --> 07:40.040
+So let's talk about worker machines and how does KP approach managing machines.
+
+07:40.040 --> 07:47.680
+It's important first to note that machine is just a host for your Kubernetes nodes.
+
+07:47.680 --> 07:52.040
+So it can be virtual machine, can be bare metal, can be anything your infrastructure
+
+07:52.040 --> 07:54.120
+provider means.
+
+07:54.120 --> 07:58.200
+And I'd like to show an example with bots.
+
+07:58.200 --> 08:01.200
+You don't manage bots manually, right?
+
+08:01.200 --> 08:03.000
+You don't use them as a standalone resource.
+
+08:03.000 --> 08:05.320
+You use something else.
+
+08:05.320 --> 08:09.560
+If you want to manage replicas count for your bots, you use something called replica set
+
+08:09.560 --> 08:14.320
+that has just one purpose, create your certain count of bots.
+
+08:14.320 --> 08:18.280
+And then if you want to do more complex stuff like rolling upgrades, you use a deployment
+
+08:18.280 --> 08:20.880
+on top of this that manages replica sets.
+
+08:20.880 --> 08:24.400
+So KP followed the same pattern and created machines.
+
+08:24.400 --> 08:27.920
+Then there is the machine set that manages replica count.
+
+08:27.920 --> 08:34.440
+And there is the machine deployment on top of that that does more complicated things.
+
+08:34.440 --> 08:38.320
+Let's go back to the terminal.
+
+08:38.320 --> 08:44.040
+I will show you the machine deployment.
+
+08:44.040 --> 08:46.600
+You can see it's similar to normal deployment.
+
+08:46.600 --> 08:52.040
+It has replica count, then it has a selector, has a template.
+
+08:52.040 --> 08:55.840
+And inside the spec, it's similar to what we saw with cluster object.
+
+08:55.840 --> 08:57.680
+It has two references.
+
+08:57.680 --> 09:03.760
+One is for our infrastructure template, which is Docker for this demo.
+
+09:03.760 --> 09:24.040
+And the second one is a bootstrap provider, which is based on Kube-ADM.
+
+09:24.040 --> 09:30.000
+So the infrastructure template or Docker template that we saw there in the reference are just
+
+09:30.000 --> 09:33.880
+specifications for your host depending on your cloud provider.
+
+09:33.880 --> 09:38.800
+It can be an instance type, storage size, anything you put there.
+
+09:38.800 --> 09:45.280
+And the second reference to bootstrap provider is just a reference to an API that generates
+
+09:45.280 --> 09:51.200
+user data with proper cloud config so you can configure your Kubernetes components as
+
+09:51.200 --> 09:52.200
+you want.
+
+09:52.200 --> 09:55.360
+Let me show you how it looks like.
+
+09:55.360 --> 10:01.240
+For Docker machine, it's just an image in this case and some extra mounts.
+
+10:01.240 --> 10:08.800
+And for bootstrap provider, we just have some arguments for our Kubernetes components.
+
+10:08.800 --> 10:15.040
+This is it.
+
+10:15.040 --> 10:26.240
+Okay, so this was it.
+
+10:26.240 --> 10:30.760
+Let me now check if everything works fine.
+
+10:30.760 --> 10:33.520
+Yeah, everything works fine.
+
+10:33.520 --> 10:39.640
+As you can see, we have free control pane machines that are running inside Docker containers
+
+10:39.640 --> 10:41.240
+that we created before.
+
+10:41.240 --> 10:48.760
+And after some time, we should get a worker machine that we just created.
+
+10:48.760 --> 10:54.640
+Let's take a look at how it all works together.
+
+10:54.640 --> 11:01.960
+We have a cluster object that represents the cluster then it has to reference an infrastructure
+
+11:01.960 --> 11:04.480
+provider, which is Docker in this case.
+
+11:04.480 --> 11:10.400
+And it also has to reference a control pane provider, which is based on Kube-ADM.
+
+11:10.400 --> 11:16.440
+And once these two are done with our job, you can connect your machine deployments that
+
+11:16.440 --> 11:23.240
+have to reference a machine template so Kube knows what host specifications you want and
+
+11:23.240 --> 11:30.920
+also a Kube-ADM template where you can configure Kubernetes components.
+
+11:30.920 --> 11:40.800
+And this is all you need to create a basic Kube cluster.
+
+11:40.800 --> 11:47.080
+Unfortunately, I don't have enough time to talk about other things that exist in Kube
+
+11:47.080 --> 11:53.240
+like machine health checks that help you track and remediate unhealthy machines when there
+
+11:53.240 --> 11:58.520
+are cluster classes, which are powerful templates for creating clusters.
+
+11:58.520 --> 12:01.360
+You can also connect cluster autoscalar if you want.
+
+12:01.360 --> 12:06.920
+And there are day two operations coming, so you can think of KP is like Swiss knife for
+
+12:06.920 --> 12:13.720
+everything related to cluster lifecycle.
+
+12:13.720 --> 12:17.160
+And we still have time.
+
+12:17.160 --> 12:21.600
+I'm going to show you how we can upgrade the cluster.
+
+12:21.600 --> 12:24.520
+Let's check its state again.
+
+12:24.520 --> 12:25.520
+Yeah.
+
+12:25.520 --> 12:34.480
+So if you can see that we have three control planes and they all are running Kubernetes
+
+12:34.480 --> 12:39.600
+V125.
+
+12:39.600 --> 12:42.880
+And let me upgrade them to Kubernetes V126.
+
+12:42.880 --> 12:44.720
+So how do I do this?
+
+12:44.720 --> 12:52.480
+In order to do this, we have to change the version in the control pane provider object
+
+12:52.480 --> 12:56.920
+and we also have to change the image reference in the machine template.
+
+12:56.920 --> 13:10.520
+So just by doing so, I will start upgrading the cluster.
+
+13:10.520 --> 13:17.000
+As you can see, cluster API started to spin up new control pane machine with V126 that
+
+13:17.000 --> 13:22.360
+is going to eventually replace old ones and is going to take care of for us like in
+
+13:22.360 --> 13:24.960
+ensuring that CD quorum and all sorts of things.
+
+13:24.960 --> 13:36.040
+So we don't have to take care about this.
+
+13:36.040 --> 13:45.840
+I'm going to go back to the summary and let's go once again for what we saw today.
+
+13:45.840 --> 13:51.080
+So I tried to explain the problem of managing Kubernetes clusters and the main idea, we
+
+13:51.080 --> 13:57.920
+wanted to have a tool that provides a declarative and consistent API and will allow you provision
+
+13:57.920 --> 14:03.640
+and manage your clusters on different infrastructure in some nice way so you can have a single
+
+14:03.640 --> 14:10.800
+point of managing your clusters for all possible infrastructures you are running.
+
+14:10.800 --> 14:17.760
+And this approach is like use Kubernetes because Kubernetes already provides a lot
+
+14:17.760 --> 14:25.600
+of tools for building a powerful API.
+
+14:25.600 --> 14:31.120
+I think with us it maybe was a bit quick but I don't have anything else.
+
+14:31.120 --> 14:35.640
+I'm ready to answer questions if someone has.
+
+14:35.640 --> 14:50.320
+We have ample time for questions.
+
+14:50.320 --> 14:53.200
+This allows you to manage the workload clusters.
+
+14:53.200 --> 14:56.800
+Can it also manage the life cycle of the management cluster?
+
+14:56.800 --> 14:58.120
+Yes, you can.
+
+14:58.120 --> 14:59.560
+So what if it destroys itself?
+
+14:59.560 --> 15:00.560
+So what happens then?
+
+15:00.560 --> 15:01.560
+It shouldn't.
+
+15:01.560 --> 15:03.640
+It depends on how you use it.
+
+15:03.640 --> 15:04.640
+Works on local host.
+
+15:04.640 --> 15:11.400
+You can manage management clusters.
+
+15:11.400 --> 15:12.400
+Thank you.
+
+15:12.400 --> 15:16.880
+The question about updates, is it possible to update components like cobalates without
+
+15:16.880 --> 15:18.880
+recreating virtual machines?
+
+15:18.880 --> 15:20.800
+And how is it working?
+
+15:20.800 --> 15:26.960
+It's done through your bootstrap or control pane provider.
+
+15:26.960 --> 15:32.720
+And you also have to provide an image that will be used for your new instances.
+
+15:32.720 --> 15:39.240
+No, no, I mean if you need to update cobalates and you don't want to reorder new.
+
+15:39.240 --> 15:41.600
+Cost API doesn't support in place upgrades.
+
+15:41.600 --> 15:46.440
+It will create a new machine with new image, new everything and then replace an old one.
+
+15:46.440 --> 15:47.600
+Okay, got it.
+
+15:47.600 --> 15:52.080
+And can you tell a little more about control pane updates?
+
+15:52.080 --> 15:53.080
+Control pane updates.
+
+15:53.080 --> 15:56.120
+Updates of control pane nodes and components.
+
+15:56.120 --> 15:57.400
+I just showed one.
+
+15:57.400 --> 16:02.840
+When you change the version, it will start replacing old machines with newer ones.
+
+16:02.840 --> 16:05.080
+You just have to provide all the specifications.
+
+16:05.080 --> 16:09.080
+You have to provide the new Kubernetes version you want and also new image.
+
+16:09.080 --> 16:14.600
+So we try to bake everything inside the machine image so you don't have to download new things
+
+16:14.600 --> 16:19.080
+and it will just replace old machine with a new one with new versions.
+
+16:19.080 --> 16:21.040
+So it's a replace upgrade.
+
+16:21.040 --> 16:24.400
+It's not in place.
+
+16:24.400 --> 16:29.400
+The same as POTS, if you change, for example, reference to image, it will destroy old one
+
+16:29.400 --> 16:30.720
+and create a newer.
+
+16:30.720 --> 16:34.040
+So it's the same concept.
+
+16:34.040 --> 16:36.600
+There's an online question is in the chat.
+
+16:36.600 --> 16:42.760
+Are there any latency requirements between the management cluster and the workload cluster?
+
+16:42.760 --> 16:51.600
+It depends on your use case, but yeah, ideally you should take care of it like with your management
+
+16:51.600 --> 17:06.880
+cluster with somewhere near workload clusters or is able to reach it within some limits.
+
+17:06.880 --> 17:08.120
+And one more.
+
+17:08.120 --> 17:13.400
+Does the management cluster need to run at all the time or can it be shut off when not
+
+17:13.400 --> 17:15.800
+doing life cycle work?
+
+17:15.800 --> 17:18.200
+So here is the thing.
+
+17:18.200 --> 17:24.240
+If you disable it, nothing will manage your cluster so they will be basically unmanaged.
+
+17:24.240 --> 17:28.640
+Your workload cluster will continue running, but there is nothing that will keep track
+
+17:28.640 --> 17:29.640
+of them.
+
+17:29.640 --> 17:33.280
+For example, if you use cluster autoscaler or machine health checks, you need your management
+
+17:33.280 --> 17:37.440
+cluster to be running all the time because it constantly looks at the state of your workload
+
+17:37.440 --> 17:40.440
+clusters.
+
+17:40.440 --> 17:48.600
+Okay, if there are no more questions and we can end a few minutes early, thank you for
+
+17:48.600 --> 17:49.600
+the talk.
+
+17:49.600 --> 17:50.600
+Thank you all for attending.
+
+17:50.600 --> 17:51.600
+Thank you.
+
+17:51.600 --> 17:52.600
+Thank you.
+
+17:52.600 --> 17:53.600
+Thank you.
+
+17:53.600 --> 17:54.600
+Thank you.
+
+17:54.600 --> 17:55.600
+Thank you.
+
+17:55.600 --> 18:11.600
+Thank you.

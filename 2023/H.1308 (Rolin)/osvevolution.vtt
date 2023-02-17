@@ -1,0 +1,1438 @@
+WEBVTT
+
+00:00.000 --> 00:07.400
+So, once again, hello, everybody.
+
+00:07.400 --> 00:10.520
+Welcome to my talk.
+
+00:10.520 --> 00:19.680
+This talk is going to be about OSV, evolution of OSV towards greater modularity and possibility.
+
+00:19.680 --> 00:21.320
+Thanks to Aslan for introducing me.
+
+00:21.320 --> 00:27.280
+So, I've been contributing to OSV since 2016.
+
+00:27.280 --> 00:34.040
+Like a year ago, in 2015, I heard about OSV in one of the conferences.
+
+00:34.040 --> 00:40.000
+And then, a couple of years later, I was nominated to be one of its committers.
+
+00:40.000 --> 00:47.000
+And my greatest contributions to OSV include making OSV run on Firecracker and significantly
+
+00:47.000 --> 00:53.240
+improving ARG64 port, among other things.
+
+00:53.240 --> 00:57.640
+So I'm not sure if you can tell it, but OSV is actually my hobby.
+
+00:57.640 --> 01:04.300
+So I'm not like a real current developer like many of previous speakers are.
+
+01:04.300 --> 01:10.240
+So it's actually, you know, I work on it in my night when I feel it.
+
+01:10.240 --> 01:14.560
+And I have a day job, so I don't represent my company that I work for.
+
+01:14.560 --> 01:24.960
+So this is all my personal contribution to the project.
+
+01:24.960 --> 01:32.080
+So in today's presentation, I will talk about enhancements introduced by the latest release
+
+01:32.080 --> 01:40.400
+of OSV, 057, with a focus on greater modularity and composability.
+
+01:40.400 --> 01:48.480
+But I will also discuss other interesting enhancements, like lazy stock, novel ways
+
+01:48.480 --> 01:54.160
+to build ZFS images, and improvements to the ARM port.
+
+01:54.160 --> 02:03.440
+Finally, I will also cover an interesting use case of OSV, C-WIDFS, running on OSV,
+
+02:03.440 --> 02:07.120
+which is a distributed file system.
+
+02:07.120 --> 02:16.280
+So as you can see in this talk, besides the title, modularity, I will actually try to
+
+02:16.280 --> 02:23.080
+give you state of the art, where OSV is, how it has changed recently, and a little bit
+
+02:23.080 --> 02:28.440
+of where it's going, hopefully.
+
+02:28.440 --> 02:35.040
+So I know there are probably many definitions of unicurns, and each of them is a little
+
+02:35.040 --> 02:43.800
+bit different, and I'm sure most of you understand what unicurnls are, but just a quick recap,
+
+02:43.800 --> 02:47.200
+with emphasis on how OSV is a little bit different.
+
+02:47.200 --> 02:52.960
+So OSV is a unicurnl that was designed to run single and modified Linux application
+
+02:52.960 --> 02:58.440
+on top of Hypervisor, whereas traditional operating systems were originally designed
+
+02:58.440 --> 03:02.180
+to run on a vast range of physical machines.
+
+03:02.180 --> 03:10.280
+But simply speaking, OSV is an OS designed to run single application without isolation
+
+03:10.280 --> 03:18.240
+between application and kernel, or it can be thought as a way to run highly isolated
+
+03:18.240 --> 03:23.320
+process without ability to make system calls to the host OS.
+
+03:23.320 --> 03:34.760
+Finally, OSV can run on both 64-bit x86 and ARMv8 architectures.
+
+03:34.760 --> 03:37.160
+Now a little bit of history.
+
+03:37.160 --> 03:46.240
+So OSV, for those that don't know, OSV was started in late 2012 by the company called
+
+03:46.240 --> 03:55.960
+Cloud Use Systems, and they built pretty strong team of 10, 20 developers, I think.
+
+03:55.960 --> 04:03.520
+I wasn't one of them, but they pretty much wrote most of OSV, but at some point they
+
+04:03.520 --> 04:07.480
+basically realized they have to make money, I'm guessing.
+
+04:07.480 --> 04:15.840
+So they basically moved on and started working on this product you may have known, CillaDB,
+
+04:15.840 --> 04:21.080
+which is this high performance database, but I think they took some learning.
+
+04:21.080 --> 04:27.640
+And after that, basically, I think OSV did receive some grant from European Union, so
+
+04:27.640 --> 04:33.720
+there was some project on that, and I think there may have been some companies also using
+
+04:33.720 --> 04:40.440
+OSV, but honestly, since then, it's been really maintained by volunteers.
+
+04:40.440 --> 04:52.040
+So like me, there's still some people from CillaDB, Nadav Harrell, and others that contribute
+
+04:52.040 --> 04:53.040
+to the project.
+
+04:53.040 --> 04:59.040
+I would just single out 46 and Aqis, which actually was the one that implemented Virtay
+
+04:59.040 --> 05:04.480
+OFS as a very interesting contribution to OSV.
+
+05:04.480 --> 05:10.680
+And obviously, I would like to take this opportunity to invite more people to become part of our
+
+05:10.680 --> 05:17.880
+community, because honestly, you may not realize it, but our community is very small, so it's
+
+05:17.880 --> 05:28.200
+just really me, Nadav, and a couple of other people that contribute to the project.
+
+05:28.200 --> 05:34.760
+So I hope we're going to grow as a community after this talk.
+
+05:34.760 --> 05:41.520
+So a quick recap of a little bit of how OSV looks like, what the design is.
+
+05:41.520 --> 05:49.480
+So in this slide, you can see major components of OSV across layers, starting with G-LIPC,
+
+05:49.480 --> 05:56.680
+the top, which is greatly based actually on Mosul, then core layer in the middle, comprised
+
+05:56.680 --> 06:06.200
+of ELF, dynamic linker, of VFS, virtual file system, and then networking stack, thread scheduler,
+
+06:06.200 --> 06:15.760
+page cache, RCU, read, copy, update, page table management, and L1, L2, pools to manage
+
+06:15.760 --> 06:16.760
+memory.
+
+06:16.760 --> 06:24.120
+And then you have a layer of device drivers, where OSV implements Virtay O layer based
+
+06:24.120 --> 06:34.960
+virtual devices on both over PCI transport and MMIL transport, and then Zen and VMware,
+
+06:34.960 --> 06:37.560
+among others.
+
+06:37.560 --> 06:44.440
+And obviously, and one more thing, so OSV can run on KVM based hypervisors like QEMUIAC,
+
+06:44.440 --> 06:45.840
+like Firecracker.
+
+06:45.840 --> 06:56.080
+I did test also OSV on cloud hypervisor, which is I think Intel's hypervisor written in Rust.
+
+06:56.080 --> 07:03.960
+And then I personally didn't really run OSV on Zen, so I know that the Zen support is
+
+07:03.960 --> 07:07.840
+a little bit dated probably, and I'm not sure how much it has been tested.
+
+07:07.840 --> 07:15.360
+I did test on VMware vbox, virtual box, and I think on Hyperkit at some point.
+
+07:15.360 --> 07:22.240
+So I will just, I won't go into more detail about this diagram, but I will leave it with
+
+07:22.240 --> 07:28.720
+use just as a reference later.
+
+07:28.720 --> 07:37.320
+So in the first part of this presentation, I will, about modularity and composability,
+
+07:37.320 --> 07:44.800
+I will focus on new experimental modes to hide the non-G-LIP-C symbols and standard
+
+07:44.800 --> 07:46.200
+C++ library.
+
+07:46.200 --> 07:53.160
+I will also discuss how ZFS code was extracted out of the kernel in form of a dynamically
+
+07:53.160 --> 07:54.440
+linked library.
+
+07:54.440 --> 08:02.200
+And finally, I will also explain another new build option to tailor the kernel to a set
+
+08:02.200 --> 08:03.760
+of specific drivers.
+
+08:03.760 --> 08:06.120
+I call them driver profiles.
+
+08:06.120 --> 08:12.800
+And another new mechanism to allow building a version of kernel with a subset of G-LIP-C
+
+08:12.800 --> 08:23.880
+symbols needed to support a specific application, which I think is quite interesting.
+
+08:23.880 --> 08:34.600
+So by design, OSV has always been a fat unicernel, which has been some sort of, some other criticism.
+
+08:34.600 --> 08:40.320
+And by default provided a large subset of G-LIP-C functionality has included full standard
+
+08:40.320 --> 08:49.840
+C++ library and ZFS implementation drivers for many devices and has supported many hypervisors.
+
+08:49.840 --> 08:58.000
+So on one hand, it makes running arbitrary application on any hypervisor very easy using
+
+08:58.000 --> 09:00.880
+a single universal kernel.
+
+09:00.880 --> 09:07.480
+But on another hand, such universality comes with the price of bloated kernel with many
+
+09:07.480 --> 09:13.480
+symbols and drivers and possibly ZFS that is unused.
+
+09:13.480 --> 09:23.080
+That's causing inefficient memory usage, longer boot time, and potential security vulnerabilities.
+
+09:23.080 --> 09:30.920
+In addition, C++ application linked against one version of LIP-SDC++ different than the
+
+09:30.920 --> 09:35.960
+version the kernel was linked against may simply not work.
+
+09:35.960 --> 09:42.920
+For example, that happened to me when I was testing OSV with.NET.
+
+09:42.920 --> 09:54.320
+And yeah, the only way to make it work was to hide basically the C++ standard library
+
+09:54.320 --> 10:03.760
+and use the one that was part of the.NET app.
+
+10:03.760 --> 10:10.120
+So one way to lower memory utilization of the guest is to minimize the kernel size.
+
+10:10.120 --> 10:17.540
+By default, OSV comes with a universal kernel that provides quite large spectrum of G-LIP-C
+
+10:17.540 --> 10:25.920
+library and full standard C++ library and exposes over a total of 17,000 symbols.
+
+10:25.920 --> 10:33.420
+And most of those are very long, as you know, C++ symbols that make up the symbol table.
+
+10:33.420 --> 10:41.000
+So the question may be posed, why not have a mechanism where we can build a kernel with
+
+10:41.000 --> 10:50.080
+all known G-LIP-C symbols hidden and all unneeded code that is unused garbage collected.
+
+10:50.080 --> 10:56.240
+So the extra benefit of fewer exported symbols is increased security that stems from the
+
+10:56.240 --> 11:03.760
+fact that there's simply less potential code that is left, that is harmful, that could
+
+11:03.760 --> 11:05.360
+be harmful.
+
+11:05.360 --> 11:15.360
+And also, that way we can achieve better compatibility as any potential symbol collisions, for example,
+
+11:15.360 --> 11:26.680
+and mismatch standard C++ library, which I mentioned can be avoided.
+
+11:26.680 --> 11:37.280
+So the release 57, 057 added a new build option called conf-hide-symbols to hide those known
+
+11:37.280 --> 11:42.480
+G-LIP-C symbols and the standard C++ library symbols.
+
+11:42.480 --> 11:50.080
+These are enabled, if enabled, in essence most files in a source tree of OSV, except
+
+11:50.080 --> 11:55.920
+the ones under LIP-C and MOSL directories, would be compiled with the flags of visibility
+
+11:55.920 --> 12:02.080
+hidden and only if that build flag is enabled.
+
+12:02.080 --> 12:08.040
+On the other hand, the symbols to be exposed as public, like the G-LIP-C one, would be
+
+12:08.040 --> 12:14.880
+annotated with OSV asterisk API macros that translate basically to attribute visibility
+
+12:14.880 --> 12:22.800
+default and the standard C++ library is linked with the flag, no whole archive.
+
+12:22.800 --> 12:30.240
+Those S-V asterisk API macros basically would be like OSV LIP-C API or OSV P-threads API,
+
+12:30.240 --> 12:33.680
+OSV LIP-M API and so on.
+
+12:33.680 --> 12:41.400
+Basically that match all then I think around 10 libraries that OSV dynamic linker exposes.
+
+12:41.400 --> 12:53.200
+Finally, the list of public symbols exported by the kernel is enforced during the build
+
+12:53.200 --> 12:59.440
+process based on the symbol list files for each advertised library.
+
+12:59.440 --> 13:08.600
+Like for example LIP-C SO6 and is maintained under the directory exported symbols.
+
+13:08.600 --> 13:14.720
+These files are basically a list of symbols that are concatenated using the script called
+
+13:14.720 --> 13:21.840
+generate version script, which goes into version script file and then is fed to the linker
+
+13:21.840 --> 13:28.600
+as an argument to the version script flag.
+
+13:28.600 --> 13:35.600
+In order to now remove all unneeded code, basically garbage, all files will be compiled
+
+13:35.600 --> 13:42.880
+with the flag function sections and data sections and then they would be linked with the flag
+
+13:42.880 --> 13:44.840
+GC section.
+
+13:44.840 --> 13:51.600
+Now any code that needs to stay, like for example the bootstrap start points or dynamically
+
+13:51.600 --> 14:03.040
+enabled code like the optimal MAMCPY implementation or trace point patch size is retained by putting
+
+14:03.040 --> 14:11.640
+relevant kept directives and relevant sections in the linker script.
+
+14:11.640 --> 14:21.400
+The kernel L file built with most symbols hidden is roughly 4.3 megabytes in size compared
+
+14:21.400 --> 14:27.280
+to 6.7, which is reduction of around 40%.
+
+14:27.280 --> 14:34.440
+This great reduction stems from the fact that the standard C++ library is no longer linked
+
+14:34.440 --> 14:36.400
+with whole archive.
+
+14:36.400 --> 14:43.840
+The symbol table is way smaller and unused code is garbage collected.
+
+14:43.840 --> 14:53.640
+Please note that the resulting kernel is still universal as it exports all julipsy symbols
+
+14:53.640 --> 14:56.440
+and includes all the device drivers.
+
+14:56.440 --> 15:04.120
+As the result of this size reduction, kernel boots also a little bit faster.
+
+15:04.120 --> 15:06.040
+These all sound great.
+
+15:06.040 --> 15:13.720
+One may ask why not hide most symbols and standard C++ library by default.
+
+15:13.720 --> 15:22.240
+The problem is that there are around 35 unit tests and some also application that were
+
+15:22.240 --> 15:33.400
+written in the past that rely on C++ symbols and they basically would not run if we hide
+
+15:33.400 --> 15:35.520
+all of those symbols.
+
+15:35.520 --> 15:45.280
+Those are basically used to, they were implemented in the past and it was done sometimes out
+
+15:45.280 --> 15:49.600
+of convenience, sometimes basically out of necessity.
+
+15:49.600 --> 15:57.680
+To address this specific problem, we will need to expose some of those OSVC++ symbols
+
+15:57.680 --> 16:02.640
+as C basically, as API expressed in C.
+
+16:02.640 --> 16:14.640
+We will basically define very simple C wrapper functions that will call those C++ code.
+
+16:14.640 --> 16:21.600
+I can use this one.
+
+16:21.600 --> 16:28.840
+A good example of modularity improvements made in the release 0.57 is extracting ZFS
+
+16:28.840 --> 16:35.080
+code out of kernel as a dynamically linked library, libsolarisso, which effectively is
+
+16:35.080 --> 16:37.440
+a new module.
+
+16:37.440 --> 16:45.360
+To accomplish that, we changed the main OSV makefile to build new artifact, libsolarisso
+
+16:45.360 --> 16:53.280
+out of ZFS and solaris file sets in the makefile, which basically used to be linked into kernel.
+
+16:53.280 --> 17:02.320
+The new library has to be linked with a bind now flag and OSV specific OSV MLock node to
+
+17:02.320 --> 17:10.360
+force OSV dynamic linker to resolve symbols eagerly and populate the mappings eagerly
+
+17:10.360 --> 17:11.700
+as well.
+
+17:11.700 --> 17:18.000
+This basically is done to prevent page faults that would lead to potential deadlocks as
+
+17:18.000 --> 17:22.520
+the libraries load it and initialize.
+
+17:22.520 --> 17:31.220
+The init function ZFS initialize called upon the library is loaded creates necessary thread
+
+17:31.220 --> 17:38.780
+pulls and registers various callbacks so that the page cache arc, which is adaptive replacement
+
+17:38.780 --> 17:50.480
+cache from ZFS, and ZFS dev driver can interact with relevant code in the ZFS library.
+
+17:50.480 --> 17:58.880
+On another hand, the OSV kernel needs to expose some around 100 symbols that provide some
+
+17:58.880 --> 18:05.920
+internal FreeBSD originating functionality that libsolarisso depends on.
+
+18:05.920 --> 18:12.600
+Actually, OSV borrowed some code from FreeBSD and actually a good chunk of this code was
+
+18:12.600 --> 18:18.040
+actually implementation of ZFS, which right now is outside of the kernel.
+
+18:18.040 --> 18:27.360
+Finally, the virtual file system bootstrap code needs to dynamically load libsolarisso
+
+18:27.360 --> 18:37.680
+from bootfs or read-onlyfs using dlopen before mounting ZFS file system.
+
+18:37.680 --> 18:44.120
+There are at least three advantages of moving ZFS to a separate library.
+
+18:44.120 --> 18:50.760
+Most of ZFS can be optionally loaded from another file system like bootfs or read-onlyfs, partition
+
+18:50.760 --> 18:53.760
+on the same disk or another disk.
+
+18:53.760 --> 19:00.080
+I will actually discuss that in more detail in one of the upcoming slides later.
+
+19:00.080 --> 19:08.040
+Then also kernel gets smaller by around 800 kilobytes and effectively becomes 3.6 megabytes
+
+19:08.040 --> 19:09.040
+in size.
+
+19:09.040 --> 19:15.160
+Finally, there are at least 10 fewer threads that are needed to run non-ZFS image.
+
+19:15.160 --> 19:31.960
+For example, when you run read-onlyfs image on OSV, with one CPU, it only requires 25
+
+19:31.960 --> 19:37.000
+threads.
+
+19:37.000 --> 19:45.280
+The regular Linux GLLipsi apps should run fine on kernel with most symbols and standard
+
+19:45.280 --> 19:47.440
+C++ library hidden.
+
+19:47.440 --> 19:55.800
+Unfortunately, many unit tests, which I mentioned, and various internal OSV apps, which are written
+
+19:55.800 --> 20:02.520
+mostly in C++, so-called modules, do not, as they had been coded in the past to use
+
+20:02.520 --> 20:07.760
+those internal C++ symbols from the kernel.
+
+20:07.760 --> 20:12.960
+We have to do something to deal with that problem.
+
+20:12.960 --> 20:23.320
+In the release 0.57, we introduced some of the CRAPR API, which are basically in C-style
+
+20:23.320 --> 20:28.160
+convention.
+
+20:28.160 --> 20:38.920
+We changed those modules to use those CRAPR function instead of C++ code.
+
+20:38.920 --> 20:44.880
+The benefit is that down the road, we might have some newer apps or some newer modules
+
+20:44.880 --> 20:50.440
+that would use those CRAPR functions.
+
+20:50.440 --> 20:54.520
+It also may make OSV more modular.
+
+20:54.520 --> 21:00.960
+As you can see, one of those examples is, for example, OSV gets all threads, which is
+
+21:00.960 --> 21:12.680
+basically a function that gives a thread-safe way to color to basically iterate over threads,
+
+21:12.680 --> 21:22.840
+which for example is used in an HTTP monitoring module to list all the threads.
+
+21:22.840 --> 21:32.720
+A good example of OSV-specific modules that uses some internal C++ symbols is HTTP server
+
+21:32.720 --> 21:33.720
+monitoring.
+
+21:33.720 --> 21:41.720
+We modify the HTTP monitoring module to stop using internal kernel C++ API.
+
+21:41.720 --> 21:47.480
+We do it by replacing some of the calls to internal C++ symbols with this new module
+
+21:47.480 --> 21:54.360
+C-style API, symbols from the slide which you saw on the slide before, for example,
+
+21:54.360 --> 21:59.840
+SCAD with all threads with this new OSV getAllThreads function.
+
+21:59.840 --> 22:04.760
+In other scenarios, we fall back to standard G-LipC API.
+
+22:04.760 --> 22:12.200
+For example, the monitoring app used to call OSV current mount.
+
+22:12.200 --> 22:29.400
+Right now, it uses basically getNT and function and related ones.
+
+22:29.400 --> 22:37.480
+The release 0.57 introduced another build mechanism that allows creating a custom kernel
+
+22:37.480 --> 22:43.000
+with a specific list of drivers intended to target given hypervisor.
+
+22:43.000 --> 22:50.800
+Obviously such kernel benefits from even smaller size and better security as all unneeded code,
+
+22:50.800 --> 22:55.480
+all unneeded drivers are basically excluded during the build process.
+
+22:55.480 --> 23:02.360
+In essence, we introduce a new build script and make file parameter, driver's profile.
+
+23:02.360 --> 23:09.240
+This new parameter is intended to specify a driver profile which is simply a list of
+
+23:09.240 --> 23:19.320
+device drivers to be linked into the kernel and some extra functionality like PCI or ACPI
+
+23:19.320 --> 23:21.760
+these drivers depend on.
+
+23:21.760 --> 23:30.640
+Each profile is specified in a tiny include files with the MK extension under conf profiles
+
+23:30.640 --> 23:39.400
+arch directory and included by the main make file as requested by the driver profile parameter.
+
+23:39.400 --> 23:48.200
+The main make file has a number of basically if expressions and adds a conditionally given
+
+23:48.200 --> 23:57.800
+driver object to the linked object list depending on the value of 0 or 1 of the given conf driver's
+
+23:57.800 --> 24:02.960
+parameter specified in that include file.
+
+24:02.960 --> 24:10.680
+The benefit of using drivers are most profound when they are used with when you build kernel
+
+24:10.680 --> 24:17.680
+and hide most of the symbols as I talked about in one of the previous slides.
+
+24:17.680 --> 24:24.440
+It's also possible to enable or disable individual drivers on top of profiles.
+
+24:24.440 --> 24:30.640
+Files are basically list of the drivers but there are number of configuration parameters
+
+24:30.640 --> 24:35.880
+that where you can specifically for example include which I'm going to be actually showing
+
+24:35.880 --> 24:36.880
+here.
+
+24:36.880 --> 24:42.120
+You can include specific driver.
+
+24:42.120 --> 24:47.320
+One may ask a question why not use something more standard like menu config like for example
+
+24:47.320 --> 24:49.880
+what Unicraft does.
+
+24:49.880 --> 24:58.240
+Actually OSV has this specific build system and I didn't want to basically now introduce
+
+24:58.240 --> 25:01.960
+another way of doing things.
+
+25:01.960 --> 25:09.760
+That's where we basically script the build uses the various effectively parameters to
+
+25:09.760 --> 25:21.520
+for example take to hide symbols or specify specific driver profile or list of other parameters.
+
+25:21.520 --> 25:38.640
+As you can see in the first example we built default kernel with all symbols hidden and
+
+25:38.640 --> 25:46.360
+the resulting kernel is around 36 3.6 megabytes.
+
+25:46.360 --> 25:56.800
+In the next example we actually use we built kernel with the VITIO over PCI profiles which
+
+25:56.800 --> 26:06.560
+is like 300 kilobytes smaller and then we in the third one we built kernel which is
+
+26:06.560 --> 26:20.480
+intended to for example for Firecracker when we include only VITIO block device and networking
+
+26:20.480 --> 26:23.840
+driver over MMIO transport.
+
+26:23.840 --> 26:31.040
+And then just to see basically in a fourth one just to see how large the drivers code
+
+26:31.040 --> 26:37.400
+in OSV is when you basically use driver profiles base which is basically nothing no drivers
+
+26:37.400 --> 26:46.880
+you can see that roughly 600 kilobytes of the drivers code is roughly 600 kilobytes
+
+26:46.880 --> 26:48.360
+in size.
+
+26:48.360 --> 26:54.560
+And then in the last one actually option is where you can specify you use basically drivers
+
+26:54.560 --> 27:02.280
+profile and then you explicitly say which specific drivers or driver like the capability
+
+27:02.280 --> 27:14.840
+like in this case ACPI, VITIOFS and VITIO net and PV panic devices you want to use.
+
+27:14.840 --> 27:21.960
+Actually with the new version with new release of OSV 0.57 we started publishing new versions
+
+27:21.960 --> 27:29.840
+of new variations effectively of OSV kernel that correspond to this I thought you know
+
+27:29.840 --> 27:36.600
+interesting build configuration that I just mentioned and in this example the OSV loader
+
+27:36.600 --> 27:45.600
+hidden artifacts are effectively the versions of OSV kernel built with most symbols hidden
+
+27:45.600 --> 27:59.280
+and then for example which will be at the top for both ARM and x86 and then for example
+
+27:59.280 --> 28:05.400
+right here in the second and the third and fourth artifacts basically version of the
+
+28:05.400 --> 28:12.240
+kernel built for micro VM profile which is effectively something that you would use to
+
+28:12.240 --> 28:25.040
+run OSV on firecracker which only has VITIO over MMIO transport.
+
+28:25.040 --> 28:32.400
+Now the release 0.57 introduced yet another built mechanism and that allows creation of
+
+28:32.400 --> 28:38.400
+a custom kernel by exporting only symbols required by a specific application.
+
+28:38.400 --> 28:45.240
+The extra such kernel benefits from the fact that again it's a little bit smaller and thus
+
+28:45.240 --> 28:53.400
+offers better security as in essence all unneeded code by that specific application is removed.
+
+28:53.400 --> 28:59.800
+This new mechanism relies on two scripts that analyze the built manifest, detect application
+
+28:59.800 --> 29:08.320
+L files, identify symbols required from OSV kernel and finally produce the application-specific
+
+29:08.320 --> 29:14.320
+version script under app version script.
+
+29:14.320 --> 29:21.400
+The generate app version script iterates over the manifest files produced by list manifest
+
+29:21.400 --> 29:29.560
+files pi, identifies undefined symbols in the L files using object dump that are also
+
+29:29.560 --> 29:35.560
+exported by OSV kernel and finally generates basically the app version script.
+
+29:35.560 --> 29:40.840
+So please note that this functionality only works when you build kernel with most symbols
+
+29:40.840 --> 29:43.480
+hidden.
+
+29:43.480 --> 29:52.320
+So I think what is kind of interesting, well interesting, worth noting in that approach
+
+29:52.320 --> 29:56.680
+is that you basically run a built script against given application twice.
+
+29:56.680 --> 30:02.960
+Basically first time to identify all symbols that application needs from OSV kernel and
+
+30:02.960 --> 30:15.080
+then actually second time we do is to build the kernel for that specific app.
+
+30:15.080 --> 30:24.000
+In this example we actually generate kernel specific to run a simple going app on OSV
+
+30:24.000 --> 30:38.520
+and when you actually build kernel with symbols around I think 30 symbols in by going pi example,
+
+30:38.520 --> 30:49.600
+the kernel is effectively by around half a megabyte smaller and it's around 3.2 megabytes.
+
+30:49.600 --> 31:00.600
+So this approach has obviously some limitations.
+
+31:00.600 --> 31:07.280
+Some applications obviously use for example DLS then to dynamically resolve symbols and
+
+31:07.280 --> 31:10.480
+those would be missed by this technique.
+
+31:10.480 --> 31:16.440
+So in this scenario basically for now you have to manually find those symbols and add
+
+31:16.440 --> 31:20.200
+them to the app version script file.
+
+31:20.200 --> 31:27.440
+Conversely a lot of jilipsy functionality is still in OSV in the Linux CC where all
+
+31:27.440 --> 31:37.640
+the system calls are actually implemented is still basically references all the code
+
+31:37.640 --> 31:40.680
+in some of the parts of the lips implementation.
+
+31:40.680 --> 31:43.240
+So this obviously also would not be removed.
+
+31:43.240 --> 31:54.080
+So obviously we could think of ways of finding some kind of built mechanism that could for
+
+31:54.080 --> 32:04.560
+example find all the usages of Cisco instruction or SVC on ARM and analyze and find all these
+
+32:04.560 --> 32:09.520
+only code that is needed.
+
+32:09.520 --> 32:14.400
+In the future we may componentize other functional elements of the kernel for example the DHCP
+
+32:14.400 --> 32:19.720
+lookup code could be either loaded from a separate library or compiled out depending
+
+32:19.720 --> 32:25.120
+on some build option to improve compatibility while also planning to add support of statically
+
+32:25.120 --> 32:33.280
+linked executables which would require implementing at least clone, BRK and arch PRCTL syscalls.
+
+32:33.280 --> 32:38.680
+We may also introduce ability to swap built in version of jilipsy libraries with third
+
+32:38.680 --> 32:45.920
+party ones for example the subset of libm so that is provided by OSV kernel could be
+
+32:45.920 --> 32:55.240
+possibly hidden with the mechanism that is discussed and we could use different implementation
+
+32:55.240 --> 32:57.160
+of that library.
+
+32:57.160 --> 33:04.600
+Finally we are considering to expand standard procfs and syscfs and OSV specific parts of
+
+33:04.600 --> 33:10.600
+syscfs that would better support statically linked executables but also allow regular
+
+33:10.600 --> 33:13.800
+apps to interact with OSV.
+
+33:13.800 --> 33:20.640
+A good example of it could be implementation of netstat like type of capability application
+
+33:20.640 --> 33:31.680
+that could expose the networking internals of OSV better during runtime.
+
+33:31.680 --> 33:35.920
+In the next part of the presentation I will discuss the other interesting enhancements
+
+33:35.920 --> 33:39.360
+introduced as part of the latest 0.57 release.
+
+33:39.360 --> 33:45.800
+More specifically I will talk about lazy stack and new ways to build ZFS images and finally
+
+33:45.800 --> 33:51.680
+the improvements to the AR-64 port.
+
+33:51.680 --> 34:00.120
+The lazy stack which by the way is actually the idea that was felt off by Nadav Harrell
+
+34:00.120 --> 34:06.800
+which maybe is listening to this presentation effectively allows to save substantial amount
+
+34:06.800 --> 34:12.440
+of memory if an application spawns many p threads with large stack by letting stack
+
+34:12.440 --> 34:17.840
+grow dynamically as needed instead of getting pre-populated ahead of time which is normally
+
+34:17.840 --> 34:19.760
+the case right now with OSV.
+
+34:19.760 --> 34:26.080
+So on OSV right now all kernel threads and all application threads have stacks that are
+
+34:26.080 --> 34:31.200
+automatically pre-populated which is obviously not very memory efficient.
+
+34:31.200 --> 34:36.420
+Now the crux of the solution is based on observation that OSV page fault handler requires that
+
+34:36.420 --> 34:45.880
+both interrupts and preemption must be enabled when fault is triggered and therefore if stack
+
+34:45.880 --> 34:51.720
+is dynamically mapped we need to make sure that the stack page fault never happens in
+
+34:51.720 --> 34:56.920
+these relatively few places where the kernel code that executes with either interrupts
+
+34:56.920 --> 35:00.160
+or preemption disabled.
+
+35:00.160 --> 35:06.200
+And we basically satisfied this requirement by pre-faulting the stack by reading one byte,
+
+35:06.200 --> 35:14.260
+one page down per stack pointer just before preemption or interrupts are disabled.
+
+35:14.260 --> 35:18.760
+So a good example of that code would be in a scheduler right when OSV scheduler is trying
+
+35:18.760 --> 35:29.120
+to figure out what the next threads to switch to and obviously that code has preemption
+
+35:29.120 --> 35:38.240
+and interrupts disabled and we wouldn't obviously want to have page fault happen at that moment.
+
+35:38.240 --> 35:44.960
+So there are relatively few places when that happens and this idea is to basically pre-fault
+
+35:44.960 --> 35:48.280
+this code.
+
+35:48.280 --> 35:54.760
+So to achieve that we basically analyze OSV code to find all the places where the IRQ
+
+35:54.760 --> 36:01.160
+disabled and pre-empt disabled is called directly or indirectly sometimes and pre-fault the
+
+36:01.160 --> 36:03.800
+stack there if necessary.
+
+36:03.800 --> 36:07.880
+As we analyze all call sites we need to follow basically five rules.
+
+36:07.880 --> 36:13.480
+The first one do nothing if the call in question executes always on the kernel thread because
+
+36:13.480 --> 36:15.480
+it has pre-populated stack.
+
+36:15.480 --> 36:19.800
+There's no chance that page fault is going to happen.
+
+36:19.800 --> 36:26.960
+Second one is do nothing if the call site executes on other type of pre-populated stack.
+
+36:26.960 --> 36:33.760
+The good example of that would be the interrupt and exception stack or syscall stack which
+
+36:33.760 --> 36:37.320
+are all pre-populated.
+
+36:37.320 --> 36:44.560
+And the number three rule is do nothing if the call site executes when we know that either
+
+36:44.560 --> 36:50.800
+interrupts or pre-emptions are disabled because we don't need to somebody already probably
+
+36:50.800 --> 36:52.400
+pre-faulted that.
+
+36:52.400 --> 36:57.760
+And then pre-fault unconditionally if we know that both pre-emptions and interrupts are
+
+36:57.760 --> 37:00.000
+about to be enabled.
+
+37:00.000 --> 37:07.280
+And otherwise pre-fault stack by determining dynamically basically by calling the pre-emptable
+
+37:07.280 --> 37:11.320
+is pre-emptable and IRQ enabled functions.
+
+37:11.320 --> 37:20.200
+Now the idea basically if we only always if we did if we followed only rule number five
+
+37:20.200 --> 37:24.200
+which actually this is what I tried to do in the very beginning the first attempt to
+
+37:24.200 --> 37:28.680
+implement like syscall it would be actually pretty inefficient.
+
+37:28.680 --> 37:36.840
+I mean I saw pretty significant degradation of for example you know context switch and
+
+37:36.840 --> 37:46.360
+other parts of the OSV when I dynamically checked if preemption and interrupts were
+
+37:46.360 --> 37:47.360
+disabled.
+
+37:47.360 --> 37:52.080
+So this access was pretty painful to basically analyze the code but I think it was worth
+
+37:52.080 --> 37:55.400
+it.
+
+37:55.400 --> 38:00.680
+As you remember from the modularity slides the ZFS file system has been extracted from
+
+38:00.680 --> 38:07.640
+the kernel as a separate shared library called libsolyzeso which can be loaded from the different
+
+38:07.640 --> 38:11.480
+file system before ZFS file system can be mounted.
+
+38:11.480 --> 38:15.680
+This allows for three ways ZFS can be mounted by OSV.
+
+38:15.680 --> 38:21.680
+The first and original way assumes that ZFS is mounted at the root from the first partition
+
+38:21.680 --> 38:23.320
+of the first disk.
+
+38:23.320 --> 38:29.120
+The second one involves mounting ZFS from the second partition of the first disk and
+
+38:29.120 --> 38:34.680
+at an arbitrary non-root point for example slash data.
+
+38:34.680 --> 38:39.960
+Similarly the third way involves mounting ZFS from the first partition of the second
+
+38:39.960 --> 38:46.200
+or higher disk at an arbitrary non-root point as well.
+
+38:46.200 --> 38:52.000
+Please note that the second and third options assume that the root file system is non-ZFS
+
+38:52.000 --> 38:59.480
+obviously and which could be like read-onlyFS or bootFS.
+
+38:59.480 --> 39:09.080
+This slide shows you the build command and how OSV runs when we follow the original and
+
+39:09.080 --> 39:13.320
+default method of building and mounting ZFS.
+
+39:13.320 --> 39:23.120
+For those that have done it, there's nothing really interesting here.
+
+39:23.120 --> 39:31.320
+This is a new method, actually the first of the two new ones where we actually allow ZFS
+
+39:31.320 --> 39:38.040
+to be mounted at a non-root mount point like beta for example and mixed with another file
+
+39:38.040 --> 39:39.520
+system on the same disk.
+
+39:39.520 --> 39:45.920
+Please note that libsolaris as always plays on the root file system, typically read-onlyFS
+
+39:45.920 --> 39:50.600
+under usr.libfs and load it from it automatically.
+
+39:50.600 --> 40:00.280
+The build script will automatically add the relevant mount point time to its ZFS style.
+
+40:00.280 --> 40:06.240
+The last method is basically similar to the one before but this time we allow ZFS to be
+
+40:06.240 --> 40:13.480
+mounted from the partition from the second disk or another one.
+
+40:13.480 --> 40:20.320
+Actually what happens with this option, I noticed that OSV would actually mount ZFS
+
+40:20.320 --> 40:27.560
+file system by around 30 to 40 milliseconds faster.
+
+40:27.560 --> 40:38.920
+Now there's another new feature we used to run in order to build ZFS images and file
+
+40:38.920 --> 40:43.760
+system we would use OSV itself to do it.
+
+40:43.760 --> 40:50.360
+With this new release there's a specialized version of the kernel called ZFS loader which
+
+40:50.360 --> 40:57.840
+basically delegates to this utility like ZPUL, ZFS and so on to mount OSV.
+
+40:57.840 --> 41:07.840
+But there's also now a new script called ZFS image on host that can be used to mount OSV
+
+41:07.840 --> 41:13.040
+ZFS images provided you have open ZFS functionality on your host system.
+
+41:13.040 --> 41:21.800
+Which is actually quite nice because you can mount basically OSV disk and introspect it.
+
+41:21.800 --> 41:30.560
+You can also modify it using standard Linux tools and unmount it and use it on OSV again.
+
+41:30.560 --> 41:38.720
+Here's some help on how this new script can be used.
+
+41:38.720 --> 41:43.640
+Now I think I don't have much time left but I will try.
+
+41:43.640 --> 41:49.080
+Also I will focus a little bit on the AR64 improvements.
+
+41:49.080 --> 41:53.200
+I will focus on three things that I think are worth mentioning.
+
+41:53.200 --> 42:04.320
+The changes to dynamically map the kernel during the boot from the second basically
+
+42:04.320 --> 42:09.720
+gigabyte of visual memory to the 63rd gigabyte of memory.
+
+42:09.720 --> 42:16.640
+Additional enhancements to handle system calls and then also handle exceptions on a dedicated
+
+42:16.640 --> 42:19.960
+stock.
+
+42:19.960 --> 42:25.400
+As far as the moving memory, visual memory to the 63rd gigabyte, so I'm not sure if you
+
+42:25.400 --> 42:30.640
+realize OSV kernel is actually position dependent.
+
+42:30.640 --> 42:37.320
+But obviously the kernel itself may be loaded in different parts of physical memory.
+
+42:37.320 --> 42:40.640
+It used to be before that release that you would have to build different versions for
+
+42:40.640 --> 42:44.440
+Firecracker or for the QEMU.
+
+42:44.440 --> 42:52.040
+Basically in this release we changed the logic in the assembly in a boot loader where we
+
+42:52.040 --> 43:02.520
+basically OSV detects itself where it is in a physical memory and in essence builds dynamically
+
+43:02.520 --> 43:12.600
+the early mapping tables to then eventually bootstrap to the right place in the positional
+
+43:12.600 --> 43:15.240
+code.
+
+43:15.240 --> 43:19.200
+So now basically you don't need to... You can use the same version of the kernel to
+
+43:19.200 --> 43:21.800
+on any hypervisor.
+
+43:21.800 --> 43:30.640
+Now to add system calls on ARM we have to handle the SVC instruction.
+
+43:30.640 --> 43:39.440
+There's not really much interesting if you know how that works.
+
+43:39.440 --> 43:46.480
+What is maybe a little bit more interesting was the change that I made to make all exceptions,
+
+43:46.480 --> 43:49.040
+including system calls to work on a dedicated stock.
+
+43:49.040 --> 43:55.800
+So before that change all exceptions would be handled on the same stock as the application
+
+43:55.800 --> 44:03.880
+which costs all kinds of problems.
+
+44:03.880 --> 44:08.560
+For example, that would effectively prevent implementation of the lazy stock.
+
+44:08.560 --> 44:21.720
+So to support basically that, in OSV which runs in EL1 in a kernel mode we would basically
+
+44:21.720 --> 44:30.720
+take advantage of the stack selector register and we would basically use both stack pointer
+
+44:30.720 --> 44:34.040
+register SPL0 and SPL1.
+
+44:34.040 --> 44:47.320
+So normally OSV uses SPL1 register to point to the stock for each spread.
+
+44:47.320 --> 44:53.320
+With the new implementation what basically we would do before the exception was taken
+
+44:53.320 --> 45:01.800
+basically we would switch the stack pointer selector to SPL0.
+
+45:01.800 --> 45:09.720
+Once basically the exception was handled it would basically go back to normal which was
+
+45:09.720 --> 45:12.720
+SPL1.
+
+45:12.720 --> 45:24.280
+I think I'm going to skip with the fast because we're running a little bit of time left but
+
+45:24.280 --> 45:28.280
+you can read it on that.
+
+45:28.280 --> 45:39.400
+We've also added Netlink support and we've made quite many improvements to VFS layer.
+
+45:39.400 --> 45:47.480
+So both actually of those Netlink and VFS improvements were done to support C-WitFS.
+
+45:47.480 --> 45:53.120
+So there are basically more gaps that have been filled by trying to run this new use
+
+45:53.120 --> 45:56.120
+case.
+
+45:56.120 --> 46:01.880
+So just briefly as we are pretty much at the end of the presentation I think in the next
+
+46:01.880 --> 46:07.800
+releases of OSV whenever they're going to happen I would like us to focus on supporting
+
+46:07.800 --> 46:13.720
+statically linked executables, adding proper support of spin locks because OSV for example
+
+46:13.720 --> 46:20.920
+Mutex right now is lock less but under high contention it would actually make sense to
+
+46:20.920 --> 46:25.840
+use spin locks and we have actually a prototype on that on the mailing list.
+
+46:25.840 --> 46:31.000
+And then supporting ASLR, refreshing Capstan which is a build tool which hasn't been really
+
+46:31.000 --> 46:35.600
+out because we don't have enough volunteers, improved for a long time and then even the
+
+46:35.600 --> 46:41.280
+website and there are many other interesting ones.
+
+46:41.280 --> 46:48.440
+So as a last slide I would like to basically use this as occasion to thank basically organizer
+
+46:48.440 --> 46:56.760
+Rasvan for inviting me and everybody else from the community of UNI kernels and I would
+
+46:56.760 --> 47:07.200
+also want to thank SillaDB for supporting me and Dorlauer and Nadav Harrell for reviewing
+
+47:07.200 --> 47:14.240
+all the patches and his other improvements and I also want to thank all other contributors
+
+47:14.240 --> 47:21.680
+to OSV and I also would like to invite you to join us because there are not many of us
+
+47:21.680 --> 47:27.800
+and if you want to have OSV alive we definitely need you.
+
+47:27.800 --> 47:35.520
+So there are some resources about OSV, there's my P99 presentation here as well and if you
+
+47:35.520 --> 47:37.840
+guys have any questions I'm happy to answer them.
+
+47:37.840 --> 47:38.840
+Thank you.
+
+47:38.840 --> 47:39.840
+Thank you Voldemort.
+
+47:39.840 --> 47:40.840
+Thank you.
+
+47:40.840 --> 47:46.280
+So any questions for Voldemort?
+
+47:46.280 --> 47:48.800
+Yeah please, just ask it's going to be a bit too.
+
+47:48.800 --> 47:49.800
+I have two questions.
+
+47:49.800 --> 48:01.040
+First when you have spoken about symbols, about the GLC symbols and the CLC symbols,
+
+48:01.040 --> 48:08.040
+do I understand it correctly that the problem is that a kernel might be using some GLC functions
+
+48:08.040 --> 48:15.400
+and some applications might be linked to its own GLC and some symbols clash with it?
+
+48:15.400 --> 48:21.880
+Well not really, they would use the same version and there's no problem with for example malloc,
+
+48:21.880 --> 48:28.240
+like malloc we don't want to expose malloc but there is a good chunk of OSVs implemented
+
+48:28.240 --> 48:35.440
+in C++ and all of those symbols don't need to be exposed because they inflate the symbols
+
+48:35.440 --> 48:42.400
+stable a lot and they are not, they shouldn't be really available to visible to others.
+
+48:42.400 --> 48:51.560
+And now I think OSV exposes if you build with that option around I think 16 hundreds of
+
+48:51.560 --> 48:52.560
+symbols instead of 17,000.
+
+48:52.560 --> 48:57.240
+So it's really about the binary size there?
+
+48:57.240 --> 49:05.360
+Yeah, yeah basically binary size and with in case of C++ library avoiding a collision
+
+49:05.360 --> 49:11.560
+where you build OSV with different version of C++ library versus the application that.
+
+49:11.560 --> 49:16.280
+Yeah okay so this is the case I am interested in.
+
+49:16.280 --> 49:22.280
+So have you thought about maybe renaming the symbols in the kernel image during the link
+
+49:22.280 --> 49:29.280
+time, maybe adding some prefixes to all the symbols so that you can have them visible
+
+49:29.280 --> 49:31.360
+but they would not clash?
+
+49:31.360 --> 49:34.360
+That's interesting idea, I haven't thought about it yet.
+
+49:34.360 --> 49:35.360
+And Marti the second question?
+
+49:35.360 --> 49:36.360
+Yeah, yeah just a quick second question.
+
+49:36.360 --> 49:37.360
+So when you have spoken about the lazy stack you said that you pre-fold the stack to avoid
+
+49:37.360 --> 49:38.360
+the problematic case when it drops and preemptions disabled.
+
+49:38.360 --> 49:39.360
+So basically when I am thinking about it you still need to have some kind of upper bound
+
+49:39.360 --> 49:40.360
+of the size of the stack so that you know that you pre-folded large enough to not get
+
+49:40.360 --> 49:41.360
+into the inter-dependence of the stack.
+
+49:41.360 --> 49:51.520
+So what I am thinking about is that you have to have a kind of a
+
+49:51.520 --> 50:19.520
+upper bound for the whole kernel.
+
+50:19.520 --> 50:24.280
+Well I mean this is a technique for applications, threads only.
+
+50:24.280 --> 50:30.480
+So for application stacks where the kernel threads would still have the pre-populated
+
+50:30.480 --> 50:33.200
+fixed size stack.
+
+50:33.200 --> 50:36.440
+Because I mean there are many applications like good example is Java that would start
+
+50:36.440 --> 50:42.600
+like 200 threads and all of them right now are pre-folded like 1 megabyte and you would
+
+50:42.600 --> 50:45.480
+all of a sudden need like 200.
+
+50:45.480 --> 50:46.480
+So this is just for application.
+
+50:46.480 --> 50:54.720
+Okay so basically my understanding is wrong so you have obviously yeah so you have the
+
+50:54.720 --> 50:57.840
+user stack and the kernel stack is the same stack.
+
+50:57.840 --> 51:07.240
+Well no it is in the same you know virtual memory but yeah there are I mean when I say
+
+51:07.240 --> 51:10.880
+kernel stack I mean in OSV basically there are two types of threads.
+
+51:10.880 --> 51:14.240
+There are kernel threads and there are application threads.
+
+51:14.240 --> 51:18.160
+So basically application threads use their own stack but.
+
+51:18.160 --> 51:25.680
+But when they enter the kernels so to speak they are still using the original.
+
+51:25.680 --> 51:31.440
+I mean application threads use application stack and kernel use a kernel and when I say
+
+51:31.440 --> 51:39.800
+like some kernel code obviously as a, well obviously because uni-kernel as the code executes
+
+51:39.800 --> 51:45.600
+in an application it runs on application stack but it may execute some kernel code as well.
+
+51:45.600 --> 51:46.600
+Which yeah.
+
+51:46.600 --> 51:47.600
+Yeah.
+
+51:47.600 --> 51:48.600
+Thank you.
+
+51:48.600 --> 51:49.600
+Any other question?
+
+51:49.600 --> 51:50.600
+Okay thank you so much.
+
+51:50.600 --> 52:11.240
+Let's move on.

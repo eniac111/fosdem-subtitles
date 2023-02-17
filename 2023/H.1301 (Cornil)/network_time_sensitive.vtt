@@ -1,0 +1,691 @@
+WEBVTT
+
+00:00.000 --> 00:12.280
+Hi, welcome to my talk. So you want to build a deterministic networking system, a gentle
+
+00:12.280 --> 00:17.720
+introduction to time-sensitive networking, just out of interest how many of you have
+
+00:17.720 --> 00:23.720
+heard of TSN or time-sensitive networking so far? That's quite a few for a networking
+
+00:23.720 --> 00:30.720
+session, that's great. How many of you have already worked with that? Not so many. Okay,
+
+00:30.720 --> 00:38.200
+you will after that talk. Yeah, who am I? I think I'm a former system engineer. I worked
+
+00:38.200 --> 00:44.680
+a lot with time-sensitive networking and its predecessors. I also took part in standardization,
+
+00:44.680 --> 00:50.160
+so I also did some of that. And since last summer, I work at the current developer at
+
+00:50.160 --> 00:58.320
+Pangrotronics, that's a German Linux consulting and support company. We have roughly 7,600
+
+00:58.320 --> 01:04.360
+patches in the kernel and we also do consulting for real-time networking amongst many other
+
+01:04.360 --> 01:11.760
+stuff. And by the way, we're hiring, of course. Now, to what we will look into today, we will
+
+01:11.760 --> 01:19.640
+look into applications. I will give you some examples why you would probably want to do
+
+01:19.640 --> 01:27.720
+networking over real-time data transport over networking and what the implications of that
+
+01:27.720 --> 01:33.120
+is, what the requirements of these applications are. We will look into the basic building
+
+01:33.120 --> 01:39.360
+blocks. So, sorry for the folks who already know about that. And we will talk a bit about
+
+01:39.360 --> 01:46.200
+which Linux user space and kernel components are used in building these applications. And
+
+01:46.200 --> 01:52.160
+I will sum up the state of the union a bit and then just as an announcement in advance,
+
+01:52.160 --> 01:57.360
+there are some bonus slides where I will give some more details and some references to open
+
+01:57.360 --> 02:02.680
+source projects already working with TSM. So, if you're interested in that, just download
+
+02:02.680 --> 02:08.600
+the slides from the Penta and, well, check out the links. And I also gave an example
+
+02:08.600 --> 02:14.600
+of how to basically glue together a stage box, so a transport system for audio data
+
+02:14.600 --> 02:21.360
+over the network. I won't make that into the talk because it has been shortened to half
+
+02:21.360 --> 02:29.320
+an hour. So, the example I will focus on today is audio video bridging. So, if you want to
+
+02:29.320 --> 02:35.800
+transport real-time data over a network for an application just as this talk, you want
+
+02:35.800 --> 02:41.320
+to have as low JIT above or as much JIT above as possible to reduce latency in the system
+
+02:41.320 --> 02:47.160
+because if you transport data over a traditional network, packets could get dropped, so you
+
+02:47.160 --> 02:53.720
+have to resend them or you have to make sure that somehow magically interfering traffic
+
+02:53.720 --> 03:00.280
+doesn't do you any harm. And that usually involves quite large JIT above us of up to
+
+03:00.280 --> 03:05.720
+several seconds. And if I talk now and you hear me from stage and you hear me from the
+
+03:05.720 --> 03:11.640
+EPA four seconds after that, that would be quite annoying. So, you want to cut that down
+
+03:11.640 --> 03:19.800
+to as low as possible transmission latency overall, end-to-end latency. Of course, for
+
+03:19.800 --> 03:27.880
+TSN, we started as audio video bridging or A-V-B as a standard. They came across the
+
+03:27.880 --> 03:33.680
+fact that this technology could also be useful for quite some other applications. Most of
+
+03:33.680 --> 03:38.720
+the customers do like machine control stuff with that. So, if you have a large production
+
+03:38.720 --> 03:45.320
+line and you want to transmit data between your PLC and your server drives or your robot
+
+03:45.320 --> 03:53.880
+arms and stuff, you also want to make sure that your control data arrives in time at
+
+03:53.880 --> 04:00.880
+the actor or your sensor data is read in within a certain point in time. And that's quite
+
+04:00.880 --> 04:06.640
+important to keep that timing. Same holds, of course, for aerospace and automotive and
+
+04:06.640 --> 04:12.760
+railways and stuff. I won't go into these applications today because we're, as I said,
+
+04:12.760 --> 04:19.080
+short on time. The first requirement of said applications is that you need to establish
+
+04:19.080 --> 04:24.800
+a common time base in the network. That's due to the fact that while measuring time
+
+04:24.800 --> 04:30.840
+in computers is basically hooking up a hardware counter to a crystal oscillator. These crash
+
+04:30.840 --> 04:37.200
+crystal oscillators tend to have frequency drift over time, especially with temperature.
+
+04:37.200 --> 04:42.440
+And due to the different switch on points in time, you also have quite large offsets.
+
+04:42.440 --> 04:50.400
+So if you start one device, say at 12 o'clock and the other at 1 p.m., they have one hour
+
+04:50.400 --> 04:58.960
+of offset in there. So you want to make sure that all your network devices have a common
+
+04:58.960 --> 05:09.520
+meaning or a sense of time passing and a common sense of what time it is because lots of scheduling
+
+05:09.520 --> 05:14.640
+decisions for networking traffic may depend on timing. Also, for some applications, as
+
+05:14.640 --> 05:20.640
+the audio example, you also would like to regenerate your audio sampling clocks. So
+
+05:20.640 --> 05:26.520
+basically in order not to introduce any additional degradation in audio quality, you want to
+
+05:26.520 --> 05:34.240
+make sure that your sampling clocks of your ADC and DAC run basically in lockstep. And
+
+05:34.240 --> 05:39.600
+that is why you want to make sure that your time is distributed evenly. And the way this
+
+05:39.600 --> 05:46.680
+is done usually in networks is just shown basically in this old style picture. You elect
+
+05:46.680 --> 05:52.520
+a so-called master clock. So basically that's the best clock reference in your network or
+
+05:52.520 --> 05:59.160
+the most stable clock reference in your network. And then basically you compare all other clocks
+
+05:59.160 --> 06:05.920
+to that clock reference and they have to adjust their local time for that reference time.
+
+06:05.920 --> 06:11.880
+It's basically just as those three gentlemen do in that picture. I like that comparison
+
+06:11.880 --> 06:18.000
+because you find a lot of analogies and the standards to just the way that works with
+
+06:18.000 --> 06:28.880
+like pocket watches. And if you look into that, you will find that basic idea quite
+
+06:28.880 --> 06:36.440
+useful to keep in mind. Now, the other thing we want to have guaranteed is, as I already
+
+06:36.440 --> 06:42.800
+said, bound transmission latency. So if we go across the transmission of a data stream
+
+06:42.800 --> 06:48.520
+in the network, so that's what the standard calls a talker at the left. And that's what
+
+06:48.520 --> 06:54.480
+the standard calls bridges. Usually as we're dealing with layer two, that's ethernet switches.
+
+06:54.480 --> 06:59.440
+And in the right, that's what the standard calls a listener. You also call it a source
+
+06:59.440 --> 07:07.600
+and a sink. But the standard talks about talkers and listeners. And the packet goes from bridge
+
+07:07.600 --> 07:15.280
+to bridge along its path across the network. And each switch, basically a bridge, has an
+
+07:15.280 --> 07:21.160
+ingress queue and a switch fabric and an egress queue. That's due to the fact that you can
+
+07:21.160 --> 07:27.680
+only transmit one packet out of a certain network port at a time. You can't just, if
+
+07:27.680 --> 07:32.880
+another packet at another port arrives for that destination port, you have to store it.
+
+07:32.880 --> 07:37.400
+And you have to wait until last transmission is done. And then you can transmit the next
+
+07:37.400 --> 07:43.200
+packet. And this introduces what's called a residence time in each switch. So even if
+
+07:43.200 --> 07:50.120
+you have a perfect pass through through network without any additional interfering traffic,
+
+07:50.120 --> 07:54.840
+you add a little time. At each step, your payload packet travels through the network.
+
+07:54.840 --> 08:00.120
+So if our audio starts here, it's a bit later when it arrives here and a bit later when
+
+08:00.120 --> 08:06.680
+it arrives there, and so on and so forth. So that's fine, as long as you have no interfering
+
+08:06.680 --> 08:12.760
+traffic. Because if you have additional interfering traffic, and that might be because we of course
+
+08:12.760 --> 08:17.800
+want to use our audio on converged networks. So we want to use the same network for, say,
+
+08:17.800 --> 08:25.200
+our live PA system and for our network internet connection. And we want to download a large
+
+08:25.200 --> 08:33.680
+file because we want to download a presentation recording from Fostem. And basically that's
+
+08:33.680 --> 08:41.920
+where this entity arrives and it's introduced or it creates a large amount of traffic here.
+
+08:41.920 --> 08:47.720
+This will cause the packet here to be delayed until it's sent out of the egress port. And
+
+08:47.720 --> 08:54.160
+basically it won't arrive in time. And if we go for as small Jitter buffers as possible,
+
+08:54.160 --> 08:59.880
+that's a problem because we have a buffer underrun at the listener side. And basically
+
+08:59.880 --> 09:05.280
+we have audio dropouts in the audio case or we have stolen motors in the industrial control
+
+09:05.280 --> 09:11.360
+case. And that's something we have to avoid under any circumstances. So basically something
+
+09:11.360 --> 09:18.880
+we want to have is quality of service. And so the picture, of course, you're a professional
+
+09:18.880 --> 09:22.800
+networking engineer, so you don't need that picture. But the picture I like to use for
+
+09:22.800 --> 09:29.120
+that is a bus lane in the street because also the bus runs in a more or less isochromous
+
+09:29.120 --> 09:39.680
+way. So you send those bus or packets down the lane and the way not to be hindered by
+
+09:39.680 --> 09:46.440
+the interfering traffic there is just basically to introduce a priority lane. And that is
+
+09:46.440 --> 09:54.080
+what we also use in networks basically when we introduce quality of service measures.
+
+09:54.080 --> 09:59.560
+Another thing we need for at least some of these applications is link layer redundancy.
+
+09:59.560 --> 10:06.200
+So imagine if there's a mixing desk right in the back and we run a network link back
+
+10:06.200 --> 10:12.480
+there and someone just trips over that link, rips out the cable or maybe it's a fiber link
+
+10:12.480 --> 10:18.200
+and someone stomps on the fiber link. Bad things happen and basically if host M is over,
+
+10:18.200 --> 10:25.480
+we don't want to have that. So we want to introduce means of having redundancy schemes
+
+10:25.480 --> 10:32.480
+there. Basically you can't think of it as a real time capable, real time healing with
+
+10:32.480 --> 10:41.920
+no waiting time like spanning tree-ish thing. You want to have the standard spanning trees
+
+10:41.920 --> 10:48.840
+quite don't cut it for these kinds of applications so we have to introduce other stuff there.
+
+10:48.840 --> 10:52.880
+We have some other application requirements there. They're not so important so I leave
+
+10:52.880 --> 11:01.640
+them out for now. Now what does the or what kernel and user space components do we have
+
+11:01.640 --> 11:09.560
+to implement that? We will look into what the TSM components are later or what the TSM
+
+11:09.560 --> 11:15.240
+components are because that's basically just numbers and letters. So for time synchronization,
+
+11:15.240 --> 11:21.920
+for especially TSM we use GPTP. That's a flavor of the precision time protocol, basically
+
+11:21.920 --> 11:30.120
+generalized precision time protocol of which you can think of PTP, standard PTP, IEEE 1588
+
+11:30.120 --> 11:36.540
+boils down to layer two. So of course we're dealing with raw, ethernet frames so we can't
+
+11:36.540 --> 11:42.640
+use UDP for transport and it also has some other quirks but they're not too important
+
+11:42.640 --> 11:48.160
+right there. And the way we do that with Linux kernel we have the hardware time-simping units
+
+11:48.160 --> 11:55.040
+and the PTP hardware clocks. That's basically the interface to hardware clocks in your ethernet
+
+11:55.040 --> 12:03.080
+MAC or PHY and the user space component to run all the remaining stuff is PTP for Linux.
+
+12:03.080 --> 12:07.240
+That's basically the way it works and it works quite well. You can achieve down to several
+
+12:07.240 --> 12:13.080
+nanoseconds precision from point to point with that. For traffic shaping that's the
+
+12:13.080 --> 12:21.160
+quality of service measure we want to employ. The kernel has the TC subsystem and usually
+
+12:21.160 --> 12:30.620
+if you configure that manually you use IP
+
+12:30.620 --> 12:38.520
+where it works and we will look into a bit of detail later for network management. So
+
+12:38.520 --> 12:44.640
+basically if you have to reserve a data flow from a talker to a listener that's where it
+
+12:44.640 --> 12:50.080
+gets a bit sketchy because that's of course user space demons and there aren't much. There's
+
+12:50.080 --> 12:57.000
+also a problem because there's several ways of doing that. The traditional way of or ABB
+
+12:57.000 --> 13:04.800
+style, the initial implementation used the so-called stream reservation protocol. Modern
+
+13:04.800 --> 13:15.120
+ways for especially pre-calculated or pre-engineered networks is using Yang-Nadcon extensions.
+
+13:15.120 --> 13:21.800
+And there are some demons for that but support for the TSN extensions is not too great. So
+
+13:21.800 --> 13:32.240
+if you're into that that's quite a nice thing to work on. For the real-time data packetization
+
+13:32.240 --> 13:39.360
+that's mostly user space. Of course you want to use some kernel features like ETF, Qdisks
+
+13:39.360 --> 13:47.560
+and XDP to have as low overhead as possible and to make sure that your transmission is
+
+13:47.560 --> 13:54.200
+sent out as asynchronously as possible and you want to use offloading for that. And then
+
+13:54.200 --> 14:02.080
+there's some very application specific user space components. So for audio video stuff
+
+14:02.080 --> 14:08.280
+you can use the G-streamer plugins and for industrial control I'd recommend to use the
+
+14:08.280 --> 14:18.760
+Open6651 implementation that's not quite finished yet but it's a good starting point at least.
+
+14:18.760 --> 14:26.480
+And for the link layer redundancy that's what PCR and FRAER is. Basically the standards
+
+14:26.480 --> 14:33.560
+are finished since one or two years. There's not much hardware supporting that yet and
+
+14:33.560 --> 14:39.440
+you really want to have hardware offloading for that so you're basically down to proprietary
+
+14:39.440 --> 14:46.720
+vendor stacks at the moment. There are efforts to put stuff mainline but they are not quite
+
+14:46.720 --> 14:55.640
+there yet. But stuff is coming and that's the good thing with that. So I think one slide
+
+14:55.640 --> 15:05.200
+is missing there which is not a too big problem. Yes, one slide is missing. So basically the
+
+15:05.200 --> 15:12.840
+stuff how to put stuff together with TSN I will summarize it without a slide. With time
+
+15:12.840 --> 15:23.520
+synchronization we have GPTP that's IEEE 802.1AS for the IEEE standard fetishists here in
+
+15:23.520 --> 15:30.640
+the room. Traffic shaping the basic standard stuff is the credit based shaper but there
+
+15:30.640 --> 15:37.680
+are more time aware shapers available right now. They are basically making more efficient
+
+15:37.680 --> 15:44.480
+use of your network and the way that works is basically reserving bandwidth along your
+
+15:44.480 --> 15:56.480
+data flow path in your network. Network management again that's a bit application specific so
+
+15:56.480 --> 16:02.400
+the audio video and professional audio video stuff is still using the stream reservation
+
+16:02.400 --> 16:12.600
+protocols and for the payload as I already told that's really really application specific.
+
+16:12.600 --> 16:19.080
+For redundancy we use PCR and FRER. Usually there are some exceptions to that especially
+
+16:19.080 --> 16:24.960
+for professional audio video PCR and FRER weren't standardized when those standards
+
+16:24.960 --> 16:31.120
+were written so there are some proprietary or not proprietary but some other redundancy
+
+16:31.120 --> 16:38.800
+schemes where you basically send two different streams and try to separate your networks
+
+16:38.800 --> 16:49.520
+by means of VLANs usually and try to force different data paths through network. Basically
+
+16:49.520 --> 16:55.880
+nowadays you want to go PCR and FRER whenever your hardware support starts. So state of
+
+16:55.880 --> 17:02.600
+the union the hard stuff is already done so there's already implementations in the kernel
+
+17:02.600 --> 17:10.960
+there are user space demons available. That's again the stuff that's difficult to get right
+
+17:10.960 --> 17:16.280
+so if you want to implement those standards first of all you have to read like tons of
+
+17:16.280 --> 17:25.720
+paper I did that for an employer took me two years so that's really hard to get right and
+
+17:25.720 --> 17:30.080
+the good thing is that that is already implemented you just have to use it and you have to use
+
+17:30.080 --> 17:39.080
+the right knobs. For some stuff like GPTP and traffic shaping you want to really really
+
+17:39.080 --> 17:46.840
+use for GPTP you have to use for traffic shaping you want to use hardware offloading. You
+
+17:46.840 --> 17:53.480
+have to bear in mind that your network gear has to support explicitly GPTP and traffic
+
+17:53.480 --> 17:59.960
+shaping so the band with reservation and basically making sure that your traffic shaping is
+
+17:59.960 --> 18:10.960
+applied properly. That's not true for every hardware especially not for commodity hardware
+
+18:10.960 --> 18:16.720
+and bear in mind that sometimes configuration especially for traffic shaping can be quite
+
+18:16.720 --> 18:23.000
+tricky. As I said I have added bonus slides to the presentation I will check that they
+
+18:23.000 --> 18:32.520
+have the right slides in there later on or just contact me and the point is especially
+
+18:32.520 --> 18:37.200
+credit based shapers can be really really tricky to set up properly and to make sure
+
+18:37.200 --> 18:43.680
+that you reserve the bandwidth you want because you want to have the remaining bandwidth to
+
+18:43.680 --> 18:49.720
+be available for best effort traffic so the idea is that you can use like say 70% of your
+
+18:49.720 --> 18:54.920
+link for your audio video stuff and still have like 30% of your gigabit link which is
+
+18:54.920 --> 19:02.320
+what we are usually dealing with for like audio video available for just best effort
+
+19:02.320 --> 19:07.640
+network management traffic and whatsoever so you really want to make sure your shapers
+
+19:07.640 --> 19:14.520
+are configured the right way to you and it's quite hard to tweak the right knobs in IP
+
+19:14.520 --> 19:23.360
+2. So there are good examples and I strongly recommend to read the docs on that there's
+
+19:23.360 --> 19:29.280
+also a link to the TSM read the docs for Linux it's quite a good starting point for getting
+
+19:29.280 --> 19:36.040
+into that whole topic and yeah basically I think that's it do you have any questions?
+
+19:36.040 --> 19:46.840
+Any questions here?
+
+19:46.840 --> 19:49.200
+Questions?
+
+19:49.200 --> 19:55.240
+Hey thanks for this what's the highest speed Ethernet implementation of this you've seen
+
+19:55.240 --> 20:01.280
+like have you gone seen anything beyond like 10 gigi for example or?
+
+20:01.280 --> 20:09.360
+I have seen a 10 gig implementation for that as far as I recall the standards and have
+
+20:09.360 --> 20:16.200
+some limitations with respect to how you communicate your bandwidth requirements and they're a
+
+20:16.200 --> 20:24.880
+bit capped I'm sure and I know that they are working on that for future revisions of the
+
+20:24.880 --> 20:31.640
+sun it's because of course now faster links are becoming available more and more most
+
+20:31.640 --> 20:39.240
+applications for TSM like the control stuff or the AV stuff are running on 100 megabit
+
+20:39.240 --> 20:46.480
+links still you want to go to gigabit links because you can achieve quite a bit lower
+
+20:46.480 --> 20:55.840
+end to end latencies on faster links but I haven't seen personally haven't seen faster
+
+20:55.840 --> 21:01.800
+stuff than 10 gig so far but I'd be interested to do so.
+
+21:01.800 --> 21:09.200
+Do you have happy stories or really users that have put this in production and can you
+
+21:09.200 --> 21:10.520
+tell more about this?
+
+21:10.520 --> 21:19.160
+Yeah so if you want to check that out you can just google for Milan and TSM which is
+
+21:19.160 --> 21:24.960
+the professional audio video stuff and they just before covid started shortly before covid
+
+21:24.960 --> 21:32.120
+started they ran the Bumstein concert concert in Munich over a TSM system it's a really
+
+21:32.120 --> 21:38.480
+large system with several video balls and several like hundreds of thousands of audio
+
+21:38.480 --> 21:44.720
+streams and pyrotechniques and light control and stuff all in the same network converged
+
+21:44.720 --> 21:52.120
+so that's the largest installation for live audio I know of and I think that's quite a
+
+21:52.120 --> 21:56.320
+good story to tell.
+
+21:56.320 --> 22:02.440
+I was curious if you had the chance to play around with synchronous Ethernet as well?
+
+22:02.440 --> 22:18.320
+I haven't looked into that too deep yet so I can't tell you too much about that.
+
+22:18.320 --> 22:25.280
+You mentioned XDP are you aware of any applications of XDP in that area?
+
+22:25.280 --> 22:30.800
+To be honest I haven't seen them and I will start working on some of them for a customer
+
+22:30.800 --> 22:35.880
+project in just a few weeks probably.
+
+22:35.880 --> 22:42.480
+The idea is that basically because it's layer 2 you don't have much network stack above
+
+22:42.480 --> 22:49.600
+the hardware layer so if you can cut some of the Linux networking stack because you
+
+22:49.600 --> 22:56.920
+don't use it anyway you work on raw sockets anyway you could just cut some of that out
+
+22:56.920 --> 23:05.240
+and try to achieve lower latencies in your basically Linux stack there.
+
+23:05.240 --> 23:10.640
+Probably on the next Fostom I can probably give you a talk on that.
+
+23:10.640 --> 23:14.960
+This is probably a big question but how do you go about debugging this sort of stuff
+
+23:14.960 --> 23:21.320
+so like setting it up or if you think there's a problem how do you go about finding problems?
+
+23:21.320 --> 23:29.800
+That's actually a bit of a pain point and you have to know at least a bit what's same
+
+23:29.800 --> 23:37.560
+values for like path delays for the PTP and stuff are and one of the most useful debugging
+
+23:37.560 --> 23:43.840
+tools I found so far is a good Ethernet switch because it will give you like output for your
+
+23:43.840 --> 23:49.720
+stream reservations so it will give you output for your PTP or GPTP.
+
+23:49.720 --> 23:58.400
+You can also like sniff traffic with wire taps basically and analyze it in Wireshark
+
+23:58.400 --> 24:03.240
+or Skypy or whatever your tool of choice is.
+
+24:03.240 --> 24:07.920
+That works best to be honest for 100 megabit links because you can use passive taps.
+
+24:07.920 --> 24:14.920
+It doesn't work that great for gigabit links because it violates some of the sounds a bit.
+
+24:14.920 --> 24:21.880
+You can also use like mirror ports and switches to exfiltrate traffic but basically it's a
+
+24:21.880 --> 24:29.360
+more manual approach of debugging and I'd like to get in touch with if anyone is interested
+
+24:29.360 --> 24:41.040
+in just write me an email to start a community based project of automated analysis of TSN
+
+24:41.040 --> 24:46.320
+links basically because I think it's something we really really need especially for people
+
+24:46.320 --> 24:53.560
+who aren't that deep into the standards and we need to make sure that we can basically
+
+24:53.560 --> 25:01.120
+have a one click check and set up and can tell from a tool that at least if that looks
+
+25:01.120 --> 25:08.200
+okayish or not what you're doing but I'm not aware of any project so far so I'd like to
+
+25:08.200 --> 25:15.320
+start but I'm not too experienced in how to start such a project so if you're experienced
+
+25:15.320 --> 25:20.720
+in that or are interested in that just write me an email get in touch and maybe we can
+
+25:20.720 --> 25:24.520
+set up something.
+
+25:24.520 --> 25:33.280
+Any more questions for the last one?
+
+25:33.280 --> 25:44.600
+You mentioned some protocols for link redundancy, can it also be used for node redundancy?
+
+25:44.600 --> 25:48.120
+I'm not entirely sure.
+
+25:48.120 --> 25:54.680
+I would have to look something up.
+
+25:54.680 --> 26:01.560
+I think basically it should because it's about the data path so if one node drops out basically
+
+26:01.560 --> 26:06.680
+that would work as well but it won't work for the endpoints so for the talk of the listener
+
+26:06.680 --> 26:15.560
+of course it won't work but for nodes in the middle of your graph that would probably work.
+
+26:15.560 --> 26:16.560
+Thank you very much again for your presentation.
+
+26:16.560 --> 26:32.440
+Thank you.

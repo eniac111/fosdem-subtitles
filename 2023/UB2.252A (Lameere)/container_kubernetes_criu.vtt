@@ -1,0 +1,1000 @@
+WEBVTT
+
+00:00.000 --> 00:14.120
+We want to start and that means I need to once again ask you to quiet down please so
+
+00:14.120 --> 00:16.760
+that we can hear our speaker.
+
+00:16.760 --> 00:22.000
+Our next talk is by Adrian Raber and he's going to talk about Kubernetes and Checkpoint
+
+00:22.000 --> 00:25.000
+Restore.
+
+00:25.000 --> 00:29.840
+So, welcome everyone to my conference.
+
+00:29.840 --> 00:32.960
+We're going to talk about Kubernetes and Checkpoint Restore.
+
+00:32.960 --> 00:33.960
+Please quiet down.
+
+00:33.960 --> 00:40.440
+So, I've actually done the talk about container migration here in 2020.
+
+00:40.440 --> 00:42.760
+This was using Portman in the last three years.
+
+00:42.760 --> 00:46.880
+I was able to move it into Kubernetes.
+
+00:46.880 --> 00:47.880
+It's not on.
+
+00:47.880 --> 00:48.880
+It is on.
+
+00:48.880 --> 00:49.880
+It's green.
+
+00:49.880 --> 00:50.880
+It's on.
+
+00:50.880 --> 00:51.880
+It's a bad.
+
+00:51.880 --> 00:52.880
+Better now.
+
+00:52.880 --> 00:53.880
+No.
+
+00:53.880 --> 00:54.880
+To soft.
+
+00:54.880 --> 00:55.880
+To soft.
+
+00:55.880 --> 01:02.880
+What's to soft?
+
+01:02.880 --> 01:08.880
+You think the only thing that we can do is move it slightly down.
+
+01:08.880 --> 01:09.880
+Better now?
+
+01:09.880 --> 01:10.880
+No.
+
+01:10.880 --> 01:13.880
+You can turn it up.
+
+01:13.880 --> 01:15.880
+Oh, there it was.
+
+01:15.880 --> 01:16.880
+That's for the...
+
+01:16.880 --> 01:18.880
+Is that a two mic?
+
+01:18.880 --> 01:19.880
+It's green.
+
+01:19.880 --> 01:20.880
+It's green.
+
+01:20.880 --> 01:21.880
+It's green.
+
+01:21.880 --> 01:22.880
+It's green.
+
+01:22.880 --> 01:23.880
+Better now.
+
+01:23.880 --> 01:24.880
+Better now.
+
+01:24.880 --> 01:27.880
+No, not too good.
+
+01:27.880 --> 01:30.880
+Is it better now?
+
+01:30.880 --> 01:34.880
+No, no, no, no, no.
+
+01:34.880 --> 01:37.880
+Okay, we got to make do with what we have for now.
+
+01:37.880 --> 01:46.880
+But please, if you all quiet down, we can hear our speaker a lot better.
+
+01:46.880 --> 01:51.880
+Okay, so I'm working on process migration for at least 13 years now.
+
+01:51.880 --> 01:56.880
+I'm involved in CRIU, which is the basis for the container migration we are doing here
+
+01:56.880 --> 01:57.880
+today.
+
+01:57.880 --> 02:00.880
+I don't know.
+
+02:00.880 --> 02:02.880
+Since around 2012.
+
+02:02.880 --> 02:07.880
+And I'm focusing mainly on container migration since 2015.
+
+02:07.880 --> 02:13.880
+So the agenda for today's session here is...
+
+02:13.880 --> 02:14.880
+Can we turn something down?
+
+02:14.880 --> 02:18.880
+I get feedback.
+
+02:18.880 --> 02:19.880
+Okay.
+
+02:19.880 --> 02:21.880
+So the agenda is something like...
+
+02:21.880 --> 02:26.880
+I'm going to talk a bit about background of checkpoint restore, especially how CRIU
+
+02:26.880 --> 02:28.880
+is integrated in different things.
+
+02:28.880 --> 02:34.880
+Then I will present use cases for container checkpoint restore, container migration.
+
+02:34.880 --> 02:38.880
+Then I want to talk about few technical details about CRIU.
+
+02:38.880 --> 02:40.880
+I might make this very short, depending on the time.
+
+02:40.880 --> 02:45.880
+And then I want to talk about a future of checkpoint restore, especially in Kubernetes,
+
+02:45.880 --> 02:49.880
+what we are thinking about topic right now.
+
+02:49.880 --> 02:53.880
+So checkpoint restore in user space is the name of the tool CRIU.
+
+02:53.880 --> 02:58.880
+The reason for the name is that checkpointing and restoring is a thing for over 20 years
+
+02:58.880 --> 03:00.880
+now in Linux, even longer maybe.
+
+03:00.880 --> 03:01.880
+And there were different implementations.
+
+03:01.880 --> 03:03.880
+There were ones using an external module.
+
+03:03.880 --> 03:06.880
+There were ones doing LD preload.
+
+03:06.880 --> 03:09.880
+And around 2006 or 2008, there was something called...
+
+03:09.880 --> 03:12.880
+It was a patch set for the Linux kernel to do it in the kernel.
+
+03:12.880 --> 03:14.880
+It was over 100 patches.
+
+03:14.880 --> 03:18.880
+It was never merged because it was really huge and complicated.
+
+03:18.880 --> 03:24.880
+And because the in kernel thing didn't work, CRIU was named in user space
+
+03:24.880 --> 03:29.880
+because it's not in the kernel, it's in user space.
+
+03:29.880 --> 03:33.880
+There are multiple integrations of CRIU in different container engines,
+
+03:33.880 --> 03:34.880
+run times, orchestration.
+
+03:34.880 --> 03:37.880
+The first one to mention here is OpenVz.
+
+03:37.880 --> 03:41.880
+They invented CRIU for their container product many years ago
+
+03:41.880 --> 03:45.880
+to live migrate containers from one node to another.
+
+03:45.880 --> 03:50.880
+So the thing is about CRIU, it has been developed with containers in mind.
+
+03:50.880 --> 03:56.880
+At the time, it was for different containers probably, but it's for containers.
+
+03:56.880 --> 04:01.880
+And that's why it works as well as it does today.
+
+04:01.880 --> 04:07.880
+Then we know that Google uses CRIU in their internal container engine called Borg.
+
+04:07.880 --> 04:12.880
+I have no details about it except the things I've heard at conferences from them.
+
+04:12.880 --> 04:21.880
+So what they told us, CRIU upstream, is that they use container migration
+
+04:21.880 --> 04:25.880
+for low priority jobs on nodes.
+
+04:25.880 --> 04:30.880
+And if there's not enough resources, then the container will be migrated.
+
+04:30.880 --> 04:36.880
+They said they killed the container before and restarted it somewhere else.
+
+04:36.880 --> 04:41.880
+All the work was lost and now they can just migrate it to another node.
+
+04:41.880 --> 04:47.880
+And they say they use it for background tasks like the example they gave is
+
+04:47.880 --> 04:50.880
+YouTube recoding of things which happens in the background.
+
+04:50.880 --> 04:52.880
+It's not time-critical.
+
+04:52.880 --> 04:55.880
+So that's why they use Checkpoint Restore for.
+
+04:55.880 --> 04:59.880
+Then there's an integration in CXD which enables you to migrate container
+
+04:59.880 --> 05:01.880
+from one host to another.
+
+05:01.880 --> 05:03.880
+Then it's integrated in Docker.
+
+05:03.880 --> 05:08.880
+It's integrated in Portman. This is what I have been working on the last five years mainly.
+
+05:08.880 --> 05:16.880
+And the thing I've been working on in the last three years to get it into Kubernetes
+
+05:16.880 --> 05:20.880
+is to integrate CRIU support into CRIO.
+
+05:20.880 --> 05:26.880
+This is one of the existing container engines which Kubernetes can use.
+
+05:26.880 --> 05:31.880
+Interestingly enough, there's a ticket about container live migration in Kubernetes
+
+05:31.880 --> 05:35.880
+since 2015. Since then, nothing has happened.
+
+05:35.880 --> 05:42.880
+Until now, where we kind of can migrate container, we can definitely checkpoint them.
+
+05:42.880 --> 05:48.880
+And we introduced this into Kubernetes and the label forensic container checkpointing.
+
+05:48.880 --> 05:55.880
+So this was an interesting experience for me because I was not aware how Kubernetes processes
+
+05:55.880 --> 05:57.880
+are working to get something new in there.
+
+05:57.880 --> 06:01.880
+So I wrote some code, I submitted the patches and then nothing happened.
+
+06:01.880 --> 06:06.880
+And then at some point people told me, yeah, you have to write something called a Kubernetes enhancement proposal.
+
+06:06.880 --> 06:09.880
+It's a document where you describe what you want to do.
+
+06:09.880 --> 06:12.880
+So I did this. So this is the links to the documents.
+
+06:12.880 --> 06:18.880
+I wrote for this. The third link is then the pull request for the actual code changes, which is Merch now.
+
+06:18.880 --> 06:28.880
+And the last link is a blog post where it is described how to today use forensic container checkpointing
+
+06:28.880 --> 06:30.880
+in combination with Kubernetes.
+
+06:30.880 --> 06:36.880
+The reason for the name forensic container checkpointing is we were looking at a way to introduce
+
+06:36.880 --> 06:42.880
+checkpointing into Kubernetes with the minimal impact on Kubernetes.
+
+06:42.880 --> 06:50.880
+The thing is it's a more or less completely new concept for containers because Kubernetes thinks about containers.
+
+06:50.880 --> 06:54.880
+You start them, you stop them, they're done, you don't care about anything.
+
+06:54.880 --> 07:01.880
+And now there's something new there which tries to, okay, but I can still move my container from one node to another node,
+
+07:01.880 --> 07:03.880
+keep all the state.
+
+07:03.880 --> 07:08.880
+And so it was a long discussion to get it into Kubernetes.
+
+07:08.880 --> 07:16.880
+The idea behind forensic container checkpointing is you have a container running somewhere and you suspect there might be something wrong.
+
+07:16.880 --> 07:18.880
+You don't want to immediately stop it.
+
+07:18.880 --> 07:22.880
+Maybe the attacker can detect if you stop it and remove things from it.
+
+07:22.880 --> 07:24.880
+So you can take a checkpoint from the container.
+
+07:24.880 --> 07:26.880
+The container never knows it was checkpointed.
+
+07:26.880 --> 07:30.880
+You can analyze it in a sandbox environment somewhere else.
+
+07:30.880 --> 07:38.880
+You can look at all the memory pages offline without the container running or you can restart it as many times as you want.
+
+07:38.880 --> 07:45.880
+So that's the idea for forensic container checkpointing and under which label it's currently available in Kubernetes.
+
+07:45.880 --> 07:49.880
+So use cases for checkpoint and restore container migration.
+
+07:49.880 --> 07:53.880
+I have a couple of them and one has a demo which relies on the network.
+
+07:53.880 --> 07:55.880
+So we will see if this works.
+
+07:55.880 --> 08:03.880
+So first and maybe simplest use case for checkpoint restore in for containers is reboot and save state.
+
+08:03.880 --> 08:06.880
+So I have a host with a blue kernel running on it.
+
+08:06.880 --> 08:08.880
+The kernel is getting out of the state.
+
+08:08.880 --> 08:10.880
+I have to update it.
+
+08:10.880 --> 08:14.880
+I have a stateful container because for stateless containers, it doesn't make sense.
+
+08:14.880 --> 08:17.880
+But the container, the stateful container takes some time to start.
+
+08:17.880 --> 08:21.880
+So what can you do with checkpoint restore?
+
+08:21.880 --> 08:28.880
+You can take a copy of the container, write it to the disk with all the state, with all memory pages saved as they were just before.
+
+08:28.880 --> 08:34.880
+You update the kernel, you reboot the system and it comes up with a green kernel with all security holes fixed.
+
+08:34.880 --> 08:38.880
+But a container, you can restore it without waiting a long time.
+
+08:38.880 --> 08:42.880
+It's immediately there on your rebooted host.
+
+08:42.880 --> 08:46.880
+Another use case which is similar to this is quick startup use case.
+
+08:46.880 --> 08:51.880
+I have people were talking to me about this.
+
+08:51.880 --> 08:54.880
+So this is what people actually use in production from what I've been told.
+
+08:54.880 --> 08:57.880
+So they have a container it takes forever to start.
+
+08:57.880 --> 09:05.880
+They said it takes like eight minutes to initialize and they have some software as a service thing where they want customers to have a container immediately.
+
+09:05.880 --> 09:08.880
+So what they do, they don't initialize it from scratch.
+
+09:08.880 --> 09:15.880
+They take a checkpoint once it's initialized and then they can create multiple copies really fast of the container in matters of time.
+
+09:15.880 --> 09:21.880
+And so the customers can have their containers faster and maybe they are happier.
+
+09:21.880 --> 09:26.880
+So the next thing is the combination of those things is container live migration.
+
+09:26.880 --> 09:35.880
+I have a source node, I have a destination node and I want to move my container from one system to the other system without losing the state of the container.
+
+09:35.880 --> 09:43.880
+So I take a checkpoint and then I can restore the container on the destination system one or multiple times.
+
+09:43.880 --> 09:47.880
+And this is the place where I want to do my demo.
+
+09:47.880 --> 09:49.880
+So let's see.
+
+09:49.880 --> 10:01.880
+So I want to have a Kubernetes thing running here and I have a small YAML file with two containers.
+
+10:01.880 --> 10:11.880
+Let's have a look at the YAML file.
+
+10:11.880 --> 10:14.880
+So it's a part with two containers.
+
+10:14.880 --> 10:16.880
+One is called Wildfly.
+
+10:16.880 --> 10:20.880
+This is a Wildfly-based Java-based application and the other one is Counter.
+
+10:20.880 --> 10:22.880
+Both are really simple, stateful containers.
+
+10:22.880 --> 10:25.880
+If I do a request to the container, I get back a number.
+
+10:25.880 --> 10:29.880
+The number is increased and second time the number is the increased number.
+
+10:29.880 --> 10:32.880
+So let's talk to the container.
+
+10:32.880 --> 10:37.880
+Hopefully it works.
+
+10:37.880 --> 10:42.880
+Okay, this is hard to read but I think I need this ID.
+
+10:42.880 --> 10:51.880
+So I'll just do a curl to the container here and then I need to replace the ID to figure out the IP address of my...
+
+10:51.880 --> 10:53.880
+Where's my mouse here?
+
+10:53.880 --> 10:55.880
+Container.
+
+10:55.880 --> 10:59.880
+And it returns counter zero, counter one, counter two.
+
+10:59.880 --> 11:02.880
+So it's stateful but it's simple.
+
+11:02.880 --> 11:07.880
+So to use Checkpoint Restore in Kubernetes,
+
+11:07.880 --> 11:12.880
+so this is currently a kubelet only interface because we still don't know how it...
+
+11:12.880 --> 11:19.880
+It's the best way to integrate it into Kubernetes so it's not straightforward yet to use it but it's there.
+
+11:19.880 --> 11:23.880
+So I'm also doing a curl.
+
+11:23.880 --> 11:25.880
+Let's find my command in the history.
+
+11:25.880 --> 11:27.880
+Now that's the wrong one.
+
+11:27.880 --> 11:33.880
+Sorry.
+
+11:33.880 --> 11:35.880
+Almost have it.
+
+11:35.880 --> 11:37.880
+Okay, so this is the command.
+
+11:37.880 --> 11:40.880
+So what I'm doing here, I'm just talking to the kubelet.
+
+11:40.880 --> 11:48.880
+You see the HTTPS address at the end of the long line and it says I'm using the Checkpoint API endpoint
+
+11:48.880 --> 11:56.880
+and I'm trying to checkpoint a container in the default Kubernetes namespace in the pod counters and the container counters.
+
+11:56.880 --> 12:02.880
+So I'm doing this and now it's creating the checkpoint in the back and if I'm looking at what it says,
+
+12:02.880 --> 12:10.880
+it just created a file somewhere which contains all file system changes, all memory pages, the complete state of the container.
+
+12:10.880 --> 12:18.880
+And now I want to migrate it to another host and now I have to create an OCI image out of it.
+
+12:18.880 --> 12:24.880
+I'm using Builder here and then I'm saying...
+
+12:24.880 --> 12:30.880
+I'll give it an annotation so that the destination knows this is a container image.
+
+12:30.880 --> 12:37.880
+Then I'm going to include the checkpoint archive into the container, into the image.
+
+12:37.880 --> 12:40.880
+And then I will say commit.
+
+12:40.880 --> 12:42.880
+It's the wrong one.
+
+12:42.880 --> 12:46.880
+Commit and I'm going to call it checkpoint image latest.
+
+12:46.880 --> 12:56.880
+So now I have OCI type container image locally which contains the checkpoint and now I will push it to a registry.
+
+12:56.880 --> 13:02.880
+Here it was and I will call it tech39.
+
+13:02.880 --> 13:08.880
+And now it's getting pushed to a registry so this works pretty good but this VM is not local.
+
+13:08.880 --> 13:15.880
+And now I want to restore the container on my local VM and that's happening here.
+
+13:15.880 --> 13:19.880
+I'll try to control PS.
+
+13:19.880 --> 13:21.880
+So nothing is running.
+
+13:21.880 --> 13:28.880
+Then I have to edit my YAML file.
+
+13:28.880 --> 13:31.880
+And so it's pretty similar to the one I had before.
+
+13:31.880 --> 13:39.880
+I have a pod called counters and I have a container wildfly which is started from a normal image
+
+13:39.880 --> 13:48.880
+and the other container called counter is started from the checkpoint image.
+
+13:48.880 --> 13:52.880
+And now I say apply.
+
+13:52.880 --> 13:58.880
+And now let's see what the network says.
+
+13:58.880 --> 14:01.880
+If it likes me.
+
+14:01.880 --> 14:07.880
+So it now says, so it's really hard to read because it's a large font but it said pulling the initial image.
+
+14:07.880 --> 14:09.880
+So that's already there so it doesn't need to pull.
+
+14:09.880 --> 14:12.880
+It created a container wildfly.
+
+14:12.880 --> 14:18.880
+It started a container wildfly and now it's actually pulling the checkpoint archive from the registry.
+
+14:18.880 --> 14:22.880
+Oh, and it's created a container and started a container.
+
+14:22.880 --> 14:25.880
+So now we have a restored container hopefully running here.
+
+14:25.880 --> 14:33.880
+Let's get the idea, the ID of the container and let's talk to the container again.
+
+14:33.880 --> 14:39.880
+And so now we shouldn't see counter zero but counter three or four.
+
+14:39.880 --> 14:41.880
+I don't remember what it was last time.
+
+14:41.880 --> 14:45.880
+This is the right idea.
+
+14:45.880 --> 14:52.880
+So now we have a stateful migration of a container from one Kubernetes host to another Kubernetes host
+
+14:52.880 --> 15:01.880
+by creating a checkpoint, pushing it to a registry and then kind of tricking Kubernetes into starting a container
+
+15:01.880 --> 15:05.880
+but in the background we kind of used a checkpoint container.
+
+15:05.880 --> 15:11.880
+So Kubernetes thinks it started a container, a normal container, but there was a checkpoint container behind it.
+
+15:11.880 --> 15:18.880
+So the checkpoint restore, the restoring of the checkpoint all happens in the container engine below it in cryo
+
+15:18.880 --> 15:21.880
+and for Kubernetes it's just a normal container.
+
+15:21.880 --> 15:23.880
+It has restored.
+
+15:23.880 --> 15:28.880
+So back to my slides.
+
+15:28.880 --> 15:38.880
+So another use case people are interested in a lot which I have never thought about is spot instances which AWS and Google has.
+
+15:38.880 --> 15:44.880
+It's cheap machines which you can get but the deal is they can take it away anytime they want.
+
+15:44.880 --> 15:47.880
+Like you have two minutes before they take it away.
+
+15:47.880 --> 15:53.880
+And so if you have checkpointing, it's now independent of Kubernetes or not,
+
+15:53.880 --> 15:59.880
+you have Kubernetes on your spot instances, you can checkpoint your containers right into some storage
+
+15:59.880 --> 16:10.880
+and then restore the container on another system and still use spot instances without losing any of your calculation work, whatever it was doing.
+
+16:10.880 --> 16:14.880
+So something about Cree use.
+
+16:14.880 --> 16:19.880
+So I mentioned everything we are doing here is using Cree use.
+
+16:19.880 --> 16:27.880
+The call stack is basically the Q-Blet talks to cryo, cryo talks to run C, run C talks to Cree use, Cree use does the checkpoint
+
+16:27.880 --> 16:31.880
+and then each layer adds some metadata to it and so that's how we have it.
+
+16:31.880 --> 16:38.880
+But all the main work of checkpointing a process is done by Cree use and some details about Cree use.
+
+16:38.880 --> 16:47.880
+So of course the first step is it's checkpointing the container and Cree use is P trace or the secret freezer to stop all processes in the container
+
+16:47.880 --> 16:54.880
+and then we look at PROC PIT to collect information about the processes.
+
+16:54.880 --> 17:01.880
+That's also one of the reasons why it's called in user space because we use existing user space interfaces.
+
+17:01.880 --> 17:08.880
+Cree use over the years added additional interfaces to the kernel but they've never been checkpoint only.
+
+17:08.880 --> 17:14.880
+They are usually just adding additional information you can get from a running process.
+
+17:14.880 --> 17:22.880
+So once all the information in PROC PIT has been collected by Cree use, another part of Cree use comes which is called the parasite code.
+
+17:22.880 --> 17:30.880
+The parasite code is injected into the process and it's now running as a daemon in the address space of the process
+
+17:30.880 --> 17:40.880
+and this way Cree use can talk to this parasite code and now get information about the process from inside the address space of the process.
+
+17:40.880 --> 17:48.880
+This is especially used for memory pages to get to dump them all really fast to this but a lot of steps are done by the parasite code
+
+17:48.880 --> 17:53.880
+which is injected into the target process we want to checkpoint.
+
+17:53.880 --> 17:59.880
+The parasite code is removed after usage and the process never knows it was under the control from the parasite code.
+
+17:59.880 --> 18:07.880
+I have a diagram which tries to show how this could look like so we have the original process code to be checkpointed.
+
+18:07.880 --> 18:17.880
+We take something out of the code, we put the parasite code in the original process, now the parasite code is running,
+
+18:17.880 --> 18:24.880
+doing the things it has to do and then we remove it and the program looks the same as it was before.
+
+18:24.880 --> 18:31.880
+At this point all checkpointing information has been written to disk and the process is killed or continues running.
+
+18:31.880 --> 18:37.880
+This really depends on what you want to do.
+
+18:37.880 --> 18:43.880
+We are not aware of any effect on the process if it continues to run after checkpointing.
+
+18:43.880 --> 18:50.880
+To migrate the process you have the last step is restoring and what CreeU does is it reads all the checkpoint images,
+
+18:50.880 --> 18:57.880
+then it recreates the process tree of the container by doing a clone, clone 3 for each PID, a thread ID,
+
+18:57.880 --> 19:07.880
+and then the process tree is recreated as before and then CreeU kind of morphs all the processes in the process tree to the original process
+
+19:07.880 --> 19:12.880
+and always a good example is file descriptors.
+
+19:12.880 --> 19:21.880
+What CreeU does during checkpointing, it looks at all the file descriptors, looks the ID and the file name, the path
+
+19:21.880 --> 19:29.880
+and the file pointer where it is in during restore it's just put again so it opens the same file with the same file ID
+
+19:29.880 --> 19:40.880
+and then it points the file pointer to the same location and then the process can continue to run and then the file is the same as it was before.
+
+19:40.880 --> 19:46.880
+Then all the memory pages are loaded back into memory and mapped to the right location.
+
+19:46.880 --> 19:51.880
+All the security settings like app-ammer, as in XACCOM we do this really late in CreeU
+
+19:51.880 --> 20:03.880
+because some of these things make restoring difficult but it's happening late so it's working well.
+
+20:03.880 --> 20:11.880
+Then when everything, all the resources are restored, all the memory pages are back then CreeU tells the process to continue to run
+
+20:11.880 --> 20:14.880
+and then you have a restored process.
+
+20:14.880 --> 20:18.880
+So now to what's next in Kubernetes.
+
+20:18.880 --> 20:26.880
+So we can kind of migrate a container like I have shown but we are only at the start of the whole thing.
+
+20:26.880 --> 20:34.880
+So the next thing would maybe be kubectl checkpoint so that you don't have to talk directly to the kubelet.
+
+20:34.880 --> 20:43.880
+For kubectl checkpoint one of the things which is currently under discussion is if you do a checkpoint all of a sudden you have all the memory pages on disk
+
+20:43.880 --> 20:47.880
+all secrets, private keys, random numbers, whatever.
+
+20:47.880 --> 20:57.880
+So what we do for the current Kubernetes setup is we, it's only readable by root because if you root then you could easily access the memory of all the processes.
+
+20:57.880 --> 21:05.880
+So if the checkpoint archive is also only readable as root it's the same problem you have.
+
+21:05.880 --> 21:11.880
+The thing is you can take the checkpoint archive, move it to another machine and then maybe somebody else can read it.
+
+21:11.880 --> 21:15.880
+There's still a problem that you can leak information you don't want to leak.
+
+21:15.880 --> 21:20.880
+So the thing we are thinking about is to maybe encrypt the image.
+
+21:20.880 --> 21:25.880
+We don't know yet if we do it at the OCI image level or at the CreeU level.
+
+21:25.880 --> 21:29.880
+We're talking about but it's not yet clear what we want to do.
+
+21:29.880 --> 21:35.880
+But at some point the goal is definitely to have something like kubectl checkpoint to make it easy.
+
+21:35.880 --> 21:42.880
+Then I've shown only how I can checkpoint a container out of a pod and restore it into another pod.
+
+21:42.880 --> 21:46.880
+So the other thing would be to do a complete pod checkpoint restore.
+
+21:46.880 --> 21:56.880
+I've done proof of concepts of this so this is not really a technical challenge but you have to figure out how can the interface in Kubernetes look to implement this.
+
+21:56.880 --> 22:06.880
+Then maybe if all of this works maybe you can do a kubectl migrate to just tell Kubernetes please migrate this container to some other node, to some other hosts.
+
+22:06.880 --> 22:16.880
+And if this works then maybe we also could have schedule integration that if certain resources are getting low, low priority containers can be moved to another place.
+
+22:16.880 --> 22:25.880
+Another thing which we are also discussing concerning this is so I've shown you I've migrated a container with my own private OCI image standard.
+
+22:25.880 --> 22:28.880
+Which is the thing which I came up with.
+
+22:28.880 --> 22:31.880
+It's a tar file with some metadata in it.
+
+22:31.880 --> 22:44.880
+But we would like to have it standardized so that other container engines can use that information, the standard and not the thing I came up with which just felt like the right thing to do.
+
+22:44.880 --> 22:47.880
+So this is the place where the standardization discussion is going on.
+
+22:47.880 --> 22:55.880
+It's not going on really fast or anything like this but yeah I guess that's how creating a standard works.
+
+22:55.880 --> 22:57.880
+And with this I'm at the end of my talk.
+
+22:57.880 --> 23:01.880
+The summary is basically Cree you can checkpoint and restore containers.
+
+23:01.880 --> 23:03.880
+It's integrated in different container engines.
+
+23:03.880 --> 23:05.880
+It's used in production.
+
+23:05.880 --> 23:15.880
+Use cases are things like reboot into new kernel without losing container states, start multiple copies quickly, migrate running containers, the new spot instances I've been asked about.
+
+23:15.880 --> 23:21.880
+This has all been done under the forensic container checkpoint in Kubernetes enhancement proposal.
+
+23:21.880 --> 23:31.880
+And currently we trick Kubernetes to restore a container by using create and start without letting Kubernetes know that it's a checkpoint.
+
+23:31.880 --> 23:33.880
+And with this I'm at the end.
+
+23:33.880 --> 23:35.880
+Thanks for your time and I guess.
+
+23:35.880 --> 23:37.880
+I guess the question.
+
+23:43.880 --> 23:45.880
+We have time for questions.
+
+23:47.880 --> 23:49.880
+I have two questions.
+
+23:49.880 --> 23:51.880
+The first one is Howard.
+
+23:53.880 --> 23:57.880
+One second please stay quiet until the talk is over.
+
+23:57.880 --> 23:59.880
+So two questions.
+
+23:59.880 --> 24:09.880
+How are network connections handled when the containers are stored and the other question is does Cree you support some kind of optimization in incremental checkpoints?
+
+24:09.880 --> 24:11.880
+Okay. So the first question is network connections.
+
+24:11.880 --> 24:18.880
+So Cree you can checkpoint and restore TCP connections if established.
+
+24:18.880 --> 24:28.880
+Establish is an interesting thing if they're just open and listening it's not really a difficult thing to do but it can restore established TCP connections.
+
+24:28.880 --> 24:42.880
+But I'm not sure it's important in the case of Kubernetes because if you migrate maybe you migrate to some other cluster or somewhere else maybe the network is set up differently.
+
+24:42.880 --> 24:48.880
+And you can only restore a TCP connection if the destiny of both IP addresses of the connection are the same.
+
+24:48.880 --> 24:54.880
+And it all makes sense for live migration because at some point the TCP timers will time out anyway.
+
+24:54.880 --> 25:05.880
+But I think maybe it would make sense if you migrate a part and keep the TCP connections between the container and the part alive then it would make sense.
+
+25:05.880 --> 25:07.880
+It's technically possible.
+
+25:07.880 --> 25:15.880
+I'm not sure how important it is for external connections but for internal connections it makes sense.
+
+25:15.880 --> 25:26.880
+The other question was about optimization. So Cree you itself supports pre-copy and post-copy migration techniques just like VMs.
+
+25:26.880 --> 25:41.880
+So you can take a copy of the memory, move it to the destination then just do the diff at the end or you can do page faults on missing pages and missing pages are then used, are then collected during the run time.
+
+25:41.880 --> 25:49.880
+It's all just like QMU does, all the technology is the same but it's not integrated into Kubernetes at all.
+
+25:49.880 --> 25:58.880
+My question was more like if I do many take points, are the each consecutive ones smaller? Is it reusing data from the previous ones?
+
+25:58.880 --> 26:03.880
+Technically it's possible in Portman we can do this.
+
+26:03.880 --> 26:12.880
+The only thing is you have to decide when you do the checkpoint, is this an incremental checkpoint or not because the checkpoint looks differently.
+
+26:12.880 --> 26:27.880
+So if we know it's an incremental checkpoint only the memory pages are dumped and if it's the final checkpoint we have to dump everything and if it's the first checkpoint you say it's the final checkpoint you cannot do an incremental checkpoint on that one.
+
+26:27.880 --> 26:36.880
+Okay, very impressive thing. Except network what else do you know will not be possible to migrate?
+
+26:36.880 --> 26:44.880
+I'm impressed by this thing but except network you mentioned is there anything else that cannot be checkpoints?
+
+26:44.880 --> 26:55.880
+Okay, so the main problem is every external hardware like InfiniBand, GPUs, FPGAs because they're stayed in the hardware and we cannot get it out.
+
+26:55.880 --> 27:13.880
+Two years ago AMD actually provided a plugin for Creus to get the state out of their GPGPUs so Creus should be able to checkpoint restore processes using AMD GPUs.
+
+27:13.880 --> 27:29.880
+I never use it myself, I don't have one but they implemented it so I assume it's working and so everything external hardware where you don't have the state in the kernel that's the main limitation.
+
+27:29.880 --> 27:46.880
+Hi, thank you for this. You said there's parasite code, does that mean it changes the container hash and if so how do you propose to secure them again and make sure that's your parasite code and that's somebody else's?
+
+27:46.880 --> 27:59.880
+I didn't get it 100%. Something about container hashes and making sure it's... I think the worry is that if you inject parasite code that the container hashes change somehow.
+
+27:59.880 --> 28:15.880
+It doesn't? Okay, if it doesn't change the container hash... The parasite code is removed afterwards so it's... Okay, thank you.
+
+28:15.880 --> 28:25.880
+Thank you, excellent talk. How big are the images that... The size of the process memory used or the total process allocated to the system?
+
+28:25.880 --> 28:34.880
+I don't hear anything in the front. I'm sorry. How big are the images that you restore? Is it the size of the memory used by each process?
+
+28:34.880 --> 28:49.880
+Exactly, so the size of the checkpoint is basically the size of all memory pages which we dump. All the additional information which Kree is dumping is compared to it is really small and then it depends if you do something like an
+
+28:49.880 --> 29:05.880
+importment or docker, if you do a diff you usually see which files changed in the container to your base image and this comes on top of it. All files which change, we include all the files completely into the checkpoint whether we don't include diffs.
+
+29:05.880 --> 29:20.880
+While I'm bringing the mic over there, has anything changed in terms of how complex process treats you can restore because we're thinking about... We discussed using it for system deservices for example, Kree.
+
+29:20.880 --> 29:32.880
+One of your limitations that you usually had is as soon as you ran something fairly complex inside of the container and you tried to checkpoint restore it with Kree, it would just fail because it would use kernel features that it wouldn't support.
+
+29:32.880 --> 29:53.880
+So the biggest problem we're currently seeing is containers using systemD because systemD is very advanced, it uses things nobody else uses so this is a point where Kree might fail because it seems like at least from Kree's point or from what I've seen nobody uses as many new kernel features as systemD does
+
+29:53.880 --> 30:15.880
+and so it sometimes fails if systemD is running there. But usually I don't see often people in the OCI container world using systemD. I guess it would be a good idea to have a real in-it system even in your container but it's not something people do so it's not something we get complaints at all about.
+
+30:15.880 --> 30:39.880
+Yeah, I also thought this talk was very interesting. So I saw that you had these... talked about having these cube control migrate and cube control checkpoints because I'm thinking that mostly what you want to migrate might be like a stateful application for example, like a stateful...
+
+30:39.880 --> 30:54.880
+What is it called? Stateful something. So I was thinking maybe you could have something in the stateful deploy whatever it's called instead of drain. Say you want to drain a node.
+
+30:54.880 --> 31:13.880
+One of the first implementations I did was using drain. I added an option to Qtl drain which is called checkpoints. So all containers were checkpointed during drain and then they were restored during boot up.
+
+31:13.880 --> 31:25.880
+Okay, sorry for being the buskill but we're out of time. Thank you for the talk, that was really interesting and thank you everyone for attending and being so quiet during your questions.

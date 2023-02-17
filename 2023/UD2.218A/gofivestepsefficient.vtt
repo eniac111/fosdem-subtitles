@@ -1,0 +1,1255 @@
+WEBVTT
+
+00:00.000 --> 00:09.480
+Okay, welcome back.
+
+00:09.480 --> 00:13.640
+So while you all have been walking in, I've been quickly reading this book, Fish and Go,
+
+00:13.640 --> 00:18.640
+it reads very quickly, and now Bartek has made sure that my code is ten times quicker,
+
+00:18.640 --> 00:19.840
+so tell us everything about it.
+
+00:19.840 --> 00:21.000
+Thank you.
+
+00:21.000 --> 00:28.560
+Thank you very much, everybody.
+
+00:28.560 --> 00:29.560
+You're welcome.
+
+00:29.560 --> 00:31.640
+I hope your travels went well.
+
+00:31.640 --> 00:37.560
+Mine were top-party, you know, Play, Cancel, Change your pre-route, so I had lots of adventures,
+
+00:37.560 --> 00:41.600
+but generally I'm super happy I made it, and we are at the FOSDEM.
+
+00:41.600 --> 00:47.960
+So in this talk, I would like to invite you to learn more about efficiency of our Go programs,
+
+00:47.960 --> 00:53.960
+and there was already two talks that I had been on who mentioned, you know, optimizations
+
+00:53.960 --> 00:58.280
+in its name and, like, generally how to make software more efficient.
+
+00:58.280 --> 01:02.720
+I wonder where this, I don't know, it's not hype, but it's already three talks about one
+
+01:02.720 --> 01:03.720
+topic.
+
+01:03.720 --> 01:05.640
+Why it's so popular?
+
+01:05.640 --> 01:08.080
+Is it because everybody saved me money?
+
+01:08.080 --> 01:13.780
+That might be a reason, but I'm super happy we are really uncovering this for Go, because
+
+01:13.780 --> 01:18.960
+Go alone might be fast, but that doesn't mean that we cannot, you know, doesn't need to
+
+01:18.960 --> 01:26.680
+care about, you know, making it better, and use resources when we execute it, right?
+
+01:26.680 --> 01:31.280
+So let's learn about that, and it turns out that, you know, you can save literally millions
+
+01:31.280 --> 01:35.840
+of dollars if you, you know, optimize some code, sometimes in production long-term, so
+
+01:35.840 --> 01:37.920
+it really matters, right?
+
+01:37.920 --> 01:42.040
+But before we start, short introduction, my name is Bartolome Podka, I'm an engineer at
+
+01:42.040 --> 01:50.680
+Google, normally I work at Google Cloud, Google Managed Promoteer Service, but generally I'm
+
+01:50.680 --> 01:56.720
+open source passionists, I love Go, I love distributed systems, observability topics,
+
+01:56.720 --> 02:02.600
+I maintain TANOS, which is like open source, scalable Prometheus system, I maintain Prometheus
+
+02:02.600 --> 02:07.960
+as well, and generally, yeah, lots of things in open source, I mentor a lot, and I suggest
+
+02:07.960 --> 02:12.760
+you to check, you know, also try to mentor others, it's super important to bring new
+
+02:12.760 --> 02:20.080
+generation of people up to the speed in the open source, and yeah, I'm active in the CNCF.
+
+02:20.080 --> 02:27.720
+And recently, as you see, I published a book, and I think, you know, it's kind of unique,
+
+02:27.720 --> 02:32.680
+everybody's doing TikToks now, and YouTube, and I was like, yeah, let's be old school,
+
+02:32.680 --> 02:36.360
+because you need to be unique sometimes in the world, and I really enjoyed that, I learned
+
+02:36.360 --> 02:41.600
+a lot during that, and I would love you to learn as well, so I'm kind of summarizing
+
+02:41.600 --> 02:46.520
+some concepts from my book here in the stock, so let's go.
+
+02:46.520 --> 02:52.760
+And I would like to start with this story, and, you know, apparently, some of the talks,
+
+02:52.760 --> 02:56.320
+one of the best talks have to start with the story, but this is something that kind of
+
+02:56.320 --> 03:00.080
+maybe triggered me to write a book, right?
+
+03:00.080 --> 03:05.240
+So imagine that, I mean, yeah, that was kind of five years ago, we just started the project
+
+03:05.240 --> 03:10.400
+called TANOS open source, really doesn't matter what it does right now, but, you know, what
+
+03:10.400 --> 03:15.680
+happens is that it has microservices, it has, you know, I think six different microservices
+
+03:15.680 --> 03:20.120
+written in Go like you put in Kubernetes or any other cloud, and it's just a distributed
+
+03:20.120 --> 03:25.120
+database, and one part of this database is compact or it's like a component, again, doesn't
+
+03:25.120 --> 03:29.880
+matter much what it does, what it matters is that it touches object storage, and it
+
+03:29.880 --> 03:35.360
+processes, you know, sometimes gigabytes or terabytes daily of metrics, right, of some
+
+03:35.360 --> 03:42.800
+data, so what happened is that the very, very beginning of implementation, as you can imagine,
+
+03:42.800 --> 03:48.720
+you know, we implemented MVP, it kind of functionally worked, but of course, you know, the implementation
+
+03:48.720 --> 03:53.560
+was kind of naive, definitely not optimized, we didn't even run any benchmark, right, at
+
+03:53.560 --> 03:59.200
+all, other than just running on production and just, yeah, kind of works, so, and you're
+
+03:59.200 --> 04:03.440
+laughing, but this is usually, you know, what development in a high-level ST looks like,
+
+04:03.440 --> 04:09.640
+and it was working very well until, of course, more people put load into this, and, you know,
+
+04:09.640 --> 04:16.240
+we have some issues, like OOMS, you know, one user pointed us to some graphs of, you
+
+04:16.240 --> 04:22.520
+know, incredibly, you know, high spike of memory usage on the heap, on the Golang heap,
+
+04:22.520 --> 04:26.120
+right, and you can see it's a drop, which means, you know, there was a restart or someone
+
+04:26.120 --> 04:33.120
+killed this, and, yeah, and the numbers are not small, like 15 gigs, I mean, for large
+
+04:33.120 --> 04:39.880
+data set, maybe it's fine, but it was kind of problematic, right, so it was really interesting
+
+04:39.880 --> 04:45.560
+to see what different feedback and what different suggestions community were giving us, and
+
+04:45.560 --> 04:49.960
+I mean, community, everybody, like users, other developers, maybe product managers,
+
+04:49.960 --> 04:54.400
+we don't know sometimes who their role are, but, you know, probably depending on their
+
+04:54.400 --> 05:00.280
+background, the answers, the proposals were totally different, right, so I would like
+
+05:00.280 --> 05:06.960
+you to kind of, you know, check, and like check if you had the same situations in your
+
+05:06.960 --> 05:13.560
+experience, because, you know, this is kind of like very ongoing problem, and I would
+
+05:13.560 --> 05:17.960
+like to, yeah, showcase this, so, you know, first suggestion was that can you give me
+
+05:17.960 --> 05:23.520
+a configuration that doesn't OOM, and it's like, what, do you expect me, like, in the
+
+05:23.520 --> 05:28.260
+like very new project to have like flags, not OOM or like useless memory?
+
+05:28.260 --> 05:32.840
+This is not as simple as that, yet many, many users are asking us this question of a person's
+
+05:32.840 --> 05:37.360
+project, probably you heard this question, okay, what configuration I should use so it
+
+05:37.360 --> 05:42.240
+uses less memory, right, or like it just, it's more optimized, how can I optimize using
+
+05:42.240 --> 05:43.240
+configuration?
+
+05:43.240 --> 05:46.920
+It's just, you know, it's not as simple as that, I guess, you know, maybe in Java, in
+
+05:46.920 --> 05:51.800
+JVM, you have lots of performance flags, you sometimes tune things and it's better, but,
+
+05:51.800 --> 05:56.360
+you know, it's not so simple, it's a goal, like, kind of low level, you, I mean, yeah,
+
+05:56.360 --> 05:59.560
+you need to do more than that, right?
+
+05:59.560 --> 06:04.080
+Another, you know, interesting approach, but very, very good in some way, is that just,
+
+06:04.080 --> 06:09.000
+okay, I will just put this process into bigger machine and it's done, and that's totally
+
+06:09.000 --> 06:14.080
+valid, you know, solution, maybe short term, maybe sometimes it's enough, but, you know,
+
+06:14.080 --> 06:18.880
+in our case, it was not sustainable, because, of course, you couldn't grow vertically more
+
+06:18.880 --> 06:23.440
+and more, and also, even if you would maybe find a big enough machine that was working
+
+06:23.440 --> 06:29.720
+for your dataset, then, you know, obviously you were overpaying a lot if the code is naive
+
+06:29.720 --> 06:33.200
+and maybe wasting a lot of memory, right?
+
+06:33.200 --> 06:38.560
+Then finally, you know, the most fun approach, okay, let's split this one microservice into,
+
+06:38.560 --> 06:43.000
+you know, like a scheduler and then, you know, work errors and then we'll just replicate
+
+06:43.000 --> 06:48.680
+in my super nice computer, you know, communities cluster and, you know, it will just horizontally
+
+06:48.680 --> 06:53.080
+scale so I can use many, many hundreds of small machines, so it will work.
+
+06:53.080 --> 06:59.720
+Yes, but, you know, you are putting on small kind of microservice so much complexity that
+
+06:59.720 --> 07:02.440
+it will be, like, more expensive generally, right?
+
+07:02.440 --> 07:08.400
+Because of the network cost, like, distributed systems, you know, injects, you know, things
+
+07:08.400 --> 07:10.400
+that you have to replicate data finally.
+
+07:10.400 --> 07:16.560
+So if you overpaint more and more and more, and you are kind of distributing this non-optimized
+
+07:16.560 --> 07:20.480
+code to different places, that's not always a solution.
+
+07:20.480 --> 07:25.160
+Sometimes the code cannot be optimized more and we can, you know, we should probably horizontally
+
+07:25.160 --> 07:28.600
+scale but not in the very beginning of the project, right?
+
+07:28.600 --> 07:32.320
+Yet that was the first suggestion from the community, right?
+
+07:32.320 --> 07:34.920
+Of course you can just switch from that to something else, right?
+
+07:34.920 --> 07:35.920
+That's also a solution.
+
+07:35.920 --> 07:39.720
+And then if you have this approach and probably you would just jump through project, this
+
+07:39.720 --> 07:45.880
+is not super efficient but maybe, you know, some parts of the project are better or some
+
+07:45.880 --> 07:46.880
+worse.
+
+07:46.880 --> 07:47.880
+That's an option.
+
+07:47.880 --> 07:51.320
+Some suggestion, some suggested, of course, paying for vendor, right?
+
+07:51.320 --> 07:54.760
+They would solve the absorbance for me for real money.
+
+07:54.760 --> 07:58.320
+So, but, yeah, that's not always a good solution.
+
+07:58.320 --> 08:00.240
+That's just giving up.
+
+08:00.240 --> 08:06.840
+And also, you know, migration of data, huge cost of learning new tools and so on.
+
+08:06.840 --> 08:13.720
+And you know, all of this work, we're in the code, we have this.
+
+08:13.720 --> 08:19.720
+And it's like, you know, it's bumping and super easy ways that you could be avoided,
+
+08:19.720 --> 08:20.720
+right?
+
+08:20.720 --> 08:21.880
+And, yeah, I understand.
+
+08:21.880 --> 08:25.000
+So you know, of course, that was malloc.
+
+08:25.000 --> 08:28.500
+So in Bughal we don't have malloc and so on.
+
+08:28.500 --> 08:33.160
+But you know, memory overhead, memory leaks like that are very common in GOR.
+
+08:33.160 --> 08:37.320
+Just imagine how many GOR routines sometimes you put, you created, you forgot to close
+
+08:37.320 --> 08:41.280
+some kind of abstraction and the GOR routine is leaking and so you are leaking memory like
+
+08:41.280 --> 08:43.200
+this malloc, right?
+
+08:43.200 --> 08:49.920
+And you know, what actually, you know, was the solution was some contributor finally
+
+08:49.920 --> 08:56.160
+came up, investigated, thought about this efficiency problem on the code level, algorithm
+
+08:56.160 --> 08:57.600
+and code level, right?
+
+08:57.600 --> 09:02.360
+And rewrote or like rewrote small part of the compactor to stream data, right?
+
+09:02.360 --> 09:10.120
+So instead of building maybe the kind of resulted object that the compactor is doing in memory,
+
+09:10.120 --> 09:13.400
+it was as soon as possible streaming that to FireSystem.
+
+09:13.400 --> 09:14.400
+Easy.
+
+09:14.400 --> 09:16.600
+Generally easy, easy, easy change.
+
+09:16.600 --> 09:21.240
+Yet there was lots of discussions, lots of stress, lots of weird ideas and I would just
+
+09:21.240 --> 09:27.600
+find it like over time amusing that this story was repeating in many, many cases, right?
+
+09:27.600 --> 09:33.960
+So and you know, that's not only, you know, of course, experience so many kind of nice
+
+09:33.960 --> 09:38.640
+examples where only small character change, two character change there and you know, so
+
+09:38.640 --> 09:42.160
+much kind of like improvement over like large system.
+
+09:42.160 --> 09:48.440
+So sometimes, sometimes there are like very easy ways that we can just pick it up and
+
+09:48.440 --> 09:49.840
+just do it, right?
+
+09:49.840 --> 09:51.520
+But we need to know how, right?
+
+09:51.520 --> 09:54.120
+So kind of two learnings from the story.
+
+09:54.120 --> 09:59.800
+One is that software efficiency and code level and algorithms for changing code, you know,
+
+09:59.800 --> 10:05.600
+matters and learning how to do it can be useful.
+
+10:05.600 --> 10:12.120
+And second learning is that there is common pitfall, I think, generally in the years because
+
+10:12.120 --> 10:14.520
+in the past we have premature optimizations.
+
+10:14.520 --> 10:18.080
+Everybody was playing with the code and trying to over optimize things.
+
+10:18.080 --> 10:23.720
+I think now we are lazy and we are more like into DevOps, into changing, you know, configuration,
+
+10:23.720 --> 10:27.280
+into horizontally scaling because we have this power, we have cloud.
+
+10:27.280 --> 10:31.520
+And this is usually, you know, more chosen solution than actually checking the code,
+
+10:31.520 --> 10:32.520
+right?
+
+10:32.520 --> 10:37.560
+I call it closed box thinking and I think this is a thread a little bit in our system.
+
+10:37.560 --> 10:40.800
+So we should acknowledge that there are different levels.
+
+10:40.800 --> 10:41.880
+We can sometimes scale.
+
+10:41.880 --> 10:43.920
+We can sometimes put more bigger machine.
+
+10:43.920 --> 10:46.320
+We can sometimes write to Rust if that makes sense.
+
+10:46.320 --> 10:50.680
+But you know, that's not the first solution that should come to your mind, right?
+
+10:50.680 --> 10:51.680
+Okay.
+
+10:51.680 --> 10:57.360
+Before we go forward, I have five books to share and I will share the link to quiz at
+
+10:57.360 --> 10:58.720
+the end.
+
+10:58.720 --> 11:00.880
+And it was super simple, but pay attention, right?
+
+11:00.880 --> 11:05.680
+Because maybe there will be some questions around and you need to answer, send me an
+
+11:05.680 --> 11:11.960
+email and I will just, you know, just choose five people, lucky people to have my book.
+
+11:11.960 --> 11:15.040
+So yeah, pay attention.
+
+11:15.040 --> 11:16.040
+All right.
+
+11:16.040 --> 11:18.560
+Five steps.
+
+11:18.560 --> 11:23.760
+Five steps, yeah, for efficiency progress.
+
+11:23.760 --> 11:28.640
+One thing I want to mention, I don't know if you have been in the previous talk or like
+
+11:28.640 --> 11:35.600
+more previous, he kind of explained a lot of optimization ideas.
+
+11:35.600 --> 11:41.360
+Like I think, like Mache before, like he mentioned string optimization with internings.
+
+11:41.360 --> 11:48.880
+Has just mentioned, I think, something around, you know, pre-allocations and many kind of
+
+11:48.880 --> 11:54.480
+like, I think, padding, struct padding and generally, you know, all those kind of ideas.
+
+11:54.480 --> 11:55.480
+This is fine.
+
+11:55.480 --> 11:57.720
+But it's optimizing stuff.
+
+11:57.720 --> 12:01.880
+It's not like looking for dictionary of things I did in the past.
+
+12:01.880 --> 12:03.640
+It's kind of more fuzzy, more involved.
+
+12:03.640 --> 12:09.400
+So what I would like you to focus, it's not a particular way of how we optimize an example
+
+12:09.400 --> 12:14.040
+I will show, because it's super simple and trivial, but how we get there, right?
+
+12:14.040 --> 12:18.600
+How we found what to optimize, how we found if we should even optimize, okay?
+
+12:18.600 --> 12:19.800
+So focus on that.
+
+12:19.800 --> 12:24.280
+So first step, first suggestion I would have, and this is from book, I kind of found, yeah,
+
+12:24.280 --> 12:30.840
+I don't know, I define this name TFBO, which is essentially a flow for development, efficient
+
+12:30.840 --> 12:33.160
+aware development that worked for me.
+
+12:33.160 --> 12:36.320
+And generally I see other professionals doing that a lot as well.
+
+12:36.320 --> 12:38.520
+So test fix benchmark optimize.
+
+12:38.520 --> 12:43.440
+So essentially what it is, it's like a TDD with something else.
+
+12:43.440 --> 12:46.760
+And TDD you are probably familiar with, test driven development.
+
+12:46.760 --> 12:52.160
+You test first, as you can see, and only then you kind of like implement or fix it until
+
+12:52.160 --> 12:53.840
+the test is passing, right?
+
+12:53.840 --> 12:58.200
+I would like to kind of do the same for optimizations as well.
+
+12:58.200 --> 13:03.800
+So we have benchmark driven optimizations, because as you can see, we benchmark first,
+
+13:03.800 --> 13:07.360
+then we optimize, and then we profile, right?
+
+13:07.360 --> 13:11.660
+And I will tell you later why, but all of this is a close loop, right?
+
+13:11.660 --> 13:14.040
+So after optimizations we have to test as well.
+
+13:14.040 --> 13:20.280
+All right, so it feels complex, but we'll make one loop, actually maybe two, doing the
+
+13:20.280 --> 13:22.120
+stock on a simple code.
+
+13:22.120 --> 13:23.400
+So let's do it.
+
+13:23.400 --> 13:28.480
+So let's introduce a simple function, super simple, super stupid.
+
+13:28.480 --> 13:33.560
+We are creating a million elements, I mean, a slice with million elements, and each of
+
+13:33.560 --> 13:38.800
+those elements are just a string, a constant string for them.
+
+13:38.800 --> 13:39.800
+Super simple.
+
+13:39.800 --> 13:44.480
+It's the first, you know, kind of first iteration of this program we want to write.
+
+13:44.480 --> 13:49.640
+So what we do regarding TFBO, okay, so we test, right?
+
+13:49.640 --> 13:53.320
+I mean, now we have a code, for example, and we want to maybe improve it.
+
+13:53.320 --> 13:57.140
+We test of development, so let's assume I already had the test, right?
+
+13:57.140 --> 14:00.480
+But the test could look like this.
+
+14:00.480 --> 14:05.080
+And then, you know, I'm ensuring, okay, it's passing, so nothing functionally I have to
+
+14:05.080 --> 14:06.800
+fix.
+
+14:06.800 --> 14:08.800
+So what next?
+
+14:08.800 --> 14:10.240
+So next is this measurement.
+
+14:10.240 --> 14:11.240
+It's a benchmark.
+
+14:11.240 --> 14:16.360
+And, again, it has already mentioned how to make benchmarks, but I have some additions,
+
+14:16.360 --> 14:19.840
+to that, that you might find helpful.
+
+14:19.840 --> 14:24.880
+Something I want to mention is that, you know, we were talking about microbenchmarks, because
+
+14:24.880 --> 14:30.320
+the same level of testing behavior, like, for example, like, for this small function,
+
+14:30.320 --> 14:35.400
+we have this create, you know, unit test is totally enough, right?
+
+14:35.400 --> 14:38.440
+This is on micro level, we are making just unit test, it's fine.
+
+14:38.440 --> 14:41.960
+But sometimes if you have a bigger system, you need to have, you know, to do something
+
+14:41.960 --> 14:46.000
+on macro level, like integration test, end-to-end test, whatever bigger, right?
+
+14:46.000 --> 14:48.160
+And the same happens in the benchmarks, right?
+
+14:48.160 --> 14:49.160
+This is microbenchmark.
+
+14:49.160 --> 14:52.160
+This is a kind of unit benchmark.
+
+14:52.160 --> 14:56.800
+There are also microbenchmarks I covered in my book.
+
+14:56.800 --> 15:01.440
+And then you need to have more sophisticated kind of setup with low testing, with maybe
+
+15:01.440 --> 15:06.040
+some automation, with some observability, like, you know, Prometheus, maybe, which measures
+
+15:06.040 --> 15:07.480
+over time some resources.
+
+15:07.480 --> 15:12.320
+But here we can, we have a simple unit create function, we can just make it simple with
+
+15:12.320 --> 15:13.320
+microbenchmarks.
+
+15:13.320 --> 15:17.400
+And, you know, it has already mentioned, but, you know, there is a special signature in
+
+15:17.400 --> 15:19.880
+a test file you have to put.
+
+15:19.880 --> 15:25.240
+And then there are optional helpers, for example, that I like, actually, to put almost everywhere.
+
+15:25.240 --> 15:29.320
+Report allocs, which is by default making sure that this function will measure allocations
+
+15:29.320 --> 15:30.320
+as well.
+
+15:30.320 --> 15:34.640
+And the reset timer, which is super cool because it resets the measurement.
+
+15:34.640 --> 15:39.400
+So anything before you allocate, you spend time on, it will be discarded from benchmark
+
+15:39.400 --> 15:40.400
+result.
+
+15:40.400 --> 15:46.880
+So benchmark will only focus on what will happen within this loop iteration, right?
+
+15:46.880 --> 15:48.920
+And then this for loop, you cannot change it.
+
+15:48.920 --> 15:49.960
+Don't try to change it.
+
+15:49.960 --> 15:50.960
+Always copy.
+
+15:50.960 --> 15:54.280
+This is a boilerplate that has to be there, right?
+
+15:54.280 --> 16:02.000
+Because it allows Go to make repeatability, check the repeatability of your test by running
+
+16:02.000 --> 16:04.680
+it, you know, hundreds of times.
+
+16:04.680 --> 16:10.480
+Okay, so how we execute it already, again, as mentioned, but this is, you know, how I
+
+16:10.480 --> 16:12.600
+do it, like, focus to one test.
+
+16:12.600 --> 16:16.240
+But this is not enough, in my opinion, right?
+
+16:16.240 --> 16:20.160
+By default, it runs only one test, one second.
+
+16:20.160 --> 16:25.920
+I recommend to actually make sure you explicitly state some parameters, right?
+
+16:25.920 --> 16:31.720
+And I have one liner, one liner in bash, for example, that I often use.
+
+16:31.720 --> 16:36.680
+So what it is, essentially, I'm kind of creating some variables so I can reference this result
+
+16:36.680 --> 16:39.080
+later on in the short-term future.
+
+16:39.080 --> 16:40.600
+V1, for example.
+
+16:40.600 --> 16:46.680
+So this will create a v1.txt file in my locally.
+
+16:46.680 --> 16:47.680
+It will run this benchmark.
+
+16:47.680 --> 16:53.320
+It will actually run it, you know, sometime, I specify, again, which is super amazing,
+
+16:53.320 --> 16:57.160
+because it was like, okay, so I have this v1 file, what I was doing with it, and then
+
+16:57.160 --> 17:00.760
+you check in your bash key story, okay, oh, that was one second, and then that was something
+
+17:00.760 --> 17:01.760
+else, right?
+
+17:01.760 --> 17:03.080
+So it's kind of useful.
+
+17:03.080 --> 17:04.760
+And then this is crucial.
+
+17:04.760 --> 17:07.760
+This is something I don't know why I didn't learn in the beginning.
+
+17:07.760 --> 17:10.560
+Maybe you learned the count, dash count, right?
+
+17:10.560 --> 17:15.560
+So what it is is that it runs the same test a couple of times, six times, actually.
+
+17:15.560 --> 17:18.500
+And so one second, six times.
+
+17:18.500 --> 17:24.320
+And this is super important, because then you can use further tools, you will see, to check,
+
+17:24.320 --> 17:27.040
+you know, how reliable are your results.
+
+17:27.040 --> 17:32.320
+You will essentially calculate the variance between the timings, for example.
+
+17:32.320 --> 17:37.400
+So if the variance is too big, then your environment is not stable, right?
+
+17:37.400 --> 17:39.040
+And then I pin to one CPU.
+
+17:39.040 --> 17:43.440
+This is super important to generally pinning, not to one, right?
+
+17:43.440 --> 17:47.480
+Just pick something that works for you for concurrency, pick something that runs on production,
+
+17:47.480 --> 17:49.000
+maybe, or similar.
+
+17:49.000 --> 17:51.240
+But always between tests don't change that, right?
+
+17:51.240 --> 17:52.640
+So that's super important.
+
+17:52.640 --> 17:56.960
+And also I recommend to change less than numbers of CPU, because your operating system has
+
+17:56.960 --> 17:58.240
+to run on something, right?
+
+17:58.240 --> 18:00.720
+So those things matter.
+
+18:00.720 --> 18:05.400
+Also don't run this on laptop without power connected, because you will be CPU throttled.
+
+18:05.400 --> 18:08.800
+There are lots of kind of small things that you think, oh, it doesn't matter.
+
+18:08.800 --> 18:11.880
+No, it matters, because then you cannot rely on your results, right?
+
+18:11.880 --> 18:17.840
+So try to make this serious a little bit, and at least, you know, don't benchmark on
+
+18:17.840 --> 18:20.800
+your lap, you know, in the bed, you know, because they will be overheating.
+
+18:20.800 --> 18:23.960
+So yeah, small things, but it matters, right?
+
+18:23.960 --> 18:26.920
+I was doing that all the time, by the way, yeah.
+
+18:26.920 --> 18:27.920
+All right.
+
+18:27.920 --> 18:31.360
+So results, you know, result looks like this.
+
+18:31.360 --> 18:33.640
+You can see many of them.
+
+18:33.640 --> 18:37.120
+But this is not how I use it, or how we're supposed to use it, apparently.
+
+18:37.120 --> 18:42.520
+There is an amazing tool called Benchstat, and it just prints in a more human-readable
+
+18:42.520 --> 18:43.960
+way.
+
+18:43.960 --> 18:50.120
+And you can see it also aggregates and has some averages over those runs, and tells you
+
+18:50.120 --> 18:56.080
+within this percentage, for example, that the time latency, there is a variance of 1%,
+
+18:56.080 --> 18:58.040
+which is tolerable, for example, right?
+
+18:58.040 --> 19:01.840
+And you can kind of, like, customize what exact how it calculates this variance and
+
+19:01.840 --> 19:02.840
+so on.
+
+19:02.840 --> 19:03.840
+So we can trust it.
+
+19:03.840 --> 19:09.360
+Like, it's even 1% of, I guess, free, you could trust it, depend on what you do, but
+
+19:09.360 --> 19:11.200
+generally it's not too bad.
+
+19:11.200 --> 19:13.920
+Allocations, fortunately, are super stable, right?
+
+19:13.920 --> 19:15.280
+So, okay.
+
+19:15.280 --> 19:18.640
+So we benchmarked, we measured, okay, we know our function has these numbers.
+
+19:18.640 --> 19:22.080
+Like, I mean, what's next, right?
+
+19:22.080 --> 19:24.160
+Everybody was like, yeah, let's make it faster, let's make it faster.
+
+19:24.160 --> 19:26.640
+But wait, wait, wait, wait, why?
+
+19:26.640 --> 19:27.640
+Why should we make it faster?
+
+19:27.640 --> 19:34.200
+Maybe, okay, maybe that's a lot, 100 megabytes of every, you know, create invocation, but
+
+19:34.200 --> 19:36.120
+maybe that's fine, right?
+
+19:36.120 --> 19:40.080
+So this is where I think we are missing a lot of experience, usually.
+
+19:40.080 --> 19:42.840
+I mean, you have to set some expectations, right?
+
+19:42.840 --> 19:47.120
+Like, to what point you are optimizing?
+
+19:47.120 --> 19:48.720
+And you know, usually we don't have any expectations.
+
+19:48.720 --> 19:53.960
+Like, okay, yeah, I mean, even from product management, here we have maybe functionals,
+
+19:53.960 --> 19:58.600
+you know, requirements, but never really concrete performance requirements.
+
+19:58.600 --> 19:59.800
+So we don't know what to do.
+
+19:59.800 --> 20:04.160
+And honestly, if you don't just ignore those requirements, okay, I don't have, I just want
+
+20:04.160 --> 20:08.080
+to make it faster, then this premature optimization is always, right?
+
+20:08.080 --> 20:13.800
+Because it's always premature because it's a random, random goal you don't really understand,
+
+20:13.800 --> 20:14.800
+right?
+
+20:14.800 --> 20:17.320
+So maybe, maybe just make it fast, right?
+
+20:17.320 --> 20:20.280
+That's also like very fuzzy, obviously, that's not very helpful.
+
+20:20.280 --> 20:21.760
+So what is helpful?
+
+20:21.760 --> 20:23.800
+What I will look, and I know it's super hard.
+
+20:23.800 --> 20:30.480
+I know it's kind of uncomfortable, but I suggest doing some kind of efficiency requirements
+
+20:30.480 --> 20:33.880
+spec, super simple, as simple as possible.
+
+20:33.880 --> 20:34.880
+I call it rare.
+
+20:34.880 --> 20:37.400
+So, rare efficiency requirements.
+
+20:37.400 --> 20:41.400
+And what it means, essentially, try to find out some kind of function, right?
+
+20:41.400 --> 20:46.440
+Some kind of, you know, complexity, but not asymptotic complexity, just more concrete
+
+20:46.440 --> 20:50.080
+estimation of the complexity based on inputs, right?
+
+20:50.080 --> 20:55.280
+And for simple functions, like for example, our function, we can estimate, you know, what
+
+20:55.280 --> 20:59.040
+in our minds we think should happen, roughly, right?
+
+20:59.040 --> 21:03.680
+So for runtime, we know in one million time we do something.
+
+21:03.680 --> 21:06.240
+We don't know how many in our seconds, let's pick 30.
+
+21:06.240 --> 21:11.640
+This is actually pretty big for one iteration of just append, but just really pick some
+
+21:11.640 --> 21:12.640
+numbers.
+
+21:12.640 --> 21:16.680
+Sometimes it's good, it's just, you know, you can iterate over this number, but if you
+
+21:16.680 --> 21:20.920
+don't know where you go, then, you know, how you can make any decisions.
+
+21:20.920 --> 21:28.640
+In allocations, it's a little bit bitter, a little bit easier, because we expect a slice
+
+21:28.640 --> 21:37.240
+of six, of one million elements of strings, and as we learned from Matri talk, every string
+
+21:37.240 --> 21:39.280
+has these two parts.
+
+21:39.280 --> 21:44.920
+One part has 16 bits, which has length and capacity, or maybe capacity not, but then,
+
+21:44.920 --> 21:51.560
+yeah, length, capacity, and pointer, and then there's other parts which lies in the heap.
+
+21:51.560 --> 21:56.240
+But for this, you know, 16 bytes, we can assume that will be 16, right?
+
+21:56.240 --> 21:59.800
+So it's every element is 16 bytes, so now we just multiply.
+
+21:59.800 --> 22:02.400
+That's our function, that's what we all expect, right?
+
+22:02.400 --> 22:09.000
+And with this, we can, you know, kind of expect that every invocation of create should, you
+
+22:09.000 --> 22:10.800
+know, kind of allocate 15 megabytes.
+
+22:10.800 --> 22:14.160
+But what we see, we allocate 80 megabytes, right?
+
+22:14.160 --> 22:19.120
+So already we see that, oh, there might be like easy ways to do it, or something I don't
+
+22:19.120 --> 22:20.680
+understand about this program.
+
+22:20.680 --> 22:27.480
+And this is what leads us to better, to spotting maybe easy wins, and spotting, you know, if
+
+22:27.480 --> 22:29.680
+we need to do anything, right?
+
+22:29.680 --> 22:34.240
+In terms of time, latency, it's already kind of like more than we kind of expected, right?
+
+22:34.240 --> 22:38.440
+But this is more of a guessing, I just guessed it's 30 seconds, right?
+
+22:38.440 --> 22:39.920
+Okay, so what we do?
+
+22:39.920 --> 22:48.800
+Now we know we are, you know, not fast enough, not allocating, we are overallocated, right?
+
+22:48.800 --> 22:52.000
+So then we profile, then we check, okay, we have a problem.
+
+22:52.000 --> 22:54.320
+Now let's find what's going on.
+
+22:54.320 --> 22:59.440
+And this is where on micro level we can, you know, use profiling very easily by just adding
+
+22:59.440 --> 23:01.280
+those two flags.
+
+23:01.280 --> 23:07.520
+It will gather memory profiles and CPU profiles in a file, like v1.mempprof.
+
+23:07.520 --> 23:12.880
+On macro level, there are other ways of gathering profiles, but you can use the same format,
+
+23:12.880 --> 23:19.520
+the same tools, there are even continuous profiling tools in all the cells, like Parcadev,
+
+23:19.520 --> 23:25.560
+I really recommend them, and it's super easy then to gather those profiles over time.
+
+23:25.560 --> 23:30.760
+So this, what we want to really learn is that what causes this problem?
+
+23:30.760 --> 23:36.520
+And this is like a CPU profile, and we could spot, and the wider means it spends more CPU
+
+23:36.520 --> 23:42.320
+profiles, the depth doesn't matter, it's just how many functions we have, right?
+
+23:42.320 --> 23:46.760
+So you can see that create, of course, is one of the biggest contributors, but the growth
+
+23:46.760 --> 23:47.760
+lies, right?
+
+23:47.760 --> 23:51.120
+Like why we spend so many cycles growing slides?
+
+23:51.120 --> 23:57.960
+Ideally, I know how many elements I have, kind of why it doesn't grow me once, right?
+
+23:57.960 --> 24:03.280
+And then we can check, and by the way, you can use this go tool, pprof, dash, itp locally,
+
+24:03.280 --> 24:08.360
+I kind of use it a lot on this file to kind of expose this kind of interactive UI, you
+
+24:08.360 --> 24:13.160
+can do the same for memory, but honestly, this is not useful because Append is a standard
+
+24:13.160 --> 24:16.160
+library function, and they are not very well exposed, right?
+
+24:16.160 --> 24:17.160
+So they're hidden.
+
+24:17.160 --> 24:21.280
+So this is not very helpful, actually CPU profile was more helpful, because it pointed
+
+24:21.280 --> 24:25.440
+us to the growth lies, and if you just Google for that, you will notice this comes from
+
+24:25.440 --> 24:30.600
+Append, and then you can go to documentation of Append and learn what it actually does.
+
+24:30.600 --> 24:35.080
+And as you probably are familiar, because this is like, should be a trivial case, I
+
+24:35.080 --> 24:41.600
+mean, Append resizes the slides, or resizes the underlying RI whenever, you know, it's
+
+24:41.600 --> 24:42.600
+full, right?
+
+24:42.600 --> 24:48.500
+And resizing, it's not super simple, it has to kind of create a new, bigger RI, and copy
+
+24:48.500 --> 24:55.760
+things over, and, you know, garbage collection will kill the old one, but not fast enough
+
+24:55.760 --> 24:57.540
+because of the garbage collection.
+
+24:57.540 --> 25:01.500
+So we kind of aggregate that as another allocation, right?
+
+25:01.500 --> 25:09.560
+So this is what happens, and kind of the fix is to just pre-allocate, right?
+
+25:09.560 --> 25:13.760
+So to tell, you know, when you create the slides, okay, how much capacity you want to
+
+25:13.760 --> 25:16.120
+prepare for that, and thanks for that.
+
+25:16.120 --> 25:22.880
+So what we do now, okay, we did optimize in our TFBO, now we test before with the measuring,
+
+25:22.880 --> 25:29.000
+because if you are not testing if this, you know, this code is correct, then, you know,
+
+25:29.000 --> 25:32.800
+you might be, you know, yeah, we'll be happy that things are faster, but functionally broken.
+
+25:32.800 --> 25:35.440
+So always test, don't be, you know, lazy.
+
+25:35.440 --> 25:37.040
+Run those unit tests, easy.
+
+25:37.040 --> 25:41.080
+And then, you know, once they are passing, you can comfortably measure.
+
+25:41.080 --> 25:46.920
+Again, I just changed V2, just to specify another variable, right, on our file system,
+
+25:46.920 --> 25:50.920
+and then I can do bunch.v1.txt and then V2.txt.
+
+25:50.920 --> 25:53.400
+Again, I can put like 100 of those variables.
+
+25:53.400 --> 25:59.240
+It will compare all of them, but here we compare two, and not only we have absolute values
+
+25:59.240 --> 26:01.840
+of those measurements, but also a diff, right?
+
+26:01.840 --> 26:08.240
+So you can see we improved a lot, and if we check absolute value in regards to our efficiency
+
+26:08.240 --> 26:14.720
+requirements, you see that we met our threshold, roughly, but like we estimated it, so it's
+
+26:14.720 --> 26:20.080
+totally good, you know, 15 megabytes, we have 15 megabytes, and then it's faster than our
+
+26:20.080 --> 26:21.080
+goal.
+
+26:21.080 --> 26:23.600
+So now we are good to go and release it, right?
+
+26:23.600 --> 26:27.840
+So that's kind of the whole loop, and you kind of do it until you're happy with your
+
+26:27.840 --> 26:28.840
+results.
+
+26:28.840 --> 26:33.640
+So yeah, this is it, and learnings, again, five learnings.
+
+26:33.640 --> 26:39.120
+Follow TFBO, test, fix, benchmark, optimize, use benchmarks, they are built into Golang,
+
+26:39.120 --> 26:42.320
+they are super amazing, go test, slash, bench.
+
+26:42.320 --> 26:46.120
+Set the clear goals, goals are super important here, right?
+
+26:46.120 --> 26:51.960
+And then profile, and you can, I mean, Golang uses Pprof, which you can Google as well,
+
+26:51.960 --> 26:57.760
+it's like amazing kind of protocol, kind of set of tools integrated with other clouds
+
+26:57.760 --> 27:02.920
+and so on, and use it every day whenever I have to optimize something.
+
+27:02.920 --> 27:09.080
+And then finally, the key is to try to understand what happens, what I expected, and what's
+
+27:09.080 --> 27:10.200
+wrong.
+
+27:10.200 --> 27:13.640
+Reading documentation, reading code, this is what you have to do sometimes.
+
+27:13.640 --> 27:19.680
+And at General Tip, whenever you want to optimize something super, super carefully in some bottleneck
+
+27:19.680 --> 27:25.600
+part of your code, I mean, avoid standard library functions, because they are really
+
+27:25.600 --> 27:27.080
+built into generic functionality.
+
+27:27.080 --> 27:31.240
+It will test, I mean, it will do a lot of things with different edge cases that you
+
+27:31.240 --> 27:32.360
+might not have.
+
+27:32.360 --> 27:37.600
+So a lot of times I just implemented my own parsing integer function, it was much faster.
+
+27:37.600 --> 27:42.400
+So this is like General Tip that always works, but again, do it only when you need it, because
+
+27:42.400 --> 27:45.080
+you might have a box in the disk out, right?
+
+27:45.080 --> 27:46.080
+So that's it.
+
+27:46.080 --> 27:47.080
+Thank you.
+
+27:47.080 --> 27:48.080
+You have a link here, bwplot.dev.
+
+27:48.080 --> 28:13.080
+Thank you.

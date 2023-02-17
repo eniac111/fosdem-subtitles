@@ -1,0 +1,1117 @@
+WEBVTT
+
+00:00.000 --> 00:10.720
+Hello, I'll get started.
+
+00:10.720 --> 00:16.520
+My talk is entitled the next frontier in open source Java compilers, just in time compilation
+
+00:16.520 --> 00:17.520
+as a service.
+
+00:17.520 --> 00:21.200
+Whoops, this isn't working.
+
+00:21.200 --> 00:24.800
+My name is Rich Haggerty, I've been a software engineer for way too many years.
+
+00:24.800 --> 00:30.960
+I'm currently a developer advocate at IBM.
+
+00:30.960 --> 00:36.200
+So we're all Java developers, we understand what a JVM and a JIT is.
+
+00:36.200 --> 00:40.200
+We'll do the JVM, execute your Java application.
+
+00:40.200 --> 00:45.480
+During runtime, it sends the hot methods to the JIT to be compiled.
+
+00:45.480 --> 00:47.920
+With that in mind, we're going to talk about JIT as a service today.
+
+00:47.920 --> 00:50.760
+And we're going to break it down into three parts.
+
+00:50.760 --> 00:55.840
+First I'm going to talk about a problem, right, which is Java running on cloud, specifically
+
+00:55.840 --> 00:59.160
+in distributed, dynamic environments like microservices.
+
+00:59.160 --> 01:05.120
+Then we're going to talk about the reason, which is going to take us back to the JVM
+
+01:05.120 --> 01:08.040
+and the JIT, which has some great technology.
+
+01:08.040 --> 01:10.820
+It's great technology, but does have some issues.
+
+01:10.820 --> 01:18.280
+And then the solution, which is the JIT as a service.
+
+01:18.280 --> 01:21.900
+So is Java a good fit on the cloud?
+
+01:21.900 --> 01:26.880
+So for context, we'll talk about legacy Java apps, enterprise apps running.
+
+01:26.880 --> 01:34.680
+They're all monoliths running on dedicated servers or VMs to ensure great performance.
+
+01:34.680 --> 01:38.800
+We loaded with a lot of memory and a lot of CPUs.
+
+01:38.800 --> 01:42.140
+They took forever to start, but it didn't matter because it never went down.
+
+01:42.140 --> 01:46.360
+We have clients running Java applications for years.
+
+01:46.360 --> 01:48.960
+If they did upgrade, it'd be every six months to a year.
+
+01:48.960 --> 01:51.160
+Do some simple refreshes.
+
+01:51.160 --> 01:57.200
+That was the world of legacy Java enterprise apps.
+
+01:57.200 --> 01:59.400
+Now we move to the cloud.
+
+01:59.400 --> 02:05.560
+That same monolith is a bunch of microservices talking to each other.
+
+02:05.560 --> 02:13.360
+They're all running in containers, managed by some cloud provider with a Kubernetes implementation
+
+02:13.360 --> 02:15.800
+to orchestrate.
+
+02:15.800 --> 02:23.120
+And we have auto scaling up and down to meet demand.
+
+02:23.120 --> 02:28.000
+So the main motivators behind this, obviously, are flexibility and scalability.
+
+02:28.000 --> 02:29.280
+Easier to roll out new releases.
+
+02:29.280 --> 02:35.560
+You can have teams assigned to specific microservices and never touching other microservices.
+
+02:35.560 --> 02:39.880
+Once you're on the cloud, you can take advantage of the latest, greatest cloud technologies
+
+02:39.880 --> 02:42.720
+like serverless coming out.
+
+02:42.720 --> 02:46.600
+Obviously you have less infrastructure to maintain and manage.
+
+02:46.600 --> 02:52.400
+And the ultimate goal is saving money.
+
+02:52.400 --> 02:58.640
+So before we start counting all our money, we got to think about what about performance.
+
+02:58.640 --> 03:02.960
+So there's two variables that impact cost and performance.
+
+03:02.960 --> 03:10.280
+It's container size and the number of instances of your application you're running.
+
+03:10.280 --> 03:15.400
+Here's a graph showing all the ways we can get these variables wrong.
+
+03:15.400 --> 03:18.720
+Starting down here, containers are way too small.
+
+03:18.720 --> 03:20.720
+We're not running enough instances.
+
+03:20.720 --> 03:24.800
+It's pretty cheap, but the performance is unacceptable.
+
+03:24.800 --> 03:28.720
+On the opposite side, we have our containers are too big.
+
+03:28.720 --> 03:30.560
+Way too many instances running.
+
+03:30.560 --> 03:33.920
+Great performance, wasting money.
+
+03:33.920 --> 03:34.920
+So we need to get over here.
+
+03:34.920 --> 03:37.000
+This is a sweet spot, right?
+
+03:37.000 --> 03:39.920
+We got our container size just right.
+
+03:39.920 --> 03:43.440
+We have just enough instances for the demand.
+
+03:43.440 --> 03:45.040
+That's what we want to get to.
+
+03:45.040 --> 03:46.040
+Very hard to do.
+
+03:46.040 --> 03:50.400
+In fact, most conferences have a lot of talks about how to get here, right?
+
+03:50.400 --> 03:53.160
+Or their fixes for this problem.
+
+03:53.160 --> 03:57.840
+So before we can figure out how to fix it, we got to figure out why it's so hard.
+
+03:57.840 --> 04:04.880
+And in order to do that, we got to talk about the JVM and the JIT.
+
+04:04.880 --> 04:10.480
+So first, a good, device independent, Java became so popular because we write once, run
+
+04:10.480 --> 04:12.240
+anywhere in theory.
+
+04:12.240 --> 04:14.920
+25 years of constant improvement.
+
+04:14.920 --> 04:18.600
+A lot of involvement from the community in it.
+
+04:18.600 --> 04:23.380
+The JIT itself, optimized code that runs great.
+
+04:23.380 --> 04:29.080
+It uses profilers so it can optimize a code that you can't get doing it statically.
+
+04:29.080 --> 04:31.720
+Has very efficient garbage collection.
+
+04:31.720 --> 04:36.680
+And when the JVM collects more data and the JIT compiles more methods, your code gets
+
+04:36.680 --> 04:37.680
+better and better.
+
+04:37.680 --> 04:43.640
+So the longer your Java application runs, the better it gets.
+
+04:43.640 --> 04:45.060
+Now the bad.
+
+04:45.060 --> 04:51.400
+So that initial execution of your code is interpreted so it's relatively slow.
+
+04:51.400 --> 04:57.480
+Those hotspot methods compiled by the JIT can create CPU and memory spikes.
+
+04:57.480 --> 05:03.280
+CPU spikes cause lower quality of service, meaning performance.
+
+05:03.280 --> 05:06.680
+And your memory spikes cause out of memory issues, including crashes.
+
+05:06.680 --> 05:11.560
+In fact, the number one reason JVM's, or a main reason JVM's crashes because of out
+
+05:11.560 --> 05:13.240
+of memory issues.
+
+05:13.240 --> 05:16.040
+And we have slow startup and slow ramp up time.
+
+05:16.040 --> 05:18.480
+So we want to distinguish between the two.
+
+05:18.480 --> 05:23.240
+Startup time is the time that it takes for that application to process first request,
+
+05:23.240 --> 05:25.420
+usually during an interpretation time.
+
+05:25.420 --> 05:29.480
+And ramp up time is the time it takes for JIT to compile everything it wants to compile
+
+05:29.480 --> 05:35.640
+to get to that optimized version of your code.
+
+05:35.640 --> 05:38.120
+So here we have some graphs to back that up.
+
+05:38.120 --> 05:44.620
+Here we take a Java enterprise application and you can see on the left, we got CPU spikes
+
+05:44.620 --> 05:48.880
+here happening initially, all because of JIT compilations.
+
+05:48.880 --> 05:50.920
+Same thing with the memory side.
+
+05:50.920 --> 05:59.560
+We got these large spikes that we have to account for.
+
+05:59.560 --> 06:02.640
+So let's go back to that graph I had finding that sweet spot.
+
+06:02.640 --> 06:07.040
+Now we have a little more information, but still we need to figure out a way to right
+
+06:07.040 --> 06:09.320
+size those provisioned containers.
+
+06:09.320 --> 06:12.480
+And we got to make our auto scaling efficient.
+
+06:12.480 --> 06:15.440
+So we have very little control over scaling.
+
+06:15.440 --> 06:19.240
+We control the size of our containers, but as far as scaling goes, we just have to set
+
+06:19.240 --> 06:30.320
+the environment enough up correctly so that auto scaling is efficient.
+
+06:30.320 --> 06:36.320
+So on the container size portion of it, the main issue is we need to over provision to
+
+06:36.320 --> 06:45.960
+handle those out of memory spikes, which is very hard to do because JVMs have a non deterministic
+
+06:45.960 --> 06:50.080
+behavior, meaning you can run the same application over and over and you're going to get different
+
+06:50.080 --> 06:51.080
+spikes at different times.
+
+06:51.080 --> 07:00.160
+So you got to run a series of tests with loading to figure out to get that number kind of right.
+
+07:00.160 --> 07:04.680
+And on the auto scaling part of things, again, we talk about the slow startup and ramp up
+
+07:04.680 --> 07:05.680
+times.
+
+07:05.680 --> 07:10.320
+The slower those are, the less effective your auto scaling is going to be.
+
+07:10.320 --> 07:13.720
+And the CPU spikes can cause other issues.
+
+07:13.720 --> 07:18.600
+A lot of auto scalers, the threshold for starting new instances is CPU load.
+
+07:18.600 --> 07:26.240
+So if you start a new instance and it's spinning, doing JIT compiles, your auto scaler may detect
+
+07:26.240 --> 07:28.040
+that as a false positive.
+
+07:28.040 --> 07:31.200
+Say oh, you need, the demand is going up, you need more instances.
+
+07:31.200 --> 07:34.000
+When in this case, you really didn't.
+
+07:34.000 --> 07:38.860
+So it makes it very inefficient.
+
+07:38.860 --> 07:44.520
+So the solution to this problem is we need to minimize or eliminate those CPU spikes
+
+07:44.520 --> 07:46.240
+and memory spikes.
+
+07:46.240 --> 07:53.840
+And we got to improve that startup and ramp up time.
+
+07:53.840 --> 07:57.960
+So we are proposing here, we're going to talk about JIT as a service, which is going to
+
+07:57.960 --> 08:01.880
+solve these issues or help solve these issues.
+
+08:01.880 --> 08:06.920
+So the theory behind it is we're going to decouple the JIT compiler from the JVM and
+
+08:06.920 --> 08:09.160
+let it run as an independent process.
+
+08:09.160 --> 08:17.080
+Then we're going to offload those JIT compilations to that remote process from the client JVMs.
+
+08:17.080 --> 08:25.120
+As you can see here, we have two client JVMs talking to two remote JITs over here.
+
+08:25.120 --> 08:33.200
+We have the JIT still locally in the JVM that can be used if these become unavailable for
+
+08:33.200 --> 08:35.480
+some reason.
+
+08:35.480 --> 08:39.560
+These, since we're all in containers, are automatically managed by the orchestrator
+
+08:39.560 --> 08:44.480
+to make sure that we have, they're scaled correctly.
+
+08:44.480 --> 08:47.160
+This is actually a mono to micro solution.
+
+08:47.160 --> 08:49.720
+So we're taking the monolith, in this case, this is a JVM.
+
+08:49.720 --> 08:55.320
+We're splitting it up into the JIT and everything left over in the other micro service.
+
+08:55.320 --> 09:02.160
+And again, like I mentioned, the local JIT still is available if this service goes down.
+
+09:02.160 --> 09:11.840
+So, this actual technology does exist today and it's called the JIT server and it's a
+
+09:11.840 --> 09:15.880
+part of the Eclipse OpenJ9 JVM.
+
+09:15.880 --> 09:21.160
+It comes with the, it's also called the SAMRU cloud compiler when used with SAMRU runtimes
+
+09:21.160 --> 09:23.520
+and I'll get to that in a minute.
+
+09:23.520 --> 09:29.560
+And I'm sure everyone here knows OpenJ9 combines with OpenJDK to form a full JDK and totally
+
+09:29.560 --> 09:31.540
+open source and free to download.
+
+09:31.540 --> 09:37.720
+And here's the GitHub repo there.
+
+09:37.720 --> 09:39.880
+Little history of OpenJ9.
+
+09:39.880 --> 09:44.800
+It started life as the J9 JVM by IBM over 25 years ago.
+
+09:44.800 --> 09:50.400
+And the reason IBM developed it was because they had a whole range of devices they needed
+
+09:50.400 --> 09:54.280
+to support and they wanted to make sure Java ran on all of them.
+
+09:54.280 --> 09:57.600
+That's all the way from handheld scanners to mainframes.
+
+09:57.600 --> 10:02.800
+So it was designed to go from small to large in both types of environments where you have
+
+10:02.800 --> 10:05.760
+a lot of memory or very, very little.
+
+10:05.760 --> 10:11.560
+And about five years ago, IBM decided to open source it to the Eclipse Foundation.
+
+10:11.560 --> 10:15.320
+And OpenJ9 is renowned for small footprint, fast startup and ramp up time, which we'll
+
+10:15.320 --> 10:16.760
+get to in a minute.
+
+10:16.760 --> 10:23.920
+And again, even though it's got a new name, it's OpenJ9, all of IBM enterprise clients
+
+10:23.920 --> 10:28.560
+have been running their applications on this JVM for years.
+
+10:28.560 --> 10:36.640
+So there's a lot of history of success with it.
+
+10:36.640 --> 10:40.560
+Here's some OpenJ9 performance compared to Hotspot.
+
+10:40.560 --> 10:43.980
+Again, this doesn't take into account the JIT server.
+
+10:43.980 --> 10:49.000
+This is just the JVMs themselves going left to right here.
+
+10:49.000 --> 10:51.320
+OpenJ9's in green.
+
+10:51.320 --> 10:52.520
+Hotspot's in orange.
+
+10:52.520 --> 10:58.560
+So in certain circumstances, we got to see 51% faster startup time, 50% smaller footprint
+
+10:58.560 --> 11:01.080
+after startup.
+
+11:01.080 --> 11:04.760
+And it ramps up quicker than Hotspot.
+
+11:04.760 --> 11:16.200
+And at the very end, under total full load, we have a 33% smaller footprint with OpenJ9.
+
+11:16.200 --> 11:18.620
+So Samru runtimes.
+
+11:18.620 --> 11:23.020
+So that is IBM's OpenJDK distribution.
+
+11:23.020 --> 11:26.200
+Just like all the, someone just mentioned there's a ton of distributions out there.
+
+11:26.200 --> 11:27.200
+This is IBM's.
+
+11:27.200 --> 11:32.400
+And it's the only one that comes with the Eclipse OpenJ9 JVM.
+
+11:32.400 --> 11:34.300
+It's available no cost.
+
+11:34.300 --> 11:35.300
+It's stable.
+
+11:35.300 --> 11:36.320
+IBM puts their name behind it.
+
+11:36.320 --> 11:41.560
+So it comes in two editions, open source and certified.
+
+11:41.560 --> 11:45.400
+The only difference being the licensing and what platforms are supported.
+
+11:45.400 --> 11:52.200
+And if you're wondering what Samru comes from, the name comes from, Mount Samru is the tallest
+
+11:52.200 --> 11:54.960
+mountain on the island of, anyone know?
+
+11:54.960 --> 11:55.960
+Java.
+
+11:55.960 --> 11:56.960
+Java.
+
+11:56.960 --> 11:57.960
+There you go.
+
+11:57.960 --> 11:58.960
+See how that makes sense?
+
+11:58.960 --> 12:02.360
+If I had a T-shirt, I would have given you that.
+
+12:02.360 --> 12:03.360
+All right.
+
+12:03.360 --> 12:09.080
+From the perspective of the server or the client talking to this new JIT server, this
+
+12:09.080 --> 12:11.880
+is the advantage they're going to get.
+
+12:11.880 --> 12:17.040
+From a provisioning aspect, now it's going to be very easy to size our containers.
+
+12:17.040 --> 12:19.120
+We don't have to worry about those spikes anymore.
+
+12:19.120 --> 12:28.040
+So now we just, we level set based on the demand or the needs of the application itself.
+
+12:28.040 --> 12:30.840
+Performance wise, we're going to see improved ramp up time.
+
+12:30.840 --> 12:35.360
+Basically because the JIT server is going to be offloading.
+
+12:35.360 --> 12:40.900
+We're going to offload all the compiles in the CPU cycles to the JIT server.
+
+12:40.900 --> 12:44.520
+And there's also a feature in this JIT server called AOT cache.
+
+12:44.520 --> 12:47.800
+So it's going to store any method it compiles.
+
+12:47.800 --> 12:53.080
+So another instance of the same container application calling it and it'll have that
+
+12:53.080 --> 12:54.340
+method and it'll just return it.
+
+12:54.340 --> 12:59.200
+No compilation needed.
+
+12:59.200 --> 13:04.800
+From a cost standpoint, obviously any time you reduce your resource cost or your resource
+
+13:04.800 --> 13:08.160
+amounts you're going to get a savings in cost.
+
+13:08.160 --> 13:11.480
+And I mentioned earlier the efficient auto scaling, you're only going to pay for what
+
+13:11.480 --> 13:14.440
+you need.
+
+13:14.440 --> 13:21.440
+Resiliency, remember the JIT, the JVM still has their local JIT.
+
+13:21.440 --> 13:29.520
+So if the JIT server goes down, it still has, it could still keep going.
+
+13:29.520 --> 13:31.680
+So this is kind of an interesting chart.
+
+13:31.680 --> 13:32.680
+This is pretty big.
+
+13:32.680 --> 13:36.600
+So we're going to talk about some of the examples of where we see savings.
+
+13:36.600 --> 13:42.120
+So this is an experiment where we took four, let me see if my pointer works, we took four
+
+13:42.120 --> 13:50.520
+Java applications and we decided to size them correctly for the amount of the memory and
+
+13:50.520 --> 13:56.180
+CPU they needed doing all those load tests to figure out what this amount should be.
+
+13:56.180 --> 13:58.040
+And we have multiple instances of them.
+
+13:58.040 --> 14:00.080
+So the color indicates the application.
+
+14:00.080 --> 14:02.880
+You can see all the different replications.
+
+14:02.880 --> 14:07.280
+The relative size is shown with the scale of the square.
+
+14:07.280 --> 14:12.040
+And in this case we used OpenShift to lay it out for us and it came out to use three
+
+14:12.040 --> 14:17.680
+nodes to handle all of this, all these applications in your instances.
+
+14:17.680 --> 14:20.940
+Then we introduced the JIT server, ran the same test.
+
+14:20.940 --> 14:22.560
+Here's our JIT server here, the brown.
+
+14:22.560 --> 14:26.080
+It's the biggest container in the nodes.
+
+14:26.080 --> 14:30.380
+But you notice the size of all of our containers for the applications goes way down.
+
+14:30.380 --> 14:35.040
+So we have the same number of instances in both cases but we've just saved 33% of the
+
+14:35.040 --> 14:38.240
+resources.
+
+14:38.240 --> 14:46.400
+And if you're wondering how they perform, whoops, went too far, you see no difference.
+
+14:46.400 --> 14:50.720
+The orange is the baseline, the blue is the JIT server.
+
+14:50.720 --> 14:56.880
+And from that stable state, meaning once they've run, the performance is exactly the same but
+
+14:56.880 --> 15:01.920
+we're again saving 33% of the resources.
+
+15:01.920 --> 15:06.820
+Now we'll take a look at some of the effects on auto scaling in Kubernetes.
+
+15:06.820 --> 15:12.720
+Here we're running an application and we're setting our threshold, I think it's up there,
+
+15:12.720 --> 15:16.960
+at 50% of CPU.
+
+15:16.960 --> 15:21.240
+And you can see here all these plateaus are when the auto scaler's going to launch another
+
+15:21.240 --> 15:23.480
+pod.
+
+15:23.480 --> 15:29.080
+And you can see how the JIT server in blue responds better.
+
+15:29.080 --> 15:33.040
+Shorter dips and they recover faster.
+
+15:33.040 --> 15:38.520
+And overall, your performance is going to be better with a JIT server.
+
+15:38.520 --> 15:42.340
+Also that other thing I talked about with false positives.
+
+15:42.340 --> 15:48.280
+So again, the auto scaler's not going to be tricked into thinking that CPU load from JIT
+
+15:48.280 --> 15:51.000
+compiles is the reason for demand.
+
+15:51.000 --> 15:54.520
+So you're going to get better behavior in auto scaling.
+
+15:54.520 --> 15:55.520
+Two minutes.
+
+15:55.520 --> 15:58.120
+All right, when to use it.
+
+15:58.120 --> 16:04.520
+Obviously when the JVM is, we're in a memory and CPU constrained environment.
+
+16:04.520 --> 16:10.080
+Recommendations you always use 10 to 20 client JVMs when you're talking to a JIT server.
+
+16:10.080 --> 16:14.640
+Because remember that JIT server does take its own container.
+
+16:14.640 --> 16:19.160
+And it is communication over the network so encrypt, only add encryption if you, only
+
+16:19.160 --> 16:22.800
+if you absolutely need it.
+
+16:22.800 --> 16:23.920
+So some final thoughts.
+
+16:23.920 --> 16:28.840
+We talked about the JIT provides great advantage that optimize code.
+
+16:28.840 --> 16:31.280
+But compilations do add overhead.
+
+16:31.280 --> 16:38.680
+So we disaggregate JIT from the JVM and we came up with this JIT compilation as a service.
+
+16:38.680 --> 16:42.600
+It's available in Eclipse OpenJ9, also called the Samru Cloud.
+
+16:42.600 --> 16:44.960
+It's called the Eclipse OpenJ9 JIT server.
+
+16:44.960 --> 16:45.960
+That's the technology.
+
+16:45.960 --> 16:48.720
+It's also called the Samru Cloud compiler.
+
+16:48.720 --> 16:52.320
+It's available on Linux of Java 8, 11, and 17.
+
+16:52.320 --> 16:53.320
+Really good with microcontainers.
+
+16:53.320 --> 16:56.640
+In fact, that's the only reason I'm bringing it up today.
+
+16:56.640 --> 16:58.080
+It's Kubernetes ready.
+
+16:58.080 --> 17:01.560
+You can improve your ramp up time, auto scaling.
+
+17:01.560 --> 17:05.280
+And here's the key point here I'll end with.
+
+17:05.280 --> 17:09.960
+So this is a Java solution to a Java problem.
+
+17:09.960 --> 17:12.440
+Initially I talked about that sweet spot space.
+
+17:12.440 --> 17:16.440
+So there's a lot of companies, a lot of vendors trying to figure out how to make that work
+
+17:16.440 --> 17:17.840
+better.
+
+17:17.840 --> 17:22.680
+And a lot of them involve doing other things besides what Java's all about, running the
+
+17:22.680 --> 17:25.240
+JVM, running the JIT.
+
+17:25.240 --> 17:32.720
+So it is a Java solution to your Java problem.
+
+17:32.720 --> 17:33.800
+That's it for me today.
+
+17:33.800 --> 17:38.840
+That QR code will take you to a page I have that has a bunch of articles on how to use
+
+17:38.840 --> 17:39.840
+it.
+
+17:39.840 --> 17:44.000
+Also, these slides and other good materials about it.
+
+17:44.000 --> 17:45.000
+That's it for me.
+
+17:45.000 --> 17:46.000
+Thank you very much.
+
+17:46.000 --> 17:48.280
+Any questions for Rich?
+
+17:48.280 --> 17:55.360
+Yes, you already have a question.
+
+17:55.360 --> 18:01.000
+It sounds amazing.
+
+18:01.000 --> 18:02.000
+It's amazing.
+
+18:02.000 --> 18:03.000
+It is amazing.
+
+18:03.000 --> 18:04.000
+It really is amazing.
+
+18:04.000 --> 18:07.040
+Apart from not knowing any different, what are the situations where I shouldn't or couldn't
+
+18:07.040 --> 18:12.980
+just rip out my current JKs and use OpenJ9?
+
+18:12.980 --> 18:13.980
+Well, why wouldn't you?
+
+18:13.980 --> 18:14.980
+You can't.
+
+18:14.980 --> 18:19.720
+OpenJ9 is a viable JVM.
+
+18:19.720 --> 18:20.720
+It's nothing special.
+
+18:20.720 --> 18:24.360
+Nothing unique about it that makes you change your code.
+
+18:24.360 --> 18:30.600
+It's a JVM that just points to the OpenJ9 JVM.
+
+18:30.600 --> 18:33.600
+A question for Simon in the back there.
+
+18:33.600 --> 18:39.120
+Before you start, there were two reasons why we had to roll back from using OpenJ9.
+
+18:39.120 --> 18:40.120
+Okay, here it comes.
+
+18:40.120 --> 18:45.560
+First of all, we noticed that the JVM dump format was different, so we couldn't use
+
+18:45.560 --> 18:47.840
+Java Mission Control or the microcoding.
+
+18:47.840 --> 18:50.760
+Maybe that has been fixed?
+
+18:50.760 --> 18:56.120
+I think so because I've seen examples of using those apps in tests.
+
+18:56.120 --> 18:57.120
+You better check that.
+
+18:57.120 --> 18:58.120
+Yeah.
+
+18:58.120 --> 19:01.760
+The second thing was there were no binders for ARM architectures.
+
+19:01.760 --> 19:03.280
+Yeah, okay.
+
+19:03.280 --> 19:04.280
+That may be a problem.
+
+19:04.280 --> 19:07.920
+You should go out and check the latest coverage of that.
+
+19:07.920 --> 19:10.920
+Let me get to the man in the back there, Simon.
+
+19:10.920 --> 19:13.920
+I'm trying to shout.
+
+19:13.920 --> 19:19.920
+With your AOT cache, how do you deal with things like profiling information specifically
+
+19:19.920 --> 19:22.480
+around these optimizations?
+
+19:22.480 --> 19:28.920
+Well, the way the AOT cache will work in this case for the JIT server, it's going to keep
+
+19:28.920 --> 19:35.200
+all that information, and the profile has to match from the requesting JVM.
+
+19:35.200 --> 19:41.600
+If it matches, it'll use it, because also on the clients, they also have their own cache.
+
+19:41.600 --> 19:44.680
+They'll keep it, but they go away once they go away, right?
+
+19:44.680 --> 19:48.640
+Or when you start a new instance of that app, you have a brand new flush cache.
+
+19:48.640 --> 19:52.000
+There were more questions.
+
+19:52.000 --> 19:53.000
+I'm sorry.
+
+19:53.000 --> 19:54.000
+Yes.
+
+19:54.000 --> 20:01.000
+How would you compare these, I guess, reduced footprint Java microcordators compared to
+
+20:01.000 --> 20:05.560
+something that's piled down in the ground here?
+
+20:05.560 --> 20:07.360
+Yeah, so that's what we were talking about.
+
+20:07.360 --> 20:08.360
+You want to go static.
+
+20:08.360 --> 20:13.280
+You'll get a smaller image running statically, but you lose all the benefits of the JIT.
+
+20:13.280 --> 20:15.000
+You'll go slower.
+
+20:15.000 --> 20:16.000
+Over time, yes.
+
+20:16.000 --> 20:19.800
+So that may be a great solution for short-lived apps, right?
+
+20:19.800 --> 20:22.960
+But the longer your Java app runs, the more you're going to benefit from that optimized
+
+20:22.960 --> 20:23.960
+code.
+
+20:23.960 --> 20:24.960
+Right?
+
+20:24.960 --> 20:25.960
+Yes.
+
+20:25.960 --> 20:34.400
+So Eclipse on the chain line, Tesla is not a TCK certified, but my name is also a certified
+
+20:34.400 --> 20:38.400
+for open edition, but today it has available binaries.
+
+20:38.400 --> 20:43.960
+But for Eclipse, they are not able to actually release the binaries because they cannot actually
+
+20:43.960 --> 20:47.160
+access the TCK certification process.
+
+20:47.160 --> 20:54.760
+So that whole, yeah, the whole TCK issue is a, I don't know.
+
+20:54.760 --> 21:00.400
+Well, I guess I could say it seems to be an issue more with IBM and Oracle, right?
+
+21:00.400 --> 21:05.840
+So our own tests are going to be, they're going to encompass all the TCK stuff.
+
+21:05.800 --> 21:13.800
+Eclipse will work for the blockchain and so on, but IBM will basically release all the
+
+21:05.840 --> 21:13.800
+So it's clear the, basically, the
+
+21:13.800 --> 21:14.800
+runtime stuff.
+
+21:14.800 --> 21:15.800
+Yes, it's open.
+
+21:15.800 --> 21:22.320
+Open J9 is managed by Eclipse, but 99% of the contributions are from IBM.
+
+21:22.320 --> 21:23.440
+It's a big part of their business.
+
+21:23.440 --> 21:24.880
+It's not going to go anywhere.
+
+21:24.880 --> 21:29.320
+If you have to do open source, this is like the best of the most worlds, I think.
+
+21:29.320 --> 21:33.100
+It's available, it's open, you can see it, but you know you have a vendor who has their
+
+21:33.100 --> 21:36.400
+business based on it that it's not going to go anywhere, and they're going to put a lot
+
+21:36.400 --> 21:38.600
+of resources to making it better.
+
+21:38.600 --> 21:42.920
+So I'm just telling you right now that we just came up with a JIT server.
+
+21:42.920 --> 21:44.640
+We're going into beta on instant on.
+
+21:44.640 --> 21:46.240
+I don't know if you've heard of that.
+
+21:46.240 --> 21:47.880
+It's based on CryU.
+
+21:47.880 --> 21:51.280
+So we're going to be able to take snapshots of those images, and you can put those in
+
+21:51.280 --> 21:52.280
+your containers.
+
+21:52.280 --> 21:54.280
+Those are going to start up in milliseconds.
+
+21:54.280 --> 21:59.880
+So JIT basically handles, the JIT server handles the ramp up time, but instant on will handle
+
+21:59.880 --> 22:01.240
+the start up time.
+
+22:01.240 --> 22:03.080
+So we're talking milliseconds.
+
+22:03.080 --> 22:06.200
+That's coming out in the next couple of months or so.
+
+22:06.200 --> 22:07.200
+Anyway, thank you.
+
+22:07.200 --> 22:08.200
+One more question over there as well.
+
+22:08.200 --> 22:09.200
+One more question.
+
+22:09.200 --> 22:10.200
+Oh.
+
+22:10.200 --> 22:11.200
+I don't see any.
+
+22:11.200 --> 22:12.200
+Oh, wait.
+
+22:12.200 --> 22:13.200
+It's over there.
+
+22:13.200 --> 22:14.200
+Oh.
+
+22:14.200 --> 22:15.200
+Can you turn the JIT off?
+
+22:15.200 --> 22:16.200
+Can you turn the NJVM JIT off when you use the JIT server?
+
+22:16.200 --> 22:17.200
+It seems like it's a little bit of a problem.
+
+22:17.200 --> 22:23.200
+Can you turn the NJVM JIT off when you use the JIT server?
+
+22:23.200 --> 22:25.080
+It seems like it's a liability if you size your containers to JIT.
+
+22:25.080 --> 22:29.680
+Well, if you don't have the JIT, then you're going to be running an interpreter, right?
+
+22:29.680 --> 22:30.680
+That's like the worst of everything.
+
+22:30.680 --> 22:32.680
+You're going to use the JIT server.
+
+22:32.680 --> 22:33.680
+Oh.
+
+22:33.680 --> 22:35.880
+Well, it won't be.
+
+22:35.880 --> 22:37.840
+But you still want to use the JIT remotely.
+
+22:37.840 --> 22:40.120
+You want the liability to keep it?
+
+22:40.120 --> 22:41.680
+Oh, you're talking about locally.
+
+22:41.680 --> 22:42.680
+It will not be used.
+
+22:42.680 --> 22:43.960
+It will not be used.
+
+22:43.960 --> 22:44.960
+By the way.
+
+22:44.960 --> 22:45.960
+Yeah.
+
+22:45.960 --> 22:50.760
+And by the way, the JIT server is just another persona of the JVM.
+
+22:50.760 --> 22:52.400
+It's just running under a different persona.
+
+22:52.400 --> 22:54.400
+No, it won't do that.
+
+22:54.400 --> 22:55.400
+Okay.
+
+22:55.400 --> 22:57.400
+Thank you very much.
+
+22:57.400 --> 22:58.400
+Okay.
+
+22:58.400 --> 22:59.400
+Thank you.
+
+22:59.400 --> 23:16.520
+Thank you.

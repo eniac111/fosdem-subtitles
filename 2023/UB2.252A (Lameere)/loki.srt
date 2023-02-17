@@ -1,0 +1,2748 @@
+1
+0:00:00.000 --> 0:00:02.000
+Thank you.
+
+2
+0:00:07.000 --> 0:00:09.000
+Thank you.
+
+3
+0:00:12.000 --> 0:00:16.000
+All right. Hey, everyone. My name is Owen. This is Kavi.
+
+4
+0:00:16.000 --> 0:00:19.000
+We're going to be talking about Loki today. This is a project
+
+5
+0:00:19.000 --> 0:00:22.000
+that's very near and dear to my heart. I've been working on for
+
+6
+0:00:22.000 --> 0:00:25.000
+a while. But I believe it's actually the second FOSDEM top
+
+7
+0:00:25.000 --> 0:00:29.000
+on the subject. First one right here by Tom, 2017 or 2018. So
+
+8
+0:00:29.000 --> 0:00:32.000
+I'm going to talk about how Loki works a little bit differently
+
+9
+0:00:32.000 --> 0:00:35.000
+than a lot of things that came before it. And what some of
+
+10
+0:00:35.000 --> 0:00:39.000
+those tradeoffs look like and why I think that's an advantage.
+
+11
+0:00:39.000 --> 0:00:42.000
+And then you can also learn some of the tips and tricks that
+
+12
+0:00:42.000 --> 0:00:45.000
+we've learned building cloud native distributed systems that
+
+13
+0:00:45.000 --> 0:00:48.000
+need to be up all the time. And maybe you can incorporate some
+
+14
+0:00:48.000 --> 0:00:52.000
+of that into your designs later. So we are both going to be
+
+15
+0:00:52.000 --> 0:00:55.000
+talking about how we can build a cloud-native distributed
+
+16
+0:00:55.000 --> 0:00:59.000
+system that can be built into the future. And it's going to
+
+17
+0:00:59.000 --> 0:01:03.000
+be a pretty good tool for that and to your designs later.
+
+18
+0:01:03.000 --> 0:01:07.000
+So we are both engineers at Grafana labs. We work primarily
+
+19
+0:01:07.000 --> 0:01:11.000
+on Loki, the open source project, but then also do a
+
+20
+0:01:11.000 --> 0:01:15.000
+bunch to make sure it runs as part of our SaaS. My move and
+
+21
+0:01:15.000 --> 0:01:21.000
+this is Kavi again. And you can find the project here. This is
+
+22
+0:01:21.000 --> 0:01:23.040
+So we both build and operate and run the software.
+
+23
+0:01:23.040 --> 0:01:25.680
+I use Loki every day to debug Loki.
+
+24
+0:01:25.680 --> 0:01:29.280
+And that's a kind of a labor of love,
+
+25
+0:01:29.280 --> 0:01:34.240
+but it comes because we get paged a lot.
+
+26
+0:01:34.240 --> 0:01:35.040
+Well, not a lot.
+
+27
+0:01:35.040 --> 0:01:37.000
+I actually shouldn't say that on the, you know.
+
+28
+0:01:37.000 --> 0:01:39.920
+But we do get paged, and so we are very empathetic
+
+29
+0:01:39.920 --> 0:01:41.000
+to that fact.
+
+30
+0:01:42.000 --> 0:01:43.960
+This was actually the last time I was here in Belgium.
+
+31
+0:01:43.960 --> 0:01:47.440
+This is in Ghent on top of the Gravnstein,
+
+32
+0:01:47.440 --> 0:01:48.920
+which is this castle.
+
+33
+0:01:48.920 --> 0:01:49.760
+This is not staged.
+
+34
+0:01:49.760 --> 0:01:51.160
+I actually did get paged here.
+
+35
+0:01:52.560 --> 0:01:56.040
+And so this is actually using Loki
+
+36
+0:01:56.040 --> 0:01:57.400
+to figure out what was wrong
+
+37
+0:01:57.400 --> 0:01:59.600
+with our hosted version of Loki itself.
+
+38
+0:02:01.040 --> 0:02:03.240
+But this is my first time here at FOSDEM,
+
+39
+0:02:03.240 --> 0:02:05.320
+and it's been a lot of fun so far.
+
+40
+0:02:05.320 --> 0:02:06.520
+So thanks for having me.
+
+41
+0:02:09.840 --> 0:02:13.120
+So this was actually coined by a friend and colleague,
+
+42
+0:02:13.120 --> 0:02:13.940
+Ed Welch.
+
+43
+0:02:13.940 --> 0:02:16.440
+Loki's a time series database, but for strings.
+
+44
+0:02:16.440 --> 0:02:19.680
+This is effectively how Loki works at the end of the day.
+
+45
+0:02:19.680 --> 0:02:21.880
+And so the first off, we'll jump into figuring out
+
+46
+0:02:21.880 --> 0:02:25.160
+what exactly a time series database is.
+
+47
+0:02:25.160 --> 0:02:26.320
+All right.
+
+48
+0:02:26.320 --> 0:02:29.680
+So yeah, what exactly is time series database, right?
+
+49
+0:02:29.680 --> 0:02:32.840
+So if you think from the normal database,
+
+50
+0:02:32.840 --> 0:02:35.880
+all you always see a key and value, right?
+
+51
+0:02:35.880 --> 0:02:37.960
+And in time series database, surprise, surprise,
+
+52
+0:02:37.960 --> 0:02:39.120
+you have timestamp.
+
+53
+0:02:39.120 --> 0:02:43.320
+So what you see is for every unique identifier,
+
+54
+0:02:43.320 --> 0:02:45.640
+you have array of records or tuple,
+
+55
+0:02:45.640 --> 0:02:46.800
+whatever you wanna call.
+
+56
+0:02:46.800 --> 0:02:49.200
+So on each record, we'll have a value
+
+57
+0:02:49.200 --> 0:02:51.400
+under timestamp attached to it, right?
+
+58
+0:02:51.400 --> 0:02:53.320
+So in this example, as you see,
+
+59
+0:02:53.320 --> 0:02:56.640
+so for this identifier, you have a value V0,
+
+60
+0:02:56.640 --> 0:03:00.160
+a timestamp T0, and value V1, a timestamp T1,
+
+61
+0:03:00.160 --> 0:03:01.560
+so on and so forth, right?
+
+62
+0:03:01.560 --> 0:03:04.600
+So this is the mental model we want you to,
+
+63
+0:03:04.600 --> 0:03:08.240
+like, yeah, I mean, keep in mind throughout the talk,
+
+64
+0:03:08.240 --> 0:03:09.800
+so that you understand some of the decisions
+
+65
+0:03:09.800 --> 0:03:11.480
+why we made the way we are.
+
+66
+0:03:11.480 --> 0:03:14.040
+So to see this in action, right?
+
+67
+0:03:14.040 --> 0:03:15.920
+So this is how it looks like in Prometheus,
+
+68
+0:03:15.920 --> 0:03:17.680
+and this is how it looks like in Loki.
+
+69
+0:03:17.680 --> 0:03:22.680
+So what is identified here is a unique combination
+
+70
+0:03:23.400 --> 0:03:25.360
+of this, what we call label set, right?
+
+71
+0:03:25.360 --> 0:03:29.560
+Here it's app equal to nginx, cluster equal to us central zero.
+
+72
+0:03:29.560 --> 0:03:31.360
+So this is like a unique identifier,
+
+73
+0:03:31.360 --> 0:03:33.560
+which has this list of records.
+
+74
+0:03:33.560 --> 0:03:36.560
+And as you can see, the only difference
+
+75
+0:03:36.560 --> 0:03:38.520
+between Prometheus and Loki here
+
+76
+0:03:38.520 --> 0:03:40.760
+is the type of the value, right?
+
+77
+0:03:40.760 --> 0:03:43.520
+So in the record, you see timestamp, comma, value,
+
+78
+0:03:43.520 --> 0:03:46.720
+and the value is floor 64 in Prometheus,
+
+79
+0:03:46.720 --> 0:03:48.920
+which is 34.5, you see here.
+
+80
+0:03:48.920 --> 0:03:50.800
+And in Loki, it's a string.
+
+81
+0:03:50.800 --> 0:03:53.520
+It's a log line, you ingest into Loki.
+
+82
+0:03:53.520 --> 0:03:57.200
+So that's what, when we say Loki is a time series
+
+83
+0:03:57.200 --> 0:03:59.040
+for strings, that's what we mean.
+
+84
+0:03:59.040 --> 0:04:01.280
+So yeah, it's a log line there.
+
+85
+0:04:03.640 --> 0:04:06.160
+And so we definitely take or steal
+
+86
+0:04:06.160 --> 0:04:09.360
+or however you want to put it, a lot from Prometheus itself.
+
+87
+0:04:09.360 --> 0:04:13.680
+And this is actually what this looks like
+
+88
+0:04:13.680 --> 0:04:15.960
+in terms of how we index and store data.
+
+89
+0:04:15.960 --> 0:04:17.720
+We're gonna talk a lot about indexing in this talk
+
+90
+0:04:17.720 --> 0:04:20.240
+or particularly the lack of indexing.
+
+91
+0:04:20.240 --> 0:04:24.640
+So Loki just basically takes in indexed metadata,
+
+92
+0:04:24.640 --> 0:04:26.440
+but doesn't index log contents at all,
+
+93
+0:04:26.440 --> 0:04:29.640
+which tends to be the vast majority of all this data.
+
+94
+0:04:29.640 --> 0:04:33.920
+So here we're looking at the set of Prometheus style
+
+95
+0:04:33.920 --> 0:04:36.120
+like label values and the timestamp,
+
+96
+0:04:36.120 --> 0:04:38.240
+all that is kind of controlled
+
+97
+0:04:38.240 --> 0:04:40.480
+and used for routing purposes of queries.
+
+98
+0:04:40.480 --> 0:04:43.000
+And then the log contents themselves,
+
+99
+0:04:43.000 --> 0:04:45.200
+which contrary to the size
+
+100
+0:04:45.200 --> 0:04:46.960
+of the underlying graphs on the screen,
+
+101
+0:04:46.960 --> 0:04:49.960
+or the lines, the log contents are much, much larger.
+
+102
+0:04:49.960 --> 0:04:51.760
+So that's the biggest piece here.
+
+103
+0:04:53.180 --> 0:04:55.360
+So this allows us to kind of figure out
+
+104
+0:04:55.360 --> 0:04:57.960
+and use our expertise for the systems that we run
+
+105
+0:04:57.960 --> 0:05:01.160
+and use these labels which tend to be topological
+
+106
+0:05:01.160 --> 0:05:03.360
+or so the source of your contents, right?
+
+107
+0:05:03.360 --> 0:05:06.920
+The application equals API, the cluster,
+
+108
+0:05:06.920 --> 0:05:08.880
+the environment, that sort of thing.
+
+109
+0:05:08.880 --> 0:05:11.160
+And then slice down to the time period that you care about
+
+110
+0:05:11.160 --> 0:05:13.040
+and we can use our own expertise as operators
+
+111
+0:05:13.040 --> 0:05:15.000
+to figure out where we should look.
+
+112
+0:05:16.280 --> 0:05:18.160
+And so as you can see here, right,
+
+113
+0:05:18.160 --> 0:05:20.720
+this maybe is a pretty broad section
+
+114
+0:05:20.720 --> 0:05:22.400
+corresponding to about a terabyte of data
+
+115
+0:05:22.400 --> 0:05:26.360
+over that period, but you can mix and match these things.
+
+116
+0:05:26.360 --> 0:05:28.800
+And so this goes to a fraction of that,
+
+117
+0:05:28.800 --> 0:05:31.440
+down to about 10 gigabytes by just looking at
+
+118
+0:05:31.440 --> 0:05:34.040
+the sets of applications that we actually care about
+
+119
+0:05:34.040 --> 0:05:35.840
+rather than all of the applications
+
+120
+0:05:35.840 --> 0:05:37.680
+and replicas deployed in that cluster.
+
+121
+0:05:37.680 --> 0:05:42.680
+So to give you a bit of a taste of what we mean
+
+122
+0:05:44.320 --> 0:05:46.060
+when we say Loki is performant
+
+123
+0:05:46.060 --> 0:05:48.420
+and Loki executes code faster.
+
+124
+0:05:48.420 --> 0:05:49.760
+So this is what we mean.
+
+125
+0:05:49.760 --> 0:05:51.920
+This is the metric we took from one of our
+
+126
+0:05:51.920 --> 0:05:53.120
+internal cluster.
+
+127
+0:05:53.120 --> 0:05:56.080
+So what you're basically seeing here is
+
+128
+0:05:56.080 --> 0:05:58.520
+this particular Loki cell at peak,
+
+129
+0:05:58.520 --> 0:06:02.200
+it's processing like 50 terabytes per day, right?
+
+130
+0:06:02.200 --> 0:06:05.280
+And what you see in the UI, it's a graph on a UI by the way,
+
+131
+0:06:05.280 --> 0:06:08.480
+where you're running some log queue, which is a query
+
+132
+0:06:08.480 --> 0:06:11.920
+language we use to get visibility of your logs
+
+133
+0:06:11.920 --> 0:06:13.180
+that you ingested into Loki.
+
+134
+0:06:13.180 --> 0:06:15.120
+We'll talk about log queue a bit later.
+
+135
+0:06:15.120 --> 0:06:18.160
+So yeah, this is specifically a metric query.
+
+136
+0:06:18.160 --> 0:06:23.160
+This is like basically you are trying to figure out
+
+137
+0:06:23.160 --> 0:06:25.560
+the metrics on the fly just from your logs
+
+138
+0:06:25.560 --> 0:06:27.080
+without any instrumentation, right?
+
+139
+0:06:27.080 --> 0:06:31.000
+So this particular query is processed like 10 terabytes
+
+140
+0:06:31.000 --> 0:06:33.540
+of data in 12 seconds, which is almost like
+
+141
+0:06:33.540 --> 0:06:35.080
+one terabytes per second throughput.
+
+142
+0:06:35.080 --> 0:06:39.040
+So that's what we mean when we say,
+
+143
+0:06:39.040 --> 0:06:41.320
+yeah, Loki is faster performant.
+
+144
+0:06:41.320 --> 0:06:42.800
+Yeah, so my favorite piece here is that these are
+
+145
+0:06:42.800 --> 0:06:44.560
+actually constructed from logs themselves.
+
+146
+0:06:44.560 --> 0:06:46.240
+They're not Prometheus metrics or anything.
+
+147
+0:06:46.240 --> 0:06:49.040
+We log query metadata for every query that comes into Loki
+
+148
+0:06:49.040 --> 0:06:51.540
+and we're kind of extracting the part of the log line
+
+149
+0:06:51.540 --> 0:06:53.960
+that talks about how fast it processes data
+
+150
+0:06:53.960 --> 0:06:55.940
+and then accumulating it over a bunch of subqueries
+
+151
+0:06:55.940 --> 0:06:58.900
+to get this final value and then graphing that over time.
+
+152
+0:07:01.080 --> 0:07:04.760
+So let's step back now and I like to think about
+
+153
+0:07:04.760 --> 0:07:06.760
+how Loki was designed kind of in response
+
+154
+0:07:06.760 --> 0:07:09.200
+to what came before it.
+
+155
+0:07:09.200 --> 0:07:11.400
+If we look really far back, we remember using
+
+156
+0:07:11.400 --> 0:07:13.660
+tail and grip on individual log files
+
+157
+0:07:13.660 --> 0:07:15.860
+and that's still in use a ton today.
+
+158
+0:07:15.860 --> 0:07:19.800
+But it doesn't work so well when you start to need
+
+159
+0:07:19.800 --> 0:07:21.760
+hundreds or thousands of machines
+
+160
+0:07:21.760 --> 0:07:25.080
+and maybe they're ephemeral, right?
+
+161
+0:07:25.080 --> 0:07:28.640
+So we had to kind of build new strategies for handling this
+
+162
+0:07:28.640 --> 0:07:31.080
+and a bunch of things have come up in the past
+
+163
+0:07:31.080 --> 0:07:32.080
+10, 15 years.
+
+164
+0:07:32.080 --> 0:07:35.760
+But sometimes it leads us into the next point
+
+165
+0:07:35.760 --> 0:07:38.760
+where we've accumulated all of this complexity
+
+166
+0:07:38.760 --> 0:07:40.760
+and sometimes we really miss that experience.
+
+167
+0:07:40.760 --> 0:07:43.360
+And I like this tweet because it's just incredibly
+
+168
+0:07:43.360 --> 0:07:46.640
+emblematic of that experience that sometimes
+
+169
+0:07:46.640 --> 0:07:50.840
+I just really wish I did have grep on top of
+
+170
+0:07:50.840 --> 0:07:53.720
+all of the log aggregation and on top of the underlying
+
+171
+0:07:53.720 --> 0:07:55.440
+complexity and scale that we've accumulated
+
+172
+0:07:55.440 --> 0:07:57.680
+over the past couple decades.
+
+173
+0:07:57.680 --> 0:08:02.680
+Yep, so broadly speaking, so that's one of the goal
+
+174
+0:08:04.120 --> 0:08:06.280
+of Loki, at least on the query side,
+
+175
+0:08:06.280 --> 0:08:09.160
+to take the same experience you have before
+
+176
+0:08:09.160 --> 0:08:11.680
+like with just grep and tail that you're confident with.
+
+177
+0:08:11.680 --> 0:08:13.640
+Can we bring the same experience in this modern
+
+178
+0:08:13.640 --> 0:08:16.160
+cloud native distributor systems era, right?
+
+179
+0:08:16.160 --> 0:08:18.560
+Where you have your logs like spitting out
+
+180
+0:08:18.560 --> 0:08:21.960
+from different machines, from different applications.
+
+181
+0:08:21.960 --> 0:08:23.360
+Yeah, similar setup, right?
+
+182
+0:08:23.360 --> 0:08:28.240
+So like I mentioned before, Loki has this language
+
+183
+0:08:28.240 --> 0:08:32.600
+called Locky and that's how you query your logs back
+
+184
+0:08:32.600 --> 0:08:34.680
+to get some visibility and this is heavily inspired
+
+185
+0:08:34.680 --> 0:08:35.520
+from Prometheus.
+
+186
+0:08:35.520 --> 0:08:38.920
+So people who are familiar with Prometheus may already
+
+187
+0:08:38.920 --> 0:08:40.640
+get a grasp here.
+
+188
+0:08:40.640 --> 0:08:43.480
+So this particular query what you see at the top
+
+189
+0:08:43.480 --> 0:08:47.800
+is basically saying like give all the logs
+
+190
+0:08:47.800 --> 0:08:49.760
+from this particular namespace, let's say,
+
+191
+0:08:49.760 --> 0:08:53.800
+Loki Dev 005 and then give me all the logs that matches
+
+192
+0:08:53.800 --> 0:08:55.880
+only the error in the log line, right?
+
+193
+0:08:55.880 --> 0:08:59.360
+So as you can see, the experience is like the pipe
+
+194
+0:08:59.360 --> 0:09:00.280
+equal to error.
+
+195
+0:09:00.280 --> 0:09:03.160
+So you can still combine multiple pipes here.
+
+196
+0:09:03.160 --> 0:09:05.160
+So that's the kind of like experience we're talking about,
+
+197
+0:09:05.160 --> 0:09:07.360
+right, so yeah.
+
+198
+0:09:07.360 --> 0:09:10.800
+So doesn't mean you have to, you can only like
+
+199
+0:09:10.800 --> 0:09:12.680
+grep for only specific pattern.
+
+200
+0:09:12.680 --> 0:09:14.800
+You can also grep for specific IDs.
+
+201
+0:09:14.800 --> 0:09:18.320
+Like use case can be like your order ID or trace ID
+
+202
+0:09:18.320 --> 0:09:19.680
+you want to find in the logs.
+
+203
+0:09:19.680 --> 0:09:22.880
+So you can also do some kind of regex match here.
+
+204
+0:09:22.880 --> 0:09:26.000
+Like I said, you can also like put multiple pipelines here,
+
+205
+0:09:26.000 --> 0:09:28.440
+right, you can do under or, doesn't matter.
+
+206
+0:09:28.440 --> 0:09:31.240
+So it's basically like first you choose which logs
+
+207
+0:09:31.240 --> 0:09:33.800
+to look for, like a routing, what Owen was saying
+
+208
+0:09:33.800 --> 0:09:37.280
+and then you can do all your piping to mix and match.
+
+209
+0:09:37.280 --> 0:09:39.720
+So that's the idea we're talking about.
+
+210
+0:09:39.720 --> 0:09:41.600
+So this query is a bit different.
+
+211
+0:09:42.560 --> 0:09:44.840
+As you have seen like compared to previous two examples
+
+212
+0:09:44.840 --> 0:09:48.080
+which we called as a lock query and this is a metric query.
+
+213
+0:09:48.080 --> 0:09:51.200
+So in the lock query, the output you see after,
+
+214
+0:09:51.200 --> 0:09:53.480
+when your query is executed, you will see,
+
+215
+0:09:53.480 --> 0:09:54.840
+you're gonna see like list of logs
+
+216
+0:09:54.840 --> 0:09:56.920
+that matches the particular pattern, right?
+
+217
+0:09:56.920 --> 0:09:58.520
+So here it's a metric.
+
+218
+0:09:58.520 --> 0:10:00.980
+So if you see what this query does,
+
+219
+0:10:00.980 --> 0:10:02.280
+it's similar to the last one
+
+220
+0:10:02.280 --> 0:10:04.440
+but we added two different things, right?
+
+221
+0:10:04.440 --> 0:10:06.460
+Here the rate and the sum by.
+
+222
+0:10:06.460 --> 0:10:10.320
+So what this means is without doing any instrumentation
+
+223
+0:10:10.320 --> 0:10:12.400
+like the logs are coming as it is,
+
+224
+0:10:12.400 --> 0:10:15.840
+so you can really find your error per second rate
+
+225
+0:10:15.840 --> 0:10:19.000
+of all your application aggregated by the container.
+
+226
+0:10:19.000 --> 0:10:21.520
+Which means, so doesn't matter like how many applications
+
+227
+0:10:21.520 --> 0:10:23.700
+running in this namespace, so you can aggregate
+
+228
+0:10:23.700 --> 0:10:26.040
+by container just from this metric query.
+
+229
+0:10:26.040 --> 0:10:29.000
+So yeah, that's the idea we are trying to,
+
+230
+0:10:29.000 --> 0:10:34.000
+like the experience we want to like with LockQL.
+
+231
+0:10:34.040 --> 0:10:36.560
+Yeah, this is probably my favorite part about Loki
+
+232
+0:10:36.560 --> 0:10:37.800
+of all the things, right?
+
+233
+0:10:37.800 --> 0:10:41.120
+The ability to extract information at query time
+
+234
+0:10:41.120 --> 0:10:42.680
+ultimately means that you can be reactive
+
+235
+0:10:42.680 --> 0:10:43.520
+instead of proactive.
+
+236
+0:10:43.520 --> 0:10:45.440
+You don't have to figure out a schema
+
+237
+0:10:45.440 --> 0:10:47.520
+and make sure that you're recording something
+
+238
+0:10:47.520 --> 0:10:51.120
+in a precise way before the bad thing happens, right?
+
+239
+0:10:51.120 --> 0:10:53.080
+Because a lot of the time it's the unknown unknowns
+
+240
+0:10:53.080 --> 0:10:54.000
+that get us.
+
+241
+0:10:54.000 --> 0:10:56.520
+And so this, the ability to extract this structure,
+
+242
+0:10:56.520 --> 0:10:58.720
+you know, and particularly to do it from logs,
+
+243
+0:10:59.760 --> 0:11:02.880
+really allows you to figure out when things go wrong
+
+244
+0:11:02.880 --> 0:11:04.400
+rather than having to re-instrument
+
+245
+0:11:04.400 --> 0:11:06.200
+before you can get that information.
+
+246
+0:11:09.160 --> 0:11:11.480
+So next up we're gonna talk a little bit less
+
+247
+0:11:11.480 --> 0:11:13.460
+about the experience querying it
+
+248
+0:11:13.460 --> 0:11:15.520
+and more about how it's constructed.
+
+249
+0:11:15.520 --> 0:11:18.060
+So this is the kind of design choices that we make.
+
+250
+0:11:19.080 --> 0:11:21.380
+So particularly individually being able to scale
+
+251
+0:11:21.380 --> 0:11:22.620
+different parts of the system,
+
+252
+0:11:22.620 --> 0:11:27.620
+particularly tuning your kind of a preference
+
+253
+0:11:28.080 --> 0:11:31.600
+for cost versus latency on the read path.
+
+254
+0:11:31.600 --> 0:11:35.120
+Loki runs, is intended to run across commodity hardware
+
+255
+0:11:35.120 --> 0:11:38.040
+and our only real dependency is object storage.
+
+256
+0:11:38.040 --> 0:11:39.600
+So we store everything cheaply
+
+257
+0:11:39.600 --> 0:11:41.040
+in a generally managed solution,
+
+258
+0:11:41.040 --> 0:11:44.800
+although you can run your own object storage
+
+259
+0:11:44.800 --> 0:11:47.980
+or use file system back ends if you prefer.
+
+260
+0:11:50.920 --> 0:11:54.320
+So this is how Loki ingestion path architecture
+
+261
+0:11:54.320 --> 0:11:55.480
+looks at the high level.
+
+262
+0:11:55.480 --> 0:11:57.940
+So when you send logs to Loki,
+
+263
+0:11:57.940 --> 0:11:59.320
+and this is what it goes through.
+
+264
+0:11:59.320 --> 0:12:03.420
+So the key takeaway here is like Owen said,
+
+265
+0:12:03.420 --> 0:12:06.000
+the only external dependency you see here
+
+266
+0:12:06.000 --> 0:12:07.140
+is the object store.
+
+267
+0:12:07.140 --> 0:12:09.500
+So everything else is a common of Loki.
+
+268
+0:12:09.500 --> 0:12:12.000
+So of course we have like different deployment models.
+
+269
+0:12:12.000 --> 0:12:14.880
+So usually all these components can be put together
+
+270
+0:12:14.880 --> 0:12:16.080
+in a single binary.
+
+271
+0:12:16.080 --> 0:12:17.200
+So if you're new to Loki,
+
+272
+0:12:17.200 --> 0:12:18.600
+you are starting just to play with it
+
+273
+0:12:18.600 --> 0:12:20.420
+at maybe like a small scale.
+
+274
+0:12:20.420 --> 0:12:23.120
+You just run it as a single binary, as a single process,
+
+275
+0:12:23.120 --> 0:12:25.320
+and you send all the logs to a single process.
+
+276
+0:12:25.320 --> 0:12:27.880
+And the only, you just put the bucket name and you're done.
+
+277
+0:12:27.880 --> 0:12:31.020
+So all your logs are getting ingested into Loki just fine.
+
+278
+0:12:31.020 --> 0:12:33.080
+So that's what we say like,
+
+279
+0:12:33.080 --> 0:12:36.520
+yeah, like less dependency in running Loki.
+
+280
+0:12:36.520 --> 0:12:40.020
+Yeah, in this case, it's an interesting part.
+
+281
+0:12:41.320 --> 0:12:43.720
+And so one of the things about not indexing
+
+282
+0:12:43.720 --> 0:12:47.300
+the log contents themselves means that it's really easy
+
+283
+0:12:47.300 --> 0:12:49.240
+to ingest data from a bunch of different sources.
+
+284
+0:12:49.240 --> 0:12:50.880
+So maybe you work at an organization
+
+285
+0:12:50.880 --> 0:12:52.440
+and one team writes in one language,
+
+286
+0:12:52.440 --> 0:12:53.680
+one team writes in another language.
+
+287
+0:12:53.680 --> 0:12:57.520
+They have no standardization over the formats
+
+288
+0:12:57.520 --> 0:13:00.400
+that they're using, the logs, the schemas of the logs,
+
+289
+0:13:00.400 --> 0:13:01.520
+if they're using structured logging.
+
+290
+0:13:01.520 --> 0:13:02.840
+So you can have one team in JSON,
+
+291
+0:13:02.840 --> 0:13:06.880
+one team who just pulls in Nginx logs
+
+292
+0:13:06.880 --> 0:13:09.280
+and then another team that uses something like log format.
+
+293
+0:13:09.280 --> 0:13:11.880
+And that's all okay, because Loki doesn't really care.
+
+294
+0:13:11.880 --> 0:13:14.920
+We just index the source of where this came from
+
+295
+0:13:14.920 --> 0:13:16.740
+along with the timing information.
+
+296
+0:13:16.740 --> 0:13:19.080
+So you can, each individual team in that sense,
+
+297
+0:13:19.080 --> 0:13:21.120
+can extract that information when they query it
+
+298
+0:13:21.120 --> 0:13:24.400
+and choose what and how that they actually do care about
+
+299
+0:13:24.400 --> 0:13:25.240
+in their logs.
+
+300
+0:13:27.920 --> 0:13:30.560
+Yes, speaking of Quarry Bart, right?
+
+301
+0:13:30.560 --> 0:13:33.600
+So this is high level architecture on the Quarry side.
+
+302
+0:13:33.600 --> 0:13:36.760
+So again, these are all like Loki components,
+
+303
+0:13:36.760 --> 0:13:39.840
+except like two dependency here.
+
+304
+0:13:39.840 --> 0:13:41.960
+One is object storage, of course.
+
+305
+0:13:41.960 --> 0:13:44.520
+The other one is like optional, which is like a cache.
+
+306
+0:13:44.520 --> 0:13:48.040
+So again, the same pattern apply here, right?
+
+307
+0:13:48.040 --> 0:13:50.400
+So you can combine all this Loki components
+
+308
+0:13:50.400 --> 0:13:51.480
+into a single binary,
+
+309
+0:13:51.480 --> 0:13:53.380
+and you can just run it as a single process.
+
+310
+0:13:53.380 --> 0:13:56.280
+And all you need to do is just point to the persistent
+
+311
+0:13:56.280 --> 0:13:58.420
+object store and then cache for the performance.
+
+312
+0:13:58.420 --> 0:13:59.260
+And that's it.
+
+313
+0:13:59.260 --> 0:14:01.440
+It's very good to go on the read path, right?
+
+314
+0:14:01.440 --> 0:14:04.280
+So yeah, again, if you want to run
+
+315
+0:14:04.280 --> 0:14:06.240
+in a highly available fashion,
+
+316
+0:14:06.240 --> 0:14:07.360
+let's say you hit some scale
+
+317
+0:14:07.360 --> 0:14:09.400
+and you wanna tweak some things.
+
+318
+0:14:09.400 --> 0:14:14.400
+So this is how, particularly, we run in our internal SAS.
+
+319
+0:14:14.720 --> 0:14:17.800
+So here, you have more control in a way.
+
+320
+0:14:17.800 --> 0:14:19.840
+Say you can tweak individual component,
+
+321
+0:14:19.840 --> 0:14:23.200
+you can scale individual component, and yeah, that's the idea.
+
+322
+0:14:23.200 --> 0:14:25.280
+So again, the key thing here
+
+323
+0:14:25.280 --> 0:14:27.880
+is the simple external dependencies.
+
+324
+0:14:27.880 --> 0:14:31.200
+So yeah, and it's really powerful to be able to develop
+
+325
+0:14:31.200 --> 0:14:33.720
+on a single binary running all these subcomponents
+
+326
+0:14:33.720 --> 0:14:36.040
+or things that eventually run in microservices
+
+327
+0:14:36.040 --> 0:14:39.040
+in a single process, and then being able to scale that out
+
+328
+0:14:39.040 --> 0:14:42.280
+depending on your tolerance for scale
+
+329
+0:14:42.280 --> 0:14:45.600
+and running HA or data replication, that sort of thing.
+
+330
+0:14:47.480 --> 0:14:51.080
+So because the index in Loki is very minimal,
+
+331
+0:14:51.080 --> 0:14:52.440
+it's just this routing information
+
+332
+0:14:52.440 --> 0:14:55.580
+or the data topology, really,
+
+333
+0:14:55.580 --> 0:14:57.560
+it allows this to be much, much smaller
+
+334
+0:14:57.560 --> 0:14:58.480
+than you would otherwise think.
+
+335
+0:14:58.480 --> 0:15:00.680
+So I actually pulled this from one of the clusters
+
+336
+0:15:00.680 --> 0:15:03.600
+that we run internally that is close to 40 terabytes
+
+337
+0:15:03.600 --> 0:15:05.920
+of logits a day and just shy of a,
+
+338
+0:15:05.920 --> 0:15:09.000
+so just 140 megabytes of index.
+
+339
+0:15:09.000 --> 0:15:10.640
+So it's much, much smaller.
+
+340
+0:15:10.640 --> 0:15:12.580
+And this gives us a lot of benefits
+
+341
+0:15:12.580 --> 0:15:14.760
+when we talk about some of the next stuff.
+
+342
+0:15:16.000 --> 0:15:17.880
+Yeah, so if I were you,
+
+343
+0:15:17.880 --> 0:15:19.840
+probably I'll be asking this question.
+
+344
+0:15:19.840 --> 0:15:23.040
+Okay, folks, you are talking a lot about tiny indexes,
+
+345
+0:15:23.040 --> 0:15:25.080
+how on earth do you make the query faster?
+
+346
+0:15:25.080 --> 0:15:29.200
+So also this thought comes from the idea,
+
+347
+0:15:29.200 --> 0:15:31.480
+like either you are from a academic background
+
+348
+0:15:31.480 --> 0:15:32.320
+or like a practitioner
+
+349
+0:15:32.320 --> 0:15:33.960
+who is building a distributed systems,
+
+350
+0:15:33.960 --> 0:15:35.440
+it's always been thought,
+
+351
+0:15:35.440 --> 0:15:38.900
+like if you wanna make something faster, you index it.
+
+352
+0:15:38.900 --> 0:15:40.760
+So here we are sharing our experience,
+
+353
+0:15:40.760 --> 0:15:44.620
+where if you want to index everything
+
+354
+0:15:44.620 --> 0:15:47.980
+to make everything faster, so at some point in scale,
+
+355
+0:15:47.980 --> 0:15:51.200
+your index is gonna be much larger than the actual data.
+
+356
+0:15:51.200 --> 0:15:54.940
+And in our experience, like handling huge index,
+
+357
+0:15:54.940 --> 0:15:57.160
+creates much more problems at scale.
+
+358
+0:15:57.160 --> 0:15:59.480
+So that's a whole idea here.
+
+359
+0:15:59.480 --> 0:16:03.520
+So let's understand like how Loki makes the query faster
+
+360
+0:16:03.520 --> 0:16:04.560
+with a tiny index.
+
+361
+0:16:06.440 --> 0:16:07.940
+And this is how.
+
+362
+0:16:07.940 --> 0:16:10.640
+So don't let the image scare you.
+
+363
+0:16:10.640 --> 0:16:12.960
+So let's understand piece by piece here.
+
+364
+0:16:12.960 --> 0:16:16.480
+So at the top, you see the query that comes in.
+
+365
+0:16:16.480 --> 0:16:18.080
+So for the sake of discussion,
+
+366
+0:16:18.080 --> 0:16:21.440
+let's say this query is asking for the data
+
+367
+0:16:21.440 --> 0:16:24.040
+for one hour period, time period.
+
+368
+0:16:24.040 --> 0:16:27.920
+So the query path architecture, what you saw before,
+
+369
+0:16:27.920 --> 0:16:30.720
+what the first thing it does is it takes this query,
+
+370
+0:16:30.720 --> 0:16:34.280
+the huge query, and it try to make it like a sub query
+
+371
+0:16:34.280 --> 0:16:35.520
+by time split.
+
+372
+0:16:35.520 --> 0:16:38.760
+So in this case, it splits this one hour query
+
+373
+0:16:38.760 --> 0:16:41.060
+into four 15 minutes query.
+
+374
+0:16:41.060 --> 0:16:42.800
+We call it a sub query, right?
+
+375
+0:16:42.800 --> 0:16:45.100
+And the trick is it doesn't stop here.
+
+376
+0:16:45.100 --> 0:16:47.860
+So Loki index is designed in such a way
+
+377
+0:16:47.860 --> 0:16:51.280
+so that it can look into the index and say,
+
+378
+0:16:51.280 --> 0:16:55.360
+hey, this many data, like this many bytes, it needs to touch.
+
+379
+0:16:55.360 --> 0:16:58.920
+So we can dynamically decide how many worker pool
+
+380
+0:16:58.920 --> 0:17:00.520
+you need to process that query.
+
+381
+0:17:00.520 --> 0:17:03.120
+So that's where this performance comes from.
+
+382
+0:17:03.120 --> 0:17:06.580
+So for example, like in this case,
+
+383
+0:17:06.580 --> 0:17:08.740
+let's say this 15 minute sub query is touching,
+
+384
+0:17:08.740 --> 0:17:11.020
+I don't know, like 10 gigabytes of data.
+
+385
+0:17:11.020 --> 0:17:14.080
+So and you can plan accordingly
+
+386
+0:17:14.080 --> 0:17:17.720
+like how many worker pools I can schedule this query into.
+
+387
+0:17:17.720 --> 0:17:20.120
+So let's think about this for a while.
+
+388
+0:17:20.120 --> 0:17:23.520
+So now the key takeaway here is you
+
+389
+0:17:23.520 --> 0:17:28.040
+get to have a control over your cost versus performance.
+
+390
+0:17:28.040 --> 0:17:31.880
+So you start with Loki and you hit some limit, right?
+
+391
+0:17:31.880 --> 0:17:34.320
+And at some scale, you're going to hit the limit.
+
+392
+0:17:34.320 --> 0:17:37.080
+And you can increase the performance just
+
+393
+0:17:37.080 --> 0:17:40.080
+by adding more query pool, like more query workers.
+
+394
+0:17:40.080 --> 0:17:43.200
+So yeah, that's like a key control
+
+395
+0:17:43.200 --> 0:17:44.320
+we want to have with the Loki.
+
+396
+0:17:44.320 --> 0:17:50.120
+So yeah, that's how we make query faster.
+
+397
+0:17:50.120 --> 0:17:52.360
+So the next thing we're going to talk about is retention.
+
+398
+0:17:52.360 --> 0:17:56.000
+We get asked this a lot, particularly wanting
+
+399
+0:17:56.000 --> 0:17:59.000
+to store things like application logs for some period of time.
+
+400
+0:17:59.000 --> 0:18:01.120
+You know, we use 30 days as kind of our standard,
+
+401
+0:18:01.120 --> 0:18:02.740
+but it could be whatever your use case is.
+
+402
+0:18:02.740 --> 0:18:05.480
+And then things like audit logs for much longer periods
+
+403
+0:18:05.480 --> 0:18:06.440
+of time.
+
+404
+0:18:06.440 --> 0:18:09.080
+This is pretty easily tunable in Loki.
+
+405
+0:18:09.080 --> 0:18:11.440
+But the important part here is we
+
+406
+0:18:11.440 --> 0:18:13.680
+were talking about the index size earlier.
+
+407
+0:18:13.680 --> 0:18:18.400
+Because we don't index, well, the log contents themselves,
+
+408
+0:18:18.400 --> 0:18:21.680
+retention is very, very easy and cost efficient to do,
+
+409
+0:18:21.680 --> 0:18:25.280
+because all of our data is stored in object storage.
+
+410
+0:18:25.280 --> 0:18:28.400
+And so if we extract that kind of earlier index sizing slide
+
+411
+0:18:28.400 --> 0:18:29.960
+out to what it would look like in a year,
+
+412
+0:18:29.960 --> 0:18:33.020
+this is roughly what we get.
+
+413
+0:18:33.020 --> 0:18:36.400
+And so again, we just use this index for routing information,
+
+414
+0:18:36.400 --> 0:18:38.800
+which means that all of the data is effectively live.
+
+415
+0:18:38.800 --> 0:18:42.840
+There's no like rehydrating or hot and cold storage tiers.
+
+416
+0:18:42.840 --> 0:18:44.880
+Everything is served out of object storage
+
+417
+0:18:44.880 --> 0:18:45.960
+generally all the time.
+
+418
+0:18:45.960 --> 0:18:47.620
+Now you can, there's some nuance there.
+
+419
+0:18:47.620 --> 0:18:49.400
+You can put like caches in a couple places
+
+420
+0:18:49.400 --> 0:18:50.640
+and that sort of thing.
+
+421
+0:18:50.640 --> 0:18:53.080
+But the idea that you can use object storage
+
+422
+0:18:53.080 --> 0:18:56.400
+as your primary back end is very powerful,
+
+423
+0:18:56.400 --> 0:18:59.720
+especially when you consider cost over long periods of time.
+
+424
+0:19:03.640 --> 0:19:06.120
+All right, so have you been saying
+
+425
+0:19:06.120 --> 0:19:08.520
+Loki has been built for the operators and for delves,
+
+426
+0:19:08.520 --> 0:19:09.160
+right?
+
+427
+0:19:09.160 --> 0:19:11.680
+And when it comes to operation, yeah,
+
+428
+0:19:11.680 --> 0:19:14.600
+if you've been run any database or any distributed systems
+
+429
+0:19:14.600 --> 0:19:17.280
+at scale, so you always want to keep
+
+430
+0:19:17.280 --> 0:19:20.200
+on top of the latest release of whatever the product you're
+
+431
+0:19:20.200 --> 0:19:23.040
+running to get the latest optimization, latest features,
+
+432
+0:19:23.040 --> 0:19:24.240
+so on and so forth.
+
+433
+0:19:24.240 --> 0:19:27.360
+And the other use case is like sometimes you
+
+434
+0:19:27.360 --> 0:19:29.960
+want to migrate your data from one persistent store
+
+435
+0:19:29.960 --> 0:19:30.560
+to another one.
+
+436
+0:19:30.560 --> 0:19:33.320
+In this case, maybe one GCS bucket to another one,
+
+437
+0:19:33.320 --> 0:19:35.280
+even across the cloud provider.
+
+438
+0:19:35.280 --> 0:19:37.880
+Sometimes you find like maybe S3 is better.
+
+439
+0:19:37.880 --> 0:19:38.840
+I can go with S3.
+
+440
+0:19:38.840 --> 0:19:40.560
+I can change from GCS to S3.
+
+441
+0:19:40.560 --> 0:19:43.040
+So with all these use cases, can we
+
+442
+0:19:43.040 --> 0:19:45.600
+do all these operations with zero downtime?
+
+443
+0:19:45.600 --> 0:19:46.800
+So can we do that?
+
+444
+0:19:46.800 --> 0:19:49.280
+So that's something like we can do in Loki.
+
+445
+0:19:49.280 --> 0:19:50.680
+We have been doing it many times.
+
+446
+0:19:50.680 --> 0:19:53.160
+So to give you a complete example here,
+
+447
+0:19:53.160 --> 0:19:55.480
+and this is one of my favorite part of Loki config,
+
+448
+0:19:55.480 --> 0:19:57.680
+like we call it as a period config.
+
+449
+0:19:57.680 --> 0:20:01.400
+So what you're seeing here is we have something
+
+450
+0:20:01.400 --> 0:20:02.440
+called schema version.
+
+451
+0:20:02.440 --> 0:20:04.400
+So whenever we change anything with the index
+
+452
+0:20:04.400 --> 0:20:06.320
+or any new feature comes in, and if it's
+
+453
+0:20:06.320 --> 0:20:09.520
+like we use different index format or something,
+
+454
+0:20:09.520 --> 0:20:11.000
+we change this version.
+
+455
+0:20:11.000 --> 0:20:14.560
+In this case, you see v11 to v12.
+
+456
+0:20:14.560 --> 0:20:17.360
+And so what you can do is let's say
+
+457
+0:20:17.360 --> 0:20:21.320
+you want to start using this new feature from Jan 2023.
+
+458
+0:20:21.320 --> 0:20:23.680
+All you need to do is go and put the version v12
+
+459
+0:20:23.680 --> 0:20:25.560
+from the start date, and you're done.
+
+460
+0:20:25.560 --> 0:20:27.640
+So Loki can understand this, and it
+
+461
+0:20:27.640 --> 0:20:31.560
+can work with both different schema version.
+
+462
+0:20:31.560 --> 0:20:37.000
+So this is how you can upgrade your schema and production
+
+463
+0:20:37.000 --> 0:20:38.480
+lively without downtime.
+
+464
+0:20:38.480 --> 0:20:41.080
+So this is one example.
+
+465
+0:20:41.080 --> 0:20:44.560
+The other one is the migration, like I talked before.
+
+466
+0:20:44.560 --> 0:20:49.440
+So you may want to move your data within the cloud provider
+
+467
+0:20:49.440 --> 0:20:50.720
+across the cloud provider.
+
+468
+0:20:50.720 --> 0:20:52.400
+For example, it's the same thing here.
+
+469
+0:20:52.400 --> 0:20:56.560
+So from 2023 of Jan, I need to store all my new data
+
+470
+0:20:56.560 --> 0:20:58.720
+into S3 instead of GCS.
+
+471
+0:20:58.720 --> 0:21:00.720
+So you go back, and you change this one config,
+
+472
+0:21:00.720 --> 0:21:01.480
+and you're done.
+
+473
+0:21:01.480 --> 0:21:02.960
+So Loki again understands this.
+
+474
+0:21:02.960 --> 0:21:05.040
+So when the query comes in, it checks
+
+475
+0:21:05.040 --> 0:21:07.040
+whether which data it's asking for,
+
+476
+0:21:07.040 --> 0:21:09.240
+like which time range it's asking for.
+
+477
+0:21:09.240 --> 0:21:11.880
+And it can go and fetch the data accordingly.
+
+478
+0:21:11.880 --> 0:21:13.800
+And again, without downtime.
+
+479
+0:21:13.800 --> 0:21:16.320
+So it also works really well with the retention.
+
+480
+0:21:16.320 --> 0:21:20.080
+Let's say if you have 30-day retention, and after 30 days,
+
+481
+0:21:20.080 --> 0:21:20.760
+you don't care.
+
+482
+0:21:20.760 --> 0:21:22.920
+So all your new data is stored to the new bucket.
+
+483
+0:21:26.000 --> 0:21:28.760
+So yeah, this is Fosdum, all about the community.
+
+484
+0:21:28.760 --> 0:21:32.960
+So we launched Loki at 2019 as open source,
+
+485
+0:21:32.960 --> 0:21:34.920
+and we have active community going on.
+
+486
+0:21:34.920 --> 0:21:37.560
+So these are some of the ways you can reach us.
+
+487
+0:21:37.560 --> 0:21:41.440
+We have public Slack, and we have a community forum.
+
+488
+0:21:41.440 --> 0:21:43.920
+And every month, we also have a Loki community call.
+
+489
+0:21:43.920 --> 0:21:46.080
+We alternate between US and EU time zone.
+
+490
+0:21:46.080 --> 0:21:48.240
+So yeah, come say hi.
+
+491
+0:21:48.240 --> 0:21:49.320
+Yeah, we are happy to.
+
+492
+0:21:49.320 --> 0:21:52.320
+And if any of the things which we talked about excites you,
+
+493
+0:21:52.320 --> 0:21:53.640
+come talk to us.
+
+494
+0:21:53.640 --> 0:21:56.520
+We'll be more than happy to have a new contributor to the project.
+
+495
+0:21:56.520 --> 0:21:58.040
+So yeah.
+
+496
+0:21:58.040 --> 0:22:00.200
+Yeah, we should have asked this probably in the beginning,
+
+497
+0:22:00.200 --> 0:22:02.120
+but is anyone out there using Prometheus?
+
+498
+0:22:02.120 --> 0:22:03.120
+Yeah, a couple.
+
+499
+0:22:03.120 --> 0:22:03.760
+All right, a lot.
+
+500
+0:22:03.760 --> 0:22:05.200
+Yeah, good.
+
+501
+0:22:05.200 --> 0:22:07.240
+What about any Loki users?
+
+502
+0:22:07.240 --> 0:22:09.240
+OK, not bad.
+
+503
+0:22:09.240 --> 0:22:09.720
+Thanks.
+
+504
+0:22:09.720 --> 0:22:11.120
+That makes me really happy.
+
+505
+0:22:11.120 --> 0:22:13.700
+Anyone run into hard configuration problems
+
+506
+0:22:13.700 --> 0:22:14.560
+with Loki?
+
+507
+0:22:14.560 --> 0:22:15.400
+Yeah?
+
+508
+0:22:15.400 --> 0:22:17.000
+Oh, no hands.
+
+509
+0:22:17.000 --> 0:22:17.560
+That's weird.
+
+510
+0:22:17.560 --> 0:22:18.600
+No, I'm just kidding.
+
+511
+0:22:18.600 --> 0:22:22.280
+Yeah, we got some work to do on.
+
+512
+0:22:22.280 --> 0:22:24.520
+Yeah, so things to take away from the talk.
+
+513
+0:22:24.520 --> 0:22:26.840
+Loki is meant to largely function
+
+514
+0:22:26.840 --> 0:22:29.080
+like a distributed graph that you can also kind of pull
+
+515
+0:22:29.080 --> 0:22:30.560
+metrics and analytics out of.
+
+516
+0:22:30.560 --> 0:22:33.960
+It's low footprint of storing things in object storage
+
+517
+0:22:33.960 --> 0:22:35.720
+and not relying on schemas.
+
+518
+0:22:35.720 --> 0:22:38.560
+And we really target easy operations with that,
+
+519
+0:22:38.560 --> 0:22:39.520
+as well as low cost.
+
+520
+0:22:39.520 --> 0:22:41.400
+And then please come join the community.
+
+521
+0:22:41.400 --> 0:22:42.600
+Come talk to us.
+
+522
+0:22:42.600 --> 0:22:44.560
+We're going to be hanging out for probably at least 10,
+
+523
+0:22:44.560 --> 0:22:45.120
+15 minutes.
+
+524
+0:22:45.120 --> 0:22:48.640
+If you have any questions, we'd love to hear from you.
+
+525
+0:22:48.640 --> 0:22:49.120
+Thank you.
+
+526
+0:22:49.120 --> 0:22:50.160
+All right, thank you.
+
+527
+0:22:50.160 --> 0:23:01.080
+Thank you.
+
+528
+0:23:01.080 --> 0:23:02.080
+Any questions?
+
+529
+0:23:02.080 --> 0:23:04.080
+Yeah, if you want to run up, we'll just share them right
+
+530
+0:23:04.080 --> 0:23:05.600
+down here.
+
+531
+0:23:05.600 --> 0:23:06.640
+Hey, great talk.
+
+532
+0:23:06.640 --> 0:23:09.680
+I was wondering with the amount of query sharding you're doing,
+
+533
+0:23:09.680 --> 0:23:12.720
+how are you kind of synchronizing the result in the end?
+
+534
+0:23:12.720 --> 0:23:15.800
+Or is it synchronized in the UI at the end?
+
+535
+0:23:15.800 --> 0:23:17.400
+Or do you need to sort things?
+
+536
+0:23:17.400 --> 0:23:19.880
+Because that might be very expensive.
+
+537
+0:23:19.880 --> 0:23:22.080
+All right, so I had a little difficulty hearing that.
+
+538
+0:23:22.080 --> 0:23:24.640
+But I think the question was, how do we synchronize sharding
+
+539
+0:23:24.640 --> 0:23:26.440
+in the query engine?
+
+540
+0:23:26.440 --> 0:23:28.400
+Is that it?
+
+541
+0:23:28.400 --> 0:23:31.720
+At the very end, when you show it in the UI?
+
+542
+0:23:31.720 --> 0:23:34.840
+Oh, when we show it in the UI, it
+
+543
+0:23:34.840 --> 0:23:37.280
+happens a layer down in Loki itself.
+
+544
+0:23:37.280 --> 0:23:40.200
+So we've already merged everything.
+
+545
+0:23:40.200 --> 0:23:42.800
+I think the real answer to that is probably a lot longer
+
+546
+0:23:42.800 --> 0:23:44.800
+than I can give in this question.
+
+547
+0:23:44.800 --> 0:23:46.600
+But talk to me.
+
+548
+0:23:46.600 --> 0:23:49.840
+It's one of my favorite things to talk about.
+
+549
+0:23:49.840 --> 0:23:50.880
+Thanks.
+
+550
+0:23:50.880 --> 0:23:52.720
+Great talk.
+
+551
+0:23:52.720 --> 0:23:56.920
+This was mentioned several times that the main power of Loki
+
+552
+0:23:56.920 --> 0:23:59.720
+is that it indexes only labels, basically.
+
+553
+0:23:59.720 --> 0:24:03.920
+And it doesn't index actual log messages.
+
+554
+0:24:03.920 --> 0:24:06.400
+But to make log messages searchable,
+
+555
+0:24:06.400 --> 0:24:09.600
+you want to have many labels in this case.
+
+556
+0:24:09.600 --> 0:24:12.880
+And many labels often lead to cardinality explosions,
+
+557
+0:24:12.880 --> 0:24:13.880
+how you deal with it.
+
+558
+0:24:13.880 --> 0:24:17.320
+Is there any good recommendation how many labels I
+
+559
+0:24:17.320 --> 0:24:19.960
+should have what are trade-offs here?
+
+560
+0:24:19.960 --> 0:24:21.960
+Yeah, so the way that I think about this
+
+561
+0:24:21.960 --> 0:24:26.520
+is you probably want to index where the log came from less
+
+562
+0:24:26.520 --> 0:24:28.240
+than what's in it.
+
+563
+0:24:28.240 --> 0:24:30.280
+So we definitely added the ability to kind of like,
+
+564
+0:24:30.280 --> 0:24:33.400
+especially in promtail configs, which is the agent that we
+
+565
+0:24:33.400 --> 0:24:36.120
+write, the ability to add extra things in there.
+
+566
+0:24:36.120 --> 0:24:38.280
+And people have been really clever about what they put in.
+
+567
+0:24:38.280 --> 0:24:42.080
+Unfortunately, that can also be somewhat of a foot gun at times.
+
+568
+0:24:42.080 --> 0:24:45.720
+So I'd say index the things that correspond
+
+569
+0:24:45.720 --> 0:24:48.320
+to your topology, where the logs come from.
+
+570
+0:24:48.320 --> 0:24:51.120
+So environment, application, cluster, that sort of thing.
+
+571
+0:24:51.120 --> 0:24:53.600
+And less things that have to do with the contents of them
+
+572
+0:24:53.600 --> 0:24:54.640
+themselves.
+
+573
+0:24:54.640 --> 0:24:57.640
+There's probably a somewhat longer answer there, too.
+
+574
+0:24:57.640 --> 0:25:00.080
+And then we've also been doing some recent work
+
+575
+0:25:00.080 --> 0:25:03.560
+to make some of this less of a user concern,
+
+576
+0:25:03.560 --> 0:25:07.320
+particularly about distribution of individual log stream
+
+577
+0:25:07.320 --> 0:25:07.880
+throughput.
+
+578
+0:25:07.880 --> 0:25:10.760
+So if you have one application which
+
+579
+0:25:10.760 --> 0:25:12.360
+is logging like 10 megabytes a second,
+
+580
+0:25:12.360 --> 0:25:15.880
+that could be really harmful on Loki in some ways.
+
+581
+0:25:15.880 --> 0:25:18.240
+And so people got clever around splitting that out
+
+582
+0:25:18.240 --> 0:25:19.320
+into different streams.
+
+583
+0:25:19.320 --> 0:25:20.320
+But in the future, we're going to be
+
+584
+0:25:20.320 --> 0:25:22.840
+doing a lot of that automatically and transparently
+
+585
+0:25:22.840 --> 0:25:26.360
+behind Loki's API.
+
+586
+0:25:26.360 --> 0:25:29.160
+Just to add one thing on top of what Owen said,
+
+587
+0:25:29.160 --> 0:25:31.160
+in logQL, which we didn't show here,
+
+588
+0:25:31.160 --> 0:25:34.760
+so if you have something in your log line itself
+
+589
+0:25:34.760 --> 0:25:36.280
+that you want to treat it as a label,
+
+590
+0:25:36.280 --> 0:25:39.280
+you can do it on the fly with the logQL query language
+
+591
+0:25:39.280 --> 0:25:39.880
+itself.
+
+592
+0:25:39.880 --> 0:25:42.600
+So we have some parser.
+
+593
+0:25:42.600 --> 0:25:45.160
+If it's a log form, if it's a JSON parser,
+
+594
+0:25:45.160 --> 0:25:53.120
+you can use it like labels, the things in your log line itself.
+
+595
+0:25:53.120 --> 0:25:53.600
+Hi.
+
+596
+0:25:53.600 --> 0:25:55.080
+Thank you for the great talk.
+
+597
+0:25:55.080 --> 0:25:58.280
+I have many questions, but I'll ask one.
+
+598
+0:25:58.280 --> 0:26:02.600
+Do you have any tips in terms of scaling query and caching
+
+599
+0:26:02.600 --> 0:26:03.640
+layers?
+
+600
+0:26:03.640 --> 0:26:06.560
+Like from my experience, usually they're very overutilized,
+
+601
+0:26:06.560 --> 0:26:09.040
+but when people start querying, you get all the crashes.
+
+602
+0:26:09.040 --> 0:26:11.640
+Do you have any code and ratios or anything?
+
+603
+0:26:11.640 --> 0:26:13.240
+Yeah, so this is one of the things
+
+604
+0:26:13.240 --> 0:26:16.240
+like how we expose configurations around query
+
+605
+0:26:16.240 --> 0:26:18.360
+parallelism and controls.
+
+606
+0:26:18.360 --> 0:26:21.640
+I wish I had a do over on this a few years back,
+
+607
+0:26:21.640 --> 0:26:24.280
+because there's a couple different configurations,
+
+608
+0:26:24.280 --> 0:26:27.360
+largely around, for every individual tenant,
+
+609
+0:26:27.360 --> 0:26:30.520
+how many subqueries you want to be allowed to be processed
+
+610
+0:26:30.520 --> 0:26:32.520
+per query at a time.
+
+611
+0:26:32.520 --> 0:26:35.440
+And then there's also things like concurrency
+
+612
+0:26:35.440 --> 0:26:37.200
+for each of your query or components, right?
+
+613
+0:26:37.200 --> 0:26:40.000
+How many go routines should you associate with
+
+614
+0:26:40.000 --> 0:26:43.680
+or should you devote to running queries independently?
+
+615
+0:26:43.680 --> 0:26:47.720
+But I got some work to do to make that easily digestible,
+
+616
+0:26:47.720 --> 0:26:48.240
+if that's fair.
+
+617
+0:26:52.080 --> 0:26:57.960
+So this year at work, I end up giving to Loki for 10 minutes
+
+618
+0:26:57.960 --> 0:27:01.600
+about 20 gigabytes of log from 500 machine.
+
+619
+0:27:01.600 --> 0:27:03.880
+It was just a one-time experiment
+
+620
+0:27:03.880 --> 0:27:06.000
+that I ran from time to time.
+
+621
+0:27:06.000 --> 0:27:08.000
+And we started using Loki.
+
+622
+0:27:08.000 --> 0:27:10.600
+We optimized it as intended.
+
+623
+0:27:10.600 --> 0:27:12.840
+So using index query was great.
+
+624
+0:27:12.840 --> 0:27:15.840
+At a certain point, my colleagues came to me and say,
+
+625
+0:27:15.840 --> 0:27:21.480
+we want the log string for each individual machine in a file.
+
+626
+0:27:21.480 --> 0:27:23.440
+And I started asking Loki for this,
+
+627
+0:27:23.440 --> 0:27:27.160
+and it took ages to extract this information.
+
+628
+0:27:27.160 --> 0:27:28.920
+Now, I hope you're going to tell me,
+
+629
+0:27:28.920 --> 0:27:30.720
+this is not the use case for Loki.
+
+630
+0:27:30.720 --> 0:27:34.400
+You did very well to use RCs log and just pushing things
+
+631
+0:27:34.400 --> 0:27:35.440
+in a file.
+
+632
+0:27:35.440 --> 0:27:38.120
+But if you have another answer, I'll be glad.
+
+633
+0:27:40.920 --> 0:27:42.600
+We didn't catch the question fully,
+
+634
+0:27:42.600 --> 0:27:45.200
+but my understanding is you're asking,
+
+635
+0:27:45.200 --> 0:27:49.560
+like, can the log field find the logs coming
+
+636
+0:27:49.560 --> 0:27:51.320
+from a single machine?
+
+637
+0:27:51.320 --> 0:27:52.000
+Is that right?
+
+638
+0:27:52.000 --> 0:27:53.000
+Am I getting it right?
+
+639
+0:27:53.000 --> 0:27:57.480
+Yeah, extract the log string for all these 450 machines
+
+640
+0:27:57.480 --> 0:28:00.760
+using RPC and put them in a file.
+
+641
+0:28:00.760 --> 0:28:04.200
+So you're talking about, I guess, some kind of federation,
+
+642
+0:28:04.200 --> 0:28:04.720
+maybe.
+
+643
+0:28:04.720 --> 0:28:07.960
+So why do you want to store it in the file in a single machine?
+
+644
+0:28:07.960 --> 0:28:10.520
+Because they wanted to run analysis
+
+645
+0:28:10.520 --> 0:28:15.640
+on a specific stream of log from a specific machine.
+
+646
+0:28:15.640 --> 0:28:16.520
+So they needed.
+
+647
+0:28:16.520 --> 0:28:20.120
+So technically, you can store log files in a file system.
+
+648
+0:28:20.120 --> 0:28:23.800
+So instead of using object storage,
+
+649
+0:28:23.800 --> 0:28:25.320
+technically you can use a file system.
+
+650
+0:28:25.320 --> 0:28:26.680
+That's completely possible.
+
+651
+0:28:26.680 --> 0:28:28.800
+But we encourage to use object storage
+
+652
+0:28:28.800 --> 0:28:33.920
+when it comes to scale, because that's how it works.
+
+653
+0:28:33.920 --> 0:28:35.680
+Yeah, is the question behind the question there
+
+654
+0:28:35.680 --> 0:28:39.120
+like changing where you actually store it
+
+655
+0:28:39.120 --> 0:28:43.200
+so that you can then run your own processing tools on top?
+
+656
+0:28:43.200 --> 0:28:44.000
+Yeah?
+
+657
+0:28:44.000 --> 0:28:44.520
+Yeah?
+
+658
+0:28:44.520 --> 0:28:45.040
+OK.
+
+659
+0:28:45.040 --> 0:28:47.560
+Yeah, that's actually a relatively common ask.
+
+660
+0:28:47.560 --> 0:28:49.200
+It's not something that we support at the moment.
+
+661
+0:28:49.200 --> 0:28:52.080
+We have our own format that we store in object storage
+
+662
+0:28:52.080 --> 0:28:52.760
+or whatnot.
+
+663
+0:28:52.760 --> 0:28:53.960
+We do have some tooling.
+
+664
+0:28:53.960 --> 0:28:55.680
+One's called chunk inspect, which
+
+665
+0:28:55.680 --> 0:28:57.720
+allows you to kind of iterate through all the chunks, which
+
+666
+0:28:57.720 --> 0:29:00.240
+could be from a particular stream or log file.
+
+667
+0:29:00.240 --> 0:29:02.080
+But it's not incredibly bad.
+
+668
+0:29:02.080 --> 0:29:04.160
+I always include it at the moment, if that makes sense.
+
+669
+0:29:09.160 --> 0:29:09.680
+Hello.
+
+670
+0:29:09.680 --> 0:29:14.800
+I have the use case that I store some telemetry data with my logs
+
+671
+0:29:14.800 --> 0:29:18.320
+sometimes, like a metric or sometimes which
+
+672
+0:29:18.320 --> 0:29:19.760
+I don't want to be indexed.
+
+673
+0:29:19.760 --> 0:29:23.720
+But I also don't want to encode in the actual log message
+
+674
+0:29:23.720 --> 0:29:26.720
+because it's already structured data.
+
+675
+0:29:26.720 --> 0:29:32.120
+Is it possible to have fields that are not indexed or data
+
+676
+0:29:32.120 --> 0:29:33.920
+that are not indexed?
+
+677
+0:29:33.920 --> 0:29:35.720
+It's funny that you asked that.
+
+678
+0:29:35.720 --> 0:29:39.000
+Yeah, so there's kind of a growing question
+
+679
+0:29:39.000 --> 0:29:42.320
+around non-index metadata like that.
+
+680
+0:29:42.320 --> 0:29:44.600
+That's not actually stored in the index itself,
+
+681
+0:29:44.600 --> 0:29:47.000
+but includes some degree of structure.
+
+682
+0:29:47.000 --> 0:29:50.040
+I know we see this as kind of a current need, particularly
+
+683
+0:29:50.040 --> 0:29:53.280
+for hotel formats.
+
+684
+0:29:53.280 --> 0:29:55.200
+So it's something that we're looking into right now,
+
+685
+0:29:55.200 --> 0:29:55.720
+actually.
+
+686
+0:29:55.720 --> 0:29:56.720
+Thank you.
+
+687
+0:29:56.720 --> 0:30:22.720
+So thanks a lot, everyone.
+

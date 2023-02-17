@@ -1,0 +1,252 @@
+1
+0:00:00.000 --> 0:00:11.200
+Hello everyone, I'm Saar Perakhtimish and I work for Collateral Productivity.
+
+2
+0:00:11.200 --> 0:00:20.360
+This talk will be about any interoperability improvements in LibreOffice Impress Tables.
+
+3
+0:00:20.360 --> 0:00:26.040
+So this is a screenshot from the bug report and let's talk about what was the problem
+
+4
+0:00:26.040 --> 0:00:30.520
+on the surface level.
+
+5
+0:00:30.520 --> 0:00:35.960
+On the right you can see how it appears in PowerPoint and on the left you can see how
+
+6
+0:00:35.960 --> 0:00:43.720
+it appears when it was opened by Impress, the pptx file exported by PowerPoint.
+
+7
+0:00:43.720 --> 0:00:51.440
+What we need to focus here is the rows pointed by the arrow are somehow shrunk when it was
+
+8
+0:00:51.440 --> 0:00:56.580
+opened in Impress and it wasn't immediately obvious.
+
+9
+0:00:56.580 --> 0:01:05.040
+If we look at how PowerPoint exports the table layout into pptx files, what we will realize
+
+10
+0:01:05.040 --> 0:01:12.120
+is it defines row heights.
+
+11
+0:01:12.120 --> 0:01:18.360
+So let's just focus on that part but it doesn't really define a total table height to fit
+
+12
+0:01:18.360 --> 0:01:28.120
+inside and while we are importing this row heights what we do is we first calculate what
+
+13
+0:01:28.120 --> 0:01:34.920
+does all of the rows, row heights add up to because we use the total table height to layout
+
+14
+0:01:34.920 --> 0:01:36.240
+the table.
+
+15
+0:01:36.240 --> 0:01:42.920
+So we calculate that by adding up each of the row heights and also we assign each row
+
+16
+0:01:42.920 --> 0:01:45.320
+with their own heights.
+
+17
+0:01:45.320 --> 0:01:52.160
+But turns out when this specific file is exported and if you look at row heights for the empty
+
+18
+0:01:52.160 --> 0:01:57.040
+rows they are correct, there is nothing wrong there but if you look at for instance the
+
+19
+0:01:57.040 --> 0:02:04.320
+one row that says cola it appears to have a row height of zero which doesn't really
+
+20
+0:02:04.320 --> 0:02:07.400
+make sense.
+
+21
+0:02:07.400 --> 0:02:18.120
+So now let's also something to mention here is if we start typing anything in one of the
+
+22
+0:02:18.120 --> 0:02:25.020
+empty rows there are no text properties actually imported from the pptx file they are somehow
+
+23
+0:02:25.020 --> 0:02:30.760
+lost in the process like the text when we start typing in the empty rows in the PowerPoint
+
+24
+0:02:30.760 --> 0:02:39.680
+one starts as a blue it has a blue color etc it has a different size but if we write it
+
+25
+0:02:39.680 --> 0:02:45.880
+in the impressed one it has just defaulted so it's black and 18 points.
+
+26
+0:02:45.880 --> 0:02:51.880
+So before understanding the problem we need to know a little bit about how impressed layouts
+
+27
+0:02:51.880 --> 0:03:02.520
+the table is basically fitted into a given total height but while doing so we also care
+
+28
+0:03:02.520 --> 0:03:10.920
+for what were the each row heights were so basically we need to know the total height
+
+29
+0:03:10.920 --> 0:03:20.080
+correctly because if it is smaller than some of the rows we basically happen to be shrinking
+
+30
+0:03:20.080 --> 0:03:26.320
+trying to shrink the table when that happens what the impressed tries to do is adjust the
+
+31
+0:03:26.320 --> 0:03:33.200
+row heights proportionally to what were they before and if there is text inside there is
+
+32
+0:03:33.200 --> 0:03:43.200
+a minimum height it can go to and when that happens it like in this case when that happens
+
+33
+0:03:43.200 --> 0:03:50.720
+since it can't shrink the line that says color further it shrinks the empty line because
+
+34
+0:03:50.720 --> 0:03:59.280
+it can to try to fit in that to the wrong table height also if you explore the pptx
+
+35
+0:03:59.280 --> 0:04:05.200
+output we will realize that the empty cell properties are exported in and paragraph run
+
+36
+0:04:05.200 --> 0:04:12.560
+properties we need to import that there is an already an implementation for that but
+
+37
+0:04:12.560 --> 0:04:18.320
+I'll discuss this a little bit later if you look at the problem in detail let's say what
+
+38
+0:04:18.320 --> 0:04:25.440
+we need to fix here is we need to somehow care for this problematic row heights that
+
+39
+0:04:25.440 --> 0:04:34.800
+during import which they don't have a height of zero but they are defined as so such and
+
+40
+0:04:34.800 --> 0:04:41.040
+empty cell we need to know the text sizes for empty cells too we need to do this from
+
+41
+0:04:41.040 --> 0:04:45.440
+n paragraph run properties also there was some previous range of pixels here that's
+
+42
+0:04:46.000 --> 0:04:51.120
+kind of altered the layout in code instead of the import code and there are some regressions that
+
+43
+0:04:51.920 --> 0:05:00.480
+messed up some table resizing functionality there we need to revert those changes and
+
+44
+0:05:02.560 --> 0:05:09.680
+so basically it turns out to be parboin tries to export desired row heights for instance if you
+
+45
+0:05:09.680 --> 0:05:17.200
+try to just pull arrow to zero while it has text in it it doesn't let you but it actually
+
+46
+0:05:17.200 --> 0:05:27.600
+saves it as such so in the end that creates a problem for us so to fix this what we can do
+
+47
+0:05:27.600 --> 0:05:36.880
+and what what I did was during the import before layouting the table into an area which how
+
+48
+0:05:36.880 --> 0:05:44.800
+impress usually does it we do a pre-layouting which is we just take the row sizes and we don't
+
+49
+0:05:44.800 --> 0:05:51.520
+give the layout in code any area to layout into and we let it layout itself so it basically
+
+50
+0:05:53.280 --> 0:06:00.720
+just looks at the row sizes and tries to expand them if they are smaller than possible and
+
+51
+0:06:00.720 --> 0:06:12.000
+then that gives us a final height that we can use to in successive layouting attempts so
+
+52
+0:06:12.000 --> 0:06:18.880
+we kind of correct the total lay table heights doing that and
+
+53
+0:06:18.880 --> 0:06:30.080
+then we also don't have the text properties for the empty rows so the problem there was
+
+54
+0:06:31.600 --> 0:06:39.680
+and turns out these text properties are actually imported into text nodes but
+
+55
+0:06:40.720 --> 0:06:46.880
+when there's new text is being typed they they actually inherit their properties from the
+
+56
+0:06:46.880 --> 0:06:54.320
+cells owns properties instead of the text nodes text nodes are just being dumped and any ones
+
+57
+0:06:54.320 --> 0:07:02.960
+are being created so to fix that we need to push the text properties from the n-paragraph
+
+58
+0:07:02.960 --> 0:07:10.800
+run properties into the SAS properties that themselves to make it work correctly
+
+59
+0:07:10.800 --> 0:07:22.240
+well to finish up with these fixes we were able to get rid of the problematic regression
+
+60
+0:07:22.240 --> 0:07:29.920
+causing code in the layout thing and we moved the conceptual fixes from there into the import code
+
+61
+0:07:30.720 --> 0:07:38.320
+making it possible to work correctly and additionally some unit tests were added to
+
+62
+0:07:38.320 --> 0:07:46.880
+make sure the n-paragraph run properties stayed correctly that covered those areas
+
+63
+0:07:46.880 --> 0:08:10.000
+thank you that's all from me
+

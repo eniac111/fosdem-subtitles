@@ -1,0 +1,1240 @@
+1
+0:00:00.000 --> 0:00:18.560
+Hello, everyone.
+
+2
+0:00:18.560 --> 0:00:22.960
+I am Egole Feuver, a PhD student at the University of Manchester.
+
+3
+0:00:22.960 --> 0:00:28.080
+In this talk, I will present the result of my research on compartment interface vulnerabilities,
+
+4
+0:00:28.080 --> 0:00:31.600
+a work that will appear in NDSS 23.
+
+5
+0:00:31.600 --> 0:00:40.560
+This is the result of a collaboration between Manchester, Bucharest, Rice, and Unicraft.io.
+
+6
+0:00:40.560 --> 0:00:46.840
+Before starting to talk about interface vulnerabilities, let me bring a little bit of necessary background.
+
+7
+0:00:46.840 --> 0:00:52.400
+And a very important notion in this work is compartmentalization.
+
+8
+0:00:52.400 --> 0:00:57.040
+Compartmentalization is about decomposing software into lesser privileged components, such that
+
+9
+0:00:57.040 --> 0:01:00.760
+components only have access to what they need to do their job.
+
+10
+0:01:00.760 --> 0:01:06.200
+Compartmentalization is not particularly something new, so let me illustrate it with a real-world
+
+11
+0:01:06.200 --> 0:01:08.480
+example, web servers.
+
+12
+0:01:08.480 --> 0:01:13.720
+Typically, web servers are composed of components that do, on the one hand, privileged things
+
+13
+0:01:13.720 --> 0:01:18.800
+like listening to port 80, and on the other hand, of other components that perform risky
+
+14
+0:01:18.800 --> 0:01:22.600
+operations like parsing network-provided data.
+
+15
+0:01:22.600 --> 0:01:27.680
+If we have these two components in the same process, then this process has to be root,
+
+16
+0:01:27.680 --> 0:01:33.120
+and that's problematic, because if an attacker manages to compromise the network-facing component,
+
+17
+0:01:33.120 --> 0:01:37.640
+for example, then it will immediately own the root process.
+
+18
+0:01:37.640 --> 0:01:42.840
+So what people do in practice is decomposing or compartmentalizing the server into two
+
+19
+0:01:42.840 --> 0:01:48.400
+entities in separate processes, the master, which is privileged and not exposed to risky
+
+20
+0:01:48.400 --> 0:01:54.200
+operations, and the worker, which is deprivileged and exposed to network data.
+
+21
+0:01:54.200 --> 0:01:57.120
+Both entities then communicate over shared memory.
+
+22
+0:01:57.120 --> 0:02:02.520
+Thus, if the worker gets compromised, it will not be able to perform privileged operations
+
+23
+0:02:02.520 --> 0:02:04.640
+and will remain contained.
+
+24
+0:02:04.640 --> 0:02:10.000
+Recently, we have seen really nice advances in the field of compartmentalization.
+
+25
+0:02:10.000 --> 0:02:14.920
+People have been taking more fine grain, more arbitrary, and more automatic approaches to
+
+26
+0:02:14.920 --> 0:02:16.800
+compartmentalization.
+
+27
+0:02:16.800 --> 0:02:22.520
+And what these work do is taking arbitrary applications, identifying a particular component
+
+28
+0:02:22.520 --> 0:02:29.960
+that may be untrusted or risky, or trusted and critical, and compartmentalizing it automatically
+
+29
+0:02:29.960 --> 0:02:32.280
+or semi-automatically.
+
+30
+0:02:32.280 --> 0:02:36.960
+The granularity of the component can be very variable, ranging from libraries to blocks
+
+31
+0:02:36.960 --> 0:02:38.600
+of code.
+
+32
+0:02:38.600 --> 0:02:43.160
+Notice that I'm talking about compartments here and not processes, as the isolation technology
+
+33
+0:02:43.160 --> 0:02:45.320
+too is very variable.
+
+34
+0:02:45.320 --> 0:02:48.080
+In short, the goal of these works is quite ambitious.
+
+35
+0:02:48.080 --> 0:02:53.720
+It's about compartmentalizing legacy software with a low engineering effort and a low performance
+
+36
+0:02:53.720 --> 0:02:55.120
+cost.
+
+37
+0:02:55.120 --> 0:03:00.480
+Unfortunately, as we're highlighting in this work, things are not as easy as they might
+
+38
+0:03:00.480 --> 0:03:01.800
+seem.
+
+39
+0:03:01.800 --> 0:03:07.680
+And privileged-separated software, cross-component interfaces are the attack surface.
+
+40
+0:03:07.680 --> 0:03:11.880
+And there, all sorts of things can go wrong security-wise.
+
+41
+0:03:11.880 --> 0:03:14.280
+Let me give you a few examples.
+
+42
+0:03:14.280 --> 0:03:18.800
+Let's say we have two compartments, one on the left, malicious, and the other one on
+
+43
+0:03:18.800 --> 0:03:22.160
+the right, trusted, protecting some secret.
+
+44
+0:03:22.160 --> 0:03:27.400
+The compartmentalization mechanism guarantees us that compartment one cannot access compartment
+
+45
+0:03:27.400 --> 0:03:30.840
+two's memory directly, so that doesn't work.
+
+46
+0:03:30.840 --> 0:03:35.880
+However, compartment one is still able to do legitimate API calls to compartment two
+
+47
+0:03:35.880 --> 0:03:40.220
+with, for example, an invalid pointer.
+
+48
+0:03:40.220 --> 0:03:44.880
+If compartment two doesn't validate the pointer, it will risk exploitation.
+
+49
+0:03:44.880 --> 0:03:50.680
+Another example is the usage of corrupted indexing information, for example, a size,
+
+50
+0:03:50.680 --> 0:03:54.040
+index, or bounce, as is done in this function.
+
+51
+0:03:54.040 --> 0:03:59.460
+Another one is the usage of a corrupted object, such as a tempered file pointer.
+
+52
+0:03:59.460 --> 0:04:04.840
+And there are many others which will go through partially in the next slide.
+
+53
+0:04:04.840 --> 0:04:10.080
+In this work, we unify all of these vulnerabilities under the concept of compartment interface
+
+54
+0:04:10.080 --> 0:04:13.280
+vulnerabilities, or SIVs.
+
+55
+0:04:13.280 --> 0:04:18.280
+SIVs encompass traditional confused deputies, IAGO attacks, which are SIVs specific for
+
+56
+0:04:18.280 --> 0:04:25.440
+the system called API, and their references under influence, and probably many others.
+
+57
+0:04:25.440 --> 0:04:30.800
+They are all attacks revolving around misuse of a legitimate interface.
+
+58
+0:04:30.800 --> 0:04:35.880
+SIVs are very common when compartmentalizing and modified applications, as we further highlight
+
+59
+0:04:35.880 --> 0:04:37.520
+in this talk.
+
+60
+0:04:37.520 --> 0:04:42.320
+They affect all compartmentalization framework because they are a fundamental part of the
+
+61
+0:04:42.320 --> 0:04:44.720
+problem of privilege separation.
+
+62
+0:04:44.720 --> 0:04:51.760
+To put it in more precise words, we define SIVs as the set of vulnerabilities that arise
+
+63
+0:04:51.760 --> 0:04:58.520
+due to lack of or improper control in data flow validation at compartment boundaries.
+
+64
+0:04:58.520 --> 0:05:05.200
+We observe three classes of SIVs, data leakages, data corruption, and temporal violations.
+
+65
+0:05:05.200 --> 0:05:09.440
+Within data leakages, we differentiate between address leakages, which can be leveraged to
+
+66
+0:05:09.440 --> 0:05:14.580
+de-randomize compartments and mount further attacks, and compartment confidential data
+
+67
+0:05:14.580 --> 0:05:18.760
+leakages, which result in information disclosure.
+
+68
+0:05:18.760 --> 0:05:23.640
+Both are due to data oversharing and sharing of uninitialized memory.
+
+69
+0:05:23.640 --> 0:05:29.040
+We have already illustrated a range of data corruption attacks in the previous slide,
+
+70
+0:05:29.040 --> 0:05:33.640
+but generally they are bound to happen in situations where interface crossing data is
+
+71
+0:05:33.640 --> 0:05:36.560
+used without appropriate sanitization.
+
+72
+0:05:36.560 --> 0:05:40.440
+They can affect control as well as non-control data.
+
+73
+0:05:40.440 --> 0:05:47.200
+Finally, temporal violations include vulnerabilities like expectation of API usage ordering, usage
+
+74
+0:05:47.200 --> 0:05:53.200
+of corrupted synchronization primitives, or shared memory time of check to time of use.
+
+75
+0:05:53.200 --> 0:05:57.720
+Temporal violations are usually caused by a wide range of behaviors, including missing
+
+76
+0:05:57.720 --> 0:06:03.720
+copies, double fetches, and generally lack of enforcement of API semantics.
+
+77
+0:06:03.720 --> 0:06:08.880
+This is a broad and succinct overview, but the paper provides a full taxonomy, including
+
+78
+0:06:08.880 --> 0:06:12.720
+an analysis of existing defenses.
+
+79
+0:06:12.720 --> 0:06:18.200
+So having observed and characterized the problem, we asked a few questions.
+
+80
+0:06:18.200 --> 0:06:22.160
+How many SIVs are there at legacy imported APIs?
+
+81
+0:06:22.160 --> 0:06:25.160
+Are all APIs similarly affected by SIVs?
+
+82
+0:06:25.160 --> 0:06:30.080
+For example, taking library API generally versus module APIs generally, do we observe
+
+83
+0:06:30.080 --> 0:06:32.600
+systematic differences?
+
+84
+0:06:32.600 --> 0:06:36.160
+How hard are these SIVs to address when compartmentalizing?
+
+85
+0:06:36.160 --> 0:06:38.000
+And finally, how bad are they?
+
+86
+0:06:38.000 --> 0:06:42.920
+If for some reason you don't fix one of them or just decide to not fix them at all, what
+
+87
+0:06:42.920 --> 0:06:49.240
+is the impact on the guarantees that compartmentalization can give to you?
+
+88
+0:06:49.240 --> 0:06:53.840
+We believe that it is really critical to understand these points to be able to provide countermeasures
+
+89
+0:06:53.840 --> 0:06:58.000
+that are adequate, systematic, and usable.
+
+90
+0:06:58.000 --> 0:07:03.400
+And so the approach that we take in this work to answer these questions is to design a tool,
+
+91
+0:07:03.400 --> 0:07:08.400
+and more particularly a fuzzer, specialized to detect SIVs at arbitrary interfaces, and
+
+92
+0:07:08.400 --> 0:07:10.960
+we call this tool Confuzz.
+
+93
+0:07:10.960 --> 0:07:16.200
+Then we apply Confuzz at scale to a range of applications and interfaces to gather a
+
+94
+0:07:16.200 --> 0:07:18.800
+dataset of real-world SIVs.
+
+95
+0:07:18.800 --> 0:07:25.520
+Finally, we study, systematize, patternize the resulting dataset to extract numerous
+
+96
+0:07:25.520 --> 0:07:29.520
+insights on the problem of SIVs in compartmentalization.
+
+97
+0:07:29.520 --> 0:07:33.840
+In the next slides, I will give a quick overview of Confuzz before focusing on the dataset
+
+98
+0:07:33.840 --> 0:07:36.680
+and insights.
+
+99
+0:07:36.680 --> 0:07:40.560
+So let me give you a high-level overview of the fuzzer first.
+
+100
+0:07:40.560 --> 0:07:46.720
+Taking unmodified applications, we instrument them to intercept cross-compartment calls.
+
+101
+0:07:46.720 --> 0:07:52.480
+These are freely defined, for example, a particular library boundary or an internal component
+
+102
+0:07:52.480 --> 0:07:54.280
+interface.
+
+103
+0:07:54.280 --> 0:08:00.560
+We based our prototype on dynamic binary instrumentation using Intel PIN, but also explored other
+
+104
+0:08:00.560 --> 0:08:04.760
+instrumentation approaches, for example, LLVM-based.
+
+105
+0:08:04.760 --> 0:08:10.680
+The interface between the trusted and untrusted components is automatically detected using
+
+106
+0:08:10.680 --> 0:08:13.440
+binary debug information.
+
+107
+0:08:13.440 --> 0:08:19.360
+Our fuzzing monitor then drives the exploration by ordering mutations of the dataflow to simulate
+
+108
+0:08:19.360 --> 0:08:24.660
+attacks from the malicious compartment to the trusted compartment.
+
+109
+0:08:24.660 --> 0:08:29.240
+The workload used to drive the program is application-specific, for example, benchmark
+
+110
+0:08:29.240 --> 0:08:32.800
+tools, test suites, custom workloads, etc.
+
+111
+0:08:32.800 --> 0:08:36.320
+You could even plug another fuzzer like OSS fuzz there.
+
+112
+0:08:36.320 --> 0:08:41.760
+Finally, the fuzzer automatically triages and stores crash reports.
+
+113
+0:08:41.760 --> 0:08:48.120
+That includes deduplicating, reproducing, minimizing, etc.
+
+114
+0:08:48.120 --> 0:08:52.320
+The paper provides much greater details on these technical matters, and I would be happy
+
+115
+0:08:52.320 --> 0:08:55.320
+to elaborate if you have questions.
+
+116
+0:08:55.320 --> 0:09:00.680
+Using Confuzz, we gathered a substantial dataset that we carefully dissected.
+
+117
+0:09:00.680 --> 0:09:05.520
+Here you can see the paper's big table that summarizes the dataset.
+
+118
+0:09:05.520 --> 0:09:07.680
+Let's have a closer look at it.
+
+119
+0:09:07.680 --> 0:09:15.700
+Overall, we applied Confuzz to 25 applications and 36 APIs for a total of 39 scenarios.
+
+120
+0:09:15.700 --> 0:09:21.760
+We considered a selection of library APIs, module APIs, and internal component APIs,
+
+121
+0:09:21.760 --> 0:09:26.400
+trying to focus on scenarios that make sense in popular software.
+
+122
+0:09:26.400 --> 0:09:32.600
+In fact, 16 of these scenarios have been previously considered by about 12 studies in the literature,
+
+123
+0:09:32.600 --> 0:09:35.760
+and the attacks that we find apply to them as well.
+
+124
+0:09:35.760 --> 0:09:40.560
+In total, we find 629 SIFs.
+
+125
+0:09:40.560 --> 0:09:46.600
+We classify these SIFs in five impact classes, read impact, write impact, execution, memory
+
+126
+0:09:46.600 --> 0:09:51.560
+allocator corruption, and null-pointing reference.
+
+127
+0:09:51.560 --> 0:09:56.440
+With this data, the first questions that we try to answer are how many SIFs are there
+
+128
+0:09:56.440 --> 0:10:04.040
+at legacy or unmodified arbitrary APIs, and are all APIs or codes similarly affected?
+
+129
+0:10:04.040 --> 0:10:09.480
+And looking into this, we quickly confirm that SIFs are absolutely widespread among
+
+130
+0:10:09.480 --> 0:10:12.320
+unmodified APIs or code.
+
+131
+0:10:12.320 --> 0:10:17.640
+Having said that, we also highlighted significant disparities of prevalence among scenarios,
+
+132
+0:10:17.640 --> 0:10:20.040
+and that's the really interesting part.
+
+133
+0:10:20.040 --> 0:10:26.080
+For example, we observed variations of SIF counts from 0 to 105 across APIs.
+
+134
+0:10:26.080 --> 0:10:27.440
+That's quite significant.
+
+135
+0:10:27.440 --> 0:10:32.120
+Take a look at this plot, which represents for each scenario, the number of vulnerable
+
+136
+0:10:32.120 --> 0:10:35.520
+API endpoints versus non-vulnerable.
+
+137
+0:10:35.520 --> 0:10:41.480
+It clearly shows that SIF prevalence among applications and APIs is very heterogeneous.
+
+138
+0:10:41.480 --> 0:10:48.560
+We have large and almost totally SIF-free APIs, and small and fully vulnerable APIs.
+
+139
+0:10:48.560 --> 0:10:55.840
+In fact, we show an entire absence of correlation between API size and SIF count in this dataset.
+
+140
+0:10:55.840 --> 0:11:03.380
+So while clearly, yes, SIFs are widespread, no, not all APIs are similarly affected.
+
+141
+0:11:03.380 --> 0:11:09.600
+This motivates us to look into the patterns and effects that influence these observations.
+
+142
+0:11:09.600 --> 0:11:15.580
+And doing so, we observe recurring API design patterns that result in SIFs.
+
+143
+0:11:15.580 --> 0:11:20.720
+This really comforts us in the idea that the presence of SIFs is influenced by structural
+
+144
+0:11:20.720 --> 0:11:26.900
+properties of the API, rather than API size or quantity of shared data.
+
+145
+0:11:26.900 --> 0:11:32.040
+In this talk, I will present one of these patterns, but there are more in the paper.
+
+146
+0:11:32.040 --> 0:11:36.160
+And the particular pattern I want to go through concerns modular APIs.
+
+147
+0:11:36.160 --> 0:11:42.680
+Indeed, we notice that modular or module APIs are the most SIF-vulnerable interfaces in
+
+148
+0:11:42.680 --> 0:11:44.280
+our study.
+
+149
+0:11:44.280 --> 0:11:50.440
+On average, we observe that module APIs feature more SIFs and worse SIFs than any other class
+
+150
+0:11:50.440 --> 0:11:52.160
+of APIs.
+
+151
+0:11:52.160 --> 0:11:56.200
+And looking at the structure of these interfaces, it makes sense.
+
+152
+0:11:56.200 --> 0:12:01.720
+Unlike library APIs, module APIs must be very generic and yield high performance.
+
+153
+0:12:01.720 --> 0:12:07.400
+As a consequence, we have patterns with the application exposing its core internals and
+
+154
+0:12:07.400 --> 0:12:12.400
+its core state to the module to achieve their generosity and performance.
+
+155
+0:12:12.400 --> 0:12:17.440
+But this results in a much larger attack surface exposed to the module.
+
+156
+0:12:17.440 --> 0:12:23.120
+Take the example of this data structure exposed to potential malicious modules by the Apache
+
+157
+0:12:23.120 --> 0:12:25.040
+HttpD core.
+
+158
+0:12:25.040 --> 0:12:32.560
+It is very complex with over 75 fields, 60% of which point us, referencing core data structures
+
+159
+0:12:32.560 --> 0:12:37.600
+like memory pools, connection state structures, or mutexes.
+
+160
+0:12:37.600 --> 0:12:45.940
+What we observe with this pattern is a somewhat counterintuitive thing.
+
+161
+0:12:45.940 --> 0:12:52.520
+Security is not always good for compartmentalization, and in many cases, it can even be counterproductive.
+
+162
+0:12:52.520 --> 0:12:57.280
+This is only one of the patterns that we highlight, and there are more in the paper.
+
+163
+0:12:57.280 --> 0:13:04.000
+Now having shown that SIFs are widespread but affecting applications unequally or APIs,
+
+164
+0:13:04.000 --> 0:13:07.080
+let's look at their concrete security impact.
+
+165
+0:13:07.080 --> 0:13:11.040
+And the first thing that we confirm is that they are quite impactful.
+
+166
+0:13:11.040 --> 0:13:18.920
+In fact, over 75% of scenarios present in our dataset show at least one right vulnerability.
+
+167
+0:13:18.920 --> 0:13:25.040
+And worse than that, about 70% of right and read and 50% of executed vulnerabilities
+
+168
+0:13:25.040 --> 0:13:33.900
+are arbitrary, which means that when the attacker controls a right or read primitive, then they
+
+169
+0:13:33.900 --> 0:13:37.320
+are likely to be able to read and write anywhere.
+
+170
+0:13:37.320 --> 0:13:42.240
+And while only a smaller proportion of these scenarios have execution impact, it is likely
+
+171
+0:13:42.240 --> 0:13:47.920
+that read and write primitives will be combinable to achieve execution capabilities.
+
+172
+0:13:47.920 --> 0:13:53.000
+In this talk, I will be concretely illustrating this impact with practical scenarios and real-world
+
+173
+0:13:53.000 --> 0:13:59.540
+SIFs taken from the dataset where we demonstrate key extraction from a protected OpenSSL.
+
+174
+0:13:59.540 --> 0:14:03.680
+Once again here, we show more details in the paper.
+
+175
+0:14:03.680 --> 0:14:10.200
+So here we assume a scenario with two compartments where the goal is to isolate OpenSSL.
+
+176
+0:14:10.200 --> 0:14:15.320
+For example, from a compromised web server engine exon.
+
+177
+0:14:15.320 --> 0:14:21.280
+Isolating OpenSSL or part of OpenSSL is a popular application of compartmentalization,
+
+178
+0:14:21.280 --> 0:14:23.840
+both in the literature and in the industry.
+
+179
+0:14:23.840 --> 0:14:31.160
+Thus here, the compartment interface and therefore the attack surface is the OpenSSL public API.
+
+180
+0:14:31.160 --> 0:14:37.280
+Unfortunately, we find several SIFs that enable for read, write and execution impact.
+
+181
+0:14:37.280 --> 0:14:43.080
+Take this option setting primitive, for example, which is part of the OpenSSL public API.
+
+182
+0:14:43.080 --> 0:14:49.360
+It dereferences an interface crossing pointer, sets it and returns it, clearly resulting
+
+183
+0:14:49.360 --> 0:14:52.480
+in an arbitrary read and write oracle.
+
+184
+0:14:52.480 --> 0:14:57.360
+Any attacker that can compromise the application's control flow will likely be able to extract
+
+185
+0:14:57.360 --> 0:14:59.440
+SSL keys easily.
+
+186
+0:14:59.440 --> 0:15:05.120
+Thus, clearly if the API is not carefully enough sanitized, the benefits will be pretty
+
+187
+0:15:05.120 --> 0:15:09.960
+low at most a form of weak hardening.
+
+188
+0:15:09.960 --> 0:15:15.160
+Now you could tell me that it's not a good idea to protect at the public API anyways
+
+189
+0:15:15.160 --> 0:15:21.600
+and that we should rather choose the OpenSSL internal key API that's much smaller.
+
+190
+0:15:21.600 --> 0:15:23.120
+So let's take a look at it.
+
+191
+0:15:23.120 --> 0:15:28.200
+This time we have engine ex and most of OpenSSL in the untrusted compartment.
+
+192
+0:15:28.200 --> 0:15:33.560
+While we have the small key handling part of OpenSSL together with the keys in the protected
+
+193
+0:15:33.560 --> 0:15:34.560
+compartment.
+
+194
+0:15:34.560 --> 0:15:38.920
+Unfortunately, here too we find several SIFs.
+
+195
+0:15:38.920 --> 0:15:42.440
+Take a look at this function of the internal key API, for example.
+
+196
+0:15:42.440 --> 0:15:47.440
+I only put the signature for simplicity's sake because the function is implemented in
+
+197
+0:15:47.440 --> 0:15:49.800
+per generated assembly.
+
+198
+0:15:49.800 --> 0:15:56.080
+You can manipulate the in pointer to point to the key that you cannot directly access
+
+199
+0:15:56.080 --> 0:16:00.600
+encrypt with a known key and then decrypt to get the secret.
+
+200
+0:16:00.600 --> 0:16:05.920
+Hence, here again, attackers that can manage to compromise the application are likely to
+
+201
+0:16:05.920 --> 0:16:09.520
+be able to easily extract the key.
+
+202
+0:16:09.520 --> 0:16:14.520
+Unfortunately here, fixing this SIFs requires to make the components stateful, which is
+
+203
+0:16:14.520 --> 0:16:17.120
+a fairly drastic design change.
+
+204
+0:16:17.120 --> 0:16:24.000
+Overall, through these two examples, I showed how existing OpenSSL isolation strategies
+
+205
+0:16:24.000 --> 0:16:30.240
+collapse when confronted to SIFs and how important they are security wise.
+
+206
+0:16:30.240 --> 0:16:33.920
+To conclude this talk, let's take a quick look at countermeasures.
+
+207
+0:16:33.920 --> 0:16:35.560
+How do we tackle SIFs?
+
+208
+0:16:35.560 --> 0:16:38.160
+Overall, we see two ways.
+
+209
+0:16:38.160 --> 0:16:43.000
+First, making progress on automatic and systematic countermeasures.
+
+210
+0:16:43.000 --> 0:16:47.760
+Our paper highlights the limitations as part of our SIF taxonomy.
+
+211
+0:16:47.760 --> 0:16:54.360
+Second, learning from our study of patterns, we also believe that software component APIs
+
+212
+0:16:54.360 --> 0:17:00.640
+should be designed to feature low compartmentalization complexity in the first place.
+
+213
+0:17:00.640 --> 0:17:04.160
+We provide a set of guidelines to achieve this.
+
+214
+0:17:04.160 --> 0:17:08.360
+The two approaches are complementary.
+
+215
+0:17:08.360 --> 0:17:14.280
+Even in the presence of countermeasures, well-designed APIs are wishable as the first point is known
+
+216
+0:17:14.280 --> 0:17:16.880
+to be fundamentally harder.
+
+217
+0:17:16.880 --> 0:17:21.000
+I will not have enough time to go over all the guidelines, but let me try to give you
+
+218
+0:17:21.000 --> 0:17:23.360
+the gist of them.
+
+219
+0:17:23.360 --> 0:17:28.840
+First, not every interface is a good boundary for privilege separation.
+
+220
+0:17:28.840 --> 0:17:33.080
+Maybe a particular API doesn't fit privilege separation, and that's fine.
+
+221
+0:17:33.080 --> 0:17:36.080
+In this case, it will be hard to harden anyways.
+
+222
+0:17:36.080 --> 0:17:41.800
+Second, we recommend that major attention should be dedicated to reducing the complexity
+
+223
+0:17:41.800 --> 0:17:47.200
+of interface crossing objects, avoiding, for example, sharing of resource handle, system
+
+224
+0:17:47.200 --> 0:17:52.280
+resource handles, complex tracks, synchronization primitives, etc.
+
+225
+0:17:52.280 --> 0:17:56.000
+If this is not possible, it should bring us back to the first point.
+
+226
+0:17:56.000 --> 0:18:00.400
+The interface is probably not the right point to compartmentalize, for example, because
+
+227
+0:18:00.400 --> 0:18:03.160
+components are too deeply entangled.
+
+228
+0:18:03.160 --> 0:18:09.840
+Third, compartmentalizable components should enforce API semantics to be safe, for example,
+
+229
+0:18:09.840 --> 0:18:12.720
+securing or concurrency support.
+
+230
+0:18:12.720 --> 0:18:18.560
+Under distrust scenarios, it is not acceptable anymore to assume that the caller will respect
+
+231
+0:18:18.560 --> 0:18:21.680
+them or face the consequences.
+
+232
+0:18:21.680 --> 0:18:25.480
+We are slowly coming towards the end of this talk, so let me summarize the key points that
+
+233
+0:18:25.480 --> 0:18:27.760
+I wanted to make.
+
+234
+0:18:27.760 --> 0:18:34.160
+Civs should be at the center of every compartmentalization approach, and you will likely not achieve
+
+235
+0:18:34.160 --> 0:18:37.880
+tangible security benefits without considering them.
+
+236
+0:18:37.880 --> 0:18:43.440
+API design patterns influence the presence of Civs and their severity.
+
+237
+0:18:43.440 --> 0:18:48.120
+Overall, it's not so much about the size of the API, it's about the complexity of
+
+238
+0:18:48.120 --> 0:18:51.040
+API crossing objects.
+
+239
+0:18:51.040 --> 0:18:54.120
+Addressing Civs is not just a matter of writing a few checks.
+
+240
+0:18:54.120 --> 0:19:01.280
+In fact, strong solutions often require refactoring the API.
+
+241
+0:19:01.280 --> 0:19:09.200
+Because compartmentalizing apps goes much further than just setting and enforcing bounds.
+
+242
+0:19:09.200 --> 0:19:13.440
+We want this work to be an appeal for more research towards addressing the problem of
+
+243
+0:19:13.440 --> 0:19:20.040
+Civs, systematically finding them, addressing them, or telling you what interface make good
+
+244
+0:19:20.040 --> 0:19:23.160
+compartmentalization boundaries.
+
+245
+0:19:23.160 --> 0:19:27.460
+If you are interested in this work, I invite you to check out our paper and the code and
+
+246
+0:19:27.460 --> 0:19:29.520
+data set of confuzz.
+
+247
+0:19:29.520 --> 0:19:32.680
+I will now be more than happy to take questions.
+
+248
+0:19:32.680 --> 0:19:33.680
+Thank you.
+
+249
+0:19:33.680 --> 0:20:01.360
+Okay.
+
+250
+0:20:01.360 --> 0:20:10.280
+Thank you, Hugo, for this very accessible talk on this important topic of securing interfaces.
+
+251
+0:20:10.280 --> 0:20:14.000
+One question maybe that I can start with is something that you brought up yourself as
+
+252
+0:20:14.000 --> 0:20:15.000
+well.
+
+253
+0:20:15.000 --> 0:20:21.480
+You say it's more about compartmentalization, but it also applies obviously to TEs.
+
+254
+0:20:21.480 --> 0:20:24.640
+Can you comment a bit on that?
+
+255
+0:20:24.640 --> 0:20:26.240
+Is that something you consider?
+
+256
+0:20:26.240 --> 0:20:32.000
+Confuzz, your physics could be extended to something like Gramine?
+
+257
+0:20:32.000 --> 0:20:37.120
+Actually, so maybe there are two different parts.
+
+258
+0:20:37.120 --> 0:20:42.960
+I think the conceptual part about compartment interface vulnerabilities, maybe we could
+
+259
+0:20:42.960 --> 0:20:48.640
+remove the compartment out of compartment interface vulnerabilities and just get interface
+
+260
+0:20:48.640 --> 0:20:49.800
+vulnerabilities.
+
+261
+0:20:49.800 --> 0:20:55.560
+I think it has also been described by other works previously, notably some of the work
+
+262
+0:20:55.560 --> 0:20:56.560
+that you did, Joe.
+
+263
+0:20:56.560 --> 0:21:00.080
+I think that applies to TEs really, really well.
+
+264
+0:21:00.080 --> 0:21:07.920
+I think it's just a generic problem about interfaces and that fully applies to TEs.
+
+265
+0:21:07.920 --> 0:21:15.600
+Regarding the fuzzer, from a very technical point of view, I think that it might need
+
+266
+0:21:15.600 --> 0:21:23.560
+some adaptation to be run on existing TE software, but it's absolutely feasible.
+
+267
+0:21:23.560 --> 0:21:27.240
+And yeah, I think that it could apply there as well.
+
+268
+0:21:27.240 --> 0:21:32.360
+We didn't really explore it because obviously at some point we needed to restrict the scope
+
+269
+0:21:32.360 --> 0:21:34.800
+of what we're doing, but I think it...
+
+270
+0:21:34.800 --> 0:21:36.240
+That makes sense.
+
+271
+0:21:36.240 --> 0:21:43.520
+So following up on that as well, I think you mentioned in your slides, one of the technologies
+
+272
+0:21:43.520 --> 0:21:47.880
+that you could use for compartmentalization is not only TEs, it's also something like
+
+273
+0:21:47.880 --> 0:21:55.840
+SHERRI, which uses capabilities, and I'm wondering, TEs are not great in these vulnerabilities
+
+274
+0:21:55.840 --> 0:22:00.440
+because you have these confused deputy attacks that you explained also where you have a pointer
+
+275
+0:22:00.440 --> 0:22:02.560
+that you essentially can dereference.
+
+276
+0:22:02.560 --> 0:22:10.360
+And with SHERRI, with capabilities, you have native mitigations for many of those capabilities,
+
+277
+0:22:10.360 --> 0:22:13.400
+I think were made with the idea of avoiding confused deputies.
+
+278
+0:22:13.400 --> 0:22:18.400
+So can you comment a bit on what the underlying technology can mean for the vulnerability
+
+279
+0:22:18.400 --> 0:22:21.320
+of compartmentalization essentially?
+
+280
+0:22:21.320 --> 0:22:25.440
+So I'm not sure if I can...
+
+281
+0:22:25.440 --> 0:22:29.080
+I don't think I can share my screen, but maybe I can.
+
+282
+0:22:29.080 --> 0:22:30.080
+No, no.
+
+283
+0:22:30.080 --> 0:22:32.800
+But you can put a link maybe in the...
+
+284
+0:22:32.800 --> 0:22:33.800
+Yeah.
+
+285
+0:22:33.800 --> 0:22:34.800
+... for people.
+
+286
+0:22:34.800 --> 0:22:39.520
+So actually in the paper, we did talk about this, so I'm just gonna...
+
+287
+0:22:39.520 --> 0:22:43.160
+I don't think I can share my screen, but maybe I can.
+
+288
+0:22:43.160 --> 0:22:45.720
+Oh, my God, I'm sorry.
+
+289
+0:22:45.720 --> 0:22:47.400
+I'm sorry, I just broke everything.
+
+290
+0:22:47.400 --> 0:22:49.120
+I just posted the link.
+
+291
+0:22:49.120 --> 0:22:52.960
+I don't know if I triggered something terrible, but...
+
+292
+0:22:52.960 --> 0:22:54.200
+I think I see the link.
+
+293
+0:22:54.200 --> 0:22:57.040
+I think you unmuted the tab or something.
+
+294
+0:22:57.040 --> 0:22:59.640
+So the paper goes in in case of that.
+
+295
+0:22:59.640 --> 0:23:02.880
+Can you summarize maybe in the minute that remains?
+
+296
+0:23:02.880 --> 0:23:04.520
+Absolutely, yes.
+
+297
+0:23:04.520 --> 0:23:11.040
+So SHERRI provides some features that, as you said, are really nice in addressing some
+
+298
+0:23:11.040 --> 0:23:18.560
+of the spatial part of the compartment interface spectrum, of the CF spectrum.
+
+299
+0:23:18.560 --> 0:23:20.640
+It does not solve everything.
+
+300
+0:23:20.640 --> 0:23:22.840
+It's not magic.
+
+301
+0:23:22.840 --> 0:23:27.520
+Many of the leakage issues remain.
+
+302
+0:23:27.520 --> 0:23:34.200
+Many of the temporal issues remain as well, because to some extent, they are a little
+
+303
+0:23:34.200 --> 0:23:40.360
+bit more high level than just spatial things on memory.
+
+304
+0:23:40.360 --> 0:23:42.080
+So they still apply.
+
+305
+0:23:42.080 --> 0:23:48.360
+For example, the issues with ordering of interface calls.
+
+306
+0:23:48.360 --> 0:23:53.920
+If you have an interface that has some ordering expectations, for example, calling function
+
+307
+0:23:53.920 --> 0:24:00.280
+one before function two, and you don't respect that, SHERRI is not necessarily going to help
+
+308
+0:24:00.280 --> 0:24:02.720
+you.
+
+309
+0:24:02.720 --> 0:24:03.920
+So this is going to remain.
+
+310
+0:24:03.920 --> 0:24:10.920
+So it does address part of it, but it's not everything.
+

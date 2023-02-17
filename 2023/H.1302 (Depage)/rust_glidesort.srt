@@ -1,0 +1,2004 @@
+1
+0:00:00.000 --> 0:00:13.600
+So now we have Orson, he's going to be talking about GlideSort.
+
+2
+0:00:13.600 --> 0:00:15.340
+Very beautiful opening slide.
+
+3
+0:00:15.340 --> 0:00:17.640
+So yeah, take it away.
+
+4
+0:00:17.640 --> 0:00:18.640
+Thank you.
+
+5
+0:00:18.640 --> 0:00:19.640
+Can everyone hear me?
+
+6
+0:00:19.640 --> 0:00:21.600
+All right, good.
+
+7
+0:00:21.600 --> 0:00:22.960
+Thanks for coming.
+
+8
+0:00:22.960 --> 0:00:26.640
+So my name is Orson, and I'm here to present GlideSort.
+
+9
+0:00:26.640 --> 0:00:31.000
+I did this research at the CBI Database Architecture Group.
+
+10
+0:00:31.000 --> 0:00:32.480
+GlideSort, what is it?
+
+11
+0:00:32.480 --> 0:00:35.760
+It's a general purpose stable comparison sort here.
+
+12
+0:00:35.760 --> 0:00:38.080
+Does everyone here understand what that means?
+
+13
+0:00:38.080 --> 0:00:39.080
+No.
+
+14
+0:00:39.080 --> 0:00:40.080
+Oh, okay.
+
+15
+0:00:40.080 --> 0:00:42.520
+Well, good luck.
+
+16
+0:00:42.520 --> 0:00:45.760
+So stable means that it does not reorder equal elements.
+
+17
+0:00:45.760 --> 0:00:47.680
+They stay in the original order.
+
+18
+0:00:47.680 --> 0:00:50.240
+So essentially it makes sorting deterministic.
+
+19
+0:00:50.240 --> 0:00:52.000
+GlideSort is a hybrid.
+
+20
+0:00:52.000 --> 0:00:56.600
+It's a hybrid of merge sort, quick sort, and block insertion sort, which is a very
+
+21
+0:00:56.600 --> 0:00:58.560
+variant of insertion sort.
+
+22
+0:00:58.560 --> 0:01:03.200
+And it is robustly adaptive to pre-sorted and low cardinality inputs.
+
+23
+0:01:03.200 --> 0:01:06.280
+Don't worry, I'll talk about what that means.
+
+24
+0:01:06.280 --> 0:01:10.480
+I made a reference implementation in partially unsafe Rust.
+
+25
+0:01:10.480 --> 0:01:14.720
+And you can think of it, if you're programming Rust, as a drop-in for the slice stable sort
+
+26
+0:01:14.720 --> 0:01:16.560
+algorithm.
+
+27
+0:01:16.560 --> 0:01:19.000
+So you might wonder, stable quick sort?
+
+28
+0:01:19.000 --> 0:01:22.920
+The answer is yes.
+
+29
+0:01:22.920 --> 0:01:28.880
+A guy named Igor Fondenhove made very, I don't know, he did very good work on FluxSort,
+
+30
+0:01:28.880 --> 0:01:34.600
+where he showed that indeed you can do stable quick sort efficiently.
+
+31
+0:01:34.600 --> 0:01:40.760
+Wikipedia will tell you that quick sort is in place, that it is done using element exchanges,
+
+32
+0:01:40.760 --> 0:01:45.480
+and that it will literally tell you efficient implementations of quick sort are not a stable
+
+33
+0:01:45.480 --> 0:01:46.480
+sort.
+
+34
+0:01:46.480 --> 0:01:50.600
+So Wikipedia tells you, no, you cannot do it.
+
+35
+0:01:50.600 --> 0:01:55.080
+Stable sort uses extra memory to do its sorting.
+
+36
+0:01:55.080 --> 0:01:59.280
+And if you tell people, hey, you can do the same with stable quick sort, they completely
+
+37
+0:01:59.280 --> 0:02:00.280
+lose their minds.
+
+38
+0:02:00.280 --> 0:02:03.000
+Like, no, quick sort is in place, you cannot do that.
+
+39
+0:02:03.000 --> 0:02:04.000
+That's not true.
+
+40
+0:02:04.000 --> 0:02:05.000
+You can.
+
+41
+0:02:05.000 --> 0:02:07.840
+And you probably should.
+
+42
+0:02:07.840 --> 0:02:10.040
+So earlier I mentioned adaptive sorting.
+
+43
+0:02:10.040 --> 0:02:11.760
+What do I mean by that?
+
+44
+0:02:11.760 --> 0:02:18.360
+To adapt is to change your behavior to deal with new information or a new situation.
+
+45
+0:02:18.360 --> 0:02:25.240
+And there are two ways that you can be adaptive, in my opinion, major ways you can be adaptive
+
+46
+0:02:25.240 --> 0:02:27.280
+in sorting.
+
+47
+0:02:27.280 --> 0:02:29.720
+And they correspond to two schools of sorting.
+
+48
+0:02:29.720 --> 0:02:32.000
+There is the bottom up school of sorting.
+
+49
+0:02:32.000 --> 0:02:36.880
+Those are your merge sorts or your merge sorts variants.
+
+50
+0:02:36.880 --> 0:02:38.240
+And they are bottom up.
+
+51
+0:02:38.240 --> 0:02:43.480
+They construct larger and larger sorted sequences from smaller sorted sequences.
+
+52
+0:02:43.480 --> 0:02:47.800
+They are often presented in a schoolbook way top down, but really fundamentally they are
+
+53
+0:02:47.800 --> 0:02:48.800
+bottom up.
+
+54
+0:02:48.800 --> 0:02:51.240
+And that way they can be adaptive to pre sorted runs.
+
+55
+0:02:51.240 --> 0:02:55.320
+If there's already pre sorted running your input, you can just take that as is and continue
+
+56
+0:02:55.320 --> 0:02:56.840
+merging up.
+
+57
+0:02:56.840 --> 0:03:00.040
+There's also the partition school of sorts.
+
+58
+0:03:00.040 --> 0:03:03.320
+Those are your quick sorts, your sample sorts, your radix sorts.
+
+59
+0:03:03.320 --> 0:03:07.120
+They partition out or distribute data.
+
+60
+0:03:07.120 --> 0:03:08.600
+They are fundamentally top down.
+
+61
+0:03:08.600 --> 0:03:12.280
+You start at the higher and you partition to smaller, smaller, smaller.
+
+62
+0:03:12.280 --> 0:03:16.880
+Subpartitions and that way they can be adaptive to low cardinality inputs.
+
+63
+0:03:16.880 --> 0:03:19.760
+So what are low cardinality inputs?
+
+64
+0:03:19.760 --> 0:03:24.020
+Essentially you have a lot of data and you're sorting it by a subset of the data.
+
+65
+0:03:24.020 --> 0:03:27.880
+So you're sorting your customers, but you're sorting them by which city they live in.
+
+66
+0:03:27.880 --> 0:03:31.080
+Or you're sorting your cars, but you're sorting by the brand of the car.
+
+67
+0:03:31.080 --> 0:03:35.280
+And even though you might have hundreds of thousands of cars, you might only have 100
+
+68
+0:03:35.280 --> 0:03:36.280
+brands.
+
+69
+0:03:36.280 --> 0:03:40.480
+So you have a lot of essentially duplicates, at least from the perspective of a comparison
+
+70
+0:03:40.480 --> 0:03:42.280
+operator.
+
+71
+0:03:42.280 --> 0:03:45.640
+So how does adaptive quick sort deal with that?
+
+72
+0:03:45.640 --> 0:03:50.760
+The idea is that during partitioning we can detect buckets of elements that are all equal
+
+73
+0:03:50.760 --> 0:03:52.640
+to each other.
+
+74
+0:03:52.640 --> 0:03:55.460
+And there's a challenge with doing that.
+
+75
+0:03:55.460 --> 0:03:59.020
+You don't want to do extra unnecessary comparisons.
+
+76
+0:03:59.020 --> 0:04:01.160
+And we actually want to avoid three way comparisons.
+
+77
+0:04:01.160 --> 0:04:08.040
+That's a bit funny because Rust's basic or trade uses three way comparisons.
+
+78
+0:04:08.040 --> 0:04:09.040
+But that's a lie.
+
+79
+0:04:09.040 --> 0:04:13.580
+Under the hood we turned that back into a two way comparison because computers aren't
+
+80
+0:04:13.580 --> 0:04:15.040
+very good at ternary logic.
+
+81
+0:04:15.040 --> 0:04:16.360
+They really love binary logic.
+
+82
+0:04:16.360 --> 0:04:17.720
+They love ifs and else.
+
+83
+0:04:17.720 --> 0:04:21.600
+So we still turn that back into two way comparisons.
+
+84
+0:04:21.600 --> 0:04:27.800
+And there's been a long history on adaptive quick sorts in this way.
+
+85
+0:04:27.800 --> 0:04:28.800
+With Dykstra and Hauer.
+
+86
+0:04:28.800 --> 0:04:33.280
+I still don't know how to pronounce that.
+
+87
+0:04:33.280 --> 0:04:34.280
+Working on it.
+
+88
+0:04:34.280 --> 0:04:36.560
+And already time flies.
+
+89
+0:04:36.560 --> 0:04:41.680
+Eight years ago I showed that in pattern defeating quick sort that you can detect this and handle
+
+90
+0:04:41.680 --> 0:04:43.520
+this very efficiently.
+
+91
+0:04:43.520 --> 0:04:44.680
+So how does that work?
+
+92
+0:04:44.680 --> 0:04:49.880
+I had an entire earlier talk on PDQ sort that you can watch if you're interested in this.
+
+93
+0:04:49.880 --> 0:04:52.440
+But essentially we have two different partition strategies.
+
+94
+0:04:52.440 --> 0:04:54.960
+A partition left and a partition right.
+
+95
+0:04:54.960 --> 0:04:58.540
+The partition left puts elements equal to the pivot on the left.
+
+96
+0:04:58.540 --> 0:05:01.960
+And the partition right puts equal elements on the right.
+
+97
+0:05:01.960 --> 0:05:07.520
+And what you do is when you select a pivot you check if that pivot is equal to a pivot
+
+98
+0:05:07.520 --> 0:05:08.520
+we used previously.
+
+99
+0:05:08.520 --> 0:05:14.360
+And you can do this efficiently using a single extra comparison during partitioning.
+
+100
+0:05:14.360 --> 0:05:16.160
+Or at least pivot selection.
+
+101
+0:05:16.160 --> 0:05:19.120
+And the default is that you put the equal elements on the right.
+
+102
+0:05:19.120 --> 0:05:23.040
+But if you detect hey this pivot is equal to a previous pivot you put equal elements
+
+103
+0:05:23.040 --> 0:05:24.040
+on the left.
+
+104
+0:05:24.040 --> 0:05:29.320
+And this way you implicitly do a three way partition using two way comparisons.
+
+105
+0:05:29.320 --> 0:05:35.200
+And you can prove that on average this means that your sort is O and log K where K is the
+
+106
+0:05:35.200 --> 0:05:36.480
+number of distinct values.
+
+107
+0:05:36.480 --> 0:05:40.140
+If every value is distinct that becomes O and log N we're used to that.
+
+108
+0:05:40.140 --> 0:05:46.760
+But if you have a lot of duplicate values O and log K goes a lot faster than N log N.
+
+109
+0:05:46.760 --> 0:05:48.800
+There's also adaptive merge sort.
+
+110
+0:05:48.800 --> 0:05:53.520
+These as I said earlier these merge pre-existing runs in the input.
+
+111
+0:05:53.520 --> 0:05:58.480
+The problem with solving this is that you want to minimize the amount of unbalanced
+
+112
+0:05:58.480 --> 0:05:59.600
+mergers that you do.
+
+113
+0:05:59.600 --> 0:06:04.680
+So you don't want to merge a very large array with a very small array because that's quite
+
+114
+0:06:04.680 --> 0:06:06.480
+inefficient.
+
+115
+0:06:06.480 --> 0:06:13.480
+And you also want to somehow store during your algorithm where the runs are in memory.
+
+116
+0:06:13.480 --> 0:06:18.480
+And if you do this in an illogical way you have to potentially store a lot of data about
+
+117
+0:06:18.480 --> 0:06:21.280
+where all the runs are.
+
+118
+0:06:21.280 --> 0:06:25.920
+And Van Neumann invented merge sort very early.
+
+119
+0:06:25.920 --> 0:06:30.460
+And Knuth described also quite early a natural merge sort that takes advantage of pre-existing
+
+120
+0:06:30.460 --> 0:06:31.880
+runs in the input.
+
+121
+0:06:31.880 --> 0:06:36.160
+And then in particular Tim Peters popularized Tim sort which became the default sorting
+
+122
+0:06:36.160 --> 0:06:43.600
+algorithm in Python that really showed the first sort of clever way to keep track of
+
+123
+0:06:43.600 --> 0:06:48.280
+your run information and minimizing unbalanced mergers.
+
+124
+0:06:48.280 --> 0:06:54.720
+More recent work is power sort which extends on Tim sort essentially or has the same logic
+
+125
+0:06:54.720 --> 0:07:03.600
+but more clever logic and actually has mathematical proofs that it creates balanced merge sequences.
+
+126
+0:07:03.600 --> 0:07:08.000
+And in fact Python I believe now uses power sort logic as well.
+
+127
+0:07:08.000 --> 0:07:11.040
+So I'm not going to go into detail on how power sort works.
+
+128
+0:07:11.040 --> 0:07:12.840
+I don't have enough time for that.
+
+129
+0:07:12.840 --> 0:07:18.220
+But essentially the core loop of it is that you create a run and that can either be by
+
+130
+0:07:18.220 --> 0:07:24.640
+finding the run in the input or doing a small sorting algorithm to create a small run.
+
+131
+0:07:24.640 --> 0:07:26.000
+You compute the power of a run.
+
+132
+0:07:26.000 --> 0:07:28.760
+That's the heuristics I'm not going to get into.
+
+133
+0:07:28.760 --> 0:07:36.380
+And then you keep a stack of runs and then use the power heuristic that we computed to
+
+134
+0:07:36.380 --> 0:07:38.520
+decide when to merge two runs.
+
+135
+0:07:38.520 --> 0:07:44.640
+And you can prove that the stack then becomes logarithmic in size and that your merge sequences
+
+136
+0:07:44.640 --> 0:07:47.880
+are going to be very good.
+
+137
+0:07:47.880 --> 0:07:53.840
+And the idea is that create a run can take advantage of existing runs in the input.
+
+138
+0:07:53.840 --> 0:07:55.280
+So a problem merges.
+
+139
+0:07:55.280 --> 0:08:00.040
+We want to be adaptive to low cardinality inputs and we want to be adaptive to pre-existing
+
+140
+0:08:00.040 --> 0:08:01.240
+rather than input.
+
+141
+0:08:01.240 --> 0:08:06.520
+But one is fundamentally bottom up and the other one is fundamentally top down.
+
+142
+0:08:06.520 --> 0:08:08.480
+And that's why I call this glide sort.
+
+143
+0:08:08.480 --> 0:08:09.480
+We glide.
+
+144
+0:08:09.480 --> 0:08:11.680
+What do I mean by that?
+
+145
+0:08:11.680 --> 0:08:15.240
+The idea is that a soaring bird only flaps its wings when necessary.
+
+146
+0:08:15.240 --> 0:08:17.200
+Glide sort only sorts when necessary.
+
+147
+0:08:17.200 --> 0:08:24.920
+So during this create run process, sorry, before that, I changed the concept of a run
+
+148
+0:08:24.920 --> 0:08:26.080
+to a logical run.
+
+149
+0:08:26.080 --> 0:08:28.520
+And a logical run can be one of three things.
+
+150
+0:08:28.520 --> 0:08:32.920
+It can be just as before, it can just be a sorted range of elements in your array.
+
+151
+0:08:32.920 --> 0:08:37.800
+And can also be an unsorted range of elements in your array or two sorted ranges that are
+
+152
+0:08:37.800 --> 0:08:42.680
+right next to each other in your array.
+
+153
+0:08:42.680 --> 0:08:44.840
+We change the create run function.
+
+154
+0:08:44.840 --> 0:08:51.120
+We do, in fact, if there's a run in the input, detect that and return that as a sorted run.
+
+155
+0:08:51.120 --> 0:08:54.040
+But if we don't detect a sorted run, we just return an unsorted run.
+
+156
+0:08:54.040 --> 0:08:58.760
+We don't eagerly sort anything.
+
+157
+0:08:58.760 --> 0:09:00.400
+And how you do that is very simple.
+
+158
+0:09:00.400 --> 0:09:04.680
+You just scan through the array and if you find a run that we consider big enough, we
+
+159
+0:09:04.680 --> 0:09:12.000
+return it and otherwise we just skip some elements and return an unsorted run.
+
+160
+0:09:12.000 --> 0:09:15.720
+And then you add quite a bit of code for merging two runs.
+
+161
+0:09:15.720 --> 0:09:18.860
+But it's actually relatively simple.
+
+162
+0:09:18.860 --> 0:09:24.200
+As long as two unsorted runs concatenated fit in our scratch base, which is essentially
+
+163
+0:09:24.200 --> 0:09:30.240
+this extra memory that blows people's minds, as long as it fits in that, we just concatenate
+
+164
+0:09:30.240 --> 0:09:32.040
+our unsorted runs.
+
+165
+0:09:32.040 --> 0:09:39.280
+And otherwise we actively physically sort the elements using quicksort and then create
+
+166
+0:09:39.280 --> 0:09:44.260
+one of these two sorted concatenated run cases.
+
+167
+0:09:44.260 --> 0:09:49.820
+If we have two sorted runs, we concatenate them.
+
+168
+0:09:49.820 --> 0:09:59.520
+If we have an unsorted run and something else, we actually sort this unsorted run and then
+
+169
+0:09:59.520 --> 0:10:02.060
+recurse.
+
+170
+0:10:02.060 --> 0:10:04.940
+And finally, we have our actual physical mergers.
+
+171
+0:10:04.940 --> 0:10:12.860
+So when we can no longer be lazy, we can no longer glide, we have to actually merge elements.
+
+172
+0:10:12.860 --> 0:10:16.780
+So that is essentially the main loop of glidesort.
+
+173
+0:10:16.780 --> 0:10:23.100
+So it's an extension of power sort, but you can apply the same logic to any natural stable
+
+174
+0:10:23.100 --> 0:10:24.640
+mergers sort.
+
+175
+0:10:24.640 --> 0:10:26.440
+We don't eagerly sort small runs.
+
+176
+0:10:26.440 --> 0:10:31.440
+We keep them as unsorted runs as long as possible.
+
+177
+0:10:31.440 --> 0:10:37.420
+And this way we transform the sorting problem into a sequence of quicksort calls and triple
+
+178
+0:10:37.420 --> 0:10:39.480
+slash quad mergers.
+
+179
+0:10:39.480 --> 0:10:43.460
+And doing this we are adaptive to pre sorted runs and low cardinality inputs at the same
+
+180
+0:10:43.460 --> 0:10:46.400
+time.
+
+181
+0:10:46.400 --> 0:10:48.720
+So why triple and quad mergers?
+
+182
+0:10:48.720 --> 0:10:51.580
+And there are three main reasons.
+
+183
+0:10:51.580 --> 0:10:54.360
+There's ping pong merging, bidirectional merging.
+
+184
+0:10:54.360 --> 0:11:01.980
+Oh, sorry, before I want to quite clearly mention something, glidesort is not the first algorithm
+
+185
+0:11:01.980 --> 0:11:06.200
+that is adaptive to both of these categories at the same time.
+
+186
+0:11:06.200 --> 0:11:10.300
+But to my knowledge, at least it is the first algorithm that is robustly adaptive.
+
+187
+0:11:10.300 --> 0:11:11.760
+So it does not hard code anything.
+
+188
+0:11:11.760 --> 0:11:17.380
+It does not use heuristics to decide when to switch to which algorithm it detects is
+
+189
+0:11:17.380 --> 0:11:20.900
+completely naturally based on the input.
+
+190
+0:11:20.900 --> 0:11:23.020
+So why triple slash quad mergers?
+
+191
+0:11:23.020 --> 0:11:24.020
+There are three main reasons.
+
+192
+0:11:24.020 --> 0:11:28.380
+Ping pong merging, bidirectional merging and parallel merging.
+
+193
+0:11:28.380 --> 0:11:30.220
+Ping pong merging is not my idea.
+
+194
+0:11:30.220 --> 0:11:35.500
+It's found in two earlier projects, once again by Igor van der Hove and an earlier paper.
+
+195
+0:11:35.500 --> 0:11:37.020
+Ping she says virtue.
+
+196
+0:11:37.020 --> 0:11:42.620
+And the idea is that in a traditional merge, you copy out part of the data someplace else
+
+197
+0:11:42.620 --> 0:11:45.380
+and then merge back into the original array.
+
+198
+0:11:45.380 --> 0:11:48.380
+That's an extra memcap.
+
+199
+0:11:48.380 --> 0:11:55.420
+With a triple slash quad or a quad merge, you can merge both into your scratch base
+
+200
+0:11:55.420 --> 0:11:56.540
+and on the way back.
+
+201
+0:11:56.540 --> 0:12:00.020
+Because essentially when you do an out of place merge, you get a mem copy for free because
+
+202
+0:12:00.020 --> 0:12:02.220
+you're moving to some other place.
+
+203
+0:12:02.220 --> 0:12:03.700
+So I think that's best described visually.
+
+204
+0:12:03.700 --> 0:12:10.860
+If you have four, so in this case a quad merge, you have four sorted runs, you merge two
+
+205
+0:12:10.860 --> 0:12:15.780
+into your scratch base, you merge two more into your scratch base, and you merge two
+
+206
+0:12:15.780 --> 0:12:16.780
+back.
+
+207
+0:12:16.780 --> 0:12:19.300
+And now we eliminated three mem copies.
+
+208
+0:12:19.300 --> 0:12:21.740
+So don't have to do that.
+
+209
+0:12:21.740 --> 0:12:25.020
+That's one advantage of being lazy with merging.
+
+210
+0:12:25.020 --> 0:12:28.340
+We can also do bidirectional merging.
+
+211
+0:12:28.340 --> 0:12:35.580
+To my knowledge, it was first done again by Igor van der Hove in quadsward where he described
+
+212
+0:12:35.580 --> 0:12:41.980
+a parity merge where he showed a very clever technique to merge two equal length arrays
+
+213
+0:12:41.980 --> 0:12:43.660
+without any branch checks.
+
+214
+0:12:43.660 --> 0:12:47.180
+But then I thought by merging from both ends at the same time.
+
+215
+0:12:47.180 --> 0:12:55.580
+But then I thought looked really into why that was fast and how can we extend that and
+
+216
+0:12:55.580 --> 0:12:57.680
+use that further.
+
+217
+0:12:57.680 --> 0:13:02.340
+So the idea behind a bidirectional merge is that if your destination and your source arrays
+
+218
+0:13:02.340 --> 0:13:06.500
+are disjoint, you can merge from both ends at the same time.
+
+219
+0:13:06.500 --> 0:13:11.140
+And then the pointer that's going from right to left does not interfere with the pointer
+
+220
+0:13:11.140 --> 0:13:12.660
+going from left to right.
+
+221
+0:13:12.660 --> 0:13:15.740
+These two logics are independent, essentially.
+
+222
+0:13:15.740 --> 0:13:19.500
+And it essentially looks like that.
+
+223
+0:13:19.500 --> 0:13:20.940
+Why?
+
+224
+0:13:20.940 --> 0:13:22.780
+Why do we want to do that?
+
+225
+0:13:22.780 --> 0:13:30.860
+Modern processors are quite different than what maybe your traditional processor with
+
+226
+0:13:30.860 --> 0:13:31.860
+your mental image are.
+
+227
+0:13:31.860 --> 0:13:33.100
+They are superscalar.
+
+228
+0:13:33.100 --> 0:13:35.580
+That means they don't execute one instruction per cycle.
+
+229
+0:13:35.580 --> 0:13:38.860
+No, they can execute many instructions per cycle.
+
+230
+0:13:38.860 --> 0:13:40.140
+They are out of order.
+
+231
+0:13:40.140 --> 0:13:44.220
+The processor will internally reorder your instructions based on your assembly, based
+
+232
+0:13:44.220 --> 0:13:48.060
+on the data paths and when memory is available.
+
+233
+0:13:48.060 --> 0:13:49.500
+And they are deeply pipelined.
+
+234
+0:13:49.500 --> 0:13:53.860
+That means that they don't like it when the next instruction depends immediately on the
+
+235
+0:13:53.860 --> 0:13:57.100
+result of the previous instruction because it has to go through the entire pipeline of
+
+236
+0:13:57.100 --> 0:14:00.540
+the processor.
+
+237
+0:14:00.540 --> 0:14:05.620
+So to study that in a bit more detail, we look at a branchless merge, which was first
+
+238
+0:14:05.620 --> 0:14:09.600
+described in branch mispredictions don't affect merge sort.
+
+239
+0:14:09.600 --> 0:14:11.740
+This is not the code that they used in this paper.
+
+240
+0:14:11.740 --> 0:14:15.260
+This is from roughly translated from Glide Sort.
+
+241
+0:14:15.260 --> 0:14:18.860
+But you don't have to get into it how it works.
+
+242
+0:14:18.860 --> 0:14:26.680
+The main important part is that you analyze where is the result used in the next slide.
+
+243
+0:14:26.680 --> 0:14:31.300
+You find that generally all the data that's computed is needed immediately.
+
+244
+0:14:31.300 --> 0:14:35.900
+The worst part of it all is that the next iteration cannot start until the previous
+
+245
+0:14:35.900 --> 0:14:36.940
+iteration is finished.
+
+246
+0:14:36.940 --> 0:14:38.940
+You don't know if you're merging two arrays.
+
+247
+0:14:38.940 --> 0:14:42.860
+You need to know am I continuing with the left array or the right array.
+
+248
+0:14:42.860 --> 0:14:46.820
+There's a lot of data dependencies.
+
+249
+0:14:46.820 --> 0:14:52.380
+So that is my main takeaway from Glide Sort and my main low level design principle is
+
+250
+0:14:52.380 --> 0:14:55.440
+to interleave independent branchless loops.
+
+251
+0:14:55.440 --> 0:14:57.540
+So branch is important.
+
+252
+0:14:57.540 --> 0:15:03.180
+The processor isn't jumping around and canceling your pipeline.
+
+253
+0:15:03.180 --> 0:15:10.220
+And by interleaving, we can hide some of these data dependencies.
+
+254
+0:15:10.220 --> 0:15:13.980
+The processor can execute multiple instructions at once.
+
+255
+0:15:13.980 --> 0:15:24.260
+It can essentially reduce the impact of having to constantly wait for the previous result.
+
+256
+0:15:24.260 --> 0:15:25.860
+You can also consider parallel merging.
+
+257
+0:15:25.860 --> 0:15:30.740
+In this case, we had one merge where we did it in parallel from the left and parallel
+
+258
+0:15:30.740 --> 0:15:33.300
+from the right.
+
+259
+0:15:33.300 --> 0:15:39.260
+But we also noticed that the first step in our quad merge has two independent merges.
+
+260
+0:15:39.260 --> 0:15:40.860
+These are essentially parallel.
+
+261
+0:15:40.860 --> 0:15:42.820
+But we're not using threads.
+
+262
+0:15:42.820 --> 0:15:45.860
+But we can interleave their loops.
+
+263
+0:15:45.860 --> 0:15:51.220
+So once I discovered that, I thought let's create more parallelism.
+
+264
+0:15:51.220 --> 0:15:57.900
+By doing a binary search, you can identify a split point where you can turn one merge
+
+265
+0:15:57.900 --> 0:16:06.340
+into two smaller merges by swapping the right blocks in the middle.
+
+266
+0:16:06.340 --> 0:16:09.820
+I won't go into the exact logic of proof about that.
+
+267
+0:16:09.820 --> 0:16:12.060
+But you can.
+
+268
+0:16:12.060 --> 0:16:16.620
+And in fact, if you are doing an out of place merge, you can do this swap implicitly by
+
+269
+0:16:16.620 --> 0:16:19.060
+just reassigning pointers.
+
+270
+0:16:19.060 --> 0:16:21.500
+So there's no actual physical mem copy going on.
+
+271
+0:16:21.500 --> 0:16:27.820
+However, if you're doing an in place merge, you can actually do the physical swap.
+
+272
+0:16:27.820 --> 0:16:32.260
+And now you have for free a fallback for low memory merging.
+
+273
+0:16:32.260 --> 0:16:37.940
+So even if you don't have a large buffer available to merge with, you can use this algorithm
+
+274
+0:16:37.940 --> 0:16:42.700
+to do it in a low amount of memory.
+
+275
+0:16:42.700 --> 0:16:45.900
+Then I also optimized the quick sort portion of it with the same principle.
+
+276
+0:16:45.900 --> 0:16:48.980
+I came up with what I call bidirectional stable partitioning.
+
+277
+0:16:48.980 --> 0:16:51.580
+Again, I don't have time to get into it.
+
+278
+0:16:51.580 --> 0:16:55.660
+But the idea is that we do, again, partition like in quick sort.
+
+279
+0:16:55.660 --> 0:17:00.860
+So this one set of elements goes to that are less than the pivot, go somewhere else.
+
+280
+0:17:00.860 --> 0:17:01.860
+Go go here.
+
+281
+0:17:01.860 --> 0:17:04.260
+And some that are greater or equal, go somewhere else.
+
+282
+0:17:04.260 --> 0:17:08.380
+But we do it from both the left hand side to the right and from the right hand side
+
+283
+0:17:08.380 --> 0:17:09.380
+to the left.
+
+284
+0:17:09.380 --> 0:17:12.620
+And these two loops are independent from each other so we can interleave them.
+
+285
+0:17:12.620 --> 0:17:15.420
+Same principle.
+
+286
+0:17:15.420 --> 0:17:19.420
+When you recurse, it gets a bit more involved because now your data is in multiple different
+
+287
+0:17:19.420 --> 0:17:21.740
+locations.
+
+288
+0:17:21.740 --> 0:17:24.980
+I can tell you this is not fun to program.
+
+289
+0:17:24.980 --> 0:17:26.420
+But I did it.
+
+290
+0:17:26.420 --> 0:17:30.060
+And here it is.
+
+291
+0:17:30.060 --> 0:17:36.140
+So I do have some experiments to show you very briefly.
+
+292
+0:17:36.140 --> 0:17:37.140
+The next round is set up.
+
+293
+0:17:37.140 --> 0:17:46.380
+So this is a lot of text that basically says a 2021 Apple MacBook.
+
+294
+0:17:46.380 --> 0:17:50.660
+And these are the numbers you would get on an Apple 2021 MacBook.
+
+295
+0:17:50.660 --> 0:17:53.820
+So at the top I have two variants of Glide Sword.
+
+296
+0:17:53.820 --> 0:17:58.020
+One is the default variant that you would get if you were to download it.
+
+297
+0:17:58.020 --> 0:18:01.660
+Glide Sword 1024 is a variant that uses a fixed amount of memory.
+
+298
+0:18:01.660 --> 0:18:05.580
+So 1024 elements of memory.
+
+299
+0:18:05.580 --> 0:18:11.540
+Then we have the Rust Stable Sword, the C++ Stable Sword, an implementation of Tim Sword,
+
+300
+0:18:11.540 --> 0:18:18.740
+a PDQ Sword, an older algorithm of mine, which is also the stable Rust sorting algorithm
+
+301
+0:18:18.740 --> 0:18:24.940
+and the whatever shipped as the standard sort in C++.
+
+302
+0:18:24.940 --> 0:18:29.420
+And you can read the slides yourself.
+
+303
+0:18:29.420 --> 0:18:34.980
+Glide Sword is quite a bit faster than the Rust Stable Sword right now.
+
+304
+0:18:34.980 --> 0:18:41.340
+What isn't shown on this page are some more competitive algorithms like Flux Sword and
+
+305
+0:18:41.340 --> 0:18:43.580
+Quad Sword.
+
+306
+0:18:43.580 --> 0:18:48.220
+They trade blows for blows on different data sets.
+
+307
+0:18:48.220 --> 0:18:54.100
+But those are written in C. And they don't have to deal with some of the problems that
+
+308
+0:18:54.100 --> 0:19:00.940
+we deal with that I'll get to later in my talk on sorting in Rust.
+
+309
+0:19:00.940 --> 0:19:05.260
+If you actually change your comparison operator, so we're only sorting by the last byte of
+
+310
+0:19:05.260 --> 0:19:06.260
+the integer.
+
+311
+0:19:06.260 --> 0:19:12.540
+Fun fact, if you do this, stability becomes even observable for integers.
+
+312
+0:19:12.540 --> 0:19:18.140
+Glide Sword again speeds up even more compared to the Rust Stable sorting algorithm.
+
+313
+0:19:18.140 --> 0:19:26.220
+So now we're over an order of magnitude faster for these data sets.
+
+314
+0:19:26.220 --> 0:19:29.980
+If you want to use it, good news, it's released.
+
+315
+0:19:29.980 --> 0:19:32.020
+It took me a while.
+
+316
+0:19:32.020 --> 0:19:33.020
+But it's finally out.
+
+317
+0:19:33.020 --> 0:19:39.820
+You can just cargo add Glide Sword and you can replace your sort, call to Slide Sword.
+
+318
+0:19:39.820 --> 0:19:44.540
+With Glide Sword, if there are any standards library people in the audience, come talk
+
+319
+0:19:44.540 --> 0:19:46.460
+to me after the talk.
+
+320
+0:19:46.460 --> 0:19:50.700
+I would love to see it integrated so you don't have to call Glide Sword and it would just
+
+321
+0:19:50.700 --> 0:19:54.620
+be done by default.
+
+322
+0:19:54.620 --> 0:19:57.300
+But this is a Rust dev room.
+
+323
+0:19:57.300 --> 0:19:59.020
+Some of you at least probably are interested in Rust.
+
+324
+0:19:59.020 --> 0:20:01.540
+So I will also talk about some Rust specifics.
+
+325
+0:20:01.540 --> 0:20:05.780
+So what it takes to implement a sorting algorithm in Rust.
+
+326
+0:20:05.780 --> 0:20:09.860
+First I'm just going to rant.
+
+327
+0:20:09.860 --> 0:20:15.980
+Unwinding panics, I think a Rust billion dollar mistake.
+
+328
+0:20:15.980 --> 0:20:17.620
+They are a complete nightmare.
+
+329
+0:20:17.620 --> 0:20:21.540
+If you are writing unsafe code and you've ever had to deal with panics, some people
+
+330
+0:20:21.540 --> 0:20:25.020
+in the audience are laughing, they're horrible.
+
+331
+0:20:25.020 --> 0:20:30.420
+Because essentially since you can catch them and we have to be sound and safe during a
+
+332
+0:20:30.420 --> 0:20:36.700
+panic, they're essentially the same as C++ exceptions.
+
+333
+0:20:36.700 --> 0:20:41.060
+In C++ all these functions say if you throw an exception, tough shit.
+
+334
+0:20:41.060 --> 0:20:43.220
+Like your vector is invalid now.
+
+335
+0:20:43.220 --> 0:20:44.220
+Too bad.
+
+336
+0:20:44.220 --> 0:20:45.220
+Doesn't matter.
+
+337
+0:20:45.220 --> 0:20:48.220
+You don't have that choice in Rust.
+
+338
+0:20:48.220 --> 0:20:51.780
+You have to always be safe and sound in Rust.
+
+339
+0:20:51.780 --> 0:20:53.660
+Ensuring that is a nightmare.
+
+340
+0:20:53.660 --> 0:20:59.100
+Especially when you're dealing with generic code in unsafe code.
+
+341
+0:20:59.100 --> 0:21:06.380
+So if you're calling foreign code, anything you do, any call can panic which causes an
+
+342
+0:21:06.380 --> 0:21:07.380
+unwind.
+
+343
+0:21:07.380 --> 0:21:11.540
+So whenever you call a foreign function, you have to make sure that you are in a sound
+
+344
+0:21:11.540 --> 0:21:14.780
+and safe state.
+
+345
+0:21:14.780 --> 0:21:18.380
+The problem is every single trait is foreign code.
+
+346
+0:21:18.380 --> 0:21:20.580
+That clone call, that's foreign code.
+
+347
+0:21:20.580 --> 0:21:24.860
+This comparison operator, that's foreign code.
+
+348
+0:21:24.860 --> 0:21:27.180
+Implementing Glideswear was a complete nightmare.
+
+349
+0:21:27.180 --> 0:21:31.100
+Every time I compare two elements, that could cause a panic, that could cause an unwind,
+
+350
+0:21:31.100 --> 0:21:35.380
+and you saw all this stuff that I'm doing with arrays all over the place, all of that
+
+351
+0:21:35.380 --> 0:21:39.460
+has to be restored to the original location because it's a mud slice.
+
+352
+0:21:39.460 --> 0:21:43.840
+You cannot leave a mud slice in an unsound or you can't leave holes in it.
+
+353
+0:21:43.840 --> 0:21:47.700
+Everything has to be returned to the original.
+
+354
+0:21:47.700 --> 0:21:48.700
+It's a nightmare.
+
+355
+0:21:48.700 --> 0:21:53.780
+I really wish we would just instead of panicking, we would just write out a stack trace and
+
+356
+0:21:53.780 --> 0:21:56.940
+abort and be done with it.
+
+357
+0:21:56.940 --> 0:21:58.980
+I hate it.
+
+358
+0:21:58.980 --> 0:22:00.980
+That's my rant.
+
+359
+0:22:00.980 --> 0:22:03.020
+Oh, yeah.
+
+360
+0:22:03.020 --> 0:22:11.300
+And in fact, Glideswear has an actual real performance penalty because panics are a thing.
+
+361
+0:22:11.300 --> 0:22:18.460
+I can't just write a, like if you're writing an insertion sort, for example, in C++ or
+
+362
+0:22:18.460 --> 0:22:24.380
+in Python, you would just have a loop with a loop variable and you would put the items
+
+363
+0:22:24.380 --> 0:22:26.160
+in the correct place.
+
+364
+0:22:26.160 --> 0:22:30.420
+If you're implementing a thing like this in Rust and you're leaving gaps, so you're moving
+
+365
+0:22:30.420 --> 0:22:35.400
+the element out during the insertion sort, you have to have a drop handler that puts
+
+366
+0:22:35.400 --> 0:22:40.700
+this element back during a panic because this ORD implementation, this foreign code, can
+
+367
+0:22:40.700 --> 0:22:44.780
+cause a panic and can cause an unwind.
+
+368
+0:22:44.780 --> 0:22:48.740
+Even when I'm sorting something like integers which cannot panic, if I don't want to duplicate
+
+369
+0:22:48.740 --> 0:22:54.300
+my entire code base, I still have to pay this penalty for dealing with the potential for
+
+370
+0:22:54.300 --> 0:22:58.860
+panics by storing all my data in structs and all this algorithm state.
+
+371
+0:22:58.860 --> 0:23:02.660
+So yeah, that's a problem.
+
+372
+0:23:02.660 --> 0:23:06.780
+But I also want to praise Rust where it is pleasurable.
+
+373
+0:23:06.780 --> 0:23:08.820
+I love that moves are mem copies.
+
+374
+0:23:08.820 --> 0:23:09.900
+There's no move constructor.
+
+375
+0:23:09.900 --> 0:23:15.900
+If you want to move a type somewhere else, you essentially just copy it and you ignore
+
+376
+0:23:15.900 --> 0:23:17.460
+wherever it came from.
+
+377
+0:23:17.460 --> 0:23:23.140
+This also makes optimizations possible that aren't possible in C++ because of move constructor.
+
+378
+0:23:23.140 --> 0:23:28.500
+At least not if you don't want to use templates, metaprogramming.
+
+379
+0:23:28.500 --> 0:23:34.660
+For example, instead of copying an element, this is an example actually from Glide Sort,
+
+380
+0:23:34.660 --> 0:23:40.460
+not written like this, but where you place an element in one of two places and if it's
+
+381
+0:23:40.460 --> 0:23:44.420
+going to the wrong place, it doesn't matter because it will just be ignored or overwritten
+
+382
+0:23:44.420 --> 0:23:46.720
+in the next iteration.
+
+383
+0:23:46.720 --> 0:23:48.500
+If it's a small type, just place it in both.
+
+384
+0:23:48.500 --> 0:23:51.140
+Don't do a branch.
+
+385
+0:23:51.140 --> 0:23:54.460
+So essentially, this is the opposite of unwinding panics.
+
+386
+0:23:54.460 --> 0:23:55.460
+There are no surprises.
+
+387
+0:23:55.460 --> 0:24:01.100
+A mem copy is always what you get.
+
+388
+0:24:01.100 --> 0:24:02.500
+This is not necessarily.
+
+389
+0:24:02.500 --> 0:24:08.020
+This part, brace, part, complaining, split at mutt.
+
+390
+0:24:08.020 --> 0:24:11.020
+Splitting a slice in two or more.
+
+391
+0:24:11.020 --> 0:24:12.020
+It's a one-way street.
+
+392
+0:24:12.020 --> 0:24:13.020
+You cannot go back.
+
+393
+0:24:13.020 --> 0:24:16.780
+Once you split, it's split unless you go back to the original object, but that's not always
+
+394
+0:24:16.780 --> 0:24:18.060
+an option.
+
+395
+0:24:18.060 --> 0:24:25.420
+In Glide Sort, when I concatenate these arrays, I need actual concatenation.
+
+396
+0:24:25.420 --> 0:24:28.180
+My options were raw pointers.
+
+397
+0:24:28.180 --> 0:24:29.940
+That was the option.
+
+398
+0:24:29.940 --> 0:24:34.820
+More store an array with indices, but now you're storing an extra pointer everywhere
+
+399
+0:24:34.820 --> 0:24:39.440
+and passing an extra pointer everywhere and that's overhead that I didn't want to pay.
+
+400
+0:24:39.440 --> 0:24:41.980
+So I came up with a thing I call branded slices.
+
+401
+0:24:41.980 --> 0:24:47.380
+You could hold an entire talk on this, but it's essentially applying the idea of Go-Sell,
+
+402
+0:24:47.380 --> 0:24:52.900
+some of you might have heard from this, where you essentially brand a type with a unique
+
+403
+0:24:52.900 --> 0:24:54.820
+lifetime that you cannot create.
+
+404
+0:24:54.820 --> 0:24:59.540
+You can only create this lifetime once and it's not interchangeable with any other lifetime.
+
+405
+0:24:59.540 --> 0:25:04.660
+With that, you can make safe concatenation.
+
+406
+0:25:04.660 --> 0:25:08.340
+You could just check is the end pointer equal to the begin pointer of the other array?
+
+407
+0:25:08.340 --> 0:25:09.900
+If yes, we can concatenate.
+
+408
+0:25:09.900 --> 0:25:14.400
+That would work, except that could also just be happening by chance because of the local
+
+409
+0:25:14.400 --> 0:25:18.140
+array layout on the stack and you could create unsound behavior.
+
+410
+0:25:18.140 --> 0:25:25.980
+If you know that they came from the same allocation, then it's safe to concatenate them after checking
+
+411
+0:25:25.980 --> 0:25:28.460
+end equals begin.
+
+412
+0:25:28.460 --> 0:25:29.280
+That's what I did with what I call mod slice, which in Glice
+
+413
+0:25:29.280 --> 0:25:41.500
+is a mod slice type, which has a brand, so you can do the safe concatenation.
+
+414
+0:25:41.500 --> 0:25:44.580
+And it has a state, which is one of five things.
+
+415
+0:25:44.580 --> 0:25:51.860
+It's weak on init, maybe init, always init, always init, essentially immutable slice.
+
+416
+0:25:51.860 --> 0:25:55.180
+So you always have to return it to initialization state.
+
+417
+0:25:55.180 --> 0:26:01.100
+The maybe init init are a bit more specialized than just maybe on init where the type doesn't
+
+418
+0:26:01.100 --> 0:26:03.540
+really encode what it actually contains.
+
+419
+0:26:03.540 --> 0:26:06.140
+And weak is essentially a pair of pointers.
+
+420
+0:26:06.140 --> 0:26:12.860
+And the code becomes a lot more readable and a lot more verifiable by explicitly encoding
+
+421
+0:26:12.860 --> 0:26:18.860
+your assumptions about your slice type using the type and then calling functions like upgrades
+
+422
+0:26:18.860 --> 0:26:22.060
+to say, hey, this now becomes an exclusive mutably slice.
+
+423
+0:26:22.060 --> 0:26:24.220
+I'm only going to access this here.
+
+424
+0:26:24.220 --> 0:26:33.820
+Or hey, I'm now going to temporarily invalidate this initialization state of this slice.
+
+425
+0:26:33.820 --> 0:26:35.460
+That was essentially my talk.
+
+426
+0:26:35.460 --> 0:26:37.340
+I'm leaving academia.
+
+427
+0:26:37.340 --> 0:26:43.940
+So if you have an interesting potentially rough job, my contact details are on the slides
+
+428
+0:26:43.940 --> 0:26:48.140
+or come talk to me after the talk.
+
+429
+0:26:48.140 --> 0:27:02.740
+I'm not interested in cryptocurrency web 3 or similar endeavors.
+
+430
+0:27:02.740 --> 0:27:07.140
+I love cryptography, but I don't know.
+
+431
+0:27:07.140 --> 0:27:09.220
+Some of this stuff gets rather sketchy.
+
+432
+0:27:09.220 --> 0:27:10.860
+No offense.
+
+433
+0:27:10.860 --> 0:27:12.020
+That was essentially my talk.
+
+434
+0:27:12.020 --> 0:27:13.940
+I'm going to leave this on this slide.
+
+435
+0:27:13.940 --> 0:27:14.940
+Are there any questions?
+
+436
+0:27:14.940 --> 0:27:31.180
+I have a question.
+
+437
+0:27:31.180 --> 0:27:38.060
+Did you test GlideSort on, let's say, less modern CPUs like embedded CPUs that don't
+
+438
+0:27:38.060 --> 0:27:40.860
+have autofodder execution, et cetera?
+
+439
+0:27:40.860 --> 0:27:41.860
+Yes.
+
+440
+0:27:41.860 --> 0:27:44.220
+Can you repeat the question, please?
+
+441
+0:27:44.220 --> 0:27:45.220
+Oh.
+
+442
+0:27:45.220 --> 0:27:57.100
+So the question was, did you test the algorithm on any older CPUs that might not have as much
+
+443
+0:27:57.100 --> 0:27:59.220
+instruction level parallelism and that kind of stuff?
+
+444
+0:27:59.220 --> 0:28:00.220
+The answer is yes.
+
+445
+0:28:00.220 --> 0:28:06.240
+And yes, it is slower than other state of the art that don't do these tricks.
+
+446
+0:28:06.240 --> 0:28:10.380
+This is really aimed towards essentially the future of modern processors.
+
+447
+0:28:10.380 --> 0:28:16.060
+From older CPUs, it is slower than, for example, FluxSort, which doesn't do this aggressive
+
+448
+0:28:16.060 --> 0:28:19.060
+interleaving.
+
+449
+0:28:19.060 --> 0:28:22.340
+But if you compare it to the current Rust stable sort that's currently in the standard
+
+450
+0:28:22.340 --> 0:28:27.340
+library, it still completely dumps us all over that.
+
+451
+0:28:27.340 --> 0:28:28.340
+Okay.
+
+452
+0:28:28.340 --> 0:28:29.340
+So sorry.
+
+453
+0:28:29.340 --> 0:28:30.340
+Can you hear me?
+
+454
+0:28:30.340 --> 0:28:31.340
+Barely.
+
+455
+0:28:31.340 --> 0:28:33.180
+Can you speak loudly?
+
+456
+0:28:33.180 --> 0:28:34.180
+Okay.
+
+457
+0:28:34.180 --> 0:28:39.020
+When you take two sorted sequences and you take the bottom half of one and the top half
+
+458
+0:28:39.020 --> 0:28:45.420
+of another and create a third sorted sequence out of that, I thought that was an interesting
+
+459
+0:28:45.420 --> 0:28:46.420
+observation.
+
+460
+0:28:46.420 --> 0:28:50.120
+But what do you use it for?
+
+461
+0:28:50.120 --> 0:28:52.140
+So it's not the top half and the bottom half.
+
+462
+0:28:52.140 --> 0:28:53.140
+That's just a simplification.
+
+463
+0:28:53.140 --> 0:28:57.820
+You're talking about the splitting of merges into smaller merges, right?
+
+464
+0:28:57.820 --> 0:28:58.820
+Yes.
+
+465
+0:28:58.820 --> 0:28:59.820
+Yeah.
+
+466
+0:28:59.820 --> 0:29:00.820
+So it is not the top half and the bottom half.
+
+467
+0:29:00.820 --> 0:29:07.260
+It involves a binary search to find the unique split point that allows you to do this swap.
+
+468
+0:29:07.260 --> 0:29:10.860
+It could be bottom half, top half, but it's not necessarily the case.
+
+469
+0:29:10.860 --> 0:29:11.980
+What do I use this for?
+
+470
+0:29:11.980 --> 0:29:16.020
+It creates two independent merges.
+
+471
+0:29:16.020 --> 0:29:19.380
+After doing the swap, this merge no longer depends on this merge at all.
+
+472
+0:29:19.380 --> 0:29:25.020
+And by doing that, I can have two independent loops that merge these and then interleave
+
+473
+0:29:25.020 --> 0:29:26.020
+the bodies of these loops.
+
+474
+0:29:26.020 --> 0:29:29.780
+So it executes one instruction from this merge, one instruction from this merge, one instruction
+
+475
+0:29:29.780 --> 0:29:32.940
+from this merge, one instruction from this merge, et cetera.
+
+476
+0:29:32.940 --> 0:29:37.100
+And that way these instructions don't depend on each other and you can hide these data
+
+477
+0:29:37.100 --> 0:29:38.500
+dependencies and such.
+
+478
+0:29:38.500 --> 0:29:44.460
+On top of that, I use it as a fallback for the low memory case where you don't need
+
+479
+0:29:44.460 --> 0:29:49.180
+– so Glideword can use less auxiliary memory.
+
+480
+0:29:49.180 --> 0:29:53.180
+We have a last question.
+
+481
+0:29:53.180 --> 0:29:55.580
+Thanks for the talk.
+
+482
+0:29:55.580 --> 0:29:59.420
+I would like to know if you have a bench.
+
+483
+0:29:59.420 --> 0:30:00.420
+I'm sorry, I cannot hear.
+
+484
+0:30:00.420 --> 0:30:03.860
+Can you speak a bit louder, please?
+
+485
+0:30:03.860 --> 0:30:09.780
+Did you bench when the array is already sorted?
+
+486
+0:30:09.780 --> 0:30:12.380
+Did I bench when the array is already sorted?
+
+487
+0:30:12.380 --> 0:30:13.380
+Yes.
+
+488
+0:30:13.380 --> 0:30:17.100
+Yes, it's on the slides.
+
+489
+0:30:17.100 --> 0:30:18.100
+Is it on the slides?
+
+490
+0:30:18.100 --> 0:30:22.700
+Yes, it's the ascending column on the slides and on this slide as well.
+
+491
+0:30:22.700 --> 0:30:24.780
+It's the one percent.
+
+492
+0:30:24.780 --> 0:30:25.780
+Sorry?
+
+493
+0:30:25.780 --> 0:30:28.740
+It's the one percent column.
+
+494
+0:30:28.740 --> 0:30:30.340
+No, ascending.
+
+495
+0:30:30.340 --> 0:30:32.340
+Ascent, okay.
+
+496
+0:30:32.340 --> 0:30:35.540
+That means sorted in this case and descending means reverse of sorted.
+
+497
+0:30:35.540 --> 0:30:36.540
+Okay, thank you.
+
+498
+0:30:36.540 --> 0:30:37.540
+All right.
+
+499
+0:30:37.540 --> 0:30:38.540
+Thank you very much.
+
+500
+0:30:38.540 --> 0:30:39.540
+Thank you.
+
+501
+0:30:39.540 --> 0:31:04.400
+The next question is for Fluzo Spas.
+

@@ -1,0 +1,988 @@
+1
+0:00:00.000 --> 0:00:26.400
+I'm here to talk to you about graphics programming in Python on an embedded microcontroller,
+
+2
+0:00:26.400 --> 0:00:31.200
+which is hilarious because I'm none of these things, I'm not a Python programmer, I'm
+
+3
+0:00:31.200 --> 0:00:36.840
+not an embedded programmer, so we'll see how this goes.
+
+4
+0:00:36.840 --> 0:00:41.800
+It's for that reason I just, you know, I can't emphasise enough this part of the talk description,
+
+5
+0:00:41.800 --> 0:00:48.760
+this is not an instructional talk, this is just what I did.
+
+6
+0:00:48.760 --> 0:00:59.760
+So there's some background, EMF camp is this weekend camping festival for hackers and makers,
+
+7
+0:00:59.760 --> 0:01:07.320
+and it's in a similar vein to the Chaos Communication camp and the Dutch Hacker Festival, you know,
+
+8
+0:01:07.320 --> 0:01:11.040
+there's robots and lasers and geodesic domes and things, it's great fun if you get the
+
+9
+0:01:11.040 --> 0:01:14.560
+opportunity to go, I highly recommend it.
+
+10
+0:01:14.560 --> 0:01:23.200
+And it's a bit of a tradition of these style of events to give the attendees electronic
+
+11
+0:01:23.200 --> 0:01:38.600
+event badges, and the aim of these is to give attendees opportunity to play with some hardware
+
+12
+0:01:38.600 --> 0:01:42.480
+that they might not have come across before.
+
+13
+0:01:42.480 --> 0:01:50.200
+These are the two most recent badges from EMF camp, the one on the left here.
+
+14
+0:01:50.200 --> 0:01:57.600
+If I told you they had, they put a SIM card on it and a GSM modem and then they set up
+
+15
+0:01:57.600 --> 0:02:03.280
+an on-site cell phone network, you'll understand why it's made to look like a Nokia N-Gage,
+
+16
+0:02:03.280 --> 0:02:10.680
+but it's got all of the usual peripherals and sensors and things on there as well like
+
+17
+0:02:10.680 --> 0:02:16.360
+accelerometers and humidity and temperature and things, and because it runs micro Python
+
+18
+0:02:16.360 --> 0:02:23.040
+it allows people to easily get started with experimenting with that kind of hardware.
+
+19
+0:02:23.040 --> 0:02:28.240
+The one on the right there is the newest one, these photographs aren't to scale by the way,
+
+20
+0:02:28.240 --> 0:02:34.040
+let me just hold them up for comparison, the newest one is much smaller.
+
+21
+0:02:34.040 --> 0:02:40.960
+The reasons for that, you might guess, is because of the silicon shortage that's been
+
+22
+0:02:40.960 --> 0:02:49.120
+caused by fire, flood and plague, as you might expect, but it's still a lovely device.
+
+23
+0:02:49.120 --> 0:02:53.080
+The one on the left here you can see, you might recognise this as a version of the settlers
+
+24
+0:02:53.080 --> 0:03:02.160
+of Kirtan, I spent a lot of time trying to isolate small parts of the screen to redraw
+
+25
+0:03:02.160 --> 0:03:08.760
+because the update speed on that screen was so slow, it was almost unusable for anything
+
+26
+0:03:08.760 --> 0:03:14.040
+in real time, so when I got my hands on the new one this year I obviously wanted to see
+
+27
+0:03:14.040 --> 0:03:18.960
+what this one could do.
+
+28
+0:03:18.960 --> 0:03:24.360
+And so the first thing I wanted to do was to just try and blitter full screen pixels
+
+29
+0:03:24.360 --> 0:03:31.040
+to the device using the display driver directly, in this talk about 70 milliseconds, which
+
+30
+0:03:31.040 --> 0:03:35.960
+is already orders of magnitude faster than the old badge.
+
+31
+0:03:35.960 --> 0:03:44.800
+If I draw to an off screen buffer instead, that's way faster, but if you're doing that
+
+32
+0:03:44.800 --> 0:03:49.760
+then you have to get into the business of implementing your own drawing functions for
+
+33
+0:03:49.760 --> 0:03:54.640
+primitives and I didn't really want to do that.
+
+34
+0:03:54.640 --> 0:04:00.080
+That is ominous foreshadowing by the way.
+
+35
+0:04:00.080 --> 0:04:05.280
+But I did discover that micro Python has this frame buffer module which provides you with
+
+36
+0:04:05.280 --> 0:04:10.600
+an off screen frame buffer and also some drawing functions, which is great.
+
+37
+0:04:10.600 --> 0:04:15.800
+So 41 milliseconds, that was a fair compromise, that's a good start.
+
+38
+0:04:15.800 --> 0:04:21.160
+Now I've got a baseline for how fast I can draw to the screen.
+
+39
+0:04:21.160 --> 0:04:28.400
+So obviously what this is about is drawing 3D things to the screen of this device, and
+
+40
+0:04:28.400 --> 0:04:37.440
+so this is just here to, in case you don't know, this is basically, I guess this is 3D
+
+41
+0:04:37.440 --> 0:04:42.880
+rasterisation 101, this is like the minimum we have to do in order to get 3D points onto
+
+42
+0:04:42.880 --> 0:04:43.880
+the screen.
+
+43
+0:04:43.880 --> 0:04:48.360
+We start with our vertex coordinates and then that's multiplied by the model matrix to get
+
+44
+0:04:48.360 --> 0:04:53.520
+into world space and then you multiply that by the view matrix to get the view space and
+
+45
+0:04:53.520 --> 0:05:00.120
+then by the projection matrix to get the clip space and then the clip space allows you to
+
+46
+0:05:00.120 --> 0:05:04.440
+see which vertices will be clipped by the edges of the screen or not.
+
+47
+0:05:04.440 --> 0:05:10.520
+So then once we know we've got the list of vertices we want to render, then we can do
+
+48
+0:05:10.520 --> 0:05:16.640
+the perspective division to bring that into normalised device coordinate space or NDC space.
+
+49
+0:05:16.640 --> 0:05:20.640
+The perspective division is just the part that makes the further away points closer
+
+50
+0:05:20.640 --> 0:05:24.600
+together, so it gives you that illusion of 3D.
+
+51
+0:05:24.600 --> 0:05:29.720
+And then we've got to convert the normalised device coordinates which are between minus
+
+52
+0:05:29.720 --> 0:05:36.400
+one and one to screen space which is like our pixel coordinates.
+
+53
+0:05:36.400 --> 0:05:48.360
+And so when I was doing this, to render these eight points on the screen from a cube, it
+
+54
+0:05:48.360 --> 0:05:54.480
+wasn't too bad, 53 seconds and then if you join those up to create your cube wireframe
+
+55
+0:05:54.480 --> 0:06:02.200
+it's not that much slower, there's 12 triangles there obviously.
+
+56
+0:06:02.200 --> 0:06:07.880
+The next step is to then start filling in these triangles, you want to draw solid shapes
+
+57
+0:06:07.880 --> 0:06:09.880
+after all.
+
+58
+0:06:09.880 --> 0:06:18.960
+Annoyingly there's no method or no function for doing that in the frame buff module for
+
+59
+0:06:18.960 --> 0:06:20.440
+micro Python.
+
+60
+0:06:20.440 --> 0:06:29.520
+There is in the display driver but as I mentioned, using the display driver directly is much
+
+61
+0:06:29.520 --> 0:06:34.080
+slower because we're making many more calls to the hardware and we're setting pins high
+
+62
+0:06:34.080 --> 0:06:36.640
+and low and stuff for every time we want to draw something.
+
+63
+0:06:36.640 --> 0:06:41.920
+We just want to do that once when we blip the whole thing to the screen.
+
+64
+0:06:41.920 --> 0:06:51.560
+And yeah, so frame buff doesn't provide a polygon or polygon fill method and so I do
+
+65
+0:06:51.560 --> 0:06:57.200
+have to get into the business of writing these sort of functions myself after all.
+
+66
+0:06:57.200 --> 0:07:02.600
+So yeah, the display driver itself does have these methods, so obviously that's the first
+
+67
+0:07:02.600 --> 0:07:09.680
+place I looked for implementation clues, they have a polygon and a fill polygon method.
+
+68
+0:07:09.680 --> 0:07:18.000
+Only obviously there are problems with it and it's a little bit rubbish.
+
+69
+0:07:18.000 --> 0:07:27.600
+Here's the figure on the left there is just using the outline polygon method and then
+
+70
+0:07:27.600 --> 0:07:34.720
+the second one here is where I've tried to draw a filled polygon over the top of the
+
+71
+0:07:34.720 --> 0:07:39.960
+wire frame polygon and you can see it just doesn't quite match up.
+
+72
+0:07:39.960 --> 0:07:45.960
+And so reading the code, there is, it seems to be implementing quite a well known or well
+
+73
+0:07:45.960 --> 0:07:52.480
+documented fill polygon method and there's a link to the website where this algorithm
+
+74
+0:07:52.480 --> 0:07:54.480
+is described.
+
+75
+0:07:54.480 --> 0:07:58.760
+And that also supplies a reference implementation so I was able to copy the reference implementation
+
+76
+0:07:58.760 --> 0:08:04.600
+to see if the display driver's implementation was different.
+
+77
+0:08:04.600 --> 0:08:08.280
+And it isn't, it's exactly the same, it looks like the display driver has inherited the
+
+78
+0:08:08.280 --> 0:08:11.800
+same problems that were in the reference implementation.
+
+79
+0:08:11.800 --> 0:08:17.240
+You'll notice that it's not only incorrect on this side but the left edge here is completely
+
+80
+0:08:17.240 --> 0:08:21.280
+different to this edge here, so it's over drawing on this side and not drawing enough
+
+81
+0:08:21.280 --> 0:08:23.800
+on that side.
+
+82
+0:08:23.800 --> 0:08:31.200
+A lot of the problems with it were sort of like rounding errors and like floating point
+
+83
+0:08:31.200 --> 0:08:38.120
+to integer truncation and that sort of thing which I managed to mostly fix except for this
+
+84
+0:08:38.120 --> 0:08:42.840
+really annoying pixel down here that I just couldn't get.
+
+85
+0:08:42.840 --> 0:08:48.880
+And when I submitted, because I wanted to submit like this enhancement to the frame
+
+86
+0:08:48.880 --> 0:08:54.960
+with module upstream to the project and so we spent a few days scratching our heads over
+
+87
+0:08:54.960 --> 0:08:58.840
+this to try and figure out what we could do.
+
+88
+0:08:58.840 --> 0:09:05.160
+Initially we proposed just drawing the outline again on top of the fill polygon just to sweep
+
+89
+0:09:05.160 --> 0:09:10.080
+it under the rug but eventually we managed to figure out a much better way of doing it.
+
+90
+0:09:10.080 --> 0:09:18.460
+We just tried to detect when these stray pixels were going to happen and then fill them in
+
+91
+0:09:18.460 --> 0:09:28.360
+explicitly instead of letting the algorithm do it.
+
+92
+0:09:28.360 --> 0:09:42.120
+Oh yeah, it's pretty obvious that the algorithm I think was developed by a physicist or a
+
+93
+0:09:42.120 --> 0:09:50.440
+mathematician because in the article that describes the algorithm it says, and I'm quoting
+
+94
+0:09:50.440 --> 0:09:59.320
+here, the detecting points on the polygon edge will deliver unpredictable results but
+
+95
+0:09:59.320 --> 0:10:06.960
+that is quote, not generally a problem because quote, the edge of the polygon is infinitely
+
+96
+0:10:06.960 --> 0:10:11.400
+thin.
+
+97
+0:10:11.400 --> 0:10:17.320
+My polygons have an edge of one pixel so this is obviously why we had to fix the problems
+
+98
+0:10:17.320 --> 0:10:19.320
+with it.
+
+99
+0:10:19.320 --> 0:10:23.760
+Anyway, now we can draw arbitrary polygons to the screen.
+
+100
+0:10:23.760 --> 0:10:26.880
+Let's see what that looks like.
+
+101
+0:10:26.880 --> 0:10:35.640
+This is the cube here again which is basically the hello world of 3D graphics programming.
+
+102
+0:10:35.640 --> 0:10:45.040
+And it seemed to work pretty well, 66 milliseconds there but you can see on the left hand screen
+
+103
+0:10:45.040 --> 0:10:49.400
+shot there, that's not the inside, it looks like you're looking at the inside of the cube
+
+104
+0:10:49.400 --> 0:10:54.520
+but it's just because we are drawing the back face of the back of the cube on top of the
+
+105
+0:10:54.520 --> 0:10:58.960
+front face of the front of the cube.
+
+106
+0:10:58.960 --> 0:11:05.600
+As part of this 3D rasterization process you've now got to do back face culling which is more
+
+107
+0:11:05.600 --> 0:11:12.760
+maths added on to that pipeline.
+
+108
+0:11:12.760 --> 0:11:17.320
+You've got to calculate the normal vector of the face which is the direction the face
+
+109
+0:11:17.320 --> 0:11:22.600
+is facing and then compute the dot product of that with the direction you're looking
+
+110
+0:11:22.600 --> 0:11:27.880
+so that you can know if the triangle is facing you or not and then just don't bother drawing
+
+111
+0:11:27.880 --> 0:11:30.200
+the ones that aren't facing you.
+
+112
+0:11:30.200 --> 0:11:34.240
+But yeah, it's just more maths so it adds more time.
+
+113
+0:11:34.240 --> 0:11:43.120
+And yeah, I get the occasional really long frame and that coincides with a garbage collection.
+
+114
+0:11:43.120 --> 0:11:49.720
+I guess we'll talk a bit more about that in a bit.
+
+115
+0:11:49.720 --> 0:11:54.040
+So there's some really low hanging fruit things we can do to improve the performance initially
+
+116
+0:11:54.040 --> 0:11:59.520
+which basically amounts to being smarter about the algorithms we use.
+
+117
+0:11:59.520 --> 0:12:05.000
+We pre-calculate the normals instead of calculating them every frame which for a static model
+
+118
+0:12:05.000 --> 0:12:10.120
+like this makes total sense.
+
+119
+0:12:10.120 --> 0:12:16.240
+And yeah, avoid doing the perspective division if we can help it because it's like part of
+
+120
+0:12:16.240 --> 0:12:26.320
+the matrix multiplication process and usually it's a no-op unless you're multiplying it
+
+121
+0:12:26.320 --> 0:12:32.280
+by the perspective matrix and only then is it doing something.
+
+122
+0:12:32.280 --> 0:12:40.440
+So we can just avoid doing those divisions at all on every vertex, in every face, in
+
+123
+0:12:40.440 --> 0:12:41.440
+every frame.
+
+124
+0:12:41.440 --> 0:12:44.560
+That's quite a lot of time saved.
+
+125
+0:12:44.560 --> 0:12:48.840
+But it does mean I can add more things to it and make it do extra work like you add
+
+126
+0:12:48.840 --> 0:13:03.200
+a rudimentary lighting model and make the cube nice looking by adding shading and whatnot.
+
+127
+0:13:03.200 --> 0:13:07.840
+What I'm trying to do basically is to keep the rendering time below 100 milliseconds
+
+128
+0:13:07.840 --> 0:13:13.080
+as well because that seems like a good target to have.
+
+129
+0:13:13.080 --> 0:13:19.000
+If I can do that, then I get a reasonable performance of 10 frames per second.
+
+130
+0:13:19.000 --> 0:13:28.140
+So this is, although this works well, that's within that target, it's close to that target.
+
+131
+0:13:28.140 --> 0:13:31.420
+So I want to try something a bit more complex.
+
+132
+0:13:31.420 --> 0:13:38.800
+So I download a model of the industry standard T-pop and try and render that.
+
+133
+0:13:38.800 --> 0:13:48.240
+This is about 240 faces, 240 triangles, and this obviously completely destroyed my 100
+
+134
+0:13:48.240 --> 0:13:50.660
+millisecond time limit.
+
+135
+0:13:50.660 --> 0:13:55.080
+So I've got to think of more ways to make this faster.
+
+136
+0:13:55.080 --> 0:14:02.520
+And the obvious way is to rewrite all of the hottest math functions in C as a micro Python
+
+137
+0:14:02.520 --> 0:14:05.080
+native module.
+
+138
+0:14:05.080 --> 0:14:10.840
+The two ones that are called the most often are the vector matrix multiplying method and
+
+139
+0:14:10.840 --> 0:14:14.200
+the dot product method.
+
+140
+0:14:14.200 --> 0:14:20.400
+And you can see that more than cuts the time in half.
+
+141
+0:14:20.400 --> 0:14:26.720
+And with the success of that, it's pretty clear I should rewrite all of the maths in
+
+142
+0:14:26.720 --> 0:14:33.280
+C. Because if I've got the bonnet up, I might as well.
+
+143
+0:14:33.280 --> 0:14:41.360
+But that brings the time right down to a glorious, glorious, glorious six frames per second.
+
+144
+0:14:41.360 --> 0:14:48.840
+But yeah, as a general strategy, if you find yourself calling a method, you know, 1200
+
+145
+0:14:48.840 --> 0:14:56.600
+times a frame, it's probably a good target to be pushed down into the native layer.
+
+146
+0:14:56.600 --> 0:15:04.920
+So yeah, a note on writing native code for micro Python.
+
+147
+0:15:04.920 --> 0:15:06.480
+There's really two ways of doing it.
+
+148
+0:15:06.480 --> 0:15:15.200
+There's the what is called the external C modules, which is basically C code that you
+
+149
+0:15:15.200 --> 0:15:21.600
+write that is a module exposed to the Python runtime.
+
+150
+0:15:21.600 --> 0:15:31.520
+Those are compiled directly into the firmware, which is a bit suboptimal because it would
+
+151
+0:15:31.520 --> 0:15:36.800
+be nice if I didn't require other people who have these devices to reflash the firmware
+
+152
+0:15:36.800 --> 0:15:40.040
+every time I change this program.
+
+153
+0:15:40.040 --> 0:15:45.640
+So the other way of doing it is to write what they call a native module, which allows your
+
+154
+0:15:45.640 --> 0:15:53.840
+application to supply native code as an MPY file, and then that can be dynamically loaded
+
+155
+0:15:53.840 --> 0:15:57.080
+by your application at runtime, which is a much nicer way of doing it.
+
+156
+0:15:57.080 --> 0:15:58.880
+Obviously that's what I wanted to do.
+
+157
+0:15:58.880 --> 0:16:02.600
+But I did come across problems.
+
+158
+0:16:02.600 --> 0:16:07.560
+When I tried to build the native code, because I used a floating point division in there
+
+159
+0:16:07.560 --> 0:16:14.720
+for the perspective division step of the pipeline, I got this problem, which is a linker error
+
+160
+0:16:14.720 --> 0:16:21.880
+from the Espressiv's tool chain for the ESP32.
+
+161
+0:16:21.880 --> 0:16:24.680
+I'd love to know why this happens.
+
+162
+0:16:24.680 --> 0:16:28.280
+And if anyone from Espressiv is here, I'd love to know if it's fixed in the newer version
+
+163
+0:16:28.280 --> 0:16:29.280
+as well.
+
+164
+0:16:29.280 --> 0:16:33.880
+But it seems like it can't link this software implementation of floating point division.
+
+165
+0:16:33.880 --> 0:16:41.600
+So obviously what I did was I downloaded the source for the tool chain and found the assembly
+
+166
+0:16:41.600 --> 0:16:47.520
+implementation of this method to add into my project, which also didn't work.
+
+167
+0:16:47.520 --> 0:16:52.440
+The micro Python build system wasn't prepared to accept that, but that was an easy fix.
+
+168
+0:16:52.440 --> 0:16:55.400
+And that was actually the first change I got accepted into micro Python.
+
+169
+0:16:55.400 --> 0:16:56.400
+They were very good.
+
+170
+0:16:56.400 --> 0:17:01.120
+They're very good at, in my experience, they're very good at accepting patches.
+
+171
+0:17:01.120 --> 0:17:07.920
+And then once I got that building, it just caused my application to crash.
+
+172
+0:17:07.920 --> 0:17:15.720
+I'm not sure why this happens, but there seems to be like a reference to the native stuff
+
+173
+0:17:15.720 --> 0:17:22.400
+that gets collected erroneously by the garbage collection.
+
+174
+0:17:22.400 --> 0:17:28.360
+And I spent a lot of time trying to reduce my object allocations in the frames, but all
+
+175
+0:17:28.360 --> 0:17:35.240
+that did was just push out the crash to further in the future.
+
+176
+0:17:35.240 --> 0:17:43.600
+So I had to settle for compiling my maths functions directly into the firmware.
+
+177
+0:17:43.600 --> 0:17:46.160
+There are some other things I did to try and make it faster.
+
+178
+0:17:46.160 --> 0:17:49.400
+The big one is trying to reduce object associations.
+
+179
+0:17:49.400 --> 0:17:54.800
+This is super costly in Python.
+
+180
+0:17:54.800 --> 0:18:02.360
+And wherever you can, preallocate lists and arrays and things and then just reuse them.
+
+181
+0:18:02.360 --> 0:18:11.840
+I initially wanted to have a lot of my classes to be totally immutable, as a good programmer
+
+182
+0:18:11.840 --> 0:18:13.440
+that I am.
+
+183
+0:18:13.440 --> 0:18:15.600
+But they just totally wasn't feasible.
+
+184
+0:18:15.600 --> 0:18:21.760
+So I just, you know, you just have to mutate when you do calculations on your vertices,
+
+185
+0:18:21.760 --> 0:18:29.000
+just mutate one of the operands and send it back that way.
+
+186
+0:18:29.000 --> 0:18:33.720
+You can also, the other thing I found that saved some time was reducing the amount of
+
+187
+0:18:33.720 --> 0:18:37.720
+times that we cross from Python into native code and back again.
+
+188
+0:18:37.720 --> 0:18:43.680
+I found I was doing lots of the same operation to vertices and matrices.
+
+189
+0:18:43.680 --> 0:18:48.840
+So if I could just send them all as one batch in a single function call into the native
+
+190
+0:18:48.840 --> 0:18:51.680
+side, then that made it perform a lot quicker.
+
+191
+0:18:51.680 --> 0:18:58.600
+I think there's a lot of function and stack manipulation overhead there that you save.
+
+192
+0:18:58.600 --> 0:19:03.880
+So pass arrays and not lists into the native functions as well.
+
+193
+0:19:03.880 --> 0:19:09.120
+Especially for this kind of stuff where we know the data that we're passing are floats
+
+194
+0:19:09.120 --> 0:19:11.040
+or whatever.
+
+195
+0:19:11.040 --> 0:19:15.480
+You know ahead of time what type is in your array, which means you can make some assumptions
+
+196
+0:19:15.480 --> 0:19:17.320
+that micro Python can't make.
+
+197
+0:19:17.320 --> 0:19:25.320
+And when you manipulate the data objects in the native side, you can skip a bunch of type
+
+198
+0:19:25.320 --> 0:19:26.320
+save stuff.
+
+199
+0:19:26.320 --> 0:19:32.000
+You can just write directly to the data structure, which is useful.
+
+200
+0:19:32.000 --> 0:19:34.800
+And also, this won't surprise me as well.
+
+201
+0:19:34.800 --> 0:19:37.680
+Well, I don't know if it's surprising.
+
+202
+0:19:37.680 --> 0:19:46.780
+Maybe it's obvious to people who are veteran Pythonistas, but I didn't expect the libc
+
+203
+0:19:46.780 --> 0:19:57.040
+q sort function to be so much faster than the sort function in Python, but I was, if
+
+204
+0:19:57.040 --> 0:20:03.880
+you look at this picture here, you can see that some parts of the teapot are drawn on
+
+205
+0:20:03.880 --> 0:20:08.280
+top of, that should be occluded, drawn on top of the body of the teapot.
+
+206
+0:20:08.280 --> 0:20:16.640
+So what I had to do was z sort the faces so that we draw the faces from back to front.
+
+207
+0:20:16.640 --> 0:20:21.960
+And that's what I was doing, using the list sort method for here.
+
+208
+0:20:21.960 --> 0:20:29.160
+But just like implementing this face sorting as a native function as well, as it says there,
+
+209
+0:20:29.160 --> 0:20:32.040
+it's 100 times faster.
+
+210
+0:20:32.040 --> 0:20:38.240
+And the other thing that made a measurable difference as well was locally caching object
+
+211
+0:20:38.240 --> 0:20:40.520
+references in your functions as well.
+
+212
+0:20:40.520 --> 0:20:48.280
+So instead of, if you're using an object value more than once, instead of doing self foo,
+
+213
+0:20:48.280 --> 0:20:55.160
+self foo, self foo, just create a local reference, a local variable in the function and use that
+
+214
+0:20:55.160 --> 0:20:56.320
+instead.
+
+215
+0:20:56.320 --> 0:21:04.840
+So there's some dereferencing overhead there that is quite significant that we're saving.
+
+216
+0:21:04.840 --> 0:21:13.840
+And so after applying all of this sort of stuff, this is the final result, or the result
+
+217
+0:21:13.840 --> 0:21:14.840
+so far.
+
+218
+0:21:14.840 --> 0:21:17.880
+I'm pretty happy with it.
+
+219
+0:21:17.880 --> 0:21:28.240
+Getting the teapot model down to under 100 milliseconds per frame was really pleasing.
+
+220
+0:21:28.240 --> 0:21:38.520
+And yeah, I'm pretty happy with the performance.
+
+221
+0:21:38.520 --> 0:21:43.960
+So what can this be used for?
+
+222
+0:21:43.960 --> 0:21:53.400
+Honestly, this was just a fun way to spend a few weekends after the festival had happened.
+
+223
+0:21:53.400 --> 0:22:01.120
+But it seems to be performing enough where you could do some kind of small 3D game like
+
+224
+0:22:01.120 --> 0:22:07.520
+a lunar lander or something like that, or make yourself a Jurassic Park style 3D user
+
+225
+0:22:07.520 --> 0:22:10.520
+interface for your home automation.
+
+226
+0:22:10.520 --> 0:22:19.160
+But really, the chief lesson for me, I think, was the best way to get involved with a project
+
+227
+0:22:19.160 --> 0:22:23.080
+like MicroPython was to just start using it.
+
+228
+0:22:23.080 --> 0:22:31.320
+And eventually, you come across some kind of limitation that probably your best place
+
+229
+0:22:31.320 --> 0:22:36.760
+to overcome, because you're the one who's trying to solve the problem.
+
+230
+0:22:36.760 --> 0:22:38.680
+You've got the vested interest in it.
+
+231
+0:22:38.680 --> 0:22:47.000
+You have all of the information is currently paged into your brain.
+
+232
+0:22:47.000 --> 0:22:55.480
+And then the MicroPython people were extremely helpful in helping me whip my contributions
+
+233
+0:22:55.480 --> 0:22:59.520
+into shape.
+
+234
+0:22:59.520 --> 0:23:05.520
+So yeah, thanks to them for helping me get involved in MicroPython.
+
+235
+0:23:05.520 --> 0:23:16.800
+And thanks to you for listening.
+
+236
+0:23:16.800 --> 0:23:20.800
+I can try and answer questions, but I'm not super expert on anything I've been talking
+
+237
+0:23:20.800 --> 0:23:23.800
+about.
+
+238
+0:23:23.800 --> 0:23:30.320
+Hi, and thanks for your talk.
+
+239
+0:23:30.320 --> 0:23:35.360
+I had a question about the ESP2 that you were implementing on this.
+
+240
+0:23:35.360 --> 0:23:42.200
+Did you ever look at using the dual core setup to try to accelerate any of the maths?
+
+241
+0:23:42.200 --> 0:23:44.720
+That is a good question.
+
+242
+0:23:44.720 --> 0:23:48.760
+And someone has mentioned this to me before, but when I was writing this, I was actually
+
+243
+0:23:48.760 --> 0:23:51.440
+unaware that it had more than one core.
+
+244
+0:23:51.440 --> 0:23:59.880
+So I haven't yet, but it's a great idea.
+
+245
+0:23:59.880 --> 0:24:00.880
+Thanks very much for your talk.
+
+246
+0:24:00.880 --> 0:24:05.760
+If you're interested in MicroPython in the building A, there is a stand about MicroPython
+
+247
+0:24:05.760 --> 0:24:17.200
+and also a stand by pint64 who makes smartwatch that can run MicroPython and stuff.
+

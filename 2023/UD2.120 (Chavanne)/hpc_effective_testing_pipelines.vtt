@@ -1,0 +1,511 @@
+WEBVTT
+
+00:00.000 --> 00:07.000
+Okay, now we come down.
+
+00:07.000 --> 00:08.000
+All right.
+
+00:08.000 --> 00:10.000
+So last talk.
+
+00:10.000 --> 00:11.000
+All right.
+
+00:11.000 --> 00:13.000
+Testing, testing.
+
+00:13.000 --> 00:14.000
+Okay.
+
+00:14.000 --> 00:21.000
+So, starting here, my talk is about developing effective testing pipelines for HPC applications.
+
+00:21.000 --> 00:27.000
+Just to give a short introduction about who I am, relatively new here.
+
+00:27.000 --> 00:31.000
+So, you know, I first started in the HPC industry while I was in college.
+
+00:31.000 --> 00:37.000
+I joined my university's HPC institute as a software consultant.
+
+00:37.000 --> 00:40.000
+So largely in that role, I was kind of more focused on support.
+
+00:40.000 --> 00:45.000
+So in that case, I was working on, like, singularity deployments, you know, helping debug Fortran.
+
+00:45.000 --> 00:50.000
+Not very good at writing Fortran, you know, helping build custom kernels for Jupyter, all that good stuff.
+
+00:50.000 --> 00:58.000
+And then I left for a bit to go work at another university to do some adversarial machine learning workflow orchestration framework.
+
+00:58.000 --> 01:04.000
+And then eventually I came back to my university's HPC site then as an engineer instead of a kind of support role.
+
+01:04.000 --> 01:11.000
+So more in that case, what I worked on was, like, building, you know, a suite of singularity containers that clients could consume.
+
+01:11.000 --> 01:17.000
+And then also working on, like, debugging tools that interfaced with, like, MOAB and Torque and PBS and all that.
+
+01:17.000 --> 01:20.000
+And then after I graduated university, I joined Canonical.
+
+01:20.000 --> 01:24.000
+So that was probably, like, nine months ago now.
+
+01:24.000 --> 01:34.000
+So, you know, kind of the start then, you know, what sent me down this path of wanting to develop effective testing pipelines for HPC applications?
+
+01:34.000 --> 01:39.000
+Well, first, when I started at Canonical, to be frank, I wasn't very good at Debian packaging.
+
+01:39.000 --> 01:44.000
+I had mostly deployed most of my software using batch scripts, compiling from source.
+
+01:44.000 --> 01:47.000
+So part of that is I had to write provisioning scripts.
+
+01:47.000 --> 01:53.000
+So I mostly work in cloud orchestration, deploying, like, nodes and whatnot onto clouds.
+
+01:53.000 --> 01:56.000
+And so I had to, you know, develop dangerous code.
+
+01:56.000 --> 02:03.000
+You know, so it's installing packages, making configurations, kind of setting pre-seats in, what is it, Debian Ubuntu.
+
+02:03.000 --> 02:13.000
+And so basically I kind of had this, you know, dilemma of where, okay, I want an easy way to test these provisioning scripts without kind of having to go through all this manual effort.
+
+02:13.000 --> 02:23.000
+So originally, you know, I just, you know, typed in Vagrant virtual box or any real kind of virtual machine hypervisor, bring it up, install the script, and then once I was done with it, blow it out.
+
+02:23.000 --> 02:36.000
+And then kind of also had this issue of where I had a desire for reproducible tests, because even though, like, you know, I know how to bring up, like, a virtual machine on my system, you know, I might be working with someone who's off of Windows or Mac,
+
+02:36.000 --> 02:41.000
+and so they don't have the same setup that I do, or they're using a different distribution, in fact.
+
+02:41.000 --> 02:56.000
+So this gave me the idea of, you know, kind of if I'm on my personal workstation here, so my laptop, unfortunately my current laptop's X server isn't working, so the HDMI cable gets all screwed up, so thank you EasyBuild folks for lending me your computer.
+
+02:56.000 --> 03:14.000
+But basically I had the idea that what if I take a test that's written on my system, and then have the ability to run it using any hypervisor I want on any operating system that I need to test that code on without any extra hassle of having to really go through supporting or teaching someone else how to bring up that instance.
+
+03:14.000 --> 03:23.000
+And basically the case of like, oh, I have the right code, like Python or anything else that needs to run like Ubuntu, CentOS, Alma, or Rocky.
+
+03:23.000 --> 03:39.000
+And then kind of after working for that a bit, you know, I had kind of an initial prototype that would bring up, you know, basic operating system image, and then kind of as I, you know, got more into my HPC work at Canonical, I kind of realized like, oh, okay, you know, maybe
+
+03:39.000 --> 03:58.000
+don't want to rack up the cloud bill trying to test and deploy to AWS or, you know, Azure or, you know, even our own private internal public cloud use or private cloud using OpenStack for, you know, just trying to provision HPC nodes. So for example, have like identity management, OpenLDAP, shared file system using MFS, you know, have other options.
+
+03:58.000 --> 04:12.000
+And then also working in the case of just setting up and configuring a CIRM cluster all kind of headless without any kind of manual user intervention. And so I kind of had this revelation where I'm like, why waste precious compute time on your HPC cluster?
+
+04:12.000 --> 04:27.000
+Because the fact is, it's expensive, you know, you're kind of paying for that tenancy. And what if you could test your simulations, jobs, applications, or applications and whatnot on a mini HPC cluster that's kind of similar to the target platform that you're deploying, but it's more of a mock so that you can kind of get the general
+
+04:27.000 --> 04:34.000
+feel for the platform before moving on to the more expensive resources.
+
+04:34.000 --> 04:52.000
+So in this case, you know, I started working on a custom testing framework called clean test, which is basically a fancy Python testing library that allows you to bring up many HPC clusters on your local system. And, you know, just kind of in general usage for developers who are in a hurry.
+
+04:52.000 --> 05:05.000
+So kind of then breaking into question, you know, what exactly is a clean test? Because, you know, originally I named it simple test because I just wanted it to be really dead simple. But for some reason, PyPI wouldn't let me register that name.
+
+05:05.000 --> 05:21.000
+So clean test it is. So basically, it comes in three parts. There's kind of a different breakdown. So first you have the bootstrap and configuration stage. So for that, it's kind of where you can register hooks and whatnot for configuring the instances that you're bringing up or
+
+05:21.000 --> 05:38.000
+do some more advanced bootstrapping. So the example I showed in the previous slide of where you're able to bring up NFS, open LDAP, and then be able to inject scriptlets into that. So kind of that's when we get to the second part here, which is a testlet.
+
+05:38.000 --> 05:56.000
+Kind of interesting little word that I came up with joking with some of my colleagues. But basically, a testlet is an entire Python program that's wrapped into a regular function. And kind of the idea is that they contain the full body of the test that you want to be able to run inside this virtual machine container or, you know, test mini cluster.
+
+05:56.000 --> 06:11.000
+And then kind of the last part here is the evaluation reporting aspects. And then kind of with that, you know, I took a test, you know, sub test framework agnostic approach where I know that everyone kind of has their own taste that they like. Some people like Py tests, some like unit tests.
+
+06:11.000 --> 06:20.000
+You know, I don't want to sit here and make opinions for you. So, you know, I want you to be able to write tests in the format that you're most comfortable with.
+
+06:20.000 --> 06:36.000
+Oh, that came out small, but that's okay. So kind of the first part here is the going more advanced into like what exactly is the bootstrap and configuration is that you're able to bring up example nodes, you're able to provision them.
+
+06:36.000 --> 06:47.000
+What is it? You can also register hooks. So kind of similar to anyone who's done any Debian packaging. Listening to Todd, I don't think he's still here. Yeah, you seem to have some experience with Debian developers.
+
+06:47.000 --> 06:51.000
+Oh, but it's okay.
+
+06:51.000 --> 06:53.000
+It's cool.
+
+06:53.000 --> 07:07.000
+But yeah, so if anyone's ever like worked with P builder before I'm kind of one of the features that I really like about P builder for building Debian packages is that you can have different hooks that you can ingest so that or you can create that run at certain parts of the package build.
+
+07:07.000 --> 07:22.000
+I kind of wanted to replicate that same functionality and then kind of the general process is instantiating a configure instance. So that's like a Python singleton class object that basically takes in all that info shares it across, you know, the whole test suite.
+
+07:22.000 --> 07:36.000
+It can bring up nodes that you need to and then you define your hooks. So that's kind of like, what do I want to run when I start the environment and then register them so that, you know, when you run the tasks, the program knows about it.
+
+07:36.000 --> 07:52.000
+And then kind of the next part here is the testlets. So that part is kind of uses some little bit more tricky programming. So in this case, I use Python decorators and metaprogramming so kind of reading class descriptors and whatnot assessing the current state of the program.
+
+07:52.000 --> 08:09.000
+And what the decorators do in this case with the metaprogramming is that rather than having that function run locally instead, it kind of takes out the body of that function that you defined and then it was it injects it inside of the container instance and runs it there.
+
+08:09.000 --> 08:20.000
+So the idea is that like, oh, you could be working off of a new bunch of machine, but you're developing for a cluster that's running a rocky Linux. So in that case, you can just easily bring it up, inject it in there, get the results back.
+
+08:20.000 --> 08:30.000
+And then finally, kind of the last part evaluation slash reporting, it's like each testlet kind of returns this results object. So that kind of contains an exit code standard out standard error.
+
+08:30.000 --> 08:42.000
+And from there you can evaluate the results locally instead of having to kind of instead do it inside of the container. So you could say like, oh, in this case, if you like doing a spread test.
+
+08:42.000 --> 08:53.000
+So kind of if you have like, oh, you know, I need to test this on Ubuntu 2204, 2004 and 1804, it returns a generator object of the name and the result.
+
+08:53.000 --> 09:04.000
+So, you know, let's say that your code works on 2204 and 2004, but the version of Python on 1804 is too old for what you're trying to do. So report back as an error.
+
+09:04.000 --> 09:13.000
+So kind of then, you know, breaking into how does it exactly work. So the idea is that you kind of start on your local host. So that's kind of your computer there.
+
+09:13.000 --> 09:21.000
+So you have the host operating system and then you have the clean test package installed as you know, I'm part of your Python interpreter, just regular Python package.
+
+09:21.000 --> 09:33.000
+The idea is that then, as you see that dotted line in the middle there, it then makes the request, the hypervisor of your choice and tells it like, hey, so, you know, the user who wrote this test told me that I need to bring this up.
+
+09:33.000 --> 09:37.000
+Told me that I need to bring up a certain instance.
+
+09:37.000 --> 09:52.000
+You know, says that they need like a CentOS image. So bring up a CentOS image for me. And then once that's done, you know, what clean test does is that it takes that test body function and it kind of creates a simple JSON packet, which is a checksum to verify the authenticity of the testlet.
+
+09:52.000 --> 10:04.000
+The data, which is just basically the testlet encoded and then or any data necessary for the Tesla and then the injectable, which is basically like, hey, you know, when you get this data packet, here's what you need to do with it.
+
+10:04.000 --> 10:21.000
+And then once that happens, then, you know, clean test, what it does is that it copies itself onto the container image and then from there it ingest that data packet does the evaluation that you requested and then it returns that result object back to the clean test that's on local host.
+
+10:21.000 --> 10:33.000
+So kind of two different ways that it works then for like, how do you control the hypervisor? The first way is kind of Archon, which is a fancy word for director. You know, I kind of wanted to have a buzzword in there somewhere.
+
+10:33.000 --> 10:54.000
+But the idea is that what the Archon does is that's kind of more declarative approach to doing clean tests. So rather than, you know, saying like, oh, you know, automatically do this rapid, you know, you can kind of direct the deployment of said mini HPC cluster. And then what harness does is that instead of, you know, having to explicitly declare like this is the infrastructure that I want for my deployment.
+
+10:54.000 --> 11:00.000
+It just brings up an instance based on the function that it's been wrapped around.
+
+11:00.000 --> 11:06.000
+So this is a short demo video. Let's see if I can choose better quality here.
+
+11:06.000 --> 11:14.000
+Don't tell me. Came as a PDF, but let's see here. All right. YouTube. Sweet.
+
+11:14.000 --> 11:17.000
+They go full spring. There we go.
+
+11:17.000 --> 11:20.000
+Settings playback.
+
+11:20.000 --> 11:22.000
+There we go.
+
+11:22.000 --> 11:31.000
+It's a little interesting. Yeah. So basically what happens here is that just using like simple talks in that case I use talks as kind of the test administrator.
+
+11:31.000 --> 11:41.000
+I started tests just called the Archon, which basically says bring up a test environment instance. So first it starts with LDAP. So it's provisioning an LDAP node on top of LXD hypervisor. That's what I'm using here.
+
+11:41.000 --> 11:43.000
+So first it starts with LDAP.
+
+11:43.000 --> 11:46.000
+And then after a few minutes, takes a few minutes for it to boot.
+
+11:46.000 --> 11:50.000
+Crappy hotel Wi-Fi was when I was doing this.
+
+11:50.000 --> 11:55.000
+And then see there now you have the NFS image.
+
+11:55.000 --> 12:06.000
+That starts provisioning and then somewhere in here. Now you have the slurm CT LD node that comes up.
+
+12:06.000 --> 12:10.000
+And now you have the slurm three storm compute nodes that come up.
+
+12:10.000 --> 12:23.000
+And the idea is that then what the framework does is that it injects a testlet inside of slurm CT LD and then from there it uses s batch to submit the job off to the test cluster.
+
+12:23.000 --> 12:31.000
+Takes a bit.
+
+12:31.000 --> 12:33.000
+A little too far ahead.
+
+12:33.000 --> 12:36.000
+Give it a few seconds.
+
+12:36.000 --> 12:44.000
+Yep. And then it cleans up the cluster so that it doesn't linger on afterwards.
+
+12:44.000 --> 12:49.000
+Oh, goodbye.
+
+12:49.000 --> 12:51.000
+Oh, God.
+
+12:51.000 --> 12:57.000
+What happened here?
+
+12:57.000 --> 12:59.000
+All right. Okay.
+
+12:59.000 --> 13:06.000
+That's not fun.
+
+13:06.000 --> 13:15.000
+I want to go back to the video. I don't know why I jumped at the other video.
+
+13:15.000 --> 13:17.000
+I just had an auto play moment.
+
+13:17.000 --> 13:28.000
+Wow. I feel like a school teacher.
+
+13:28.000 --> 13:38.000
+This is like right for the end. Okay. All right. Thank you.
+
+13:38.000 --> 13:40.000
+Yeah. All right. Okay.
+
+13:40.000 --> 13:49.000
+No auto play. All right. So basically what happens here. I'm going to full screen it so it's a little bit bigger.
+
+13:49.000 --> 13:52.000
+What? Come on.
+
+13:52.000 --> 13:58.000
+I'm an engineer, not a YouTube video player on a projector kind of guy. But what is it? Yeah.
+
+13:58.000 --> 14:04.000
+So basically what I've seen here is that the test starts, brings up the nodes that you need to use.
+
+14:04.000 --> 14:10.000
+So in that case it was just LDAP for basic identity management and a FES for shared file system
+
+14:10.000 --> 14:13.000
+and then just like slurm for kind of resource management services.
+
+14:13.000 --> 14:17.000
+And then from there it just like injects like a little test script to run.
+
+14:17.000 --> 14:22.000
+And then, yeah, once the job succeeds it kind of copies back to the results.
+
+14:22.000 --> 14:27.000
+And then, yeah, and then it says like, okay, did we get the result that we expect?
+
+14:27.000 --> 14:34.000
+So in the case of the test that I wrote, it just prints out basically like I love doing research.
+
+14:34.000 --> 14:38.000
+And then it says like is I love doing research in the log file for standard out.
+
+14:38.000 --> 14:44.000
+So yeah. Pretty low fidelity right now is mostly a lot of work went into just getting it to work and all that.
+
+14:44.000 --> 14:50.000
+Okay. Now I want to go back to the slides. There we go.
+
+14:50.000 --> 14:56.000
+Hey. So now you saw that video, you know, kind of over going some of the current limitations.
+
+14:56.000 --> 15:00.000
+The first is that I'm kind of bad at playing YouTube videos and presentations.
+
+15:00.000 --> 15:08.000
+But the next part here is that kind of right now the issue is that there's kind of a lack of robust multi-distribution support.
+
+15:08.000 --> 15:12.000
+So currently I mostly developed it to work on Ubuntu and work with Ubuntu.
+
+15:12.000 --> 15:18.000
+I wonder why. But you can't launch all the Rocky, Sennelas, Arch instances, etc.,
+
+15:18.000 --> 15:24.000
+but kind of the macros, hooks, and like utilities that I built into the framework aren't really fully there yet for supporting it.
+
+15:24.000 --> 15:29.000
+And then public documentation is behind because, you know, usually I write code before I write documentation.
+
+15:29.000 --> 15:33.000
+Fortunately, it just seems to be how it always goes. Yeah.
+
+15:33.000 --> 15:39.000
+So I need to update that. And then kind of big issue right now is lack of package manager integration.
+
+15:39.000 --> 15:43.000
+So a lot of the support has been added ad hoc. So currently I support like charm libraries,
+
+15:43.000 --> 15:49.000
+which is something that Canonical uses and then snap packages, which are kind of controversial, depending on your opinions.
+
+15:49.000 --> 15:52.000
+And then also just pips because I do a lot of Python development.
+
+15:52.000 --> 15:59.000
+But in the future, I hope to add support for like Debian packages, RPMs, you know, arch installs, smack and easy build.
+
+15:59.000 --> 16:02.000
+So yeah. And then lastly, I'm the only developer currently.
+
+16:02.000 --> 16:07.000
+So, you know, code developed in isolation isn't reviewed as thoroughly as it could be.
+
+16:07.000 --> 16:13.000
+So, you know, yeah, I make design choices based on what I think is appropriate.
+
+16:13.000 --> 16:23.000
+So. Yeah. So last thing too is that, you know, testing framework, I think is a lot cooler than the video that I kind of struggled to play here.
+
+16:23.000 --> 16:26.000
+So if you want to scan the QR code, if you're interested, feel free.
+
+16:26.000 --> 16:31.000
+Slides are also online as well. So if you're not available right now, you can check it out.
+
+16:31.000 --> 16:37.000
+And then lastly, you know, this is kind of a, you know, call for involvement.
+
+16:37.000 --> 16:43.000
+So, you know, really, at Canonical, we're trying to start getting Ubuntu kind of geared better for HPC.
+
+16:43.000 --> 16:48.000
+We kind of know that we're a little bit behind Red Hat in the case of like network driver support and whatnot.
+
+16:48.000 --> 16:54.000
+So, you know, just if you're interested in using Ubuntu for your workflows and whatnot, we have a public mattermost channel.
+
+16:54.000 --> 16:57.000
+So you can scan that QR code or you can check it out later.
+
+16:57.000 --> 17:02.000
+But yeah, we have a public channel for HPC online.
+
+17:02.000 --> 17:11.000
+So yeah, if there's something that's missing or, you know, there's kind of some reason why you're being held back on using Ubuntu for HPC, we really love to hear that feedback.
+
+17:11.000 --> 17:22.000
+So yeah, that's it.
+
+17:22.000 --> 17:27.000
+Any questions for Jason? Last chance for today.
+
+17:27.000 --> 17:33.000
+So how you're just doing this is all Python code that builds this system for you. Yes. Yes.
+
+17:33.000 --> 17:35.000
+So how are you spinning up the LXD containers?
+
+17:35.000 --> 17:44.000
+So the idea is that in the case of LXD, it has a public API socket that uses things like open API standard or something.
+
+17:44.000 --> 17:58.000
+But yeah, so you can make like HTTP requests out to that API that basically say like, oh, you know, I need this instance or tear this down or set this configuration so I can install like app tanner some other container hypervisor inside of LXD.
+
+17:58.000 --> 18:03.000
+Why not say yes. I'm just using the API.
+
+18:03.000 --> 18:11.000
+Any other questions?
+
+18:11.000 --> 18:14.000
+So yeah, I'm interested in this.
+
+18:14.000 --> 18:19.000
+What so the like the you had an NFS server and some other stuff.
+
+18:19.000 --> 18:22.000
+Are you how are you are this pre assembled images that you're just using?
+
+18:22.000 --> 18:27.000
+Are you building up with some kind of configuration management to use Ansible development?
+
+18:27.000 --> 18:37.000
+Yeah. So currently what I have is like the way that I provision I'm using like base Ubuntu images for configuration right now.
+
+18:37.000 --> 18:41.000
+But you do have the ability to register your own custom instances and pull them in as well.
+
+18:41.000 --> 18:49.000
+But basically I have a little mechanism built into the framework where you can write like provisioning scripts using like the clean test utilities.
+
+18:49.000 --> 18:55.000
+So there's some stuff for like installing apps running commands on like sub processes on the unit.
+
+18:55.000 --> 18:58.000
+And then also like you can reach out to the network download anything you need.
+
+18:58.000 --> 19:03.000
+So yeah, I'm just using custom Python scripts to provision that are yes.
+
+19:03.000 --> 19:09.000
+Yes.
+
+19:09.000 --> 19:15.000
+Anyone else last chance there.
+
+19:15.000 --> 19:19.000
+It's for the stream and the recording.
+
+19:19.000 --> 19:23.000
+We've been doing well all day. Let's keep it up.
+
+19:23.000 --> 19:30.000
+What do you might please to move to the previous slide so I can scan my QR code correctly.
+
+19:30.000 --> 19:34.000
+Okay. Thank you very much.
+
+19:34.000 --> 19:37.000
+That was a good last question. The other one.
+
+19:37.000 --> 19:42.000
+Which one are you looking for this one or okay.
+
+19:42.000 --> 19:47.000
+That's all right. There's no more questions we can wrap up here.
+
+19:47.000 --> 19:50.000
+Thanks a lot everyone. That was a wrap for today.
+
+19:50.000 --> 19:56.000
+The 98 PC dev room at false them. That means it falls them like says we can have a tent one next year.
+
+19:56.000 --> 20:06.000
+That would be really nice. So practical stuff if you're leaving the room if you see any trash please take it with you and dump it in an appropriate place outside.
+
+20:06.000 --> 20:13.000
+And the false them team has asked us to ask you to leave the building as soon as possible so they can lock up the whole building.
+
+20:13.000 --> 20:19.000
+There's another talk going on in Janssen and the really big room. I would recommend going there.
+
+20:19.000 --> 20:27.000
+It's a really nice way to wrap up false them and there will be places there to get one or maybe two or three more beers and have some more chats with people.
+
+20:27.000 --> 20:55.000
+Thanks a lot and hopefully see you next year.

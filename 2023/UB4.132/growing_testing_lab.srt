@@ -1,0 +1,696 @@
+1
+0:00:00.000 --> 0:00:12.680
+Hello, everyone. Thanks for being here so early on a Sunday morning. My name is Laura.
+
+2
+0:00:12.680 --> 0:00:20.700
+I work at Calabra. And today I'd like to share with you a word story about how we built and
+
+3
+0:00:20.700 --> 0:00:26.080
+grew our laboratory for upstream testing. I'm going to share with you a little bit about
+
+4
+0:00:26.080 --> 0:00:31.680
+our infrastructure, as well as some of the challenges that we have to face while scaling
+
+5
+0:00:31.680 --> 0:00:41.160
+up. So our main goal was to build a big test bed for open source projects to use. So of course,
+
+6
+0:00:41.160 --> 0:00:46.400
+we're going to need diverse ecosystem of devices. So many different devices of different
+
+7
+0:00:46.400 --> 0:00:51.200
+architectures and from different vendors. Of course, we're going to need a software to
+
+8
+0:00:51.200 --> 0:00:57.960
+automate the tests on the actual devices. We need a monitoring system, so a way to monitor
+
+9
+0:00:57.960 --> 0:01:04.800
+and assess the health of the devices that we have in the lab. And we also need some recovery
+
+10
+0:01:04.800 --> 0:01:12.080
+strategies. So mainly, when devices start to misbehave or don't behave, it's expected we need
+
+11
+0:01:12.080 --> 0:01:18.560
+some way of recovering them automatically, or putting them offline automatically if they're
+
+12
+0:01:18.560 --> 0:01:27.040
+not reliable to run tests. So it all starts with a commit. The developer pushes the changes into a
+
+13
+0:01:27.040 --> 0:01:34.960
+development branch. The artifacts for the tests are built automatically. A test job is submitted
+
+14
+0:01:34.960 --> 0:01:42.760
+and run. The results are gathered and parsed. And finally, a report is generated and sent back to the
+
+15
+0:01:42.760 --> 0:01:49.280
+developer. So from the lab perspective, we're interested in the part that runs the test jobs
+
+16
+0:01:49.280 --> 0:01:57.000
+and makes the results available. What we chose for our lab is lava, as we saw earlier. This is the
+
+17
+0:01:57.000 --> 0:02:04.280
+linear automation and validation architecture. So it automates the boot and deploy phases of the
+
+18
+0:02:04.280 --> 0:02:13.080
+apprentice system on the device. It has a really scalable scheduler. It allows to run thousands of
+
+19
+0:02:13.080 --> 0:02:22.120
+jobs on hundreds of devices on a single instance. So that's really convenient for big labs. It
+
+20
+0:02:22.120 --> 0:02:29.760
+handles the power on the devices. So it switches the power on and off on the devices when needed.
+
+21
+0:02:29.760 --> 0:02:37.960
+And it also helps monitoring the serial output. And finally, it also makes the results of the
+
+22
+0:02:37.960 --> 0:02:44.840
+tests available in many different formats, which is, again, pretty convenient. Lava, again, just
+
+23
+0:02:44.840 --> 0:02:51.080
+takes care of this part of the CI loop, while all the other phases needs to be implemented with
+
+24
+0:02:51.080 --> 0:03:01.360
+different tools. So in order to run devices in lava, we need to fulfill set of base requirements.
+
+25
+0:03:01.360 --> 0:03:07.120
+Of course, we're going to need to be able to turn on and off the power on the devices remotely.
+
+26
+0:03:07.120 --> 0:03:15.520
+We need access to a reliable serial console remotely. And finally, we need some way of
+
+27
+0:03:15.520 --> 0:03:23.520
+booting an arbitrary combination of kernel, device tree, and root of us remotely. For all the devices
+
+28
+0:03:23.520 --> 0:03:32.720
+that we have in the lab, we rely on TFTP. So we need network connectivity at the bootloader level.
+
+29
+0:03:32.720 --> 0:03:40.640
+And that means that we often have to build our custom bootloaders and enable all the features
+
+30
+0:03:40.640 --> 0:03:47.200
+that we need for debugging. So there are a few steps to prepare the devices before they enter
+
+31
+0:03:47.200 --> 0:03:55.600
+the lab. As far as the configuration of the devices itself in lava, we have a couple of...
+
+32
+0:03:55.600 --> 0:04:02.800
+You only need to define some Jinja 2 and YAML templates. So the device type template basically
+
+33
+0:04:02.800 --> 0:04:09.040
+defines the characteristic of the device type. So for example, which kind of bootloader run on a
+
+34
+0:04:09.040 --> 0:04:15.840
+certain device, which kind of command line options are needed for booting. Well, the device dictionary
+
+35
+0:04:15.840 --> 0:04:23.040
+defines device specific characteristics. So for example, what command do we need to run to turn on
+
+36
+0:04:23.040 --> 0:04:29.680
+and off the power or to access the serial console. And finally, we have the health check, which is a
+
+37
+0:04:29.680 --> 0:04:36.800
+special kind of job associated to each device type. And the aim of the health check is to assess
+
+38
+0:04:36.800 --> 0:04:45.840
+the health status of each device. It's supposed to be run on a fairly regular basis. We run a
+
+39
+0:04:45.840 --> 0:04:51.600
+health check on every device that we have in the lab every day. And examples of tests that you can
+
+40
+0:04:51.600 --> 0:04:57.440
+fit in a health check are, for example, a battery test, or you can check the temperature on the
+
+41
+0:04:57.440 --> 0:05:03.040
+device to make sure it's not overheating. You can check the network connectivity. Basically, all the
+
+42
+0:05:03.040 --> 0:05:08.320
+tests that you need to make sure that the device is functional, you can fit them in health check.
+
+43
+0:05:09.120 --> 0:05:15.680
+And whenever a device fails its health check, lava automatically puts it offline.
+
+44
+0:05:16.560 --> 0:05:22.080
+So it's really useful just to shut down all the devices that are not reliable at the moment.
+
+45
+0:05:24.000 --> 0:05:31.040
+So Colabra maintains a laboratory running lava. And we have, as of a couple of days ago,
+
+46
+0:05:31.040 --> 0:05:40.640
+217 devices of 38 different types spread across 16 racks. Each rack is controlled by its own server.
+
+47
+0:05:40.640 --> 0:05:46.720
+And that's also where the lava dispatcher runs. And of course, besides all the device types,
+
+48
+0:05:46.720 --> 0:05:52.720
+devices, we also have a bunch of hardware equipment that we need to automate the boot
+
+49
+0:05:52.720 --> 0:06:01.280
+and test phases on our devices. And this is what the device distribution looked like in January.
+
+50
+0:06:02.160 --> 0:06:11.520
+So the vast majority of our devices are x86, 64, and arm 64 platforms. And we also have some QAML
+
+51
+0:06:11.520 --> 0:06:19.200
+instances that are mainly used by kernel CI. And the very vast majority of our devices are
+
+52
+0:06:19.200 --> 0:06:24.080
+actually Chromebook laptops. But we also have some embedded SPC devices as well.
+
+53
+0:06:27.600 --> 0:06:35.360
+So what kind of hardware do we have in the lab? So different devices as usually different
+
+54
+0:06:35.360 --> 0:06:42.080
+requirements. So for embedded SPCs, what we use to control the power on them remotely are
+
+55
+0:06:42.080 --> 0:06:48.640
+Ethernet control relays and PDUs. I left there some examples of the actual models that we currently
+
+56
+0:06:48.640 --> 0:06:56.000
+have in the lab. Chromebooks are kind of a different beast. They have their own hardware
+
+57
+0:06:56.000 --> 0:07:03.440
+debug interface, which is the Servo v4 and this user cables. So Servo v4 allows you to control
+
+58
+0:07:03.440 --> 0:07:10.240
+the power on the device to access the serial consoles on the device, and also provides network
+
+59
+0:07:10.240 --> 0:07:15.920
+connectivity through an internet port. So you can fit everything you need to automate the
+
+60
+0:07:15.920 --> 0:07:24.160
+boot and test phases on a Chromebook that fits inside just one hardware box. As an alternative,
+
+61
+0:07:24.160 --> 0:07:31.040
+you also have CZ cables, which pretty much have the same functionality except for the network
+
+62
+0:07:31.040 --> 0:07:38.240
+connectivity that you have to provide through usually to a USB to Ethernet adapter. We have a
+
+63
+0:07:38.240 --> 0:07:45.760
+couple of servers as well in the lab. And for those we use the IPMI standard protocol just to
+
+64
+0:07:45.760 --> 0:07:52.640
+control the power and access the serial consoles. And for all the devices, of course, we're going
+
+65
+0:07:52.640 --> 0:08:04.000
+to need a bunch of USB cables with their fragilities. And also we use USB hubs. We find especially
+
+66
+0:08:04.000 --> 0:08:09.760
+useful the switchable hubs such as the YKush, especially for those devices that are controlled
+
+67
+0:08:09.760 --> 0:08:17.200
+by just one USB connection such as the Chromebooks. So that's really convenient just not to have
+
+68
+0:08:17.200 --> 0:08:23.440
+them to manually intervene every time you need to re-plug the USB connection. As for the software,
+
+69
+0:08:23.440 --> 0:08:30.560
+I left here a couple of links. You want to check them out. We use PDU daemon to execute comments
+
+70
+0:08:30.560 --> 0:08:38.880
+on the PDUs. We use Conservo to access the serial consoles and monitor the output. And the HDC tools
+
+71
+0:08:38.880 --> 0:08:43.280
+are just for the Chromebooks. These are the software tools that allows you to interact
+
+72
+0:08:43.840 --> 0:08:50.160
+with the servo v4 and with the CZ cable as well just to control the power and serial on the
+
+73
+0:08:50.160 --> 0:08:57.040
+Chromebooks. For the interaction with lava, we use lava CLI. It's a command line interface.
+
+74
+0:08:57.600 --> 0:09:04.080
+And that's useful to run the tests on the device and also configure and push the templates.
+
+75
+0:09:04.080 --> 0:09:11.920
+Finally, we also have a lava GitLab runner that serves as a bridge between GitLab and lava.
+
+76
+0:09:13.520 --> 0:09:22.560
+And yeah, that's pretty much it for the software side. So in our lab, we have two major users.
+
+77
+0:09:22.560 --> 0:09:28.560
+One is kernel CI, which is focused on continuous testing of the Linux kernel.
+
+78
+0:09:28.560 --> 0:09:34.400
+It's not only boot tests. We have a bunch of other test suites running on them. And
+
+79
+0:09:35.680 --> 0:09:40.160
+the type of testing that kernel CI does is post merge. So changes are
+
+80
+0:09:40.160 --> 0:09:49.600
+tested after they landed on a set of monitor trees. So after the tests have run, kernel CI
+
+81
+0:09:51.360 --> 0:09:57.360
+will generate some build reports as well as some regression reports for every regression that is
+
+82
+0:09:57.360 --> 0:10:07.520
+found. The other major player in our lab is mezoci. That's DCI for meza 3D. And it does
+
+83
+0:10:07.520 --> 0:10:13.440
+conformance testing and also performance tracking. There are a bunch of test suites that are currently
+
+84
+0:10:13.440 --> 0:10:21.920
+run by mezoci. I left the list here. A bunch of APIs and drivers are tested. And while kernel CI
+
+85
+0:10:21.920 --> 0:10:28.800
+only does post merge testing, meza CI also does pre-merge conformance tests. So that's a little
+
+86
+0:10:28.800 --> 0:10:37.280
+bit of both. And in this diagram, you can see what the usage of kernel CI and meza CI in our
+
+87
+0:10:38.080 --> 0:10:45.680
+laboratory. As you can see, both projects keep our lab pretty busy. Kernel CI uses
+
+88
+0:10:45.680 --> 0:10:52.800
+almost all the architectures that we have in the lab while meza CI is focused more on x86,
+
+89
+0:10:52.800 --> 0:11:04.800
+64, and ARM 64. And with so many jobs running every day in our lab, of course, the impact
+
+90
+0:11:04.800 --> 0:11:12.320
+of any error or unreliability in the infrastructure can be quite big. So for pre-merge tests,
+
+91
+0:11:12.320 --> 0:11:17.840
+you have the merge requests from users can get blocked. And definitely, if a certain device type
+
+92
+0:11:17.840 --> 0:11:27.440
+is not available. And also, yeah, there is a risk of merge requests getting rejected if there are
+
+93
+0:11:27.440 --> 0:11:32.400
+many errors in the lab. So what we need to make sure from the lab perspective is that
+
+94
+0:11:33.840 --> 0:11:40.240
+the merge requests from users do get rejected only because the change is introduced,
+
+95
+0:11:40.240 --> 0:11:47.120
+made the test fail, and not because of any infrastructure error. Well, for post-merge
+
+96
+0:11:47.120 --> 0:11:53.760
+tests, we have a risk of reporting false regressions. In this case, we want to make
+
+97
+0:11:53.760 --> 0:12:00.480
+sure again that the infrastructure errors are reported as such by lava. And lava defines
+
+98
+0:12:01.840 --> 0:12:06.560
+different types of exceptions that you can raise based on the type of error that occurs.
+
+99
+0:12:06.560 --> 0:12:12.240
+We need just to make sure that the devices and lava itself is configured properly to do so.
+
+100
+0:12:14.960 --> 0:12:21.760
+So yeah, this is just a minimal list of the common issues that we have seen over the years.
+
+101
+0:12:21.760 --> 0:12:26.880
+Of course, there can be other degradation. You can have faulty cables at any time or
+
+102
+0:12:26.880 --> 0:12:34.480
+batteries just failing, power chargers not working properly. All kinds of network issues can happen
+
+103
+0:12:34.480 --> 0:12:42.000
+at any time and they can have quite a big impact. We also saw some issues related to the rack setup.
+
+104
+0:12:42.000 --> 0:12:49.200
+So for example, we had some laptops where the lid was likely too closed because of how it was set
+
+105
+0:12:49.200 --> 0:12:55.520
+up in the rack and it was causing the device to enter suspend unexpectedly. So we have all kind
+
+106
+0:12:55.520 --> 0:13:02.160
+of different errors that can happen. Of course, we can have firmware bugs either in the firmware
+
+107
+0:13:02.160 --> 0:13:09.120
+running or the actual devices or also firmware running in the hardware debug interface. So that's
+
+108
+0:13:09.120 --> 0:13:17.680
+a lot of errors that can happen. I gather a few of my favorite pitfalls. These are issues, tricky ones
+
+109
+0:13:17.680 --> 0:13:27.040
+that we have found recently and we're still dealing with some of those. So one of the things
+
+110
+0:13:27.040 --> 0:13:34.160
+that we saw is that sometimes it happens that the serial console will just stop outputting anything
+
+111
+0:13:34.160 --> 0:13:41.680
+on the serial console. And if this happens during the test phase, it's kind of hard to understand
+
+112
+0:13:41.680 --> 0:13:50.080
+in an automated way whether the kernel is hanging or whether your USB cable connection has dropped
+
+113
+0:13:50.080 --> 0:13:57.760
+or if it's just like a reliable serial connection. So that's usually a tricky one to deal with.
+
+114
+0:13:59.600 --> 0:14:08.400
+Another serial related one is caused by interference. So not all devices can have multiple
+
+115
+0:14:08.400 --> 0:14:15.520
+UART connections for debug. Most of our devices in the lab don't. So we have to share the same
+
+116
+0:14:15.520 --> 0:14:22.320
+serial connection between the kernel and the test shell. And this sometimes can cause some
+
+117
+0:14:22.320 --> 0:14:30.560
+interference and of course you will confuse lava about the outcome. So one way that we are
+
+118
+0:14:31.680 --> 0:14:38.400
+thinking of many solutions to deal with this kind of serial issue stuff and one approach that we are
+
+119
+0:14:38.400 --> 0:14:46.000
+looking into is actually using a docker container. So running a docker container, connecting to the
+
+120
+0:14:46.000 --> 0:14:54.080
+device over SSH and run the tests on the SSH console. This way we can probably work around some of these
+
+121
+0:14:54.080 --> 0:15:01.680
+serial issues. So as I said there are also network connectivity issues from time to time and
+
+122
+0:15:01.680 --> 0:15:09.520
+if the network drops during the bootloader phase that's usually something we can easily catch
+
+123
+0:15:10.240 --> 0:15:16.960
+because lava of course monitors the serial output. And if our bootloader is nice enough to
+
+124
+0:15:18.640 --> 0:15:25.040
+print error messages we can just catch the right patterns at the right time and just raise
+
+125
+0:15:25.040 --> 0:15:32.720
+an infrastructure error so that won't officiate like the outcome of the test. When this happens
+
+126
+0:15:32.720 --> 0:15:39.040
+we can also configure lava to retry the job if needed. So when this happens it's useful to catch
+
+127
+0:15:39.760 --> 0:15:46.160
+error patterns. If network decides to drop during the test phase that's usually
+
+128
+0:15:47.520 --> 0:15:54.400
+worse especially for devices that rely on a network phase system. So it's usually pretty
+
+129
+0:15:54.400 --> 0:16:01.840
+hard to recover from this. We have seen occasional USB disconnection for whatever reason and yet it's
+
+130
+0:16:01.840 --> 0:16:10.000
+hard to recover from these kind of issues usually. So these are some of the best practices we came
+
+131
+0:16:10.000 --> 0:16:20.320
+upon while working on these issues. So the first one is about writing robust health checks. So as
+
+132
+0:16:20.320 --> 0:16:28.160
+I said devices will be put offline by lava if the health check fails so we need to make sure that
+
+133
+0:16:28.160 --> 0:16:38.000
+the health checks catch as many issues as possible automatically. We found very useful to monitor the
+
+134
+0:16:38.560 --> 0:16:45.120
+lava infrastructure error exceptions and this is mainly to catch issues with specific racks or
+
+135
+0:16:45.120 --> 0:16:54.560
+specific device types. We usually try to monitor also the device itself and the job queue as well
+
+136
+0:16:54.560 --> 0:17:00.160
+and this is to make sure that we have enough devices of a certain device type to feed all
+
+137
+0:17:00.160 --> 0:17:10.000
+the pipelines for the projects and also to minimize if a certain device type goes offline
+
+138
+0:17:10.000 --> 0:17:17.760
+and if we have redundancy we're able to recover from that. Last but not least as I said
+
+139
+0:17:18.400 --> 0:17:24.080
+one best practice is to try and isolate the test shell output and kernel messages whenever possible.
+
+140
+0:17:25.040 --> 0:17:28.160
+If not we're trying to work around some of these issues.
+
+141
+0:17:30.480 --> 0:17:36.800
+So next steps for our lab is of course increase the lab capacity and try to cover even more
+
+142
+0:17:36.800 --> 0:17:43.920
+platform and different vendors as soon as they come out. While doing this we are continuing to
+
+143
+0:17:43.920 --> 0:17:48.640
+improve our infrastructure and our monitoring tools. I haven't included in this presentation
+
+144
+0:17:48.640 --> 0:17:55.680
+how we actually monitor things but yeah lava does have some APIs that you can use to monitor
+
+145
+0:17:55.680 --> 0:18:04.160
+the status of each device and also of the server and yeah of course while keeping to keep adding
+
+146
+0:18:04.160 --> 0:18:09.840
+new lab devices we also want to increase the coverage of test suites so we're working on
+
+147
+0:18:09.840 --> 0:18:18.320
+adding even more tests to it on kernel ci and mezoci as well and that's it. If you have any
+
+148
+0:18:18.320 --> 0:18:34.800
+questions I think I have time right.
+
+149
+0:18:34.800 --> 0:18:38.160
+Any questions?
+
+150
+0:18:38.960 --> 0:18:46.800
+So in your experience how often is something wrong with the lab? Very often I'd say.
+
+151
+0:18:48.080 --> 0:18:49.440
+Can you give me a specific question?
+
+152
+0:18:52.560 --> 0:18:59.280
+Yeah I don't have data at hand with the actual failures but yeah it happens pretty often. I mean
+
+153
+0:18:59.280 --> 0:19:07.120
+we have so many jobs running every day and we rely heavily on USB which is kind of not great,
+
+154
+0:19:07.120 --> 0:19:14.480
+like it breaks pretty often. I'd say the most common issues that we have is usually due to the
+
+155
+0:19:14.480 --> 0:19:22.720
+serial consoles being not too reliable. The vast majority of devices that we have are Chromebooks
+
+156
+0:19:22.720 --> 0:19:29.600
+and we're using like these hardware debug interfaces that were meant for debugging so sometimes like
+
+157
+0:19:29.600 --> 0:19:35.520
+the serial connection is not great and that caused all kind of issues so we try at least to retry
+
+158
+0:19:35.520 --> 0:19:55.440
+the jobs when possible and catch the infrastructure errors as they come out.
+
+159
+0:19:55.440 --> 0:20:01.760
+I'd say we don't have to manually intervene every day. I'd go like every couple of days we need to
+
+160
+0:20:01.760 --> 0:20:07.760
+maybe replug some of the devices because we as I said we use the switchable hubs to try and
+
+161
+0:20:08.320 --> 0:20:14.880
+avoid having to reset the connection manually but we don't have this set up on each and every
+
+162
+0:20:14.880 --> 0:20:22.400
+device that we have. We're working on it but yeah I'd say like at least a couple of times a week.
+
+163
+0:20:22.400 --> 0:20:27.680
+I haven't like really checked the frequency of it but yeah of course there's people in the lab
+
+164
+0:20:27.680 --> 0:20:31.840
+actually taking care of all the devices.
+
+165
+0:20:41.600 --> 0:20:47.520
+So from the lab perspective we don't really care about the test suites running. It's more the
+
+166
+0:20:47.520 --> 0:20:55.280
+responsibility of kernel CI and mazoci. You can check out the the links that I left like everything
+
+167
+0:20:55.280 --> 0:20:58.960
+is of course open source so you can check out all the test suites and how they work.
+
+168
+0:21:00.880 --> 0:21:07.680
+Yeah some tests you just need a run disk. Some other tests rely the most heavier ones
+
+169
+0:21:07.680 --> 0:21:09.280
+rely on natural practice system.
+
+170
+0:21:09.280 --> 0:21:15.280
+Yeah.
+
+171
+0:21:29.200 --> 0:21:34.960
+I mean it depends on the type of tests that you need to run. We use a lot of Chromebooks
+
+172
+0:21:34.960 --> 0:21:40.960
+because we need Chromebooks so yeah you cannot really emulate one.
+
+173
+0:21:40.960 --> 0:21:46.960
+Yeah.
+
+174
+0:21:46.960 --> 0:22:08.160
+All right no more questions so thank you. Thank you.
+

@@ -1,0 +1,703 @@
+WEBVTT
+
+00:00.000 --> 00:07.000
+Thank you.
+
+00:07.000 --> 00:12.000
+Hello.
+
+00:12.000 --> 00:25.640
+I hope you can hear me online.
+
+00:25.640 --> 00:28.440
+Well, if not, complain on chat.
+
+00:28.440 --> 00:32.440
+Okay, so we are going to talk about...
+
+00:32.440 --> 00:33.440
+Nodr?
+
+00:33.440 --> 00:35.440
+You can really yell, that's fine.
+
+00:35.440 --> 00:36.440
+Okay.
+
+00:36.440 --> 00:44.440
+We are going to talk about HPC, high-performance computing, and Nix, and how we kind of deal
+
+00:44.440 --> 00:46.440
+with that.
+
+00:46.440 --> 00:50.440
+My name is Rodrigo and my co-worker Raul here.
+
+00:50.440 --> 00:54.440
+First, a bit of what we do.
+
+00:54.440 --> 01:02.440
+Essentially, we work on a parallel concurrent task-based runtime, like similar to OpenMP,
+
+01:02.440 --> 01:04.440
+if you are familiar.
+
+01:04.440 --> 01:13.080
+We also need to work with a compiler based on LBM to read this pragmas in the code and
+
+01:13.080 --> 01:17.880
+transfer them to function calls to the runtime.
+
+01:17.880 --> 01:25.000
+In our job performance is critical, so we really need to take care.
+
+01:25.000 --> 01:34.520
+And in general, we execute the workloads on several hundreds or even thousands of CPUs.
+
+01:34.520 --> 01:38.680
+Here's a little example of something that we have observed.
+
+01:38.680 --> 01:42.280
+We have a program here that runs...
+
+01:42.280 --> 01:48.040
+And here you can see these are the CPUs, and this is the time of execution.
+
+01:48.040 --> 01:54.120
+And we are examining this little point here, because the time here is slightly bigger than
+
+01:54.120 --> 01:56.400
+what is normal.
+
+01:56.400 --> 02:01.880
+And we can see that the problem is that the allocator took a bit longer.
+
+02:01.880 --> 02:05.480
+So this is just an example.
+
+02:05.480 --> 02:11.360
+In general, in HPC or this high-performance computing, it's just a lot of machines connected
+
+02:11.360 --> 02:13.520
+by fiber optic.
+
+02:13.520 --> 02:18.440
+They are managed by this SLUR diamond, which allows you to request a certain number of
+
+02:18.440 --> 02:20.440
+nodes.
+
+02:20.440 --> 02:22.960
+We don't have fruit in any node.
+
+02:22.960 --> 02:27.280
+In general, it's very old kernels and very old software stack.
+
+02:27.280 --> 02:31.200
+So yeah, we are stuck with that.
+
+02:31.200 --> 02:37.160
+And in general, the state of the art now is to use LD library path to load all the software
+
+02:37.160 --> 02:40.320
+and change versions.
+
+02:40.320 --> 02:44.840
+Working with this technique is not very easy to reproduce.
+
+02:44.840 --> 02:48.280
+So the question is, can we benefit from using Nix?
+
+02:48.280 --> 02:55.160
+In general, we will get up-to-date packages, configuration options for every package, no
+
+02:55.160 --> 02:56.800
+more LD library path.
+
+02:56.800 --> 03:01.920
+And we can track everything that we use for an experiment.
+
+03:01.920 --> 03:04.240
+The problem is we don't have fruit.
+
+03:04.240 --> 03:10.160
+So we cannot install the Nix diamond, as we would like to do.
+
+03:10.160 --> 03:16.160
+So let's take a closer look at what we do on how we do it.
+
+03:16.160 --> 03:22.480
+In general, we work in these three hats, so to say.
+
+03:22.480 --> 03:27.680
+In the development side, we take a program and we compile it several times until it actually
+
+03:27.680 --> 03:29.240
+compiles.
+
+03:29.240 --> 03:32.400
+We kind of need to do this cycle quickly.
+
+03:32.400 --> 03:36.680
+So we want the compilation time to be very low.
+
+03:36.680 --> 03:43.200
+So we need to reuse the already built tree to run the build command.
+
+03:43.200 --> 03:49.200
+When we are finished, we switch to the experimentation side and we run this program in the machine.
+
+03:49.200 --> 03:55.320
+And maybe we need to tickle with the arguments or the configuration file of the program to
+
+03:55.320 --> 03:58.080
+get some results that we want to examine.
+
+03:58.080 --> 04:01.640
+And then we also do some visualization of the results, but we are not going to talk
+
+04:01.640 --> 04:03.600
+in this talk about this.
+
+04:03.600 --> 04:12.280
+So we will focus first on the experimentation later in the development side.
+
+04:12.280 --> 04:15.640
+So a bit of what we did.
+
+04:15.640 --> 04:21.120
+We tried with individual installation of the Nix store by using user namespaces.
+
+04:21.120 --> 04:26.880
+The problem is that the number of packages grows, so we would like to share the store
+
+04:26.880 --> 04:29.520
+with several users.
+
+04:29.520 --> 04:36.880
+So we use an auxiliary machine where we actually have a Nix demo and then we can perform the
+
+04:36.880 --> 04:44.560
+build in that machine and then use the post-build hook to execute some script that copies the
+
+04:44.560 --> 04:49.040
+output derivation to the actual cluster.
+
+04:49.040 --> 04:52.720
+Problem is inside the cluster, Nix store doesn't work.
+
+04:52.720 --> 04:58.400
+So we wrap the command Nix store in a shell script.
+
+04:58.400 --> 05:04.400
+And when it's invoked by the auxiliary machine, it creates the namespace where it mounts the
+
+05:04.400 --> 05:09.720
+Nix store there and then it runs the Nix store and receives the derivation so we can actually
+
+05:09.720 --> 05:13.200
+copy it over SSH.
+
+05:13.200 --> 05:19.800
+We also tried to patch the Nix diamond to run inside the machine, but it's a bit complicated
+
+05:19.800 --> 05:24.960
+because we cannot even run a user diamond there.
+
+05:24.960 --> 05:31.200
+Okay, so let's focus on the experimentation cycle.
+
+05:31.200 --> 05:36.680
+The first requirement, the most important thing, well, assuming that you already have
+
+05:36.680 --> 05:43.600
+like a program that somehow you built in a sandbox, we want to execute this program in
+
+05:43.600 --> 05:49.800
+the machine and we want to make sure that this program doesn't load anything that is
+
+05:49.800 --> 05:51.840
+outside the Nix store.
+
+05:51.840 --> 05:58.400
+So especially the LD library path may have some path that actually has libraries for
+
+05:58.400 --> 06:00.960
+your program, so we don't want that.
+
+06:00.960 --> 06:05.520
+And also it may use the deal open to load other libraries.
+
+06:05.520 --> 06:11.340
+So ideally we want something like the Nix boot with a sandbox that prevents accesses
+
+06:11.340 --> 06:14.880
+to slash user or a slash opt-in.
+
+06:14.880 --> 06:18.880
+And it needs to work in a store too.
+
+06:18.880 --> 06:26.640
+Another requirement that we need is for MPI, the communication mechanism, to use this syscall
+
+06:26.640 --> 06:33.680
+process VM read by that only works if the process are inside the same namespace.
+
+06:33.680 --> 06:39.840
+So we solve this by running a check that checks if the namespace is already created and if
+
+06:39.840 --> 06:45.420
+it is so, we enter it, otherwise we create another one.
+
+06:45.420 --> 06:49.880
+So let's take an overview of how this works in the cluster.
+
+06:49.880 --> 06:57.280
+We have here the login node and two compute nodes that were given to us for running our
+
+06:57.280 --> 06:58.280
+program.
+
+06:58.280 --> 07:04.560
+In general we have to wait a bit after requesting the nodes, it's fine.
+
+07:04.560 --> 07:11.980
+After this moment we take a shell that is connected to one of the allocated nodes.
+
+07:11.980 --> 07:16.640
+These are the nodes and each node in your case has two sockets.
+
+07:16.640 --> 07:20.000
+So we usually run one process per socket.
+
+07:20.000 --> 07:23.240
+And we talk to one of them only.
+
+07:23.240 --> 07:27.640
+Inside this process we don't have Nix.
+
+07:27.640 --> 07:33.360
+So we first load this namespace by using our script.
+
+07:33.360 --> 07:40.520
+And then we can run other programs like S run, which is the client that will launch the
+
+07:40.520 --> 07:44.080
+work load but is inside the Nix store.
+
+07:44.080 --> 07:52.340
+So we can compile programs linked to this specific version of Nix, of a Slurm, sorry.
+
+07:52.340 --> 07:58.200
+After that it requests the Slurm diamond to execute something in parallel and the Slurm
+
+07:58.200 --> 08:04.800
+diamond forks in every process, one process that will run something, but it's outside
+
+08:04.800 --> 08:09.440
+the namespace because it's not controlled by us.
+
+08:09.440 --> 08:13.920
+So we execute our script again to join the namespace if it's found.
+
+08:13.920 --> 08:19.360
+Otherwise we create another one, like in the second compute node.
+
+08:19.360 --> 08:26.200
+And here we can see that we can communicate in the same node because they are both in
+
+08:26.200 --> 08:28.720
+the same namespace and they're one too.
+
+08:28.720 --> 08:34.480
+And here we use private optic communications.
+
+08:34.480 --> 08:38.960
+Another requirement that we need is that we need custom packages.
+
+08:38.960 --> 08:48.300
+We use that with this technique where we define a call package function that takes priority
+
+08:48.300 --> 08:51.160
+over all attributes set.
+
+08:51.160 --> 08:58.000
+So we can change software that is provided in upstream with Nix package S and we use
+
+08:58.000 --> 08:59.380
+our best and first.
+
+08:59.380 --> 09:05.760
+So we can hack on those without disturbing the whole package set.
+
+09:05.760 --> 09:09.960
+Another thing that we need is to define package with compilers.
+
+09:09.960 --> 09:14.020
+In general we use LBM with custom runtime.
+
+09:14.020 --> 09:21.680
+So we use the RAPCC with and inject this little environment bar so we can load our runtime
+
+09:21.680 --> 09:25.120
+without needing to recompile the compiler.
+
+09:25.120 --> 09:34.200
+We also need, unfortunately, proprietary compilers and we use this RPM extract and the auto patch
+
+09:34.200 --> 09:41.200
+of hook to fix the header so we can run them on Nix 2 and compile derivation for them.
+
+09:41.200 --> 09:42.200
+Okay.
+
+09:42.200 --> 09:44.200
+So, all right.
+
+09:44.200 --> 09:58.240
+Okay, let's move on to the development cycle.
+
+09:58.240 --> 10:02.960
+In general the development process consists in getting an application, adding some new
+
+10:02.960 --> 10:09.800
+and confused to it, making things, testing and testing that is okay.
+
+10:09.800 --> 10:17.040
+And this interactive workflow requires frequent changes in the source and compilation steps.
+
+10:17.040 --> 10:23.560
+For this reason Nix build is not good to work with because every change in the source will
+
+10:23.560 --> 10:28.940
+trigger a full copy of the source to the Nix store and a full compilation.
+
+10:28.940 --> 10:34.600
+With big repositories this is a problem because, for example, in the slide we can see the time
+
+10:34.600 --> 10:41.680
+about how much time it takes to build LLVM in a 32 core machine we have referring so
+
+10:41.680 --> 10:44.960
+it's a big machine.
+
+10:44.960 --> 10:49.080
+And we can see that although we use C-Cats we talk about different orders or magnitude
+
+10:49.080 --> 10:55.120
+comparing it with simply reducing the previous build.
+
+10:55.120 --> 11:03.120
+Another alternative could be using Nixl to get our tools to build the application but
+
+11:03.120 --> 11:07.240
+this environment is not isolated from the system.
+
+11:07.240 --> 11:13.200
+And we can find software that includes hard code paths directly to the system, like in
+
+11:13.200 --> 11:21.120
+this case with a sigma module file of ROKEM that is CUDA for AMD for those who don't know
+
+11:21.120 --> 11:23.120
+what is it.
+
+11:23.120 --> 11:31.000
+And if we take an application that uses ROKEM and configure it and check the local output
+
+11:31.000 --> 11:36.040
+we can see that at the end the installation selected is the system one instead of the
+
+11:36.040 --> 11:38.760
+Nix packets we want to.
+
+11:38.760 --> 11:45.320
+An insulated environment will prevent us from this situation avoiding the necessity of patching
+
+11:45.320 --> 11:49.720
+the source to solve this problem.
+
+11:49.720 --> 11:54.800
+Our solution for these two requirements is to first build an insulated environment with
+
+11:54.800 --> 11:57.960
+a tool we named NixRAP.
+
+11:57.960 --> 12:04.800
+NixRAP is a script that uses bubble wrap to enter a user name space where the Nix store
+
+12:04.800 --> 12:11.480
+is available but not the system directories like in this case a slash user.
+
+12:11.480 --> 12:17.760
+And in this environment we can launch our Nix tools like for example Nix build.
+
+12:17.760 --> 12:23.960
+And this works because inside the name space Nix build creates a new sandbox in a nested
+
+12:23.960 --> 12:28.920
+name space so the environment is not affected.
+
+12:28.920 --> 12:36.080
+And the most powerful feature of it is running Nix Shell inside this isolated environment
+
+12:36.080 --> 12:41.400
+to get your tools to build your application in an isolated environment so you don't have
+
+12:41.400 --> 12:45.680
+to worry about accessing to the system.
+
+12:45.680 --> 12:52.840
+And in this case is the previous example LLVM and reusing the build.
+
+12:52.840 --> 13:03.400
+And finally if you are using us like us as Loom you can execute your application by running
+
+13:03.400 --> 13:10.520
+NixRAP after the Loom step-forward process and your application.
+
+13:10.520 --> 13:14.840
+Another requirement for us is since we are in an HPC environment we want to get the best
+
+13:14.840 --> 13:22.480
+performance of the applications and for this reason we need to build the critical performance
+
+13:22.480 --> 13:26.920
+software with CPU optimization flags.
+
+13:26.920 --> 13:33.200
+Our solution for this situation is to override the compiler wrapper injected flags by overriding
+
+13:33.200 --> 13:41.080
+the host platform attribute specifying the architecture and other stuff to the compiler
+
+13:41.080 --> 13:43.080
+in a standard environment in NixRAP.
+
+13:43.080 --> 13:49.720
+And finally we create the standard environment we will use to build our software with this
+
+13:49.720 --> 13:59.280
+compiler wrapper.
+
+13:59.280 --> 14:02.640
+I will talk about the conclusions.
+
+14:02.640 --> 14:10.480
+In general we can actually benefit from using Nix but obviously we have some drawbacks.
+
+14:10.480 --> 14:16.280
+Many cycles that I was talking about we can still do it very fast so it's very nice for
+
+14:16.280 --> 14:17.280
+us.
+
+14:17.280 --> 14:22.720
+And also if we have the chance to get something like a Nix demo we thought the root requirement
+
+14:22.720 --> 14:26.720
+and still be able to share the Nix store that would be awesome.
+
+14:26.720 --> 14:27.720
+Thank you very much.
+
+14:27.720 --> 14:28.720
+We have five minutes left for questions.
+
+14:28.720 --> 14:29.720
+If there are questions.
+
+14:29.720 --> 14:45.600
+When I was working in the HPC environment there was always an issue with disk space.
+
+14:45.600 --> 14:55.320
+How does it work with a dynamic Nix store where people could just say don't know anything
+
+14:55.320 --> 14:57.320
+in the Nix store?
+
+14:57.320 --> 15:03.280
+So the question is how can we manage to Nix store where users can install if that can
+
+15:03.280 --> 15:06.400
+be an issue for this space?
+
+15:06.400 --> 15:13.480
+So in general right now we have about 300 gigabytes of storage.
+
+15:13.480 --> 15:24.440
+For our particular group we have around 2-3,000 gigabytes of space available.
+
+15:24.440 --> 15:33.040
+In general in HPC people used to use a lot of space but if we share the store that will
+
+15:33.040 --> 15:38.600
+be the best solution instead of every user to have their own installation.
+
+15:38.600 --> 15:45.680
+And we also when we kind of annoy someone that says to us please use less space we run
+
+15:45.680 --> 15:48.960
+their garbage collector.
+
+15:48.960 --> 15:49.960
+Thank you.
+
+15:49.960 --> 15:50.960
+Yeah.
+
+15:50.960 --> 15:57.960
+So you said that the state of the art was people using L.D. library path on the machines.
+
+15:57.960 --> 16:01.960
+But I guess that was interesting.
+
+16:01.960 --> 16:06.960
+Did you consider using or can Nix use R-Path instead of using R-Path?
+
+16:06.960 --> 16:09.960
+Because that would get rid of your problems there.
+
+16:09.960 --> 16:16.960
+That and then the other thing you can do is there's a talk in the HPC department about
+
+16:16.960 --> 16:19.960
+pre-binding the pass to S-O.
+
+16:19.960 --> 16:20.960
+Okay.
+
+16:20.960 --> 16:27.160
+I see your spec t-shirt from here.
+
+16:27.160 --> 16:30.160
+Okay so question is about using R-Path?
+
+16:30.160 --> 16:31.160
+R-Path, yeah.
+
+16:31.160 --> 16:34.160
+Because I mean it takes precedence over L.D. library path.
+
+16:34.160 --> 16:37.480
+You don't have to worry about the user being stupid.
+
+16:37.480 --> 16:38.480
+Yeah.
+
+16:38.480 --> 16:49.600
+So the problem is that you can see programs using D.L. Open to load their own.
+
+16:49.600 --> 16:50.600
+They don't.
+
+16:50.600 --> 16:51.600
+Sorry.
+
+16:51.600 --> 16:52.600
+D.L. Open respects R-Path.
+
+16:52.600 --> 16:53.600
+Yeah.
+
+16:53.600 --> 16:54.600
+Ah.
+
+16:54.600 --> 16:55.600
+Okay.
+
+16:55.600 --> 16:56.600
+This is another.
+
+16:56.600 --> 16:57.600
+We're doing something to be okay.
+
+16:57.600 --> 16:58.600
+So.
+
+16:58.600 --> 16:59.600
+Unless you can do like a new bind with a different namespace for D.L. Open that won't respect
+
+16:59.600 --> 17:00.600
+that.
+
+17:00.600 --> 17:06.600
+But most of them are not doing that.
+
+17:06.600 --> 17:07.600
+Okay.
+
+17:07.600 --> 17:14.680
+So D.L. Open is not only the only problem because we also see software trying to read
+
+17:14.680 --> 17:23.240
+it C slash configuration file somewhere and we also want to prevent that.
+
+17:23.240 --> 17:29.080
+In general we saw that it's safer to avoid the program from accessing any path than trying
+
+17:29.080 --> 17:32.880
+to find every single option that the program can use to.
+
+17:32.880 --> 17:33.880
+Okay.
+
+17:33.880 --> 17:34.880
+There was still one eager question.
+
+17:34.880 --> 17:40.400
+Can we find the next rapid script online?
+
+17:40.400 --> 17:48.240
+Yeah I will I think I will upload it to the post on page.
+
+17:48.240 --> 17:49.240
+Any other question.
+
+17:49.240 --> 17:53.760
+Not so much of a question but a bit of a shameless plug.
+
+17:53.760 --> 17:59.520
+The main blocker for having a rootless next demand was merged last week or the week before.
+
+17:59.520 --> 18:03.520
+So hopefully that's going to eventually solve the third of your points.
+
+18:03.520 --> 18:04.520
+Perfect.
+
+18:04.520 --> 18:05.520
+Thank you.
+
+18:05.520 --> 18:06.520
+So what about into your libraries on the system?
+
+18:06.520 --> 18:15.320
+Are you only envisioning that you would install the library things like MBI through this because
+
+18:15.320 --> 18:18.560
+that's not possible on some agencies.
+
+18:18.560 --> 18:20.280
+Yeah it's a very good question.
+
+18:20.280 --> 18:24.920
+For now we have been very lucky to be able to work with only proprietary packages that
+
+18:24.920 --> 18:27.800
+can be put inside Nix.
+
+18:27.800 --> 18:31.120
+But it may happen that the proprietary something it doesn't work.
+
+18:31.120 --> 18:33.960
+So we don't have a solution for now.
+
+18:33.960 --> 18:36.960
+One more.
+
+18:36.960 --> 18:39.960
+Thank you.
+
+18:39.960 --> 19:04.960
+Just switch it over again.

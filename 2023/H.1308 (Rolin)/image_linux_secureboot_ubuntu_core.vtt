@@ -1,0 +1,544 @@
+WEBVTT
+
+00:00.000 --> 00:12.080
+Okay, we can start a bit early. So next speaker is Van-Taun David. He will give a technical
+
+00:12.080 --> 00:18.160
+overview of Ubuntu Core. So thanks for having me.
+
+00:18.160 --> 00:28.960
+Yes, so this will be a very deep technical talk about how we do things in Ubuntu Core.
+
+00:28.960 --> 00:35.920
+Ubuntu Core is a distro. It's based on Ubuntu builds, so the Ubuntu packages, but you can't
+
+00:35.920 --> 00:45.800
+install or remove packages because we removed APT and DPKG and everything. The system is
+
+00:45.800 --> 00:54.420
+split in four atomic snaps, so there are four parts that you can upgrade independently.
+
+00:54.420 --> 01:00.620
+If you want to install anything on it, you need to install it as a snap. Ubuntu Core
+
+01:00.620 --> 01:09.940
+targets Internet of Things for the month, so it's not a distro for a desktop. You can
+
+01:09.940 --> 01:19.760
+have graphical user interface, but it's not ready for desktop. Because it's targeting
+
+01:19.760 --> 01:27.080
+IoT, it supports lots of boot loaders, but in this talk I will focus on UEFI because
+
+01:27.080 --> 01:37.120
+this is what is really interesting. Ubuntu Core has been doing a secure boot with full
+
+01:37.120 --> 01:43.600
+of this description using the TPM for a while, and this was done before. systemd had lots
+
+01:43.600 --> 01:51.440
+of nice tools to do that. This is why I thought it was interesting to talk about how things
+
+01:51.440 --> 01:59.160
+were done because they might seem peculiar or it was a different approach.
+
+01:59.160 --> 02:06.480
+What is a snap? A snap is... You will see that there is a different type of snap, but
+
+02:06.480 --> 02:11.720
+what is common for a snap is just that it's a squash.fs image, and there is a specific
+
+02:11.720 --> 02:18.480
+file that is metadata that describes what this image is for. Then after they will be
+
+02:18.480 --> 02:23.680
+depending on type, there will be more information that you can get on that.
+
+02:23.680 --> 02:39.000
+The type of snaps, first is the application. This shipped the application and its runtime,
+
+02:39.000 --> 02:45.240
+and it expects to have another snap to run on top, which is the base, which is the root
+
+02:45.240 --> 02:50.000
+file system. It doesn't have the root file system, it just has the runtime for the application
+
+02:50.000 --> 03:00.040
+itself. Typically, application exports, services, or commands. In the desktop world, we have
+
+03:00.040 --> 03:06.840
+also desktop applications, but for Ubuntu Core we don't care about these kinds of things.
+
+03:06.840 --> 03:15.160
+Most applications run confined. There is all type of application in snap that we don't
+
+03:15.160 --> 03:23.200
+support in Ubuntu Core, which are not confined. We only support confined in Ubuntu Core.
+
+03:23.200 --> 03:32.680
+Then after we have the base snaps, and those are the root file system, and they are used
+
+03:32.680 --> 03:39.520
+for the applications, but they are also used for the bootable system. It has systemd in
+
+03:39.520 --> 03:46.720
+it. An application that runs on Ubuntu Core doesn't need necessarily to have the same
+
+03:46.720 --> 03:52.080
+root file system as the host itself. It can just use a different version if it was built
+
+03:52.080 --> 03:54.240
+for another version.
+
+03:54.240 --> 03:59.440
+Then we have a snapd, because to handle all the snaps, how to unpack it and to install
+
+03:59.440 --> 04:07.720
+it. There is a daemon. This is distributed as a snap itself. It's not an application
+
+04:07.720 --> 04:17.000
+snap because it has specific things, so it has its own type. Then for Ubuntu Core, we
+
+04:17.000 --> 04:28.280
+have the kernel snap, which provides the kernel, which is a UKI. It's a UFI kernel that is
+
+04:28.280 --> 04:39.000
+signed and has the integerity in it. The snap also provides modules and firmware files.
+
+04:39.000 --> 04:47.360
+Then the final type is gadget. I don't know why gadget, but it provides the bootloader.
+
+04:47.360 --> 04:55.120
+In our case, it's shim and grub. It has also lots of configuration for snapd, how to make
+
+04:55.120 --> 05:04.280
+the image. Cloud init, some init ced edition. Then we have also, if you want to have extra
+
+05:04.280 --> 05:09.280
+command line in your kernel.
+
+05:09.280 --> 05:14.760
+The disk starts, the image starts with just one partition, which is the ESP. We call it
+
+05:14.760 --> 05:23.080
+the seed. It contains grub and shim, of course. It has the seed snaps. It's like the factory
+
+05:23.080 --> 05:30.520
+snaps that you can revert to if you need. It also has a seed kernel that has to be unpacked
+
+05:30.520 --> 05:41.120
+from the seed kernel snap because grub cannot read from there. I don't know. It has also
+
+05:41.120 --> 05:51.800
+another file that is a modular assertion. It's a signed metadata file. It explains how
+
+05:51.800 --> 05:57.120
+to update things. It's some authority file.
+
+05:57.120 --> 06:00.280
+Once you have done the installation, I will not explain how the installation happens because
+
+06:00.280 --> 06:06.560
+I don't think it's fun. I will explain how we run normally. Once it's installed, we have
+
+06:06.560 --> 06:11.600
+three other partitions that will appear in your disk.
+
+06:11.600 --> 06:21.640
+The second one is the boot, which also contains a grub. Typically, the grub will change from
+
+06:21.640 --> 06:26.200
+the seed one. It will always boot from the seed. If it finds that it doesn't have to
+
+06:26.200 --> 06:30.480
+do recovery or anything, it has to do the number one. It will go to the system on one.
+
+06:30.480 --> 06:35.520
+The second one will have the current active kernel that you have installed. It will also
+
+06:35.520 --> 06:44.480
+have a seal key for the data partition because at that time, I think it was not common to
+
+06:44.480 --> 06:49.600
+have this seal key onto the header, looks to header. It was done like that.
+
+06:49.600 --> 06:54.160
+After we have two partitions that are all writeable and they are encrypted, there is
+
+06:54.160 --> 06:59.160
+a safe partition. Basically, it's to identify the device. It's not much on it. It's a very
+
+06:59.160 --> 07:07.320
+small partition. Then we have data which contains most of the writeable data.
+
+07:07.320 --> 07:19.800
+To have a runnable system, we have to do things in a TramFS. First of all, we use a system
+
+07:19.800 --> 07:28.640
+D on both the TramFS and the main boot. Here are the few things that we do that might be
+
+07:28.640 --> 07:34.320
+different for the system. One of the first steps that we have to do is mark all the disks
+
+07:34.320 --> 07:44.120
+that we have. The first thing we do is measure the epoch. For now, I think it's always just
+
+07:44.120 --> 07:49.480
+measure zero. It's something that has been done probably for revocation. If we need to
+
+07:49.480 --> 07:56.400
+revoke the code, we can just increment that. I don't know how useful it is because I don't
+
+07:56.400 --> 07:58.920
+think it has been touched.
+
+07:58.920 --> 08:05.080
+Then we'll mount the boot and partition. Those are not encrypted. From the seed partition,
+
+08:05.080 --> 08:15.440
+we find the model and we will measure it in the PCR. After that, we will find the seal
+
+08:15.440 --> 08:25.880
+key from the boot partition and we'll un-seal it and open and mount the data partition.
+
+08:25.880 --> 08:31.440
+Then we will do the same with the safe partition. The seal key for the safe partition is on
+
+08:31.440 --> 08:41.200
+the data partition. We have to monitor the data partition before we open the safe.
+
+08:41.200 --> 08:47.680
+Last we will find the base snap that we need to mount. This will find it from the data
+
+08:47.680 --> 08:54.240
+partition. We will find a file that describes what is installed. We mount the base, the
+
+08:54.240 --> 09:01.680
+kernel and the gadget. The base will be our sysroot and the kernel is needed because we
+
+09:01.680 --> 09:08.960
+need the modules and firmware. The gadget, there's some configuration there that we need.
+
+09:08.960 --> 09:14.360
+Optionally, we need snapd to be mounted also, but I will talk about this after. Then there's
+
+09:14.360 --> 09:20.920
+some locking of the seal keys so we don't un-seal them again.
+
+09:20.920 --> 09:26.720
+Once we have mounted all the disks, we have to prepare the file system. First, we will
+
+09:26.720 --> 09:32.720
+by mount the base into the slash sysroot, where we will do the switchroot. Then after,
+
+09:32.720 --> 09:40.400
+we have to by mount the userly modules and userly firmware. We do mounting of the seed
+
+09:40.400 --> 09:47.200
+and boot partition within boot. There's a specific way to do it. Then after, from the
+
+09:47.200 --> 09:54.600
+data, we have to do by mounting of specific paths onto the root file system. Typically,
+
+09:54.600 --> 10:03.800
+for example, you want a slash of wire to be mounted, to be writeable. Your base snap is
+
+10:03.800 --> 10:09.480
+not writeable because it's a squashfs, so you want to by mount.
+
+10:09.480 --> 10:18.480
+We have a script for now that reads a list of paths that we have to do by mount. We also
+
+10:18.480 --> 10:27.440
+can configure, saying that if it doesn't exist, we will initialize with the data that is on
+
+10:27.440 --> 10:39.360
+the base snap or have it empty. This script will probably be replaced by using TMP files,
+
+10:39.360 --> 10:50.720
+the FSTAB, but it was written like that. Wait, what's the time?
+
+10:50.720 --> 10:55.280
+We don't by mount slash of wire and slash a TCTiractly as writeable because most of it
+
+10:55.280 --> 11:02.480
+is not writeable. This is to ease the update because we can't track everything that needs
+
+11:02.480 --> 11:08.940
+to be updated in a TCT. If someone modifies a file in a TCT, it's very hard to track.
+
+11:08.940 --> 11:17.080
+We have a specific list of paths that are bindable that you can write.
+
+11:17.080 --> 11:28.400
+An example is etc-systemd. This one, we need to install services and mounts for all the
+
+11:28.400 --> 11:38.120
+snaps. This path needs to be writeable. There are some things that are really annoying
+
+11:38.120 --> 11:47.160
+for us. Doing this is, for example, slash etc hostname because systemd does some atomic
+
+11:47.160 --> 11:56.440
+write. That means that it will make a temporary file in the directory slash etc slash hostname
+
+11:56.440 --> 12:03.480
+dot some temporary name and do a switch. But it's not possible if slash etc is not writeable.
+
+12:03.480 --> 12:09.880
+There's some patches for that. A TCT local time is even worse because it's a symlink
+
+12:09.880 --> 12:18.440
+that has to be rewritten. We need to follow the symlinks until we find the symlink that
+
+12:18.440 --> 12:32.120
+is writeable. All this thing is a bit confusing and it's a bit annoying.
+
+12:32.120 --> 12:36.600
+This was the initialization during the annual time of S&M. Then after, we switched to the
+
+12:36.600 --> 12:45.560
+normal boot and most of what happens is just symlink. There are two main things that will
+
+12:45.560 --> 12:52.520
+happen. It's done by Snabd. It's mounting the active snaps and starting the snap service
+
+12:52.520 --> 12:57.360
+from the applications that are installed. Those are just units in symlink. They are
+
+12:57.360 --> 13:10.680
+installed by Snabd slash etc slash symlink. Sysnabd will just start them for us. We just
+
+13:10.680 --> 13:16.960
+have S&M installing those things there. But the problem is that in the first boot, Snabd
+
+13:16.960 --> 13:21.600
+is not installed. That means that we have something special for the first boot where
+
+13:21.600 --> 13:28.920
+we find that Snabd is not installed. We have this process where we have to find a Snabd
+
+13:28.920 --> 13:35.440
+that was mounted from the initial MFS, run it to install itself so that we can just continue.
+
+13:35.440 --> 13:50.760
+This is what's called the ceiling of Snabd. The disks are encrypted using LUX2. We use
+
+13:50.760 --> 14:02.800
+a TPM. The PCR that we use for the policy are 4, 7 and 12. If you don't know what 4
+
+14:02.800 --> 14:07.640
+and 7 is, it's from the system. You don't have to worry about that. 12 is something
+
+14:07.640 --> 14:20.440
+that we deal with. We do our measurements. We might have several expected values because
+
+14:20.440 --> 14:25.960
+we have a current parameter that changes if we want to do a recovery or some other things
+
+14:25.960 --> 14:36.520
+that need to still mount the 5 systems that are encrypted. I think there's several values
+
+14:36.520 --> 14:48.080
+for the PCR. Then we have another thing. We have a counter that we use for evocation.
+
+14:48.080 --> 14:57.440
+This is because we need to reseal our keys every time we change what the values of the
+
+14:57.440 --> 15:06.440
+PCR can be. To not allow all the values to be able to boot again, there is also a non-volatile
+
+15:06.440 --> 15:12.520
+counter that is used that we increment each time we have to change. What we measure in
+
+15:12.520 --> 15:23.520
+PCR 12 is one is done by system D stub because we use a system D stub to make the UQI. This
+
+15:14.720 --> 15:30.800
+trauma phase, we have the APOC and the model. There are some interesting things that we
+
+15:23.520 --> 15:33.280
+is a current command line. It's important for us because... Then we have, as I said
+
+15:30.800 --> 15:36.600
+have. What happens when you have a failure that happens and you have a failure that happens
+
+15:33.280 --> 15:36.600
+before in the
+
+15:36.600 --> 15:46.960
+and you want to have the emergency shell to open? There is two things. First Ubuntu core
+
+15:46.960 --> 15:52.360
+doesn't have... We try to not have password. You can have password, but by default you
+
+15:52.360 --> 16:00.920
+don't have password. But even if we add... We have the inter-mafest that is built for
+
+16:00.920 --> 16:14.000
+all that has to be signed in the UQI, it can be only built for every... One built for everybody.
+
+16:14.000 --> 16:22.840
+That means that there is no... In the inter-mafest there is no password, but we still need to
+
+16:22.840 --> 16:31.440
+have an emergency shell if we want to be able to debug things. To allow that, we only have
+
+16:31.440 --> 16:39.320
+this emergency shell if we have a specific kernel command line parameter, which is dangerous.
+
+16:39.320 --> 16:46.760
+You have to remember that since we measure the kernel command line in PCR 12, that means
+
+16:46.760 --> 16:56.520
+that you will not be able to unlock with the TPM your disk if you are in that shell. You
+
+16:56.520 --> 17:06.720
+will need to use a recovery key to be able to unlock if you want. We can do some debugging
+
+17:06.720 --> 17:15.440
+and figure out things, but you have to change things and to disallow you to unlock, to use
+
+17:15.440 --> 17:20.320
+the TPM. But maybe there is other things, the other ways we could have done things.
+
+17:20.320 --> 17:24.920
+Maybe we could have done some specific measurement for when there is a need for emergency. I
+
+17:24.920 --> 17:34.880
+don't know. Oh, yeah. Let's see quickly. When we update
+
+17:34.880 --> 17:48.440
+the gadget, the interesting thing to know is that the gadget provides the... The gadget
+
+17:48.440 --> 17:55.160
+not provide the shim and grub, and we might want to update it in different partitions.
+
+17:55.160 --> 18:00.680
+So the seed or the boot, usually we want to only the boot, but if we might want to do
+
+18:00.680 --> 18:07.560
+the seed which does the recovery, there is some versioning that we use to do that. That's
+
+18:07.560 --> 18:15.240
+very important. Then when we upgrade the kernel snap, we copy the new kernel in a specific
+
+18:15.240 --> 18:21.840
+way in the boot partition. We update a grub environment file. The grub will boot and see
+
+18:21.840 --> 18:26.400
+that there is something to try to boot, and if it found that it did try to boot and it
+
+18:26.400 --> 18:31.040
+didn't work, it will roll back. Then if snapd found that it managed to boot with the new
+
+18:31.040 --> 18:36.840
+kernel, that it knows that it has finished the update and will update everything. This
+
+18:36.840 --> 18:44.280
+we can skip. This is not that important. If you have any questions.
+
+18:44.280 --> 19:03.280
+So, I'm from the Ubutu Touch team and the Ubutu Touch team still use the writable pad
+
+19:03.280 --> 19:09.760
+system, the same thing that is still using Ubutu-Hore today. My question is that does
+
+19:09.760 --> 19:18.680
+Mbutu-Hore have any plan to move on from this system or are you still planning to be using
+
+19:18.680 --> 19:28.680
+this system in the foreseeable future or any update on that?
+
+19:28.680 --> 19:33.440
+Are you thinking about the writable pad? Yes, the writable pad.
+
+19:33.440 --> 19:40.160
+My plan is to move to TMP files and fstab, so use just tools that come from systemd because
+
+19:40.160 --> 19:45.840
+we can do those things. It means there is a bit of duplication in how you write the
+
+19:45.840 --> 19:51.080
+things, but that means that we have one less shell script do my thing that is not maybe
+
+19:51.080 --> 20:01.560
+the nicest thing. I don't think there is any data when it will happen. It's just that we
+
+20:01.560 --> 20:08.640
+know it works and we have to decide when we move to that.
+
+20:08.640 --> 20:21.080
+Thank you. Any other questions?
+
+20:21.080 --> 20:29.280
+You mentioned resigning or resealing on updates. Could you do away with that and use the trick
+
+20:29.280 --> 20:38.520
+with binding to a hash of a certificate and then using the certificate to sign whatever
+
+20:38.520 --> 20:41.040
+needs to be signed?
+
+20:41.040 --> 20:49.760
+That would be better. What I showed you is how the state is now and it would be better
+
+20:49.760 --> 20:59.240
+not to have a reseal. There was not that much experience I think in the community about
+
+20:59.240 --> 21:03.720
+that at that moment that we could just do that which was better. When it's been designed
+
+21:03.720 --> 21:11.320
+I think people didn't realize that could do something better. At some point we will get
+
+21:11.320 --> 21:20.960
+there. I don't think we have any proof of concept on Boonjukor using this yet. We have
+
+21:20.960 --> 21:25.800
+talked about it, that's it.
+
+21:25.800 --> 21:33.880
+We still have time for questions.
+
+21:33.880 --> 21:41.160
+It feels to me like using snaps in this way is a bit complicated. My question would be
+
+21:41.160 --> 21:48.680
+what benefits do you get from this approach compared to something like system D Sys extensions
+
+21:48.680 --> 21:54.600
+that were talked about earlier today?
+
+21:54.600 --> 22:01.800
+You mean those? The point is that the application snap is the important thing for the user experience
+
+22:01.800 --> 22:06.480
+because they want to have their own application and they can do quite a lot of things. This
+
+22:06.480 --> 22:11.520
+is very interesting. Having everything to update in the same way makes things simpler
+
+22:11.520 --> 22:20.560
+for them. I showed you what was the complex thing behind the curtain but I think the point
+
+22:20.560 --> 22:28.640
+of having snaps there is just for the simplicity of the users. People who make image for their
+
+22:28.640 --> 22:44.200
+applications they have to deal just with snaps and not many different technologies.
+
+22:44.200 --> 22:48.960
+I don't know how to use all the things and make it look like it's a snap. I'm not sure.
+
+22:48.960 --> 22:54.080
+Maybe there is a way. Which would be nice because if we have less code to maintain and
+
+22:54.080 --> 23:02.040
+we just have a wrapper to something else it's much better. For the user I believe that it
+
+23:02.040 --> 23:04.320
+has to look like a snap.
+
+23:04.320 --> 23:20.120
+Round of applause.

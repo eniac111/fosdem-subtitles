@@ -1,0 +1,1231 @@
+WEBVTT
+
+00:00.000 --> 00:01.000
+Okay.
+
+00:01.000 --> 00:08.200
+Thank you for being here.
+
+00:08.200 --> 00:09.200
+So good morning.
+
+00:09.200 --> 00:10.760
+My name is Daniel Mediado.
+
+00:10.760 --> 00:13.080
+I'm here today with my colleague Miguel.
+
+00:13.080 --> 00:15.240
+We are both principals of our engineers at Weihat.
+
+00:15.240 --> 00:16.440
+I'm currently working in the
+
+00:16.440 --> 00:19.480
+episode of the DTT team, basically monitoring.
+
+00:19.480 --> 00:25.120
+And he's on the OpenShift virtualization team.
+
+00:25.120 --> 00:28.280
+We just wanted to speak today a little bit about CNI, which stands for
+
+00:28.280 --> 00:31.880
+container network interface, which this is basically all the networking in
+
+00:31.880 --> 00:34.840
+Kubernetes, but not only limited to that.
+
+00:34.840 --> 00:37.920
+Because I think one of the things that this product lacks the most is
+
+00:37.920 --> 00:41.560
+documentation and how does this work, how you create a plugin, what are the
+
+00:41.560 --> 00:42.560
+primitives.
+
+00:42.560 --> 00:45.400
+I think that's something that is super simple, but there's little to
+
+00:45.400 --> 00:47.280
+no documentation besides the spec.
+
+00:47.280 --> 00:48.960
+So let's go walk through that.
+
+00:48.960 --> 00:51.520
+Yeah, this is a quick intro.
+
+00:51.520 --> 00:55.200
+So you may have been noticing that we are going to be speaking about
+
+00:55.200 --> 00:57.560
+CNI plugins change specifically.
+
+00:57.560 --> 01:01.080
+That means that we are going to be basically putting a couple of plugins
+
+01:01.080 --> 01:02.080
+in serial mode.
+
+01:02.080 --> 01:06.640
+But first of all, CNI stands for three different things and I want to be
+
+01:06.640 --> 01:08.640
+a little bit clearer here.
+
+01:08.640 --> 01:12.080
+You can have the CNI specification itself, which is a document.
+
+01:12.080 --> 01:13.080
+It's fine.
+
+01:13.080 --> 01:14.080
+You can read it.
+
+01:14.080 --> 01:15.080
+Then you've got the plugins.
+
+01:15.080 --> 01:18.480
+So if you go to GitHub, you can see the CNI plugins.
+
+01:18.480 --> 01:21.560
+This is a set of plugins basically maintained by the community.
+
+01:21.560 --> 01:24.120
+Bridge, Mac, VLAM, you name it.
+
+01:24.120 --> 01:25.960
+There's a couple of those.
+
+01:25.960 --> 01:29.280
+The third thing, it may be just a couple of plugins.
+
+01:29.280 --> 01:32.000
+So those are basically the three things that you may be interested
+
+01:32.000 --> 01:33.000
+into.
+
+01:33.000 --> 01:35.000
+We are going to be always speaking about the plugins here in this
+
+01:35.000 --> 01:39.040
+session, but we'll be happily discussing anything after that.
+
+01:39.040 --> 01:45.400
+So just in case, I mean, here we are going to be speaking about Kubernetes,
+
+01:45.400 --> 01:49.720
+but let me take a note that the CNI specification on the plugins, they
+
+01:49.720 --> 01:52.280
+do work totally without Kubernetes.
+
+01:52.280 --> 01:55.760
+So with any runtime and time, SaaS rocket, and in fact, it started
+
+01:55.760 --> 01:56.760
+out with rocket.
+
+01:56.760 --> 01:58.720
+I guess Casey started that out.
+
+01:58.720 --> 02:02.960
+You can be running this out with cryo rocket, whatever you want to play
+
+02:02.960 --> 02:03.960
+with this.
+
+02:03.960 --> 02:06.240
+So what is the CNI plugin specifically?
+
+02:06.240 --> 02:10.400
+CNI plugins are binaries, which are basically copied over any of the
+
+02:10.400 --> 02:15.480
+hosts that are in your Kubernetes clusters.
+
+02:15.480 --> 02:18.880
+So if you want to install this out, you probably need a demo set to deploy
+
+02:18.880 --> 02:20.880
+it on or do that manually.
+
+02:20.880 --> 02:25.200
+So here, who runs this CNI plugins?
+
+02:25.200 --> 02:29.400
+You could either run that yourself, but usually you would need to have
+
+02:29.400 --> 02:31.080
+the kubelet run those for you.
+
+02:31.080 --> 02:34.360
+Is there anybody here who doesn't know what a kubelet is?
+
+02:34.360 --> 02:35.360
+Okay.
+
+02:35.360 --> 02:38.800
+The kubelet, you fucker, anyway.
+
+02:38.800 --> 02:39.800
+They were trying me out.
+
+02:39.800 --> 02:42.600
+So anyways, I'll go ahead.
+
+02:42.600 --> 02:46.640
+So basically when you go and have the kubelet, which is a mystery thing
+
+02:46.640 --> 02:50.720
+that you don't know what it's about, runs the binary here in the host.
+
+02:50.720 --> 02:56.040
+It basically creates a network namespace, which is tied to a bf interface.
+
+02:56.040 --> 02:58.880
+As this guy doesn't know what a bf interface is, I'm going to be basically
+
+02:58.880 --> 03:00.440
+speaking out of that for him.
+
+03:00.440 --> 03:04.640
+So it's a bit trial point to point, you know, tunnel.
+
+03:04.640 --> 03:07.200
+You can basically hook this up into whatever you want to.
+
+03:07.200 --> 03:11.840
+Like usually these are connected to OVN, open bit sheets or whatever
+
+03:11.840 --> 03:17.880
+virtual streets or it depends on this CNI implementation.
+
+03:17.880 --> 03:19.360
+How do I configure the thing?
+
+03:19.360 --> 03:23.080
+These are usually configured by a configuration file.
+
+03:23.080 --> 03:27.120
+We're going to be speaking later on a little bit about how this changes.
+
+03:27.120 --> 03:32.080
+But yes, FYI, Miguel will be speaking later on about this more.
+
+03:32.080 --> 03:38.360
+Prior to the CNI specification 0.3.0, you weren't able to, you know, put your
+
+03:38.360 --> 03:39.360
+plugins in CNI mode.
+
+03:39.360 --> 03:40.360
+It would just break.
+
+03:40.360 --> 03:44.880
+So you would need to know basically there's a couple of CNI components
+
+03:44.880 --> 03:45.960
+that you need to put.
+
+03:45.960 --> 03:49.920
+Basically the name of your CNI plugin, the type, and the type should match
+
+03:49.920 --> 03:54.240
+the name of your binary or it would probably break afterwards.
+
+03:54.240 --> 03:59.160
+Then later on you need also some mbars which basically are specifically
+
+03:59.160 --> 04:03.640
+about telling you like okay, I can switch, but do I run this?
+
+04:03.640 --> 04:06.480
+Because it may be a bug or the bugs or whatever.
+
+04:06.480 --> 04:11.560
+If you put all this out, again recall a CNI plugin, it's a binary so you just
+
+04:11.560 --> 04:13.960
+run it as any binary you would run.
+
+04:13.960 --> 04:18.360
+It goes to your CNI plugin and then you can exit code.
+
+04:18.360 --> 04:22.920
+If you did your things right like that, this should be getting you an exit
+
+04:22.920 --> 04:24.760
+code 0, not error.
+
+04:24.760 --> 04:28.600
+And then you would be getting your standard out here which is just JSON.
+
+04:28.600 --> 04:32.360
+Why JSON and why not using the RPC and the daemon like everything in Kubernetes
+
+04:32.360 --> 04:33.720
+you may ask?
+
+04:33.720 --> 04:38.440
+Because again, this wasn't meant to be used on Kubernetes.
+
+04:38.440 --> 04:42.480
+If you get to stay at the more CNI working station, they'll probably be
+
+04:42.480 --> 04:46.000
+speaking about some point using the daemon for that too.
+
+04:46.000 --> 04:50.400
+But here for the sake of this session, what you would need to remember here
+
+04:50.400 --> 04:54.880
+is this preps results basically and advancing some stuff later from my
+
+04:54.880 --> 04:55.880
+colleague.
+
+04:55.880 --> 05:00.400
+This is the previous results as per JSON at the plugin and if any plugin
+
+05:00.400 --> 05:05.040
+gets a previous result here, it should output the next one just in a serial
+
+05:05.040 --> 05:08.840
+mode way.
+
+05:08.840 --> 05:11.480
+I was speaking about the specification.
+
+05:11.480 --> 05:13.080
+What the hell is that?
+
+05:13.080 --> 05:19.760
+So if you're implementing your plugin, you need to make sure that it
+
+05:19.760 --> 05:24.840
+observes several primitives which is add, dell, check and version.
+
+05:24.840 --> 05:30.320
+So for instance, you may want to add a pod.
+
+05:30.320 --> 05:33.040
+I want to delete a pod network interface.
+
+05:33.040 --> 05:36.960
+And second version to be honest and even if the specification really
+
+05:36.960 --> 05:42.640
+requests you to honor this and observe this, they aren't really used by
+
+05:42.640 --> 05:44.560
+most of the commercial plugins.
+
+05:44.560 --> 05:49.920
+For instance, Celium, I guess they don't do any kind of tech, maybe version,
+
+05:49.920 --> 05:54.560
+but those aren't really needed and we'll be discussing that later on.
+
+05:54.560 --> 05:59.240
+So this is what a config file usually looks like.
+
+05:59.240 --> 06:01.680
+So this is nothing like a big deal.
+
+06:01.680 --> 06:04.120
+Super simple CNI version again.
+
+06:04.120 --> 06:07.240
+For example, I'm getting you backwards like with the things that we were
+
+06:07.240 --> 06:08.760
+speaking before.
+
+06:08.760 --> 06:13.000
+This one would work with CNI plugin sense because it's 0 to 1.
+
+06:13.000 --> 06:16.440
+If you put 0 to 0, it would basically fail miserably telling you that
+
+06:16.440 --> 06:19.160
+he hates you and it would crash.
+
+06:19.160 --> 06:24.200
+Then you got here the name, I don't care, but this type should match the name of
+
+06:24.200 --> 06:26.520
+your binary there later on.
+
+06:26.520 --> 06:30.520
+Then you can put out some plugin specific things that are, for instance, this
+
+06:30.520 --> 06:35.800
+basically comes from the bridge plugin which Michael will be showcasing later on.
+
+06:35.800 --> 06:38.880
+So you can put here, okay, this, what do I need for a bridge?
+
+06:38.880 --> 06:39.880
+I need the name.
+
+06:39.880 --> 06:40.880
+You see the default gateway.
+
+06:40.880 --> 06:44.800
+I'm going to be forcing the address later on.
+
+06:44.800 --> 06:48.240
+This is a little bit special, but I won't be discussing that because you'll be
+
+06:48.240 --> 06:52.800
+seeing that later on in the conflict.
+
+06:52.800 --> 06:59.520
+Again, like, okay, so you told me about CNI plugins or binaries and also like
+
+06:59.520 --> 07:00.960
+our JSON configurations.
+
+07:00.960 --> 07:03.160
+So where do I store these things out?
+
+07:03.160 --> 07:08.600
+So basically when you define the cube of the configuration, you tell the CNI
+
+07:08.600 --> 07:09.600
+binary path.
+
+07:09.600 --> 07:14.720
+And by CNI binary path, it's just a directory where I store all the plugins.
+
+07:14.720 --> 07:18.480
+Sadly, there's little to no login in most of the plugins, so if something
+
+07:18.480 --> 07:21.480
+breaks you would have to go and see what's going on here.
+
+07:21.480 --> 07:26.720
+So you would just go, one of the things that usually fail the most is just like
+
+07:26.720 --> 07:29.800
+you don't have the binary here installed and it would fail until you use the
+
+07:29.800 --> 07:30.800
+H2N.
+
+07:30.800 --> 07:35.000
+And the config directory is here and you just have a couple of JSON who maps to
+
+07:35.000 --> 07:40.240
+the name of the binaries usually and where you put the specific plugin configs.
+
+07:40.240 --> 07:44.440
+Plugging chains, let's go for that.
+
+07:44.440 --> 07:46.560
+So that's the big deal.
+
+07:46.560 --> 07:51.280
+Again, available since CNI or CO2 zero.
+
+07:51.280 --> 07:56.960
+Those are required since the version one because now everything is the same, even
+
+07:56.960 --> 07:59.720
+if it's just a single plugin and everything is accomplished.
+
+07:59.720 --> 08:03.200
+Again, even if it's just a single plugin.
+
+08:03.200 --> 08:08.440
+So if you just want to put the things from the old way, it would just break.
+
+08:08.440 --> 08:11.840
+I was also pointing out that now let's assume that you've got a couple of plugins
+
+08:11.840 --> 08:13.480
+here like Abinell.
+
+08:13.480 --> 08:18.040
+You've got the Bricks plugin, then you've got Abinell Firewall plugin, which is
+
+08:18.040 --> 08:21.480
+one of the most useful use cases for this.
+
+08:21.480 --> 08:25.760
+And then Abinell, let's say put a couple of plugins, bandwidth, Abinell, Abinell,
+
+08:25.760 --> 08:30.680
+Abinell Firewall because I like to and I am going to be putting Abinell in another
+
+08:30.680 --> 08:32.640
+Macmill interface here.
+
+08:32.640 --> 08:38.120
+So all these plugins are expected to honor that they are going to be passing the
+
+08:38.120 --> 08:40.600
+properties to each other.
+
+08:40.600 --> 08:43.840
+So even if they don't know anything about what comes before, because the
+
+08:43.840 --> 08:47.880
+Bricks plugin will know how to make a Bricks, but the Macmillan plugin won't.
+
+08:47.880 --> 08:52.080
+So everything comes through the plugins, all the info goes through using prep results
+
+08:52.080 --> 08:59.480
+and we'll be showing you later on with the demo if it doesn't fail.
+
+08:59.480 --> 09:04.840
+This is the config, this is not a config for CNI plugin, this is a conf list.
+
+09:04.840 --> 09:08.320
+So if you see this pretty much resembles what you had in the config file for a plugin
+
+09:08.320 --> 09:14.560
+like before, so now we got CNI version, okay, I know I'm guessing this a lot, but it
+
+09:14.560 --> 09:18.280
+should be greater than three of these here, otherwise this would just break.
+
+09:18.280 --> 09:22.440
+This is your conf list and then you get basically a list of plugins.
+
+09:22.440 --> 09:28.120
+Instead of one, we got a few of those and those would be just working together.
+
+09:28.120 --> 09:33.200
+So in this case, we got a name because all the plugins would need a name and would need
+
+09:33.200 --> 09:37.520
+a tie which would match the binary and then we got the specific configurations.
+
+09:37.520 --> 09:43.400
+So in the demo, we'll be showing you how these plugins get to link with the prep results
+
+09:43.400 --> 09:44.880
+and so forth.
+
+09:44.880 --> 09:51.360
+But if you see, it's just a list of plugins with name, type and then specific configurations.
+
+09:51.360 --> 09:57.440
+But if you just want to do something, okay, I'm buying this, I want to create my own plugin,
+
+09:57.440 --> 10:01.560
+you probably need a name and type even if it doesn't do anything.
+
+10:01.560 --> 10:04.600
+Okay, go ahead.
+
+10:04.600 --> 10:09.480
+Now use cases and then I guess I spoke maybe a little bit too much and even if we are late
+
+10:09.480 --> 10:13.400
+because we could have rushed to the airport to that, but I'm handing over to Michael Miguel
+
+10:13.400 --> 10:18.040
+who's going to be showing you this a little bit around and then if it works again, demo.
+
+10:18.040 --> 10:20.040
+Go ahead, Miguel.
+
+10:20.040 --> 10:21.040
+Hello?
+
+10:21.040 --> 10:23.800
+Well, I'll use this.
+
+10:23.800 --> 10:32.320
+So this is like a list of the plugins that are provided by the CNI maintainers and are
+
+10:32.320 --> 10:36.160
+available on the container networking slash plugins repository.
+
+10:36.160 --> 10:38.720
+So the first is tuning CNI.
+
+10:38.720 --> 10:42.560
+It allows you to configure like a list of syscuttle.
+
+10:42.560 --> 10:47.800
+So if you need some syscuttle to happen inside of your pod, you use this tuning CNI.
+
+10:47.800 --> 10:53.120
+The bandwidth CNI as the name implies, like quite evident, what it does is to throttle
+
+10:53.120 --> 10:57.000
+either the ingress or egress traffic to your pod.
+
+10:57.000 --> 11:02.160
+If you want to do those kinds of things, the firewall plugin, what it does is only allow
+
+11:02.160 --> 11:08.840
+access to and from the IP addresses that are referenced in the results that the plugin
+
+11:08.840 --> 11:14.800
+got, for instance, and the port mapping as the, well, the name kind of implies it, well,
+
+11:14.800 --> 11:21.680
+does port forwarding configures port forwarding from the host into the container for the set
+
+11:21.680 --> 11:26.560
+of ports that you specify in the configuration.
+
+11:26.560 --> 11:32.400
+Now having said this, let's go to the demo and I'm now wondering how can I do this while
+
+11:32.400 --> 11:34.960
+holding the microphone.
+
+11:34.960 --> 11:35.960
+This doesn't work.
+
+11:35.960 --> 11:36.960
+I think.
+
+11:36.960 --> 11:37.960
+Yeah, go ahead.
+
+11:37.960 --> 11:38.960
+No, I do like.
+
+11:38.960 --> 11:39.960
+Of course, of course.
+
+11:39.960 --> 11:40.960
+Really sorry.
+
+11:40.960 --> 11:41.960
+Right.
+
+11:41.960 --> 11:42.960
+Okay.
+
+11:42.960 --> 11:43.960
+Okay.
+
+11:43.960 --> 11:44.960
+Okay.
+
+11:44.960 --> 11:45.960
+Awesome.
+
+11:45.960 --> 11:46.960
+Easy.
+
+11:46.960 --> 11:47.960
+Okay.
+
+11:47.960 --> 11:56.400
+So the first thing that I should mention, like Daniel, like reference Kubernetes a lot
+
+11:56.400 --> 12:04.640
+like, but please remember that CNI is more is like Kubernetes is a user of CNI.
+
+12:04.640 --> 12:08.680
+Like it's not that you can use CNI by itself.
+
+12:08.680 --> 12:13.040
+And as such, we're going to be using something called CNI tool.
+
+12:13.040 --> 12:20.760
+It's just a binary that you point at your, at a certain CNI binary and give it like a
+
+12:20.760 --> 12:26.960
+set of environment variables, the plugins configuration via standard then as Daniel
+
+12:26.960 --> 12:30.960
+said before, like you basically pass the configuration of the plugins.
+
+12:30.960 --> 12:36.640
+You give it the input parameters, which are the environment variables and you execute
+
+12:36.640 --> 12:37.640
+the binary.
+
+12:37.640 --> 12:42.960
+And this is how we're going to be seeing the demo.
+
+12:42.960 --> 12:49.840
+You can follow it on this on this link, but yeah, the first thing I think I should explain
+
+12:49.840 --> 12:52.400
+is like the scenario we're trying to achieve.
+
+12:52.400 --> 12:56.400
+And this can be seen here in the bottom right corner.
+
+12:56.400 --> 12:57.960
+So very simple thing.
+
+12:57.960 --> 13:04.460
+We just want to have like a bridge to namespace is interconnected via this bridge.
+
+13:04.460 --> 13:10.160
+And we're going to be configuring a static IP on a static IP addresses on each of the
+
+13:10.160 --> 13:11.160
+namespaces.
+
+13:11.160 --> 13:15.680
+And then we'll run a sniper from the client to the, to the server.
+
+13:15.680 --> 13:19.000
+And we're going to see how it fares.
+
+13:19.000 --> 13:23.960
+So first I also need to show you the configuration that I'm using for this.
+
+13:23.960 --> 13:24.960
+Okay.
+
+13:24.960 --> 13:26.480
+It's this one.
+
+13:26.480 --> 13:29.840
+And this is the configuration that we're going to be using to achieve this scenario.
+
+13:29.840 --> 13:32.540
+Like we're going to be using the plugin of type bridge.
+
+13:32.540 --> 13:37.080
+This is the name of the binary that will be invoked on the host to create the bridge.
+
+13:37.080 --> 13:38.560
+Give it the name.
+
+13:38.560 --> 13:44.080
+We enable the IP's capability so you can put a static IP in it and you tell it that you
+
+13:44.080 --> 13:46.440
+want static IP.
+
+13:46.440 --> 13:49.760
+And that's pretty much the configuration that you need to give it.
+
+13:49.760 --> 13:53.120
+So let's just run the example.
+
+13:53.120 --> 13:55.520
+Okay.
+
+13:55.520 --> 13:58.200
+Like this parameter here that you see, can you see it?
+
+13:58.200 --> 13:59.800
+Oh, it's like the font big enough.
+
+13:59.800 --> 14:00.800
+It's good.
+
+14:00.800 --> 14:01.800
+Okay.
+
+14:01.800 --> 14:02.800
+Thanks.
+
+14:02.800 --> 14:05.120
+Like you have to give this like the name of the configuration.
+
+14:05.120 --> 14:10.840
+If you see like unlimited bandwidth, it's the attribute here on the upper left corner
+
+14:10.840 --> 14:12.000
+that you see under name.
+
+14:12.000 --> 14:13.240
+It's the same thing.
+
+14:13.240 --> 14:15.020
+It must match.
+
+14:15.020 --> 14:20.720
+And now this configured the scenario and it's now running the IPOS session between the both
+
+14:20.720 --> 14:22.180
+the client and the server.
+
+14:22.180 --> 14:28.160
+And as you see, we're getting like a very big bit rate of around 60 gigabits per second.
+
+14:28.160 --> 14:31.920
+So this is with a straight configuration.
+
+14:31.920 --> 14:39.240
+Now let's use a different configuration where we put, we use the first configuration, but
+
+14:39.240 --> 14:40.480
+we use it in a chain.
+
+14:40.480 --> 14:44.360
+And afterwards we put like the bandwidth plugin.
+
+14:44.360 --> 14:51.920
+Again, what this does, it will throttle the input traffic into the network interface of
+
+14:51.920 --> 14:54.080
+both namespaces.
+
+14:54.080 --> 15:01.920
+So we're going to be doing the exact same thing, but with this different configuration
+
+15:01.920 --> 15:05.000
+and bandwidth limiter.
+
+15:05.000 --> 15:09.980
+And as we see, like the bit rate that we're getting is literally a lot less and it should
+
+15:09.980 --> 15:15.160
+map somehow to the values that we've configured here.
+
+15:15.160 --> 15:19.740
+So what this shows is that you can use like this bandwidth plugin in a chain in order
+
+15:19.740 --> 15:22.500
+to achieve a different use case than you had before.
+
+15:22.500 --> 15:28.280
+Like you want to throttle traffic to this, you use this type of plugin.
+
+15:28.280 --> 15:30.440
+I think that's, let me just check the time.
+
+15:30.440 --> 15:31.440
+Yeah, we're good.
+
+15:31.440 --> 15:33.200
+Still have 10 minutes.
+
+15:33.200 --> 15:37.200
+So let's run the second.
+
+15:37.200 --> 15:41.360
+The second demo we had, we have actually, sorry.
+
+15:41.360 --> 15:42.360
+Okay.
+
+15:42.360 --> 15:45.400
+The scenario is a lot simpler this time.
+
+15:45.400 --> 15:49.520
+Like we just have the same bridge as before, but we just have like a network namespace
+
+15:49.520 --> 15:51.360
+connected to it.
+
+15:51.360 --> 15:59.020
+And what we're going to be doing is showing you how the chain actually works, focusing
+
+15:59.020 --> 16:05.320
+on the, on what Daniel said before, like you need to handle always the previous result
+
+16:05.320 --> 16:10.720
+and you need to account for it and you need to pass it along the chain continuously.
+
+16:10.720 --> 16:12.760
+And okay.
+
+16:12.760 --> 16:16.880
+Let's just show the configuration of this plugin.
+
+16:16.880 --> 16:22.640
+So this chain might look a lot more complex than the one before because it has more things
+
+16:22.640 --> 16:24.680
+in it, but it's very, very, very simple.
+
+16:24.680 --> 16:27.780
+So this thing first will, and it will call the bridge plugin.
+
+16:27.780 --> 16:30.120
+It will create the bridge.
+
+16:30.120 --> 16:35.720
+Then we'll invoke the debug CNI, like this CNI plugin is very, very simple.
+
+16:35.720 --> 16:39.720
+The only thing it does is print the result it got from the previous plugin.
+
+16:39.720 --> 16:43.920
+So what we're going to be seeing is here is the result of the first plugin in the chain.
+
+16:43.920 --> 16:47.320
+Afterwards, we run the tuning CNI plugin.
+
+16:47.320 --> 16:52.440
+And what we're going to do is to change the MAC address that we got on the interface of
+
+16:52.440 --> 16:55.120
+this dummy namespace that we see here.
+
+16:55.120 --> 16:57.900
+So the idea is we first run the bridge plugin.
+
+16:57.900 --> 17:04.240
+This thing will assign a random MAC address to the interface that is on this namespace.
+
+17:04.240 --> 17:05.240
+We'll print that.
+
+17:05.240 --> 17:08.600
+We'll run tuning to change that MAC address.
+
+17:08.600 --> 17:13.840
+And we're going to print that again to see like the result of the previous plugin.
+
+17:13.840 --> 17:15.880
+And that's pretty much it.
+
+17:15.880 --> 17:22.880
+Let's just run the example and show you what I actually mean.
+
+17:22.880 --> 17:29.240
+So here we see like...
+
+17:29.240 --> 17:37.200
+So this log here is the result of the first call of the debug CNI.
+
+17:37.200 --> 17:44.000
+And as we see in the pods, in what would be the pod interface, which is identified by
+
+17:44.000 --> 17:48.640
+this attribute sandbox that points to the name of the namespace or actually to the path
+
+17:48.640 --> 17:53.720
+of the namespace, we see that in its result we have the interface name that was created
+
+17:53.720 --> 17:56.600
+on that network namespace.
+
+17:56.600 --> 18:01.440
+And we see that it was assigned like a random MAC address that is identified here.
+
+18:01.440 --> 18:04.920
+We then run the tuning plugin that changed this MAC address.
+
+18:04.920 --> 18:08.160
+And we finally printed the previous result again.
+
+18:08.160 --> 18:17.080
+And we see that this changed to the MAC address that we specified statically in the plugin
+
+18:17.080 --> 18:21.040
+configuration, which is exactly what we wanted to show.
+
+18:21.040 --> 18:28.440
+Like that's like very simple demo, but I think it kind of illustrates in a very neat way
+
+18:28.440 --> 18:34.840
+how chaining actually works in a step-by-step manner.
+
+18:34.840 --> 18:39.240
+And with this, we arrived at the conclusions.
+
+18:39.240 --> 18:46.220
+And I'd like to basically tell you again what we just told you, like focusing on the most
+
+18:46.220 --> 18:49.960
+important things that we think are about this.
+
+18:49.960 --> 18:54.440
+First thing is like these plugins, remember what they do.
+
+18:54.440 --> 19:00.140
+They add more stuff to the pod, so they enable different use cases.
+
+19:00.140 --> 19:02.080
+You can prevent IP spoofing.
+
+19:02.080 --> 19:04.380
+You can throttle bandwidth, as we've seen.
+
+19:04.380 --> 19:08.240
+You can configure port forwarding from the host to different containers.
+
+19:08.240 --> 19:12.040
+You can configure differences cuddles.
+
+19:12.040 --> 19:18.360
+And actually, you can also create an allow list of the syscuddles that you can use inside
+
+19:18.360 --> 19:20.760
+of the pod.
+
+19:20.760 --> 19:30.160
+And finally, I think like if you have to keep one thing from this presentation is that a
+
+19:30.160 --> 19:34.760
+meta plugin must always handle the result of the previous plugin.
+
+19:34.760 --> 19:40.400
+Like you need to account for it, first of all, because you don't know if you're a plugin,
+
+19:40.400 --> 19:43.000
+you don't know if anything will run after you in a chain.
+
+19:43.000 --> 19:46.200
+Like the user will configure it, so you don't know what's going to happen afterwards.
+
+19:46.200 --> 19:48.120
+So you need to send a result.
+
+19:48.120 --> 19:52.640
+And if you're somewhere in the middle of the chain, least you can do or least you must
+
+19:52.640 --> 19:59.960
+do is grab the result you got from the previous one and echo it into the next one.
+
+19:59.960 --> 20:05.280
+Now finally, remember that two things.
+
+20:05.280 --> 20:11.480
+Chain chains are only allowed starting from CNI 0.3.
+
+20:11.480 --> 20:16.840
+And they're the only configuration type allowed starting from CNI version 1.0.
+
+20:16.840 --> 20:24.240
+Like if you use the first configuration example we've shown on CNI 1.0, it wouldn't work.
+
+20:24.240 --> 20:26.880
+It will explode, it will fail, make you miserable.
+
+20:26.880 --> 20:34.200
+And the idea here is know your previous result always because that's probably the most information
+
+20:34.200 --> 20:37.000
+you'll get from anything that ran before you.
+
+20:37.000 --> 20:43.720
+Like as Daniel said, logging is clearly not the thing that's most prevalent on, at least
+
+20:43.720 --> 20:50.600
+on the plugins that are maintained by the CNI maintainers.
+
+20:50.600 --> 20:53.480
+And yeah, this concludes our talk.
+
+20:53.480 --> 20:55.720
+Thanks a lot, guys.
+
+20:55.720 --> 20:56.720
+Questions?
+
+20:56.720 --> 21:06.520
+Thank you.
+
+21:06.520 --> 21:07.520
+Thank you.
+
+21:07.520 --> 21:11.960
+Can you tell a little more about use cases of CNI without Kubernetes?
+
+21:11.960 --> 21:12.960
+Okay.
+
+21:12.960 --> 21:15.600
+That's a really good question.
+
+21:15.600 --> 21:18.040
+And it's going to probably eat all the time that we have.
+
+21:18.040 --> 21:21.280
+Like I can, like I work for Kubernetes.
+
+21:21.280 --> 21:27.880
+And one thing we do in it is, so there's a pod and inside the pod you run a virtual machine
+
+21:27.880 --> 21:29.000
+in it.
+
+21:29.000 --> 21:33.960
+Now CNI, what it does is configure the pod interface, but what you want to have is like
+
+21:33.960 --> 21:35.600
+networking inside of the VM.
+
+21:35.600 --> 21:40.920
+Like you need some way to get like the extended connectivity from the pod, from the pod interface
+
+21:40.920 --> 21:42.440
+and into the VM.
+
+21:42.440 --> 21:43.960
+You need to have something there.
+
+21:43.960 --> 21:48.720
+And we have code in our code base, in the Kubernetes code base to achieve this.
+
+21:48.720 --> 21:54.440
+Like one of the thing we could do using CNI chains is to all flow that entire code to
+
+21:54.440 --> 21:59.440
+CNI plugins that would create, for instance, the bridge that you have inside of the pod
+
+21:59.440 --> 22:04.760
+to extend that connectivity that would create the tap device from which the VM would create
+
+22:04.760 --> 22:07.400
+the emulated network device from.
+
+22:07.400 --> 22:12.760
+So I really think this could be modelled using CNI.
+
+22:12.760 --> 22:14.480
+That's something we still need to see.
+
+22:14.480 --> 22:20.040
+Like it's a very rough idea yet, but it's an example, I think.
+
+22:20.040 --> 22:23.480
+Now somebody says that I guess the quickest one is, as you know, he was mentioning CNI
+
+22:23.480 --> 22:24.480
+tools.
+
+22:24.480 --> 22:28.080
+CNI tool is just used to develop CNI plugins and it doesn't have Kubernetes at all.
+
+22:28.080 --> 22:31.440
+And you can see that the plugins don't have to run there.
+
+22:31.440 --> 22:34.440
+Even that rocket, so rocket, it was on its own.
+
+22:34.440 --> 22:36.280
+It didn't have to use Kubernetes at all.
+
+22:36.280 --> 22:39.400
+And it's where most of CNI plugins were originally developed.
+
+22:39.400 --> 22:42.560
+Just put any kind of, you know, random engine and it would work.
+
+22:42.560 --> 22:49.040
+No Kubernetes needed.
+
+22:49.040 --> 22:54.040
+So if I have a CNI plugin that sets up some external state, for example, a firewall that
+
+22:54.040 --> 22:58.800
+might even be a separate device, and something goes wrong and I lose the delete, how do I
+
+22:58.800 --> 23:00.360
+recover from that?
+
+23:00.360 --> 23:02.240
+So that's an amazing question.
+
+23:02.240 --> 23:10.640
+Like you need all, like you must design everything assuming that CNI deletes will be missed.
+
+23:10.640 --> 23:12.840
+Like it might happen like all the time.
+
+23:12.840 --> 23:19.240
+So you need to have a reconcile loops of sorts that knows about your state, relevant state,
+
+23:19.240 --> 23:21.160
+and reconcile this somehow.
+
+23:21.160 --> 23:25.760
+But I didn't see a way to even check if the state should still be active.
+
+23:25.760 --> 23:29.560
+How does my CNI plugin know that something is still there?
+
+23:29.560 --> 23:30.560
+It's clueless.
+
+23:30.560 --> 23:38.600
+Like you need to like, I don't know, like to monitor this little kid and assume that
+
+23:38.600 --> 23:42.840
+he will not fall and hit the head in the corner of the table.
+
+23:42.840 --> 23:45.440
+You need to do that out of bend.
+
+23:45.440 --> 23:49.360
+Like it's not designed to allow for that.
+
+23:49.360 --> 23:51.360
+I'm sorry.
+
+23:51.360 --> 23:53.480
+Hi.
+
+23:53.480 --> 23:59.320
+During the presentation you mentioned that some CNI plugin like Selium, but I guess that
+
+23:59.320 --> 24:03.840
+you were also mentioning other plugins, they're not doing the loggings and they're not using
+
+24:03.840 --> 24:04.840
+the entire APIs.
+
+24:04.840 --> 24:05.840
+How comes?
+
+24:05.840 --> 24:08.880
+I mean, it kind of depends on your CNI.
+
+24:08.880 --> 24:09.880
+I guess you hear me.
+
+24:09.880 --> 24:10.880
+It's okay?
+
+24:10.880 --> 24:13.480
+So it kind of depends on your CNI plugin implementation.
+
+24:13.480 --> 24:18.600
+So for instance, some CNI do implement logging, but it's not something that is within the
+
+24:18.600 --> 24:20.160
+implementation itself at all.
+
+24:20.160 --> 24:24.400
+So you may be totally fine doing no logging at all, but then go back to debugging it so
+
+24:24.400 --> 24:30.080
+you have to go to the kubectl, you have to go to Cribal Labs, and then go back to debugging
+
+24:30.080 --> 24:31.200
+all those.
+
+24:31.200 --> 24:36.800
+So it depends on your implementation, for instance, that which is here, he implements
+
+24:36.800 --> 24:41.520
+some of his logging for inamulties and so forth, but that's not something that is on
+
+24:41.520 --> 24:42.520
+every plugin.
+
+24:42.520 --> 24:45.640
+For sure it's not in any of the community-maintained ones.
+
+24:45.640 --> 24:48.040
+Okay, thanks.
+
+24:48.040 --> 24:50.040
+Any more questions?
+
+24:50.040 --> 24:55.280
+Well, thanks a lot for your time and for listening to us, and bye-bye.
+
+24:55.280 --> 24:56.280
+Enjoy the question.
+
+24:56.280 --> 25:02.720
+Thank you.

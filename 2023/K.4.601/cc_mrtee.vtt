@@ -1,0 +1,1081 @@
+WEBVTT
+
+00:00.000 --> 00:27.060
+So, I'm Tom.
+
+00:27.060 --> 00:32.520
+I'm a first year PhD student at the Carre Lueve and I'll be talking about the research
+
+00:32.520 --> 00:36.300
+we have done in the last year, a year and a half.
+
+00:36.300 --> 00:41.400
+So to sketch a bit of context, we are researching on cyber-physical systems.
+
+00:41.400 --> 00:46.240
+Cyber-physical systems are systems that interact with the real world, for example, air-compressive
+
+00:46.240 --> 00:48.000
+robotic arms.
+
+00:48.000 --> 00:51.880
+These systems have a controller with safety-critical applications.
+
+00:51.880 --> 00:59.200
+However, in the recent years, the industry is moving to including a commodity-less like
+
+00:59.200 --> 01:06.920
+Linux to facilitate software updates and third-party applications for monitoring of the cyber-physical
+
+01:06.920 --> 01:07.920
+systems.
+
+01:07.920 --> 01:13.560
+However, as you can imagine, to keep the safety-critical applications safe, you have to put this on
+
+01:13.560 --> 01:18.360
+a separate processor so that the commodity-less may not influence it, but this becomes very
+
+01:18.360 --> 01:19.560
+expensive.
+
+01:19.560 --> 01:23.880
+So what industry wants to do is that they want to integrate both these things on a single
+
+01:23.880 --> 01:24.880
+processor.
+
+01:24.880 --> 01:30.640
+So that's basically the requirement that the industry has at this point, but a few problems
+
+01:30.640 --> 01:32.160
+result from it.
+
+01:32.160 --> 01:34.120
+The first is, I think, the most obvious.
+
+01:34.120 --> 01:40.200
+Whenever there's a bug in the commodity-less or an attacker, they can influence the execution
+
+01:40.200 --> 01:45.680
+of the safety-critical applications, which means that the safety-critical applications
+
+01:45.680 --> 01:48.740
+cannot be guaranteed to have their availability.
+
+01:48.740 --> 01:53.620
+So the safety aspect is completely lost, which is not acceptable for these cyber-physical
+
+01:53.620 --> 01:54.960
+systems.
+
+01:54.960 --> 02:02.860
+The second issue that arises is that the safety-critical applications have real-time execution requirements.
+
+02:02.860 --> 02:07.600
+Although there is some support in Linux, for real-time execution, this is mostly not what
+
+02:07.600 --> 02:09.400
+industry is looking for.
+
+02:09.400 --> 02:15.480
+So they want to have a real, low latency real-time execution scheduler as well.
+
+02:15.480 --> 02:21.360
+And the third issue that arises is that industry also wants to share the peripherals between
+
+02:21.360 --> 02:27.600
+the safety-critical applications and the commodity OS, because these monitoring applications
+
+02:27.600 --> 02:29.920
+should be able to read out the peripherals.
+
+02:29.920 --> 02:36.520
+However, industry doesn't want them to be able to disable the peripherals, because then,
+
+02:36.520 --> 02:38.720
+again, availability isn't guaranteed.
+
+02:38.720 --> 02:43.080
+For example, if the train wants to break and the peripheral for the breaks is disabled,
+
+02:43.080 --> 02:44.080
+no break can be pressed.
+
+02:44.080 --> 02:46.720
+This is quite an issue.
+
+02:46.720 --> 02:50.120
+So out of this, our research question was formed.
+
+02:50.120 --> 02:54.720
+Can we ensure availability for safety-critical applications while running a commodity OS
+
+02:54.720 --> 02:57.400
+on the same system with little developer impact?
+
+02:57.400 --> 03:01.440
+And to repeat, we need isolation of the critical applications.
+
+03:01.440 --> 03:04.920
+We need real-time execution of these critical applications.
+
+03:04.920 --> 03:10.560
+And we also need a transparent sharing system for the peripherals.
+
+03:10.560 --> 03:14.960
+As an aside, the threat model that we assumed was that there is a strong remote adversary
+
+03:14.960 --> 03:17.720
+with root privileges in the commodity OS.
+
+03:17.720 --> 03:21.200
+They want to launch a denial of service attack on the complete system.
+
+03:21.200 --> 03:25.040
+And we assume that the hardware, critical applications, and peripherals are trusted,
+
+03:25.040 --> 03:28.240
+and everything else is not.
+
+03:28.240 --> 03:33.320
+So jumping into our first requirement to isolate the critical applications, we chose to use
+
+03:33.320 --> 03:39.280
+ARM TrustZone, because it's integrated in high- and low-end devices, embedded devices
+
+03:39.280 --> 03:40.280
+as well.
+
+03:40.280 --> 03:44.520
+It has existed for quite some time, so the chance that the industry already has a processor
+
+03:44.520 --> 03:48.120
+deployed with ARM TrustZone on it is quite high.
+
+03:48.120 --> 03:52.520
+So ARM TrustZone is actually just hardware-based isolation.
+
+03:52.520 --> 03:55.720
+It creates two worlds, as you can see the normal world on the left and the secure world
+
+03:55.720 --> 03:56.960
+on the right.
+
+03:56.960 --> 04:01.520
+It does this by defining two security states with their own address spaces.
+
+04:01.520 --> 04:06.040
+In that way, we can ensure confidentiality and integrity for code and data in the secure
+
+04:06.040 --> 04:12.000
+world, because the hardware blocks any access to these address spaces on the secure world
+
+04:12.000 --> 04:16.120
+coming from the normal world.
+
+04:16.120 --> 04:22.760
+We use OPTEE, which is an open source implementation of ARM TrustZone, and it works together with
+
+04:22.760 --> 04:25.720
+Linux in the normal world.
+
+04:25.720 --> 04:29.920
+So our architecture, you can see again the normal world on the left and the secure world
+
+04:29.920 --> 04:31.320
+on the right.
+
+04:31.320 --> 04:38.400
+All the gray boxes are the boxes that were already there in OPTEEOS and Linux, but the
+
+04:38.400 --> 04:40.080
+white boxes we added.
+
+04:40.080 --> 04:43.320
+So for requirement one, of course, it's on TrustZone.
+
+04:43.320 --> 04:46.840
+Requirement two, we added a secure scheduler and a secure interrupt.
+
+04:46.840 --> 04:51.680
+For requirement three, we added a driver in the normal world and a secure driver in the
+
+04:51.680 --> 04:52.920
+secure world.
+
+04:52.920 --> 04:58.880
+And then we also have developed a use case where we monitor the Linux kernel, and that's
+
+04:58.880 --> 05:00.040
+also in the secure world.
+
+05:00.040 --> 05:03.320
+But I'll talk about that later.
+
+05:03.320 --> 05:09.080
+So for the real-time scheduler, so for the real-time execution requirements, we basically
+
+05:09.080 --> 05:10.080
+need two things.
+
+05:10.080 --> 05:13.160
+We need a periodic interrupt, and we need a scheduling system.
+
+05:13.160 --> 05:16.520
+For this periodic interrupt, we use a hardware timer on the board.
+
+05:16.520 --> 05:17.520
+It's very simple.
+
+05:17.520 --> 05:21.080
+We set the interrupt to be the highest priority of the complete system, and we protect it
+
+05:21.080 --> 05:25.320
+from the normal world so that the normal world cannot disable it or reconfigure it.
+
+05:25.320 --> 05:31.080
+So when an interrupt is triggered by this hardware timer, it gets caught by OPTEEOS.
+
+05:31.080 --> 05:33.840
+OPTEEOS checks if it's a scheduling interrupt.
+
+05:33.840 --> 05:41.400
+If so, it passes on execution to Free charters, which is a well-known, relatively small real-time
+
+05:41.400 --> 05:49.080
+operating system which supports task prioritization and preemption, which is very useful for industry.
+
+05:49.080 --> 05:53.760
+So whenever Free charters gets control, it will schedule a task, its tasks, and after
+
+05:53.760 --> 06:00.160
+all tasks have executed, control will be given back to OPTEEOS so that the system can function
+
+06:00.160 --> 06:02.360
+as normally.
+
+06:02.360 --> 06:08.320
+And then for requirement three, we have a, so this is obviously the normal way that an
+
+06:08.320 --> 06:11.560
+application on user level would interact with hardware peripherals.
+
+06:11.560 --> 06:14.280
+However, these peripherals need to be in the secure world.
+
+06:14.280 --> 06:18.240
+So we also need to move part of the driver into the secure world.
+
+06:18.240 --> 06:21.640
+So this is called driver splitting often.
+
+06:21.640 --> 06:27.120
+We basically introduce a secure driver in the secure world at kernel level, which is
+
+06:27.120 --> 06:31.080
+the liaison between the normal world and the peripheral.
+
+06:31.080 --> 06:40.200
+So this secure driver then to keep the developer efforts minimal should not contain a lot.
+
+06:40.200 --> 06:41.480
+In fact, very little.
+
+06:41.480 --> 06:46.280
+Only hardware accesses can be put in the secure driver, but you can also put some security
+
+06:46.280 --> 06:47.880
+policies in there.
+
+06:47.880 --> 06:52.280
+So for example, if a user application in normal world wants to read something, it will get
+
+06:52.280 --> 06:53.280
+a lot.
+
+06:53.280 --> 06:59.160
+But if it isn't allowed, for example, to disable the peripheral, the secure driver is able
+
+06:59.160 --> 07:03.880
+to just stop the request and nothing will happen.
+
+07:03.880 --> 07:10.000
+The secure driver may also include some logic to share code or to share the access between
+
+07:10.000 --> 07:11.480
+the normal and the secure world.
+
+07:11.480 --> 07:16.400
+For example, if you have a screen as a peripheral, the secure world's contents of the screen
+
+07:16.400 --> 07:20.280
+will always be displayed on top of the normal world content.
+
+07:20.280 --> 07:26.040
+And the nice thing about creating such a system is indeed only the developers of the driver
+
+07:26.040 --> 07:30.320
+at the kernel level in normal world need to care about any changes made to the system.
+
+07:30.320 --> 07:34.280
+As far as the user level applications, no, nothing has changed, which is fairly useful
+
+07:34.280 --> 07:37.160
+for industry as well.
+
+07:37.160 --> 07:39.080
+Of course, you need read and write access.
+
+07:39.080 --> 07:45.520
+And this is given by a set of APIs included in Optio OS called the global platform APIs.
+
+07:45.520 --> 07:53.160
+These are a standardized set of function calls to facilitate calling into the secure world,
+
+07:53.160 --> 07:55.920
+providing data and getting data back.
+
+07:55.920 --> 08:00.760
+We've measured this to take on average 123 microseconds, which is plenty fast enough
+
+08:00.760 --> 08:02.360
+for industry.
+
+08:02.360 --> 08:06.680
+But of course, secure peripherals might also want to return an interrupt, might trigger
+
+08:06.680 --> 08:07.680
+an interrupt.
+
+08:07.680 --> 08:11.360
+And this interrupt must also be returned at some point to the normal world.
+
+08:11.360 --> 08:16.160
+So for this, we developed a notifier system that consists of two parts, one in the normal
+
+08:16.160 --> 08:18.160
+world, one in the secure world.
+
+08:18.160 --> 08:23.240
+So what happens is that if an interrupt is triggered at the peripheral, it will get forwarded
+
+08:23.240 --> 08:26.160
+to the secure world notifier by the secure driver.
+
+08:26.160 --> 08:29.760
+Then the secure world notifier will trigger an interrupt in the normal world, which will
+
+08:29.760 --> 08:32.440
+be caught by the normal world notifier.
+
+08:32.440 --> 08:36.240
+And this will forward it to any driver in the normal world that wants to know if such
+
+08:36.240 --> 08:41.920
+an interrupt has happened using a published subscribe system.
+
+08:41.920 --> 08:45.800
+So now we solved all the three requirements.
+
+08:45.800 --> 08:48.560
+But then we got on to thinking what can we do with this.
+
+08:48.560 --> 08:53.000
+So we developed a use case where we tried to monitor the Linux kernel running state,
+
+08:53.000 --> 08:54.920
+if it has crashed or not.
+
+08:54.920 --> 08:58.040
+So we adopted a very simple system to do this.
+
+08:58.040 --> 09:03.760
+We basically challenged the Linux kernel using a notification from the system we just built.
+
+09:03.760 --> 09:06.880
+We expect a response back in a certain time frame.
+
+09:06.880 --> 09:08.880
+If you got a response back, Linux is alive.
+
+09:08.880 --> 09:09.880
+Otherwise it's not.
+
+09:09.880 --> 09:13.040
+It's as simple as that.
+
+09:13.040 --> 09:18.160
+The things that we can do with this is, however, more interesting.
+
+09:18.160 --> 09:23.400
+Whenever Linux doesn't respond in time, and we know it's dead, we can, from the secure
+
+09:23.400 --> 09:30.280
+world, we can dump the kernel state, normal world memory, and we can even reboot Linux
+
+09:30.280 --> 09:35.880
+kernel while still keeping the safety critical applications running.
+
+09:35.880 --> 09:36.880
+So we did that.
+
+09:36.880 --> 09:39.520
+It will show a demo where we reboot Linux.
+
+09:39.520 --> 09:44.860
+So whenever the monitor in the secure world notices that Linux kernel is dead.
+
+09:44.860 --> 09:50.680
+So first, to go back a bit, first we store the kernel image at boot time, because then
+
+09:50.680 --> 09:54.440
+we know that Linux is in a good state and it's up and running, because we need access
+
+09:54.440 --> 09:55.880
+to the normal world file system.
+
+09:55.880 --> 09:59.760
+So we get the image, we store it in the secure world, we protect it from normal world memory,
+
+09:59.760 --> 10:04.720
+so that no access from normal world is possible anymore.
+
+10:04.720 --> 10:07.080
+So then when Linux crashes, we notice this.
+
+10:07.080 --> 10:12.320
+We disable all the cores, because we are on a multi-core system.
+
+10:12.320 --> 10:15.040
+We disable all the cores, except for our own.
+
+10:15.040 --> 10:19.840
+We write the image back again to the normal world, and then we just jump to the kernel
+
+10:19.840 --> 10:20.840
+start address.
+
+10:20.840 --> 10:27.000
+I left some tricky things out, because OptiOS needs to do some resetting of its own systems
+
+10:27.000 --> 10:30.080
+as well, but that's not that important.
+
+10:30.080 --> 10:33.520
+So I have a demo that basically demonstrates this.
+
+10:33.520 --> 10:38.280
+So again, on the left, if you can see it clearly, we have the normal world isn't very important,
+
+10:38.280 --> 10:41.640
+but you can see that the most important thing is on the right, in the secure world.
+
+10:41.640 --> 10:47.580
+You can see on the top that that's the output that the monitor is giving every 500 milliseconds.
+
+10:47.580 --> 10:51.200
+So every 500 milliseconds, it's selling a challenge to Linux and getting a response
+
+10:51.200 --> 10:54.560
+back if it's a response, it's obviously green.
+
+10:54.560 --> 11:03.440
+So now if we go into Linux, and we make, or we cause a crash in the system, a very simple
+
+11:03.440 --> 11:08.280
+crash kernel panic, we immediately see that the monitor notices this.
+
+11:08.280 --> 11:14.000
+It will start rebooting process, and keep in mind that the secure world is still executing
+
+11:14.000 --> 11:18.080
+its task in a real-time fashion with a given known latency.
+
+11:18.080 --> 11:22.920
+And after Linux has rebooted, we again see that the monitor notices that Linux is alive,
+
+11:22.920 --> 11:30.600
+and we, oh, if after we wait a bit, we get again a shell which we can use like any other
+
+11:30.600 --> 11:31.600
+Linux system.
+
+11:31.600 --> 11:35.080
+So this is the demo.
+
+11:35.080 --> 11:42.080
+Thank you.
+
+11:42.080 --> 11:47.180
+So then to conclude, again, our research question, can we ensure availability for safety critical
+
+11:47.180 --> 11:51.360
+applications while running a commodity on the same system with little developer impact?
+
+11:51.360 --> 11:53.240
+We do believe so.
+
+11:53.240 --> 11:58.160
+We did this by leveraging trust zone isolation to isolated critical applications.
+
+11:58.160 --> 12:04.840
+We introduced a secure scheduling system with free arthors, and we introduced also a transparent
+
+12:04.840 --> 12:07.320
+peripheral sharing system.
+
+12:07.320 --> 12:08.960
+We have some documentation online.
+
+12:08.960 --> 12:14.340
+I put it as a tutorial, but you need this board to be able to run it.
+
+12:14.340 --> 12:20.640
+So it's still ongoing research, and we will update this tutorial whenever we update, we
+
+12:20.640 --> 12:22.360
+get new stuff in our research.
+
+12:22.360 --> 12:26.200
+You can also look at the documentation for Opti as well, and if you have any questions
+
+12:26.200 --> 12:28.520
+at any time, just contact me at this email address.
+
+12:28.520 --> 12:31.460
+I'd be happy to answer them.
+
+12:31.460 --> 12:32.460
+So that was it.
+
+12:32.460 --> 12:37.000
+I hope you enjoyed the presentation, and if you have questions.
+
+12:37.000 --> 12:38.000
+Yeah.
+
+12:38.000 --> 12:49.080
+So one of the problems I'm really, I work at NARA, and I'm a feeling that Opti is one
+
+12:49.080 --> 12:52.600
+of the problems I see with this approach is that you move the device to the secure world.
+
+12:52.600 --> 12:56.680
+They basically have a seam layer to make the kind of talk to the device you move to the
+
+12:56.680 --> 12:57.680
+secure world.
+
+12:57.680 --> 12:58.680
+Yeah.
+
+12:58.680 --> 13:01.680
+The problem is, we've been discussing this for a while, but the problem is you expose
+
+13:01.680 --> 13:04.680
+a bigger back surface in both the, which is the drivers.
+
+13:04.680 --> 13:05.680
+Yeah.
+
+13:05.680 --> 13:10.960
+Basically breaking the main assumption of Opti that we don't trust link, right?
+
+13:10.960 --> 13:16.200
+So you have a buffer that you feed it into your driver, and you kind of start to trust
+
+13:16.200 --> 13:20.360
+that buffer, because it ends up being hard work, so that it needs to be some kind of
+
+13:20.360 --> 13:24.720
+arbitration or a rationalization process during that thing.
+
+13:24.720 --> 13:26.240
+And have you thought about it?
+
+13:26.240 --> 13:27.240
+Yeah, of course.
+
+13:27.240 --> 13:31.680
+So the question was indeed that if we move a driver into the secure world, we increase
+
+13:31.680 --> 13:35.400
+the attack surface considerably, of course.
+
+13:35.400 --> 13:41.760
+And we solved this, or we thought about it indeed, and we came to the conclusion that
+
+13:41.760 --> 13:43.760
+it is indeed a problem.
+
+13:43.760 --> 13:48.600
+However, if you get secure policies, which you know in advance, so for example, we know
+
+13:48.600 --> 13:53.160
+that a peripheral can be read only by the normal world, but not written, because of
+
+13:53.160 --> 13:55.600
+course you design a system like so.
+
+13:55.600 --> 14:02.200
+You can see based on the actual requests that are sent by the normal world, if it is allowed
+
+14:02.200 --> 14:03.200
+or not.
+
+14:03.200 --> 14:06.520
+So if it's a, for example, a write request to an address, we know we cannot allow this.
+
+14:06.520 --> 14:12.240
+However, if it's a read address, we know we can just execute it and return the data.
+
+14:12.240 --> 14:15.600
+However, vendors would just listen and have a hardware that responds to do memory address
+
+14:15.600 --> 14:16.600
+cases.
+
+14:16.600 --> 14:20.480
+Yeah, but that's not the case, sadly enough.
+
+14:20.480 --> 14:26.680
+The thing is that there's an RFC that we haven't been able to reason about it, which we don't
+
+14:26.680 --> 14:30.800
+have a workflow, like you have an open, but what we do have is that once the candle comes
+
+14:30.800 --> 14:34.160
+up, we measure portions of the text area of the candle.
+
+14:34.160 --> 14:38.920
+We take a text, and then we periodically randomly take it, if that hasn't changed.
+
+14:38.920 --> 14:44.480
+Now, arguably that's not a very strong back against recent, you know, rocks and stuff
+
+14:44.480 --> 14:47.760
+like that, but you should check that out at some point.
+
+14:47.760 --> 14:51.440
+Yeah, we are considering this for other research projects that we have running at the same
+
+14:51.440 --> 14:52.440
+time.
+
+14:52.440 --> 14:54.440
+It's a question that keeps coming back.
+
+14:54.440 --> 14:59.440
+How do we authenticate the normal world or the Linux kernel to the secure world?
+
+14:59.440 --> 15:01.440
+How do we make sure that it is running correctly?
+
+15:01.440 --> 15:05.440
+Because the kernel, when it comes up, we basically change the bounds of the master code that
+
+15:05.440 --> 15:06.440
+you want.
+
+15:06.440 --> 15:07.440
+Yeah, indeed.
+
+15:07.440 --> 15:17.600
+And there is some research going into attestation, so not remote attestation, but locally, and
+
+15:17.600 --> 15:22.160
+also some continuous attestation, but it's still an Linux kernel, which is very difficult
+
+15:22.160 --> 15:23.160
+to attestate.
+
+15:23.160 --> 15:24.160
+The right thing is the kernel itself, right?
+
+15:24.160 --> 15:25.160
+So when you write it to memory and then reboot it, you need to have some kind of cryptographic
+
+15:25.160 --> 15:26.160
+set, right?
+
+15:26.160 --> 15:27.160
+Because the trend in the whole chain of trust is, you know, you boot with the F-level,
+
+15:27.160 --> 15:28.160
+so that it verifies your kernel, and then you add the same kind of memory.
+
+15:28.160 --> 15:29.160
+So, yeah, of course, yeah.
+
+15:29.160 --> 15:39.760
+But if you load the kernel and jump to an entry point, first of all, you need to cryptograph
+
+15:39.760 --> 15:40.760
+it.
+
+15:40.760 --> 15:42.760
+You verify what you're doing.
+
+15:42.760 --> 15:44.760
+Yeah, of course, yeah.
+
+15:44.760 --> 15:54.760
+And there's been some code and development going into EFI, where if you jump to the kernel
+
+15:54.760 --> 15:58.360
+entry point, and not the EFI entry point, you lose the bound of security services.
+
+15:58.360 --> 15:59.360
+Yeah, of course.
+
+15:59.360 --> 16:00.840
+So this was a proof of concept, indeed.
+
+16:00.840 --> 16:04.240
+If you just write the kernel image back to the normal world and jump to it, it's, of
+
+16:04.240 --> 16:06.560
+course, a big problem.
+
+16:06.560 --> 16:11.720
+So if you want to actually build such a system in a secure way, you will need to do checking
+
+16:11.720 --> 16:15.320
+your image at boot time when you store it in memory.
+
+16:15.320 --> 16:18.320
+Once you've checked it and stored it, you know that it's safe.
+
+16:18.320 --> 16:22.360
+And then whenever you want to reboot, you can set up the normal world completely so
+
+16:22.360 --> 16:26.320
+that it is, again, in a well-known secure state, like at boot time, and then write the
+
+16:26.320 --> 16:27.320
+image in there.
+
+16:27.320 --> 16:28.320
+We can talk.
+
+16:28.320 --> 16:29.320
+Of course, yeah.
+
+16:29.320 --> 16:30.320
+There's more problems, right?
+
+16:30.320 --> 16:35.320
+Because, for example, if you boot like that, A is a lower-world problem, at least in our
+
+16:35.320 --> 16:36.320
+system.
+
+16:36.320 --> 16:37.320
+Okay.
+
+16:37.320 --> 16:38.320
+Okay, we'll have a good discussion.
+
+16:38.320 --> 16:39.320
+Yeah, go ahead.
+
+16:39.320 --> 16:40.320
+Maybe a follow-up question to this initial observation about the sort of security aspects
+
+16:40.320 --> 16:41.320
+of kind of sharing responsibility for the peripherals.
+
+16:41.320 --> 16:44.320
+Another reason why you would want to partition the peripherals rather than to keep control
+
+16:44.320 --> 16:58.320
+competed with trust service also performance, right?
+
+16:58.320 --> 17:05.320
+Because essentially now you're saying that for any peripheral access, you need that to
+
+17:05.320 --> 17:06.320
+go through the...
+
+17:06.320 --> 17:07.320
+Yeah, so there is...
+
+17:07.320 --> 17:08.320
+I'm sure some latency numbers...
+
+17:08.320 --> 17:09.320
+Yeah.
+
+17:09.320 --> 17:11.320
+Did you evaluate the overall performance degradation on the Linux?
+
+17:11.320 --> 17:12.320
+Yes, indeed we did.
+
+17:12.320 --> 17:13.320
+I did not include the slides.
+
+17:13.320 --> 17:14.320
+Oh, yeah.
+
+17:14.320 --> 17:21.320
+So the question was, if you evaluated the complete latency of sharing peripherals between
+
+17:21.320 --> 17:23.720
+the two worlds, yeah, we did indeed verify it.
+
+17:23.720 --> 17:26.280
+Yeah, don't have a slide for the graphs.
+
+17:26.280 --> 17:31.320
+But if you look at these numbers, you can see that to go to the peripheral from the
+
+17:31.320 --> 17:35.200
+normal world, it takes around 103 microseconds.
+
+17:35.200 --> 17:38.840
+This is however in a standard call in OptiOS.
+
+17:38.840 --> 17:42.760
+There is also something like a fast call, and then you will get six microsecond latency,
+
+17:42.760 --> 17:48.000
+which is very fast, certainly fast enough for the requirements set by our industrial
+
+17:48.000 --> 17:49.200
+partners.
+
+17:49.200 --> 17:54.160
+And also the 68 microseconds to go back is also quickly enough for these systems because
+
+17:54.160 --> 17:57.320
+these systems often have a control loop of one millisecond.
+
+17:57.320 --> 18:03.480
+So that means that even with these numbers, you have like 95 or above of the original
+
+18:03.480 --> 18:06.820
+performance or time of execution in the normal world.
+
+18:06.820 --> 18:07.820
+So this is...
+
+18:07.820 --> 18:12.680
+We think this is a cost that we can totally take in developing these systems just because
+
+18:12.680 --> 18:16.560
+it gives us so many benefits on security level.
+
+18:16.560 --> 18:17.560
+Is that good?
+
+18:17.560 --> 18:18.560
+Okay.
+
+18:18.560 --> 18:19.560
+Yeah.
+
+18:19.560 --> 18:20.560
+Go first.
+
+18:20.560 --> 18:26.560
+So all aspects of that were traditional hypervisor and VM phase.
+
+18:26.560 --> 18:27.560
+So...
+
+18:27.560 --> 18:30.560
+For example, like Siemens has seven 1,500 software controllers do essentially the same
+
+18:30.560 --> 18:33.560
+thing, I believe, except they do it on x86, and they just have like a secure world and
+
+18:33.560 --> 18:34.560
+a hypervisor.
+
+18:34.560 --> 18:42.760
+And I guess for example, the system and the VM, how does that compare?
+
+18:42.760 --> 18:47.120
+So the question was, how does this system using a trusted execution environment compare
+
+18:47.120 --> 18:50.880
+to a hypervisor implementation?
+
+18:50.880 --> 18:54.280
+We are at our research group in this synapse.
+
+18:54.280 --> 18:57.340
+We are working with very low end embedded devices.
+
+18:57.340 --> 18:59.560
+So this is our proof of concept on quite a high processor.
+
+18:59.560 --> 19:02.960
+It would be possible to do it in a hypervisor.
+
+19:02.960 --> 19:06.640
+I don't know how to do it because I haven't taken a look at it that closely.
+
+19:06.640 --> 19:13.620
+But on these very low end embedded devices, it's mostly not useful or it's even damaging
+
+19:13.620 --> 19:21.460
+for the lifetime of the device to use a hypervisor because you have also quite some overhead
+
+19:21.460 --> 19:23.600
+and a very limited lifetime battery.
+
+19:23.600 --> 19:26.120
+You have a very limited energy budget.
+
+19:26.120 --> 19:31.800
+So on these slower end processes, there is an arm trust on implementation that is also
+
+19:31.800 --> 19:33.860
+very energy efficient.
+
+19:33.860 --> 19:38.320
+So if we would of course not use OptiOS and Linux, but take the same principles and apply
+
+19:38.320 --> 19:44.360
+it to such a chip, we believe we could stay in the energy budget that the slow end devices
+
+19:44.360 --> 19:45.360
+have.
+
+19:45.360 --> 19:49.040
+And we don't think it's something we can immediately do with hypervisors.
+
+19:49.040 --> 19:51.560
+But of course, it's not my research area.
+
+19:51.560 --> 19:55.320
+So that's something that can of course be very interesting to research.
+
+19:55.320 --> 19:57.160
+There was a question in the back.
+
+19:57.160 --> 20:03.000
+Is there an instance of this hardware that we can use on the cloud to try it out?
+
+20:03.000 --> 20:04.680
+I'm afraid not.
+
+20:04.680 --> 20:09.520
+So there is no instance in the cloud that is available to try right now.
+
+20:09.520 --> 20:15.060
+However, I don't know if you know QEMU, possibly you do.
+
+20:15.060 --> 20:17.400
+So QEMU.
+
+20:17.400 --> 20:20.680
+It does support arm virtualization.
+
+20:20.680 --> 20:24.420
+So we actually first started using that to develop our system.
+
+20:24.420 --> 20:28.680
+And we very quickly moved on to a hardware device because of our industry partners.
+
+20:28.680 --> 20:32.880
+So the code as this won't immediately run on QEMU.
+
+20:32.880 --> 20:38.640
+But if you change the interrupt numbers and the things that are different, it should be
+
+20:38.640 --> 20:44.240
+relatively easy to reproduce the same results on virtualized system as well.
+
+20:44.240 --> 20:50.840
+Just to continue on the question on virtual machine versus Opti.
+
+20:50.840 --> 20:55.880
+I think one key difference is that Opti is actually a real trusted execution environment
+
+20:55.880 --> 21:00.520
+in the sense that compared to a virtual machine where the hypervisor would have access to
+
+21:00.520 --> 21:09.280
+the address space of the protected application with OptiE, it doesn't.
+
+21:09.280 --> 21:13.360
+So anything that runs on the secure world does not see that the physical address space
+
+21:13.360 --> 21:14.360
+cannot access.
+
+21:14.360 --> 21:21.040
+Well, I guess an example of a question like the CIMU software controller is actually the
+
+21:21.040 --> 21:23.040
+hypervisor is not Windows or Linux.
+
+21:23.040 --> 21:27.600
+It's the custom hypervisor and that also has access like software.
+
+21:27.600 --> 21:32.440
+So if it is an hypervisor that uses hardware virtualization, it does have access to the
+
+21:32.440 --> 21:36.840
+address space of whatever VM is running on the machine.
+
+21:36.840 --> 21:43.960
+If it's based on Arm64's virtualization extension, it will have access to the address.
+
+21:43.960 --> 21:49.240
+And OptiE, the address space is only accessible to the secure world.
+
+21:49.240 --> 21:53.320
+It's controlled by the secure monitor which is running in a very privileged level, which
+
+21:53.320 --> 21:55.480
+is more privileged than the hypervisor.
+
+21:55.480 --> 22:02.720
+So the hypervisor does not get access to the secure application whereas with the hypervisor,
+
+22:02.720 --> 22:07.320
+the hypervisor could just mess with the nested page tables and do whatever it wants, access
+
+22:07.320 --> 22:08.320
+to the secure field.
+
+22:08.320 --> 22:09.320
+Yeah.
+
+22:09.320 --> 22:10.320
+Maybe to kick in here then, I love this.
+
+22:10.320 --> 22:14.520
+So that's what the copyright now is in the next floor, so please continue this discussion
+
+22:14.520 --> 22:19.160
+but just for the general audience, we'll have like a 10 minute break now.
+
+22:19.160 --> 22:21.760
+I won't call it a coffee break because there's not enough time to run downstairs.
+
+22:21.760 --> 22:22.760
+You will come back up.
+
+22:22.760 --> 22:27.440
+But in 10 minutes, we will continue with the next talk but exactly use for these type of
+
+22:27.440 --> 22:28.440
+one-to-one entry.
+
+22:28.440 --> 22:31.440
+And we can continue the discussion in the next 10 minutes.
+
+22:31.440 --> 22:32.440
+Yeah.
+
+22:32.440 --> 22:33.440
+One thing I wanted to pitch in.
+
+22:33.440 --> 22:40.440
+Talking about hypervisor.

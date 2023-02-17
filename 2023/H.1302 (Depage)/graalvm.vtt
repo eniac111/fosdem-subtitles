@@ -1,0 +1,598 @@
+WEBVTT
+
+00:00.000 --> 00:14.280
+Just two classical optimizations that will help modern but mature virtual machine where
+
+00:14.280 --> 00:18.680
+we have that powers native images.
+
+00:18.680 --> 00:20.720
+Why is it important?
+
+00:20.720 --> 00:21.720
+And who I am?
+
+00:21.720 --> 00:23.720
+My name is Mitre Chukov.
+
+00:23.720 --> 00:29.800
+I work with a company named Bellsoft which actively participates in open JDK community
+
+00:29.800 --> 00:37.360
+and we release our own JDK distribution which you probably met if you have ever built a
+
+00:37.360 --> 00:40.360
+Spring Boot container with default build pack.
+
+00:40.360 --> 00:42.600
+So it's in there.
+
+00:42.600 --> 00:50.320
+And now Spring Boot, since version 3, supports containers with native images.
+
+00:50.320 --> 00:56.320
+It can be built as a native image and if you do that the compiler being used is the Barricot
+
+00:56.320 --> 01:02.400
+native image kit which is a Bellsoft distribution of GraalVM.
+
+01:02.400 --> 01:15.560
+So that's another project that we participate and GraalVM itself can be seen as different
+
+01:15.560 --> 01:20.160
+things at least two major modes that we can observe.
+
+01:20.160 --> 01:29.480
+It can run as a JIT where compiler is Graal or we can build a native image with a static
+
+01:29.480 --> 01:39.360
+compilation and it will utilize a special chief virtual machine substrate VM.
+
+01:39.360 --> 01:49.120
+And here it's different from the traditional Java, traditional way of how we run it.
+
+01:49.120 --> 01:55.520
+Well another interesting and peculiar point here is that it is written in Java.
+
+01:55.520 --> 02:04.520
+So it is a complex project but most of the code is Java and this is beautiful.
+
+02:04.520 --> 02:12.560
+So you have a virtual machine and a compiler for JVM languages and Java in particular written
+
+02:12.560 --> 02:14.280
+in Java.
+
+02:14.280 --> 02:21.600
+So if you look at Java itself, why is it so beautiful?
+
+02:21.600 --> 02:24.720
+Well not so beautiful compared to Kotlin as we know, right?
+
+02:24.720 --> 02:30.520
+But still both Java and Kotlin they share those concepts.
+
+02:30.520 --> 02:36.880
+So from the very beginning there is a way to write correct parallel programs.
+
+02:36.880 --> 02:43.160
+So then to write parallel programs we need some means of synchronization or to orchestrate
+
+02:43.160 --> 02:46.280
+our threads if we share data.
+
+02:46.280 --> 02:48.840
+But most typically we do that.
+
+02:48.840 --> 02:56.840
+And also it's a managed runtime where we don't have to worry that much about pre-memory because
+
+02:56.840 --> 03:04.560
+we have garbage collection and garbage is collected for us and our programs just, they
+
+03:04.560 --> 03:10.480
+can have memory but you have to work hard to get one.
+
+03:10.480 --> 03:21.560
+And having that native image implementation makes our final binaries very sometimes, makes
+
+03:21.560 --> 03:23.680
+them very performant.
+
+03:23.680 --> 03:25.880
+Of course we have an instant startup.
+
+03:25.880 --> 03:29.280
+It was mentioned today several times.
+
+03:29.280 --> 03:31.560
+But we can also have a very good peak performance.
+
+03:31.560 --> 03:36.120
+In certain cases that's not a rule but it can happen.
+
+03:36.120 --> 03:44.320
+Like it happens here on this plot, that's just a simple Spring Boot application and
+
+03:44.320 --> 03:47.480
+we just ping the same endpoint.
+
+03:47.480 --> 03:54.440
+And here the native image works better and also it warms up instantly and it has very
+
+03:54.440 --> 03:55.980
+good latency.
+
+03:55.980 --> 04:01.660
+So for this small amount of memory that it takes, so this is a small service, it takes
+
+04:01.660 --> 04:05.400
+small amount of memory, very small heap.
+
+04:05.400 --> 04:06.800
+And it also has low latency.
+
+04:06.800 --> 04:16.360
+And under the hood it uses serial GC and we'll talk about that later.
+
+04:16.360 --> 04:21.800
+What about relationship between Graal VM and OpenJDK?
+
+04:21.800 --> 04:31.160
+Well we're here in the Friends of OpenJDK room and Graal has been integrated as an additional
+
+04:31.160 --> 04:34.980
+experimental compiler in JDK 9.
+
+04:34.980 --> 04:39.560
+But well, it has been removed from recent JDKs.
+
+04:39.560 --> 04:41.360
+But what's the left over?
+
+04:41.360 --> 04:43.640
+It's an interface to plug it in.
+
+04:43.640 --> 04:49.360
+So now it's going to be a second attempt to do that.
+
+04:49.360 --> 04:54.480
+So here on slides it's mentioned that there is a discussion about project, new project
+
+04:54.480 --> 04:55.480
+they all had.
+
+04:55.480 --> 05:03.560
+But last week it was already called for votes in OpenJDK to start the project of bringing
+
+05:03.560 --> 05:15.080
+the most sweet parts of this technology into OpenJDK, back into OpenJDK.
+
+05:15.080 --> 05:18.000
+It's something that happens right now.
+
+05:18.000 --> 05:23.960
+So that default garbage collector that sometimes shows very good latency even compared to parallel
+
+05:23.960 --> 05:26.400
+GC or G1 in hotspot.
+
+05:26.400 --> 05:29.160
+Well on small heaps.
+
+05:29.160 --> 05:35.240
+Well it's a kind of garbage collector we can easily understand.
+
+05:35.240 --> 05:37.880
+And it's a generational stop the world collection.
+
+05:37.880 --> 05:47.080
+So here only one survivor space but actually it's 16 by default.
+
+05:47.080 --> 05:55.720
+But anyway, so we stop all our application threads and we collect garbage in a single
+
+05:55.720 --> 05:56.720
+thread.
+
+05:56.720 --> 06:01.560
+So this is kind of a basic garbage collector right.
+
+06:01.560 --> 06:07.280
+From the other hand it's reliable and it's very effective especially if we have only
+
+06:07.280 --> 06:10.240
+a single core available.
+
+06:10.240 --> 06:12.800
+So you see the problem.
+
+06:12.800 --> 06:19.960
+We have some CPU which may be enough to run many threads but we run only one of them.
+
+06:19.960 --> 06:21.600
+At least for garbage collection.
+
+06:21.600 --> 06:26.440
+Garbage collection can take significant time during our application execution.
+
+06:26.440 --> 06:28.960
+Well that's obvious.
+
+06:28.960 --> 06:31.640
+Well what would we do?
+
+06:31.640 --> 06:39.180
+Of course we would like to do exactly the same thing but in parallel.
+
+06:39.180 --> 06:45.240
+To decrease the time garbage collection takes to reduce the garbage collection pause.
+
+06:45.240 --> 06:50.480
+Because it still stops the world pause but we reduce it because we process data with
+
+06:50.480 --> 06:51.880
+multiple threads.
+
+06:51.880 --> 06:54.320
+So that's the idea of parallel garbage collection.
+
+06:54.320 --> 07:00.960
+The idea is not new but surprisingly this modern runtime doesn't have it yet.
+
+07:00.960 --> 07:08.920
+Well we decided to implement it and it's still being under review and some implementation
+
+07:08.920 --> 07:12.240
+details well they change.
+
+07:12.240 --> 07:15.560
+But the idea is very simple.
+
+07:15.560 --> 07:24.480
+You just say pass the garbage collection selection during the creation of your native image.
+
+07:24.480 --> 07:29.840
+For instance if you use some main or gradual configuration for your Spring Boot container
+
+07:29.840 --> 07:32.080
+you also can do that.
+
+07:32.080 --> 07:42.200
+And then you have some grips in runtime which you also can twist when you run your application.
+
+07:42.200 --> 07:46.640
+And well you enable that implementation.
+
+07:46.640 --> 07:49.840
+I'll show some performance results later.
+
+07:49.840 --> 07:57.160
+But basically the implementation itself well it can be analyzed as a change in a big Java
+
+07:57.160 --> 08:00.200
+program which Braavium is.
+
+08:00.200 --> 08:07.440
+And there are now two GC interfaces and implementations.
+
+08:07.440 --> 08:17.880
+And this functionality just reuse existing things in a very I would say smart way.
+
+08:17.880 --> 08:25.960
+Just to keep what is all about the parallelization as a code.
+
+08:25.960 --> 08:33.480
+So everything else is reused from serial GC.
+
+08:33.480 --> 08:43.600
+Basically there's a problem of how do we synchronize and share the work because parallel threads
+
+08:43.600 --> 08:48.880
+for garbage collection they also have the same problem because they work on the same
+
+08:48.880 --> 08:54.720
+data so they have contention or may have contention.
+
+08:54.720 --> 08:59.080
+So we need to share in some smart manner.
+
+08:59.080 --> 09:06.360
+Well it's implemented with a work divided in its volume.
+
+09:06.360 --> 09:14.800
+So every thread operates its local memory and it's a chunk of memory of one megabyte.
+
+09:14.800 --> 09:21.920
+So if we need an extra memory like we scan objects and we fulfill some set of data that
+
+09:21.920 --> 09:23.800
+we operate on.
+
+09:23.800 --> 09:31.080
+And then we have an extra chunk we can just put it aside so someone else can pick it.
+
+09:31.080 --> 09:36.440
+So that's the stack that contains the chunks of work.
+
+09:36.440 --> 09:44.280
+And then the work is finished the thread just takes next chunk of work.
+
+09:44.280 --> 09:54.240
+There may be a situation when threads similar several threads try to copy to promote the same object.
+
+09:54.240 --> 09:56.360
+And this is actually solved very simply.
+
+09:56.360 --> 10:02.200
+They just reserve some space for the object and then tries to install forward pointer
+
+10:02.200 --> 10:05.440
+using an atomic operation.
+
+10:05.440 --> 10:11.400
+And as this is an atomic operation only one thread succeeds so others just roll back and
+
+10:11.400 --> 10:16.280
+this is lightweight operation.
+
+10:16.280 --> 10:25.840
+Again this is Java this is not a strict email sorry but still all existing places that manage
+
+10:25.840 --> 10:31.840
+memory were reused without changing the architecture of Gralys so.
+
+10:31.840 --> 10:38.000
+There are already possibility to add garbage collectors so if you want to implement one
+
+10:38.000 --> 10:40.520
+it's not that complex.
+
+10:40.520 --> 10:52.200
+The major problem is to be correct then you deal with memory then you deal with concurrency
+
+10:52.200 --> 10:59.320
+and then you inject your code into this virtual machine because it's all declarative magic
+
+10:59.320 --> 11:03.320
+that requires you to be careful.
+
+11:03.320 --> 11:13.040
+Well some performance results with relatively large heaps with serial GC you can have pauses
+
+11:13.040 --> 11:18.200
+of several seconds which is long of course.
+
+11:18.200 --> 11:24.200
+And there's a big difference if you have a two or three or four second pause or if you
+
+11:24.200 --> 11:26.200
+decrease it by one second.
+
+11:26.200 --> 11:32.000
+So that's possible that this implementation already.
+
+11:32.000 --> 11:36.320
+So that's the order of this improvement.
+
+11:36.320 --> 11:43.320
+With another benchmark is Hyper-Alog you see that latency here latency of pauses can be
+
+11:43.320 --> 11:47.240
+decreased like two times.
+
+11:47.240 --> 11:54.840
+Those pauses are not that big and we have frequent collections here so X axis is apple
+
+11:54.840 --> 12:05.960
+so each point is a garbage collection and Y axis is time in I believe milliseconds.
+
+12:05.960 --> 12:09.760
+Well that's parallel GC.
+
+12:09.760 --> 12:18.060
+So we can obviously improve many applications and many installations where we have an option
+
+12:18.060 --> 12:20.840
+to use several CPUs.
+
+12:20.840 --> 12:25.840
+If you use one CPU of course we won't see much difference.
+
+12:25.840 --> 12:32.880
+There is some increase in memory used for service needs but that's kind of moderate.
+
+12:32.880 --> 12:37.160
+So other parts of this complex system.
+
+12:37.160 --> 12:45.640
+I mentioned synchronization and well synchronization is useful but it has trade-offs because if
+
+12:45.640 --> 12:52.000
+we implement the non-synchronization we need to save our CPU resources to put aside threads
+
+12:52.000 --> 12:54.480
+that won't get the resource.
+
+12:54.480 --> 13:02.640
+We need to stop them to queue them to manage that queues to wake them up to involve operating
+
+13:02.640 --> 13:04.960
+system in that process.
+
+13:04.960 --> 13:08.280
+So that's not cheap.
+
+13:08.280 --> 13:15.320
+But there are situations that that's another queue right and that even influences the design
+
+13:15.320 --> 13:22.400
+of standard library because like we all know string buffer and string builder right.
+
+13:22.400 --> 13:29.480
+One class appeared because well another one wasn't very pleasant in terms of performance.
+
+13:29.480 --> 13:35.120
+Yeah we need it sometimes but in many cases we need a non-synchronized implementation
+
+13:35.120 --> 13:39.520
+saying like hash table and hash map whoever uses hash table right.
+
+13:39.520 --> 13:43.320
+But it's very good synchronized.
+
+13:43.320 --> 13:50.640
+But not all classes that have any synchronization in them have their twins without synchronization.
+
+13:50.640 --> 13:52.800
+That makes no sense right.
+
+13:52.800 --> 14:01.840
+So there's a well-known technology how to deal with the case where accesses to our data
+
+14:01.840 --> 14:09.320
+structures to our classes are mostly sequential than at any point in time only a single thread
+
+14:09.320 --> 14:12.080
+owns and operates with an object.
+
+14:12.080 --> 14:15.680
+Let's call bias logging or thin logging.
+
+14:15.680 --> 14:23.040
+Well why is it simpler and more lightweight?
+
+14:23.040 --> 14:28.080
+Because we don't want to manage all the complex cases.
+
+14:28.080 --> 14:35.040
+We know that we are in a good situation and if not yes we can fall back and it's called
+
+14:35.040 --> 14:39.280
+inflate our monitor.
+
+14:39.280 --> 14:45.400
+Well it existed in OpenJDK for ages and it has been removed from OpenJDK.
+
+14:45.400 --> 14:54.960
+First deprecated then no one noticed I believe because still are there too many people using
+
+14:54.960 --> 14:58.600
+something newer than JDK11.
+
+14:58.600 --> 15:06.520
+Well some consequences were noticed probably too late.
+
+15:06.520 --> 15:12.000
+Well what are the reasons first of all what are the reasons to remove bias logging from
+
+15:12.000 --> 15:15.120
+OpenJDK from hotspot JVM?
+
+15:15.120 --> 15:22.720
+Well to ease the implementation of virtual threads to deliver project loom to decrease
+
+15:22.720 --> 15:25.400
+the amount of work there.
+
+15:25.400 --> 15:32.440
+So some consequences here an issue is discovered.
+
+15:32.440 --> 15:42.200
+In certain cases things like input streams can be slowed down like here it's 8x or something
+
+15:42.200 --> 15:45.440
+that's enormously slow.
+
+15:45.440 --> 15:54.040
+And for growl VM there is a mode that you say during static compilation.
+
+15:54.040 --> 16:01.680
+Okay this native image doesn't try to work with many cores it's a single threaded program.
+
+16:01.680 --> 16:07.800
+So it's simple and it works really better in these circumstances.
+
+16:07.800 --> 16:09.920
+So there is an optimization for that.
+
+16:09.920 --> 16:14.800
+But you have to know it in advance then you compile your program.
+
+16:14.800 --> 16:19.440
+Well and there is of course a runtime option that supports all kinds of situations and
+
+16:19.440 --> 16:21.000
+it's complex.
+
+16:21.000 --> 16:29.240
+So the missing part is in the left lower corner well to dynamically be able to process the
+
+16:29.240 --> 16:33.920
+situation of sequential access pattern.
+
+16:33.920 --> 16:48.360
+So we implemented quite a classical approach to this problem that helps to that brings
+
+16:48.360 --> 16:50.640
+that thin locking to growl VM.
+
+16:50.640 --> 17:02.840
+The initial idea was operating with object header so where it already contains a pointer
+
+17:02.840 --> 17:05.880
+to a fat monitor object.
+
+17:05.880 --> 17:12.520
+But it can be treated as well as some words we can atomically access and put some information
+
+17:12.520 --> 17:15.880
+there.
+
+17:15.880 --> 17:20.620
+Probably close to final implementation that we have right now still or again uses a point
+
+17:20.620 --> 17:29.760
+or because it turned to be not so easy to keep correctness across the whole VM with
+
+17:29.760 --> 17:37.440
+some memory that you treat as a point or as a word depending on the situation.
+
+17:37.440 --> 17:46.560
+Well anyway inside that part of header or inside that special object we can have 64
+
+17:46.560 --> 17:48.360
+bits of information.
+
+17:48.360 --> 17:55.520
+And we can mark it as a thin lock this is a flag right then we can do it atomically.
+
+17:55.520 --> 18:06.120
+We can keep the ID of an owner thread which we can obtain then the work the threads and
+
+18:06.120 --> 18:12.800
+a count of recursive locks that we currently hold.
+
+18:12.800 --> 18:19.920
+That by the way means that after a certain amount of recursive locks we have to inflate
+
+18:19.920 --> 18:28.480
+monitor because we can store more information in that part of this work.
+
+18:28.480 --> 18:40.000
+So again it's a pure Java implementation where we work with some atomic magic and we update
+
+18:40.000 --> 18:41.000
+this information.
+
+18:41.000 --> 18:46.160
+But what we've got and the most recent numbers are even better.
+
+18:46.160 --> 18:51.480
+So we see that effect on exactly that example the streams.
+
+18:51.480 --> 19:00.320
+We can speed them up and even in a very kind of nano benchmark kind of measurement you
+
+19:00.320 --> 19:16.000
+also see the improvement and even in multi-threaded case there is no difference with the original.

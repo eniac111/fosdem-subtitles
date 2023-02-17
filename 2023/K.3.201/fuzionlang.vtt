@@ -1,0 +1,568 @@
+WEBVTT
+
+00:00.000 --> 00:11.560
+Okay, thank you. It's great to be here for the first time. Really in person, I really
+
+00:11.560 --> 00:12.560
+feel...
+
+00:12.560 --> 00:16.400
+Yes, you're a regular feature actually.
+
+00:16.400 --> 00:21.200
+So far only online, it was so sad always, always in my small little room. So here I
+
+00:21.200 --> 00:27.600
+am. I want to talk about fusion again, like the last years. What I want to talk about
+
+00:27.600 --> 00:32.240
+here is about algebraic effects and types and what has changed in the last year in that
+
+00:32.240 --> 00:37.160
+respect in the fusion language.
+
+00:37.160 --> 00:42.240
+Short background to me, I did a lot on compilers and mostly in the Java area in the past for
+
+00:42.240 --> 00:50.840
+about 30 years and also did quite a bit on garbage collection. So I enjoyed the previous
+
+00:50.840 --> 00:58.160
+talks here quite a lot. But now to the fusion language, which is what I'm currently working
+
+00:58.160 --> 01:05.240
+on, the main idea behind the fusion language is that we see more and more language getting
+
+01:05.240 --> 01:09.480
+more and more overloaded with more and more features and concepts and new things being
+
+01:09.480 --> 01:16.520
+introduced while in fusion we try to reduce this to one single concept, which is a fusion
+
+01:16.520 --> 01:23.320
+feature. That's basically an abstraction for things like classes, methods, interfaces and
+
+01:23.320 --> 01:26.400
+so on.
+
+01:26.400 --> 01:32.280
+Instead of having the developer to choose what to write, whether to write a method or
+
+01:32.280 --> 01:37.240
+a class or so, have the compiler, have the implementation make these decisions, what
+
+01:37.240 --> 01:42.760
+we actually need to implement those features.
+
+01:42.760 --> 01:46.680
+And also we see that more and more systems become safety critical, so we need a simple
+
+01:46.680 --> 01:51.480
+language and we need tools to analyze that simple language to ensure the correctness.
+
+01:51.480 --> 01:57.680
+So that's what we keep in mind when we work on fusion. Fusion is on GitHub. I don't give
+
+01:57.680 --> 02:03.240
+any tutorial in the language also here in this talk. This is all online, so I will just
+
+02:03.240 --> 02:08.420
+basically throw you in the water and let you learn to swim bringing fusion code in this
+
+02:08.420 --> 02:16.640
+talk, but I hope, I think you will do fine. Fusion is backed by a small company, Tokiba.
+
+02:16.640 --> 02:25.160
+Now to this talk. No, before I forget, for those who only came for the fusion stickers,
+
+02:25.160 --> 02:31.240
+I have some here, so you can maybe give them around, whoever once can take one.
+
+02:31.240 --> 02:36.760
+So now what I want to talk about here is basically three points. I start with explaining what
+
+02:36.760 --> 02:44.080
+algebraic effects are and how they are implemented or how they are used in fusion. Then I want
+
+02:44.080 --> 02:49.840
+to talk a bit about types and how types can be used as first class features and type values
+
+02:49.840 --> 02:55.240
+can be used in fusion. And then I bring these two together because that brings a big advantage
+
+02:55.240 --> 03:07.760
+when working with algebraic effects. So what do we need effects for? Fusion, in fusion
+
+03:07.760 --> 03:18.400
+a feature is a pure function, so there is no side effects, no mutation of data by default.
+
+03:18.400 --> 03:25.280
+And algebraic effects are used in fusion now to model all the non-functional effects like
+
+03:25.280 --> 03:33.920
+state changes, I owe, any threat communication or mechanisms like exceptions. So let me first
+
+03:33.920 --> 03:42.440
+define what are algebraic effects. An algebraic effect is actually a set of operations. You
+
+03:42.440 --> 03:49.800
+could think of operations like reading data, so performing some I owe, getting the time
+
+03:49.800 --> 03:55.320
+or doing something like a panic, so causing an error in the application to stop, or logging
+
+03:55.320 --> 04:04.720
+some data somewhere. Typically these operations in an algebraic effect model some non-functional
+
+04:04.720 --> 04:11.360
+aspect that is kind of orthogonal to the actual computation of your function. These operations
+
+04:11.360 --> 04:17.160
+have basically two things that they can mainly do. They could either resume and produce a
+
+04:17.160 --> 04:22.840
+result like reading that is successful, or they can abort, which is like throwing an
+
+04:22.840 --> 04:30.400
+exception, you just get out of that, you don't get anything from this. And an effect can
+
+04:30.400 --> 04:39.160
+be implemented by different effect handlers. So one effect type could have different implementations.
+
+04:39.160 --> 04:48.840
+And to run code that uses an effect, this code has to be executed while a corresponding
+
+04:48.840 --> 05:01.600
+handler for that effect is installed. Now the effects allow static analysis of the code
+
+05:01.600 --> 05:12.640
+that we can analyze what effects any feature has. And we require that for all library code
+
+05:12.640 --> 05:24.200
+the full set of effects is documented in the signature of those features. So effects that
+
+05:24.200 --> 05:30.960
+are not presented are not affected are used that will cause a compile time error. I start
+
+05:30.960 --> 05:39.560
+with a small example of a hello world feature. We use this exclamation mark syntax to mark
+
+05:39.560 --> 05:44.920
+that this code actually uses an effect and the effect or requires an effect. And that
+
+05:44.920 --> 05:51.480
+is I ordered out in this case because the library function say requires that effect.
+
+05:51.480 --> 05:58.200
+And I run this code now, of course it prints hello world. And if I analyze the code for
+
+05:58.200 --> 06:08.520
+the effects that it has, I see that I ordered out is an effect required by this small example.
+
+06:08.520 --> 06:16.880
+Now I want to run the same code, the hello world hasn't changed, using my own handler.
+
+06:16.880 --> 06:25.800
+So I've defined a handler here which is a feature inherited thing from can print and
+
+06:25.800 --> 06:34.240
+it redefines the print operation to print to IO error instead and to replace the exclamation
+
+06:34.240 --> 06:41.400
+mark by many exclamation marks. And now to run this we need to first install this handler
+
+06:41.400 --> 06:48.280
+as the IO out handler. The IO out here is just a convenience function that installs
+
+06:48.280 --> 06:56.560
+the first handler and executes the code given in the lambda as a second argument. And when
+
+06:56.560 --> 07:03.640
+I run this now, of course, I see the print out is the modified string because we've replaced
+
+07:03.640 --> 07:09.360
+the exclamation mark here. And if I analyze this for effects, I now see this no longer
+
+07:09.360 --> 07:17.080
+depends on the IO out effect but the IO error because we have kind of diverted the code
+
+07:17.080 --> 07:22.660
+to depend on the other effect. We could also implement a handler that doesn't do anything
+
+07:22.660 --> 07:32.240
+then the hello world executed in that environment would not require any effect at all anymore.
+
+07:32.240 --> 07:44.440
+That much to effects now let me talk about types as first class features in fusion. To
+
+07:44.440 --> 07:49.480
+make it a bit easier for you to understand what's happening, I give first an example
+
+07:49.480 --> 07:57.640
+of generics in Java where I have a generic method here that takes an argument A of any
+
+07:57.640 --> 08:10.060
+generic type T and prints out the value. Doing that in fusion, we have type parameters which
+
+08:10.060 --> 08:16.120
+are actually at the same level as value parameters. So we have a function with two arguments,
+
+08:16.120 --> 08:24.080
+T which is a type and A which is a value of that type. And this is not just syntactic
+
+08:24.080 --> 08:31.880
+sugar that this looks the same but it's also internally the type parameters feature, our
+
+08:31.880 --> 08:53.760
+state features just as the arguments itself. Of course, we can now call this function with
+
+08:53.760 --> 09:03.760
+two different type parameters and two different value arguments and print these two values.
+
+09:03.760 --> 09:11.840
+That's pretty standard for generic for type parametric functions. Fusion uses a lot of
+
+09:11.840 --> 09:19.680
+type inferencing. So in such a case where the types are obvious from the arguments,
+
+09:19.680 --> 09:25.400
+they don't need to be given. So we have the rule that type parameters always have to precede
+
+09:25.400 --> 09:32.200
+the value arguments and they can be left out if they can be inferred. So the code can be
+
+09:32.200 --> 09:34.080
+written like this.
+
+09:34.080 --> 09:41.520
+The next we could constrain type parameters. So we could say in this case we want a type
+
+09:41.520 --> 09:50.040
+that must be numeric. And if you have such a constraint, we could use operations that
+
+09:50.040 --> 09:57.160
+are only provided by the type like the plus operator that is defined on numerics. And
+
+09:57.160 --> 10:05.000
+if you run this now, we can also output the double value. Still pretty standard for generics.
+
+10:05.000 --> 10:10.080
+But what we can also do is we can use the type parameter itself and call features that
+
+10:10.080 --> 10:19.440
+the type parameter provides. Every type provides its name. So we can run this code and print
+
+10:19.440 --> 10:26.160
+those names.
+
+10:26.160 --> 10:32.000
+And we can go even further with that. And I want to show you in an implementation of
+
+10:32.000 --> 10:42.280
+a feature that calculates the sum of a list of some numeric elements. The implementation
+
+10:42.280 --> 10:49.600
+of that feature would distinguish the case of an empty list or a list consisting out
+
+10:49.600 --> 10:56.240
+of a head and a tail where we can recursively calculate the sum. The question now is what
+
+10:56.240 --> 11:05.200
+do we do in the case of the empty list? In languages like Java, we would have no way
+
+11:05.200 --> 11:16.760
+to produce any value here. What we can do is we can call a feature that is defined in
+
+11:16.760 --> 11:25.980
+the type numeric and redefined by all concrete implementations to provide the zero value
+
+11:25.980 --> 11:33.680
+for that actual numeric type. So numeric itself is defined as a feature with its corresponding
+
+11:33.680 --> 11:43.160
+type defining zero as an instance of exactly this type. And then something like an I32,
+
+11:43.160 --> 11:54.080
+a 32-bit integer, defines an implementation of type.zero to return the integer zero.
+
+11:54.080 --> 12:02.600
+And we can now use that function to print the sums of different lists here. And when
+
+12:02.600 --> 12:10.040
+I do this, we have a list of floating point values, a list of fractions. We have an empty
+
+12:10.040 --> 12:13.480
+list of floating point values and an empty list of fractions. So we get the corresponding
+
+12:13.480 --> 12:28.640
+zero values from the types of the corresponding types. So that much to types. And now coming
+
+12:28.640 --> 12:38.280
+back to effects, I want to use these types and type parameters to give names to effects
+
+12:38.280 --> 12:49.120
+or to reference user-defined effects. And I'll give you an example using a code that
+
+12:49.120 --> 12:56.840
+creates a linked ring. So a ring structure. To create a ring structure with references,
+
+12:56.840 --> 13:02.760
+you need mutation because at some point you have to close the ring. So that code require
+
+13:02.760 --> 13:16.200
+is mutable, is not easily pure. Then, so we will see that this depends on the mutate effect.
+
+13:16.200 --> 13:28.120
+And then we want to re-implement this or extend this to use local mutable state, local mutability
+
+13:28.120 --> 13:38.280
+to make this function pure. So I start by code to create a ring that uses the mutate
+
+13:38.280 --> 13:42.520
+effect. You don't need to understand the whole code. The important thing is that every element
+
+13:42.520 --> 13:50.080
+in that ring has a pointer to the next element. And there's a reference to the very last because
+
+13:50.080 --> 13:55.440
+if you extend the ring, you have to update the next of the last element in the ring to
+
+13:55.440 --> 14:05.400
+point to the newly added element in the ring. And here for next we create a mutable value
+
+14:05.400 --> 14:11.520
+which is done by a base library function mut, which use the mutate effect. And to update
+
+14:11.520 --> 14:18.560
+the next, we use this error operation to update that. Now we create, in a small demo, we create
+
+14:18.560 --> 14:25.120
+a ring with elements ABC. And then we run 10 times through the ring to print them. So
+
+14:25.120 --> 14:30.480
+we do that. We see that it circles around in that ring. But if you now analyze this
+
+14:30.480 --> 14:39.400
+for effects, what we see is that we have a mutate effect in, used by the code. There's
+
+14:39.400 --> 14:43.600
+lots of other effects as well, the out effect because we print something. But there's also
+
+14:43.600 --> 14:48.520
+error handling in the library code that shows up here. But what I'm interested in is here
+
+14:48.520 --> 14:55.320
+is now this has the mutate effect because the code mutates the next element while building
+
+14:55.320 --> 15:06.280
+the ring. And now we want to get rid of this mutability in the code. I know. I think I'll
+
+15:06.280 --> 15:16.300
+make it in five minutes. And the way to do this is we define a local instance of the
+
+15:16.300 --> 15:23.440
+mutate effect. And to do that, I first need a bit more space in the code. And I'll add
+
+15:23.440 --> 15:37.160
+a type parameter, M of type mutate, to the code here. And also pass this on calls, on
+
+15:37.160 --> 15:47.400
+types of ring used in here. And now when we create an instance of a mutable reference
+
+15:47.400 --> 15:56.720
+to the next element, instead we take the instance of the mutate effect M, which we got as a
+
+15:56.720 --> 16:03.120
+parameter here, from the current environment. The syntax we use in Fusion there is type.n,
+
+16:03.120 --> 16:10.880
+which is the effect from the environment, plus dot and the operation new create a new
+
+16:10.880 --> 16:21.840
+mutable variable. And now we can define our own mutate effect. Here mm is the local mutate
+
+16:21.840 --> 16:29.800
+effect defined here, which is just inheriting from mutate. And is nothing follows after
+
+16:29.800 --> 16:35.840
+the is, so it doesn't do anything special. It is just a new subfeature inheriting from
+
+16:35.840 --> 16:42.320
+mutate. So it basically only has the purpose of giving a new name to this is my local mutate
+
+16:42.320 --> 16:56.960
+here. And now we can pass this sub instance of mutate, or the subtype of mutate, to the
+
+16:56.960 --> 17:04.320
+ring here, which means that all the mutable values that are created are created locally
+
+17:04.320 --> 17:19.240
+to the mm to our own mutate effect. Now we still have to create this effect and execute
+
+17:19.240 --> 17:23.240
+the code within the context of this effect. And this happens in the bottom here. So we
+
+17:23.240 --> 17:31.920
+create an instance of mm and use it to execute the demo code. And that means that the m.f
+
+17:31.920 --> 17:39.680
+nf call here will then take the instance of mm from the current environment to create
+
+17:39.680 --> 17:47.080
+the new mutable value. And when we run the demo, the same output. If we analyze it for
+
+17:47.080 --> 17:52.680
+effects now, we see it's the same effect apart from the mutate is gone, because the mutate
+
+17:52.680 --> 18:01.120
+is completely local here. So we can create code that locally, to perform some calculation,
+
+18:01.120 --> 18:08.400
+creates mutable data and mutates data structures. But the result is a pure function anyway,
+
+18:08.400 --> 18:17.320
+because the mutation is only done locally. So I'm coming to the end. Fusion status is
+
+18:17.320 --> 18:23.840
+still under-developing. It's a very experimental language, but the language definition is slowly
+
+18:23.840 --> 18:30.720
+getting more stable. There's still a lot of work on the base library that is ongoing.
+
+18:30.720 --> 18:37.280
+There are currently, the current implementation has two backends. One is a very slow interpreter
+
+18:37.280 --> 18:45.800
+running on a JVM. And the other is a C backend, which also used the BMD-Mviser garbage collector,
+
+18:45.800 --> 18:52.040
+which we just learned about as a garbage collector right now. But I would like to have a precise
+
+18:52.040 --> 18:59.080
+garbage collector and add a lot there as well. And basic analysis tools, like you've seen
+
+18:59.080 --> 19:07.440
+for the effects here, are available. And yes, those who remember Ellie might wonder who's
+
+19:07.440 --> 19:16.560
+disturbing me now while I'm working on this is Felix. That's it. That's coming to the
+
+19:16.560 --> 19:25.920
+end. So maybe one more sentence. I hope I could show you that algebraic effects and
+
+19:25.920 --> 19:31.240
+types as first-class features are something that complements one another pretty well.
+
+19:31.240 --> 19:46.920
+And it helps to create code, then encapsulates non-functional effects. And yes, it makes
+
+19:46.920 --> 19:52.680
+it possible to work with this and work even with code that is not pure, but to manage
+
+19:52.680 --> 20:01.360
+this in a nice way. You find some links here to resources related to Fusion. We're happy
+
+20:01.360 --> 20:07.800
+for everyone who gets involved. Please have a look. Join us. We have a small team currently
+
+20:07.800 --> 20:23.880
+from three working on this. We can, there should be more. Thank you very much. Can I
+
+20:23.880 --> 20:25.560
+pick? Yeah. Thank you.
+
+20:25.560 --> 20:39.920
+So earlier you said that a particular type can implement numeric. Is that a word terminology
+
+20:39.920 --> 20:42.920
+you use, but is it a numeric interface? And then you were able to say A plus B. If you
+
+20:42.920 --> 20:43.920
+didn't say that it's a numeric, what would happen if you tried to compile that program?
+
+20:43.920 --> 20:49.920
+The question was if a particular type would not implement numeric and you would use the
+
+20:49.920 --> 20:54.400
+plus in there, what would happen then? You would get a compile-time error. It's completely
+
+20:54.400 --> 21:00.000
+strict typing. So if you call a function that requires a numeric type parameter and you
+
+21:00.000 --> 21:05.120
+call it with, say, a string, well, a string happens to have a plus, but not the numeric
+
+21:05.120 --> 21:12.840
+plus, you will get an error that type, the actual type parameter is not compatible to
+
+21:12.840 --> 21:16.760
+the type constraint in the code features. So that will not be excellent.
+
+21:16.760 --> 21:26.920
+And the same example you were converting the value to string in order to print it. Is the
+
+21:26.920 --> 21:27.920
+string operation implied to be present for every value?
+
+21:27.920 --> 21:35.640
+There's a two-string operation in our any, which is the parent of any feature. So a two-string
+
+21:35.640 --> 21:41.720
+is always available, yes. It's not very helpful if you don't define anything because you just
+
+21:41.720 --> 21:48.360
+have to do it. I'm contributing to the language code name,
+
+21:48.360 --> 21:55.080
+which also have an effect types and I have one for people who are generic code. One problem
+
+21:55.080 --> 22:00.840
+that I've seen in combining these features is that when you have generic code, you often
+
+22:00.840 --> 22:08.040
+don't, you can create instantiations when you trigger different effects. So how do you
+
+22:08.040 --> 22:17.400
+approach this kind of syntactically or even simultaneously the language?
+
+22:17.400 --> 22:23.720
+The question was that actual code can actually trigger all sorts of different actual effects
+
+22:23.720 --> 22:29.360
+at runtime. So you could have, one example I think of, you could have a function converting
+
+22:29.360 --> 22:35.400
+in an object to a string that maybe performs some logging and some other code printing
+
+22:35.400 --> 22:42.560
+that value would not expect that. My answer to that is that must be part of the static
+
+22:42.560 --> 22:50.200
+analysis. We need to analyze the whole application and see what is happening there. Library functions
+
+22:50.200 --> 22:56.400
+can do this to a certain extent, but they cannot predict if you have a dynamic value
+
+22:56.400 --> 23:01.200
+coming in, what the actual type will be. So we need a whole program analysis in the end
+
+23:01.200 --> 23:08.200
+there. Do we have time for one more? We will.
+
+23:31.200 --> 23:38.200
+So the question was, in Haskell you have multiple
+
+24:01.200 --> 24:05.120
+monads which have a similar role like the effects, but you have them always explicitly,
+
+24:05.120 --> 24:11.200
+you have to carry them around and mark them. The answer is here, this is actually, it's
+
+24:11.200 --> 24:17.880
+on purpose. We don't want to have the hassle of wrapping everything into a monad and carrying
+
+24:17.880 --> 24:24.960
+it around all the time. So the idea is to get rid of this as much as possible without
+
+24:24.960 --> 24:33.160
+losing the information you get from the effects. Thank you for all the questions.

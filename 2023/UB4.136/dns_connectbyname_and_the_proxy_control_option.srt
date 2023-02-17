@@ -1,0 +1,1128 @@
+1
+0:00:00.000 --> 0:00:11.440
+So, actually, I'm going to talk about three subjects, Connect My Name, ProxicoTroll option,
+
+2
+0:00:11.440 --> 0:00:16.320
+and also a little bit of Rust throw-in at the end as a bonus.
+
+3
+0:00:16.320 --> 0:00:21.320
+So my name is Philip Holmberg, and since a bit more than a year, I now work for NLnet
+
+4
+0:00:21.320 --> 0:00:24.640
+Labs.
+
+5
+0:00:24.640 --> 0:00:31.640
+So the question that has probably been posed by many people is, can you have just a function
+
+6
+0:00:31.640 --> 0:00:37.160
+that in comes a hostname and a service, and you get a socket back?
+
+7
+0:00:37.160 --> 0:00:42.000
+And sort of the starting point for this project, because we've got some funding, so we officially
+
+8
+0:00:42.000 --> 0:00:48.640
+defined that, as Michael Abersom in the ITF one suggested, that some things like that
+
+9
+0:00:48.640 --> 0:00:50.560
+should be done.
+
+10
+0:00:50.560 --> 0:00:55.920
+Then of course we want to have options, so we can have a slightly more modern version
+
+11
+0:00:55.920 --> 0:01:01.360
+where you have a context as the first thing, and it returns an error code instead of overloading
+
+12
+0:01:01.360 --> 0:01:04.600
+that with a socket, but general idea.
+
+13
+0:01:04.600 --> 0:01:08.600
+Of course, this is completely bad because this is blocking.
+
+14
+0:01:08.600 --> 0:01:11.000
+This is what we need to down-front.
+
+15
+0:01:11.000 --> 0:01:17.720
+Unfortunately, because we only at NLnet Lab basically do DNS when it comes to name resolution,
+
+16
+0:01:17.720 --> 0:01:20.640
+this talk ignores every other possible thing.
+
+17
+0:01:20.640 --> 0:01:25.680
+We don't even do MDNS, but we definitely don't do anything fancy.
+
+18
+0:01:25.680 --> 0:01:29.240
+But it should not be precluded.
+
+19
+0:01:29.240 --> 0:01:33.720
+If people want to add it, why not?
+
+20
+0:01:33.720 --> 0:01:43.280
+So to make it non-blocking, the obvious way to extend it is to take an event framework
+
+21
+0:01:43.280 --> 0:01:47.920
+like libevent, and then in libevent speak it as well.
+
+22
+0:01:47.920 --> 0:01:53.920
+You create an event base, you do a bit of initialization where you pass the event base
+
+23
+0:01:53.920 --> 0:01:56.160
+to the asynchronous library function.
+
+24
+0:01:56.160 --> 0:02:00.680
+You start it, it returns to say, well, okay, I'm busy.
+
+25
+0:02:00.680 --> 0:02:06.080
+Then at some point it does a couple of callbacks, like this callback function that you pass,
+
+26
+0:02:06.080 --> 0:02:10.520
+but the main loop is called event-based dispatch.
+
+27
+0:02:10.520 --> 0:02:15.720
+As long as your entire application is written around it, then the application just calls
+
+28
+0:02:15.720 --> 0:02:24.040
+this one, and then you can call this connect by name as many times as you like.
+
+29
+0:02:24.040 --> 0:02:30.600
+If you want to make this practical, more complex, and do release engineering, for example, getDNS
+
+30
+0:02:30.600 --> 0:02:36.000
+has support for, I think, three event frameworks, and you can define your own event framework
+
+31
+0:02:36.000 --> 0:02:37.000
+and stuff like that.
+
+32
+0:02:37.000 --> 0:02:38.460
+I'll ignore this.
+
+33
+0:02:38.460 --> 0:02:44.760
+The only thing you're going to get here is libevent.
+
+34
+0:02:44.760 --> 0:02:49.200
+There's a couple of practical things that we would like to add.
+
+35
+0:02:49.200 --> 0:02:52.720
+So now we get a rather full slide.
+
+36
+0:02:52.720 --> 0:02:55.960
+So far I said you get a socket back.
+
+37
+0:02:55.960 --> 0:03:00.200
+Implicitly a socket back means TCP because your DPA is way too complex.
+
+38
+0:03:00.200 --> 0:03:04.400
+But then in practice, who does TCP anymore?
+
+39
+0:03:04.400 --> 0:03:08.640
+The thing is if you have a TCP socket, then you immediately call your SSL library and
+
+40
+0:03:08.640 --> 0:03:10.480
+you want a TLS connection.
+
+41
+0:03:10.480 --> 0:03:15.560
+At least I hope that people are not writing new code that ships unencrypted data over
+
+42
+0:03:15.560 --> 0:03:18.720
+the internet.
+
+43
+0:03:18.720 --> 0:03:24.320
+Within the pfent, you're lucky because they have a concept called buffer event.
+
+44
+0:03:24.320 --> 0:03:27.360
+That's why the callback there gets a buffer event.
+
+45
+0:03:27.360 --> 0:03:32.200
+The pfent can transparently do SSL.
+
+46
+0:03:32.200 --> 0:03:36.680
+So you just read and write to the buffer event, and then the pfent will, if it knows that
+
+47
+0:03:36.680 --> 0:03:41.600
+it is TLS, then it sends it to openSSL.
+
+48
+0:03:41.600 --> 0:03:46.760
+And if it's just a normal TCP connection, then it sends it to the socket.
+
+49
+0:03:46.760 --> 0:03:53.700
+So that solves that problem, and that allows the library to also do a couple of other interesting
+
+50
+0:03:53.700 --> 0:03:57.440
+things, as we will see on the other slide.
+
+51
+0:03:57.440 --> 0:04:05.200
+But because we are an organization that is focused on DNS, we focused on all of the complexity
+
+52
+0:04:05.200 --> 0:04:07.520
+of stuff that you can do with DNS.
+
+53
+0:04:07.520 --> 0:04:13.280
+So for example, one thing that the library does, I forgot to mention, is that if you
+
+54
+0:04:13.280 --> 0:04:18.200
+get multiple addresses back, then the traditional way is you write a for loop, you do connect
+
+55
+0:04:18.200 --> 0:04:23.280
+to the first address and then to the second address, and there's many minutes' time out
+
+56
+0:04:23.280 --> 0:04:24.760
+on the TCP connection.
+
+57
+0:04:24.760 --> 0:04:27.480
+So if the first address doesn't work, then it takes forever.
+
+58
+0:04:27.480 --> 0:04:32.600
+So your library needs to do happy eyeballs such that you start the connect, wait not
+
+59
+0:04:32.600 --> 0:04:38.760
+that long, and then start the next connect, which also means that any timer system is
+
+60
+0:04:38.760 --> 0:04:40.620
+not in the order of seconds.
+
+61
+0:04:40.620 --> 0:04:45.280
+It should be definitely in the order of milliseconds, because it should be within human response
+
+62
+0:04:45.280 --> 0:04:51.360
+levels and not like, okay, the network is down, we wait seconds.
+
+63
+0:04:51.360 --> 0:04:57.680
+So that is stuff that this library can hide and that the prototype also does.
+
+64
+0:04:57.680 --> 0:05:04.840
+But to get to the DNS part, if you have a modern web browser, then the web browser has
+
+65
+0:05:04.840 --> 0:05:12.320
+an option to configure DNS, and that's highly controversial because it goes over HTTP, but
+
+66
+0:05:12.320 --> 0:05:18.440
+it's something where applications have now said, okay, we are done with et cetera, resolve.com
+
+67
+0:05:18.440 --> 0:05:25.360
+and application point of view want to be able to do, decide which is our upstream resolver.
+
+68
+0:05:25.360 --> 0:05:31.440
+So we added configuration options that you can say, well, I want to have an upstream
+
+69
+0:05:31.440 --> 0:05:36.120
+resolver that has authenticated encryption.
+
+70
+0:05:36.120 --> 0:05:43.400
+I don't really like QUIC, and I have no clue, so I said the only allowed transport protocols
+
+71
+0:05:43.400 --> 0:05:49.120
+is plain old DNS over 53, which will always fail because it cannot do any encryption,
+
+72
+0:05:49.120 --> 0:05:57.600
+but we do allow DNS over TCP, and we do allow DNS over HTTP, but none of the fancy QUIC
+
+73
+0:05:57.600 --> 0:05:58.600
+things.
+
+74
+0:05:58.600 --> 0:06:04.840
+We have a name for authentication, and of course we can go completely overboard and
+
+75
+0:06:04.840 --> 0:06:09.120
+also do SVC parameters.
+
+76
+0:06:09.120 --> 0:06:17.120
+So that extends the call a bit because now the context has a way that you can say, well,
+
+77
+0:06:17.120 --> 0:06:21.920
+this is my DNS policy, and then it goes out and do it.
+
+78
+0:06:21.920 --> 0:06:29.760
+I mean, basic interface is still more or less the same.
+
+79
+0:06:29.760 --> 0:06:34.200
+So we worked on connect by name.
+
+80
+0:06:34.200 --> 0:06:39.280
+We built a prototype, a grant from an LNET foundation.
+
+81
+0:06:39.280 --> 0:06:41.800
+We support asynchronous resolution.
+
+82
+0:06:41.800 --> 0:06:49.160
+Well, of course, asynchronous also means that your A or what A query should go in parallel,
+
+83
+0:06:49.160 --> 0:06:50.160
+happy eyeballs.
+
+84
+0:06:50.160 --> 0:06:53.960
+Then, of course, the DNS community invented Dane.
+
+85
+0:06:53.960 --> 0:06:59.960
+So if you do TLS, then you also have to do the Dane query immediately, and I forgot to
+
+86
+0:06:59.960 --> 0:07:00.960
+list here.
+
+87
+0:07:00.960 --> 0:07:09.000
+You can also do SVCB, and if you have the patience to configure experimental open SSL
+
+88
+0:07:09.000 --> 0:07:16.760
+libraries, you can also do the encrypted client hello from SVCB into open SSL and stuff like
+
+89
+0:07:16.760 --> 0:07:17.760
+that.
+
+90
+0:07:17.760 --> 0:07:21.880
+The nice thing is you can all hide it in a single library.
+
+91
+0:07:21.880 --> 0:07:28.960
+So what I would like from the community is sort of one is sort of what doesn't work,
+
+92
+0:07:28.960 --> 0:07:31.000
+what extra stuff that we need.
+
+93
+0:07:31.000 --> 0:07:34.920
+But we also have a problem with how do we go further with this.
+
+94
+0:07:34.920 --> 0:07:41.600
+I mean, we built a prototype, but we cannot really ourselves make it into a product for
+
+95
+0:07:41.600 --> 0:07:42.600
+various reasons.
+
+96
+0:07:42.600 --> 0:07:51.240
+So take a look at it if you're interested and let us know if you want to do something.
+
+97
+0:07:51.240 --> 0:07:55.200
+Current problem for me is it's on top of get DNS.
+
+98
+0:07:55.200 --> 0:08:00.560
+The DNS is an extremely nice library, but it tries to do everything, so it's also a
+
+99
+0:08:00.560 --> 0:08:02.080
+very heavyweight library.
+
+100
+0:08:02.080 --> 0:08:07.840
+So there it is like it's a library that you want to link with potentially all applications
+
+101
+0:08:07.840 --> 0:08:11.680
+should it be that heavyweight.
+
+102
+0:08:11.680 --> 0:08:18.460
+So that's how we got to the next subject.
+
+103
+0:08:18.460 --> 0:08:25.560
+This is sort of now what the ITF has created as what a stops resolver should do.
+
+104
+0:08:25.560 --> 0:08:32.360
+And I left out a casellian other things because ADD is busy and I don't know, there's probably
+
+105
+0:08:32.360 --> 0:08:34.440
+quite a few other working groups.
+
+106
+0:08:34.440 --> 0:08:40.480
+So the stop resolver, which was a very simple thing with a res send that sends a query over
+
+107
+0:08:40.480 --> 0:08:47.880
+port 53, has to do more and more and more stuff.
+
+108
+0:08:47.880 --> 0:08:54.240
+So many applications have a stop resolver.
+
+109
+0:08:54.240 --> 0:08:59.560
+How many libraries will implement all of those transports, especially if it's also implemented
+
+110
+0:08:59.560 --> 0:09:02.080
+in this way of languages.
+
+111
+0:09:02.080 --> 0:09:08.960
+It used to be that the stop resolver had basically no state, but if you do the OT, the OA, the
+
+112
+0:09:08.960 --> 0:09:12.480
+UQ, then you have connection set up.
+
+113
+0:09:12.480 --> 0:09:18.440
+You generate load in a recursive resolver because if you're constantly setting up, say,
+
+114
+0:09:18.440 --> 0:09:25.000
+the OT, the OT connections, then it has a way higher load than if it's just a simple
+
+115
+0:09:25.000 --> 0:09:27.560
+UDP query.
+
+116
+0:09:27.560 --> 0:09:32.960
+And it's definitely bad for short-lived applications like Bing that have a way higher overhead
+
+117
+0:09:32.960 --> 0:09:40.600
+setting up a connection to the local recursive resolver than the actual work that the application
+
+118
+0:09:40.600 --> 0:09:43.560
+is doing.
+
+119
+0:09:43.560 --> 0:09:51.000
+So the simple way to solve that, we thought, you introduce a local proxy.
+
+120
+0:09:51.000 --> 0:09:58.760
+That's not really something new because lots of people are unbound as a local DNS proxy.
+
+121
+0:09:58.760 --> 0:10:05.520
+Well, we also, as part of the GetDNS project created at Stirby, that focuses more on doing
+
+122
+0:10:05.520 --> 0:10:08.720
+DNS stack all the time.
+
+123
+0:10:08.720 --> 0:10:15.080
+There is things like DNS dist, DNS mask, systemd, resolve d.
+
+124
+0:10:15.080 --> 0:10:19.040
+So that looks like, okay, we don't have to worry about that.
+
+125
+0:10:19.040 --> 0:10:23.080
+We can just talk to a local proxy.
+
+126
+0:10:23.080 --> 0:10:29.720
+But then if we go back to the example config, I had for Connect by Name for the Firefox
+
+127
+0:10:29.720 --> 0:10:32.880
+that wants to talk DOH.
+
+128
+0:10:32.880 --> 0:10:38.680
+How do you tell your local proxy that you actually want to have an authenticated connection?
+
+129
+0:10:38.680 --> 0:10:44.840
+Well, what if your proxy is just sending it, I don't know, to one of the public resolvers
+
+130
+0:10:44.840 --> 0:10:46.160
+over port 53?
+
+131
+0:10:46.160 --> 0:10:50.440
+Maybe that's not what your application wants.
+
+132
+0:10:50.440 --> 0:10:59.640
+And then this local proxy ID falls down and you get, say, a browser again implementing
+
+133
+0:10:59.640 --> 0:11:06.120
+its own sub-resolver because it doesn't have any control.
+
+134
+0:11:06.120 --> 0:11:17.080
+So we thought about it for a while and created a draft in the ITF with a new edns0 option.
+
+135
+0:11:17.080 --> 0:11:23.800
+And basically when you send the request to your step resolver, then you can encode all
+
+136
+0:11:23.800 --> 0:11:30.680
+of the stuff that you want to have as a policy in such an option.
+
+137
+0:11:30.680 --> 0:11:36.960
+So you can be very basic and set a flag like, well, only give me an authenticated connection.
+
+138
+0:11:36.960 --> 0:11:41.520
+If you can't do it and just report like it doesn't work or you could say, well, this
+
+139
+0:11:41.520 --> 0:11:48.160
+is the recursive resolver that I want you to use, please use that.
+
+140
+0:11:48.160 --> 0:11:57.800
+And then applications can trust the local proxy because they can control it.
+
+141
+0:11:57.800 --> 0:12:06.720
+And that provides a nice way to basically reduce the step resolver footprint a bit by
+
+142
+0:12:06.720 --> 0:12:13.000
+moving all of the difficult transports to the proxy.
+
+143
+0:12:13.000 --> 0:12:21.240
+We have a proof of concept for that, though I have to warn you that we revised the layout
+
+144
+0:12:21.240 --> 0:12:25.880
+of the option in the draft that is listed here and what the proof concept does is an
+
+145
+0:12:25.880 --> 0:12:26.960
+older draft.
+
+146
+0:12:26.960 --> 0:12:34.920
+But if you want to play with it with the general concept, then that is there.
+
+147
+0:12:34.920 --> 0:12:43.980
+Finally, so we decided that, well, we can continue writing code in C and of course for
+
+148
+0:12:43.980 --> 0:12:49.800
+our existing products like Unbound, NSD, we will just maintain them in C because they
+
+149
+0:12:49.800 --> 0:12:56.400
+are written in C. But we would like to try to move to a draft
+
+150
+0:12:56.400 --> 0:12:58.720
+for new code.
+
+151
+0:12:58.720 --> 0:13:08.160
+And I just copied a little bit of stuff from a prototype.
+
+152
+0:13:08.160 --> 0:13:15.120
+First thing, uses Rust in creative ways.
+
+153
+0:13:15.120 --> 0:13:23.120
+And that is something where it's now a prototype and we definitely need feedback from users
+
+154
+0:13:23.120 --> 0:13:24.440
+of the library.
+
+155
+0:13:24.440 --> 0:13:29.440
+Like, okay, it's very great that you can have a message builder that takes a static compressor
+
+156
+0:13:29.440 --> 0:13:34.720
+type and it has a stream target, but probably you don't want to write code like that.
+
+157
+0:13:34.720 --> 0:13:42.080
+So it's built at the moment to be flexible and use the language, but it should be somewhere
+
+158
+0:13:42.080 --> 0:13:45.720
+modified to be more usable.
+
+159
+0:13:45.720 --> 0:13:53.000
+Then here in the middle, you basically get the main thing because the whole thing is
+
+160
+0:13:53.000 --> 0:13:58.040
+generic if you want to send a query, then you have to go to the question section and
+
+161
+0:13:58.040 --> 0:14:02.440
+then you say, well, I want to push a question there.
+
+162
+0:14:02.440 --> 0:14:08.280
+And then there is again a bit of a usability problem where you say, okay, I need this back
+
+163
+0:14:08.280 --> 0:14:12.880
+to a builder and I need a clone of it.
+
+164
+0:14:12.880 --> 0:14:18.440
+So then, so this is the part that I experimented with.
+
+165
+0:14:18.440 --> 0:14:26.160
+If you want to have a TCP upstream, then you say, create the TCP connection.
+
+166
+0:14:26.160 --> 0:14:32.600
+And the nice thing with Rust is that it can do all of the asynchronous stuff with a nice
+
+167
+0:14:32.600 --> 0:14:35.200
+syntax.
+
+168
+0:14:35.200 --> 0:14:40.960
+So basically you say, do this connect here and wait until the connect is done.
+
+169
+0:14:40.960 --> 0:14:49.880
+But because this function is implicitly asynchronous, as a programmer, you can just write this as
+
+170
+0:14:49.880 --> 0:14:54.840
+if it's sequential code, but the caller can just call this as an asynchronous function
+
+171
+0:14:54.840 --> 0:15:00.080
+and you don't have to do anything extra.
+
+172
+0:15:00.080 --> 0:15:08.880
+Here I have to do a bit more work to really figure out how it fits in the Rust ecosystem
+
+173
+0:15:08.880 --> 0:15:16.400
+because the thing with, if you have a TCP connection upstream to a DNS resolver, and
+
+174
+0:15:16.400 --> 0:15:23.920
+I wanted to have this as just a basics for maybe DOH or whatever, is that you want to
+
+175
+0:15:23.920 --> 0:15:29.720
+set up the connection once, but then you want to potentially send many queries over it.
+
+176
+0:15:29.720 --> 0:15:38.040
+So I need to have a separate thing that actually talks TCP as a worker thread, but then because
+
+177
+0:15:38.040 --> 0:15:43.840
+it's all asynchronous, this is basically getting an asynchronous worker.
+
+178
+0:15:43.840 --> 0:15:48.960
+And then I also say, well, give me an asynchronous query.
+
+179
+0:15:48.960 --> 0:15:53.680
+And then in Rust, you can say, okay, you have two asynchronous things that you want to do
+
+180
+0:15:53.680 --> 0:15:55.760
+at the same time.
+
+181
+0:15:55.760 --> 0:15:58.940
+Just do them both at the same time.
+
+182
+0:15:58.940 --> 0:16:04.760
+And then normally we expect to be here that we got a reply and then we print a reply and
+
+183
+0:16:04.760 --> 0:16:07.200
+we are done.
+
+184
+0:16:07.200 --> 0:16:15.200
+So this is sort of the direction we want to go to, which is also why we have a bit of
+
+185
+0:16:15.200 --> 0:16:20.320
+a problem developing the connect by name prototype that we now have because it is like, okay,
+
+186
+0:16:20.320 --> 0:16:27.040
+we don't really want to have a new prototype in C. What do we want to do with it?
+
+187
+0:16:27.040 --> 0:16:31.200
+So that's what I wanted to tell today.
+
+188
+0:16:31.200 --> 0:16:40.640
+There is I think plenty of space for questions.
+
+189
+0:16:40.640 --> 0:16:49.480
+I love the idea of having a function which can deal with not just name a resolution,
+
+190
+0:16:49.480 --> 0:16:53.200
+but DNS name a resolution and also the cryptography.
+
+191
+0:16:53.200 --> 0:16:59.200
+But as a distribution maintainer, I have to say that having something, a library function
+
+192
+0:16:59.200 --> 0:17:06.520
+which makes applications behave differently from all other applications is really a non-starter.
+
+193
+0:17:06.520 --> 0:17:13.280
+So I think that you need to consider in some way to support the NSS and the NSS plugins
+
+194
+0:17:13.280 --> 0:17:17.360
+through the libc or however it's better.
+
+195
+0:17:17.360 --> 0:17:24.720
+You mentioned that probably a daemon is needed to get good performance.
+
+196
+0:17:24.720 --> 0:17:33.560
+So maybe the DNS part is the less important one that you can delegate to some other component.
+
+197
+0:17:33.560 --> 0:17:36.040
+Can you summarize?
+
+198
+0:17:36.040 --> 0:17:37.320
+I'll try to summarize.
+
+199
+0:17:37.320 --> 0:17:47.640
+You say there's something with distributing this and there is something with if you run
+
+200
+0:17:47.640 --> 0:17:51.400
+a local proxy, then you don't have to focus as much on DNS.
+
+201
+0:17:51.400 --> 0:17:53.560
+If I got that correct.
+
+202
+0:17:53.560 --> 0:18:02.960
+I mean, there are already some projects in this space that you mentioned and they are
+
+203
+0:18:02.960 --> 0:18:08.840
+expected to work with the normal libc NSS plugins.
+
+204
+0:18:08.840 --> 0:18:15.600
+And I think that your application, sorry, your library to be universally used, I think
+
+205
+0:18:15.600 --> 0:18:18.280
+that has to be your goal.
+
+206
+0:18:18.280 --> 0:18:24.640
+You need to support the normal name resolution, which is expected by any applications.
+
+207
+0:18:24.640 --> 0:18:30.160
+So it does to support the libc plugins.
+
+208
+0:18:30.160 --> 0:18:36.760
+So basically, yeah, you say that the library will only be adopted if it supports the libc
+
+209
+0:18:36.760 --> 0:18:37.760
+plugins.
+
+210
+0:18:37.760 --> 0:18:39.760
+Yes, I agree.
+
+211
+0:18:39.760 --> 0:18:46.140
+I mean, that's why we made the prototype because we were looking into what should the interface
+
+212
+0:18:46.140 --> 0:18:51.600
+to the library be, how should the library behave, stuff like that, sort of the high
+
+213
+0:18:51.600 --> 0:18:52.680
+level stuff.
+
+214
+0:18:52.680 --> 0:19:00.120
+I'm fully expecting that any production quality implementation of the library has to take
+
+215
+0:19:00.120 --> 0:19:08.280
+a lot of this stuff into account and certainly dealing with Nesbitch.conf is, I guess, mandatory
+
+216
+0:19:08.280 --> 0:19:14.240
+for any production quality library.
+
+217
+0:19:14.240 --> 0:19:20.320
+For the proxy control option, because there are lots of demons in that space, of course,
+
+218
+0:19:20.320 --> 0:19:26.320
+it's best if those adopt the option once it is actually standardized by the ITF.
+
+219
+0:19:26.320 --> 0:19:30.700
+I mean, it's not that we want to write another proxy.
+
+220
+0:19:30.700 --> 0:19:36.280
+It's just like, okay, we have a very specific problem that we want to solve if we want to
+
+221
+0:19:36.280 --> 0:19:42.880
+make stuff resolve for a small and still give them access to all of the encrypted transports.
+
+222
+0:19:42.880 --> 0:19:49.960
+But yeah, if, for example, systemd resolve would also do the proxy control option, then
+
+223
+0:19:49.960 --> 0:19:51.280
+that would be perfectly fine.
+
+224
+0:19:51.280 --> 0:19:54.880
+I mean, there's no reason to write a new one.
+
+225
+0:19:54.880 --> 0:19:58.880
+Leonard is around, don't worry.
+
+226
+0:19:58.880 --> 0:19:59.880
+Yeah.
+
+227
+0:19:59.880 --> 0:20:11.880
+So for the proxy control option, is it only the stuff resolved that won't sell the proxy
+
+228
+0:20:11.880 --> 0:20:17.080
+server that it wants those policies applied or does the proxy also communicate back to
+
+229
+0:20:17.080 --> 0:20:19.840
+the stuff resolved that is actually applying those policies?
+
+230
+0:20:19.840 --> 0:20:25.760
+Because in the initial situation where nothing supports it, which you always have.
+
+231
+0:20:25.760 --> 0:20:33.960
+So the question is, what happens if you send a proxy control option to an older stuff resolver
+
+232
+0:20:33.960 --> 0:20:36.440
+that may not be aware?
+
+233
+0:20:36.440 --> 0:20:40.240
+So I didn't want to go over the entire draft.
+
+234
+0:20:40.240 --> 0:20:42.280
+So we thought about that.
+
+235
+0:20:42.280 --> 0:20:48.320
+But basically there are some priming queries.
+
+236
+0:20:48.320 --> 0:20:52.360
+I forgot the exact name.
+
+237
+0:20:52.360 --> 0:20:55.860
+Is it resolver dot arpa that is proposed?
+
+238
+0:20:55.860 --> 0:20:56.760
+Something like that.
+
+239
+0:20:56.760 --> 0:21:04.040
+So try to look up resolver dot arpa, see if you get the right response.
+
+240
+0:21:04.040 --> 0:21:08.240
+If you don't, then the only thing you leaked is that you were trying to look up resolver
+
+241
+0:21:08.240 --> 0:21:09.240
+dot arpa.
+
+242
+0:21:09.240 --> 0:21:12.240
+So you assume that that is safe.
+
+243
+0:21:12.240 --> 0:21:15.960
+If you do get it, then you know that the proxy understands it.
+
+244
+0:21:15.960 --> 0:21:16.960
+Yeah.
+
+245
+0:21:16.960 --> 0:21:17.960
+Any more questions?
+
+246
+0:21:17.960 --> 0:21:18.960
+Okay.
+
+247
+0:21:18.960 --> 0:21:19.960
+Yeah.
+
+248
+0:21:19.960 --> 0:21:22.960
+So there's actually a comment on both this presentation and the previous one.
+
+249
+0:21:22.960 --> 0:21:25.960
+You're tackling three moving targets at the same time.
+
+250
+0:21:25.960 --> 0:21:29.960
+You're trying to figure out how to integrate with the event loop.
+
+251
+0:21:29.960 --> 0:21:33.960
+You're trying to figure out what your API to the application looks like.
+
+252
+0:21:33.960 --> 0:21:37.960
+And you need to figure out what your integration with an SS or system.
+
+253
+0:21:37.960 --> 0:21:39.960
+The complexity is multiplicative.
+
+254
+0:21:39.960 --> 0:21:41.960
+So you're cubing this.
+
+255
+0:21:41.960 --> 0:21:43.960
+This is a horrible idea.
+
+256
+0:21:43.960 --> 0:21:49.960
+You can at least remove the event loop integration as a moving target.
+
+257
+0:21:49.960 --> 0:21:56.440
+There's an existing project called libderto which tries to solve that one problem by providing
+
+258
+0:21:56.440 --> 0:22:02.280
+four libraries an API to integrate with an arbitrary event loop provided by the application.
+
+259
+0:22:02.280 --> 0:22:10.120
+So I think you need to remove the number of moving targets, like reduce it, and maybe
+
+260
+0:22:10.120 --> 0:22:15.880
+the event loop is the one to kick out first and try to put in a separate consideration
+
+261
+0:22:15.880 --> 0:22:19.880
+how to solve that, and then continue from there.
+
+262
+0:22:19.880 --> 0:22:21.880
+And if they left.
+
+263
+0:22:21.880 --> 0:22:22.880
+Yeah.
+
+264
+0:22:22.880 --> 0:22:31.320
+So the question was basically it tries to deal with too much stuff at the same time.
+
+265
+0:22:31.320 --> 0:22:38.440
+Event loops, figuring out an API and then also figuring out how to deal with an S switch.
+
+266
+0:22:38.440 --> 0:22:44.360
+There's an existing library called libderto.
+
+267
+0:22:44.360 --> 0:22:49.760
+That makes it easier to be flexible with respect to event loops.
+
+268
+0:22:49.760 --> 0:22:51.560
+That's definitely a good point.
+
+269
+0:22:51.560 --> 0:22:52.880
+I'll try to look at it.
+
+270
+0:22:52.880 --> 0:22:47.780
+But I specifically decided to only focus on libd
+
+271
+0:22:47.780 --> 0:23:00.600
+event to just get Ferto.
+
+272
+0:23:00.600 --> 0:23:07.240
+To get something a prototype up and running and not try to support arbitrary things like
+
+273
+0:23:07.240 --> 0:23:10.040
+that.
+
+274
+0:23:10.040 --> 0:23:11.040
+More questions?
+
+275
+0:23:11.040 --> 0:23:12.040
+Some more time.
+
+276
+0:23:12.040 --> 0:23:13.040
+Time for one more.
+
+277
+0:23:13.040 --> 0:23:14.040
+Okay.
+
+278
+0:23:14.040 --> 0:23:19.040
+It seems that we have run out of questions.
+
+279
+0:23:19.040 --> 0:23:20.040
+Wonderful.
+
+280
+0:23:20.040 --> 0:23:21.040
+Yeah.
+
+281
+0:23:21.040 --> 0:23:22.040
+Thank you.
+
+282
+0:23:22.040 --> 0:23:49.520
+Thank you very much.
+

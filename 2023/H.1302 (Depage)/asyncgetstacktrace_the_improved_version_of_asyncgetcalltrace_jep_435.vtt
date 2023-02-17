@@ -1,0 +1,628 @@
+WEBVTT
+
+00:00.000 --> 00:07.440
+Yes, hi, I'm Johannes Bechberger.
+
+00:07.440 --> 00:09.840
+I was already introduced.
+
+00:09.840 --> 00:12.440
+I work at the sub-machine.
+
+00:12.440 --> 00:15.320
+It's another great distribution of the OpenJDK.
+
+00:15.320 --> 00:22.520
+So I worked since the beginning of last year on my new project on Async get set trace.
+
+00:22.520 --> 00:27.440
+It's essentially an improved version of the Async get call trace API.
+
+00:27.440 --> 00:31.400
+And I think many of you probably don't know this API.
+
+00:31.400 --> 00:34.720
+I didn't know it before I started this project.
+
+00:34.720 --> 00:37.720
+But essentially, it's related to profiling.
+
+00:37.720 --> 00:40.080
+So how does profiling work?
+
+00:40.080 --> 00:43.160
+Some of you might have always seen FlameCrafts.
+
+00:43.160 --> 00:51.840
+If not, there are some other talks on profiling in the Mozilla room that you can look it up.
+
+00:51.840 --> 00:56.440
+But essentially, what profiling is, you want to see which parts of your applications are
+
+00:56.440 --> 00:57.440
+possible.
+
+00:57.440 --> 01:03.480
+For example, here, I can see that some JDK stuff is probably a thing that takes time.
+
+01:03.480 --> 01:07.440
+But essentially, how it works under the hood is that we have a selection of threads, like
+
+01:07.440 --> 01:09.520
+for example here, five threads.
+
+01:09.520 --> 01:17.200
+Then we randomly select three threads because we cannot usually sample all threads because
+
+01:17.200 --> 01:19.200
+it would be too costly.
+
+01:19.200 --> 01:21.120
+Then we pre-allocate some traces.
+
+01:21.120 --> 01:26.920
+This is just a data structure where we store the stack frame information in.
+
+01:26.920 --> 01:28.280
+And then we ping the first thread.
+
+01:28.280 --> 01:30.520
+And with ping, I mean we send it a signal.
+
+01:30.520 --> 01:35.400
+And then in the signal handle, we walk the stack because in the single handler, the thread
+
+01:35.400 --> 01:37.200
+is stopped.
+
+01:37.200 --> 01:38.400
+So it can walk the stack.
+
+01:38.400 --> 01:45.400
+We do this with the thread two, with the thread five, and we have the traces.
+
+01:45.400 --> 01:46.400
+And then we store it.
+
+01:46.400 --> 01:49.600
+And then we do some post-processing.
+
+01:49.600 --> 01:54.400
+That's essentially how Async profile works, but just in a loop.
+
+01:54.400 --> 01:56.480
+In a loop, we always do this.
+
+01:56.480 --> 02:02.320
+And so we need an API because we need an API.
+
+02:02.320 --> 02:06.520
+It's called Async at call trace because we could use JVMTR libraries.
+
+02:06.520 --> 02:07.800
+They are safe from bias.
+
+02:07.800 --> 02:13.920
+So they let the threads wait till they're ready, till they're at a safe point, but we
+
+02:13.920 --> 02:19.520
+want to have the call trace at a certain point where we want it.
+
+02:19.520 --> 02:22.080
+And so Async at call trace is quite a cool API.
+
+02:22.080 --> 02:26.440
+So how it works, here we have the stack, how it's on your system.
+
+02:26.440 --> 02:29.000
+We have at the bottom the pthread start.
+
+02:29.000 --> 02:31.240
+It's on the Unix system.
+
+02:31.240 --> 02:34.000
+And on top, we have some Java frames.
+
+02:34.000 --> 02:41.400
+And then it goes up to the top to write byte method because it writes to a buffered output
+
+02:41.400 --> 02:42.400
+stream.
+
+02:42.400 --> 02:48.960
+It's essentially print, hello world, it just prints some strings.
+
+02:48.960 --> 02:52.400
+And in the single handler, we get the top frame.
+
+02:52.400 --> 02:56.240
+That's where the u context from the single handler points to.
+
+02:56.240 --> 02:59.760
+Then we do some stack blocking and Async at call trace does it for us.
+
+02:59.760 --> 03:08.200
+And essentially, it returns us in a pre-allocated data structure, the frames, and the number
+
+03:08.200 --> 03:09.720
+of frames that we got.
+
+03:09.720 --> 03:13.400
+And it also stores a number of frames in error code if there was an error.
+
+03:13.400 --> 03:17.240
+And so what we get for every frame is the line number.
+
+03:17.240 --> 03:21.360
+So it's called line number, but it's essentially the bytecode index.
+
+03:21.360 --> 03:29.320
+I don't know, it's historically this way because this API is from 2003 around and we get a
+
+03:29.320 --> 03:31.200
+method ID.
+
+03:31.200 --> 03:33.920
+But we only get this information on Java frames.
+
+03:33.920 --> 03:36.440
+So what are these problems?
+
+03:36.440 --> 03:38.080
+So don't get me started.
+
+03:38.080 --> 03:41.560
+I worked on it for long enough time.
+
+03:41.560 --> 03:44.320
+So it's unofficial.
+
+03:44.320 --> 03:51.160
+So it's there in 2003, like for three months, and then Oracle put it out, Sun at the time
+
+03:51.160 --> 03:53.000
+put it away.
+
+03:53.000 --> 03:58.880
+It's now just lying around as an exported symbol but doesn't have its own header.
+
+03:58.880 --> 04:00.480
+It's unsupported.
+
+04:00.480 --> 04:07.420
+So if there's a change in another part of the JVM that potentially breaks it, nobody
+
+04:07.420 --> 04:13.880
+notices it because there's only one single test that doesn't test that much.
+
+04:13.880 --> 04:15.880
+So there's also missing information.
+
+04:15.880 --> 04:25.320
+So it only gives us information on the stack frames of the Java frames but not on anything
+
+04:25.320 --> 04:26.320
+else.
+
+04:26.320 --> 04:30.040
+And it misses information like inlining, which isn't that great.
+
+04:30.040 --> 04:39.160
+And so in the beginning of last year, I started to work on a new API because this, I think,
+
+04:39.160 --> 04:40.600
+a call trace is the best we have.
+
+04:40.600 --> 04:44.080
+And maybe we could do something better.
+
+04:44.080 --> 04:47.800
+So I started to work on Async at Stack Trades.
+
+04:47.800 --> 04:50.800
+It's now a CHAP candidate.
+
+04:50.800 --> 04:52.040
+It's 435.
+
+04:52.040 --> 04:59.120
+So if you want to see the CHAP in its entirety, just go on the Opti SDK website or read the
+
+04:59.120 --> 05:05.040
+blog post for this talk and you get a picture of what it does.
+
+05:05.040 --> 05:11.520
+And so the idea was to create a better API that gives us more information and is far
+
+05:11.520 --> 05:15.120
+more supported, so with lots of tests with its own header.
+
+05:15.120 --> 05:23.640
+And so again, we have the stack, our stack, but we then get more information.
+
+05:23.640 --> 05:29.880
+For example, we get at its most basic level, we also get the kind of the thread that we're
+
+05:29.880 --> 05:30.880
+running on.
+
+05:30.880 --> 05:38.800
+So is this thread like in Java mode or is this in GC mode or what is this thread, which
+
+05:38.800 --> 05:39.800
+is quite neat.
+
+05:39.800 --> 05:40.960
+And we got more information.
+
+05:40.960 --> 05:42.640
+For example, we get the BCI.
+
+05:42.640 --> 05:46.120
+It's no-call BCI because, yeah, it's the byte code index.
+
+05:46.120 --> 05:47.560
+We get a method ID.
+
+05:47.560 --> 05:49.120
+We get also the type.
+
+05:49.120 --> 05:50.120
+Is it inline?
+
+05:50.120 --> 05:52.200
+Is it native?
+
+05:52.200 --> 06:00.680
+With native, I mean not C, C++, but these boundary methods that are defined in Java,
+
+06:00.680 --> 06:05.160
+but like which code is implemented in C, C++.
+
+06:05.160 --> 06:06.640
+And we also get the compilation level.
+
+06:06.640 --> 06:11.640
+So is it C1, C2 compiled or don't compile at all?
+
+06:11.640 --> 06:14.560
+So this is quite neat because we get more information.
+
+06:14.560 --> 06:17.760
+But the cool thing is we have options now.
+
+06:17.760 --> 06:25.880
+We can, with this API, we can set in an integer, hey, we want to have non-Java frames and
+
+06:25.880 --> 06:33.800
+we also want to walk non-Java threads, which leads us to this situation where we get information
+
+06:33.800 --> 06:40.720
+also on the thread on these C, C++ frames, which is quite nice because for these frames
+
+06:40.720 --> 06:42.240
+we get also the type.
+
+06:42.240 --> 06:46.200
+So it's a C, C++ and we also get a program counter.
+
+06:46.200 --> 06:55.160
+So we can then go back, do some of our own analysis and use DLSim to get the methods
+
+06:55.160 --> 06:59.360
+of the DL family and get the method name.
+
+06:59.360 --> 07:03.080
+And we can also walk with these options non-Java threads.
+
+07:03.080 --> 07:04.480
+So we see more information.
+
+07:04.480 --> 07:10.360
+It essentially makes the life of a profile developer far easier because we can now just
+
+07:10.360 --> 07:12.080
+use this API.
+
+07:12.080 --> 07:13.600
+It will be supported.
+
+07:13.600 --> 07:15.520
+If it gets in, it will be supported.
+
+07:15.520 --> 07:19.680
+I'm working on lots and lots of tests.
+
+07:19.680 --> 07:22.640
+And yeah, that's, I hope it gets in.
+
+07:22.640 --> 07:30.440
+And as a bonus, what I also introduced is new methods for OpenJDK developers to walk
+
+07:30.440 --> 07:35.000
+stacks because currently the code is spread between a few different places.
+
+07:35.000 --> 07:36.520
+Some of them are copies of others.
+
+07:36.520 --> 07:40.280
+So it's quite hard when you change some port.
+
+07:40.280 --> 07:42.680
+You have to change other parts too.
+
+07:42.680 --> 07:45.840
+So it's essentially technical depth.
+
+07:45.840 --> 07:54.560
+There were good reasons in the years before, but still I want to make stack walking easier.
+
+07:54.560 --> 08:04.000
+So the new API that I used in the implementation of my chat proposal allows us to just give
+
+08:04.000 --> 08:06.880
+a stack walker some options like, hey, I want to walk stacks.
+
+08:06.880 --> 08:11.280
+I want to skip, I want to walk also non-Java frames.
+
+08:11.280 --> 08:16.240
+And I can just go over and say, oh, give me the next frame.
+
+08:16.240 --> 08:18.960
+And on this next frame, we can ask all the information.
+
+08:18.960 --> 08:19.960
+Is this a Java frame?
+
+08:19.960 --> 08:21.200
+Is this a native frame?
+
+08:21.200 --> 08:22.840
+Which is this compilation level?
+
+08:22.840 --> 08:28.160
+And this makes it far easier to walk stacks.
+
+08:28.160 --> 08:34.440
+And hopefully makes it easier to combine all the stack walking from some ever-related stack
+
+08:34.440 --> 08:40.800
+traces from async get call trace from JFR using one API.
+
+08:40.800 --> 08:46.840
+And so when you make an improvement in one of these APIs and implementations, you get
+
+08:46.840 --> 08:49.440
+an improvement on all.
+
+08:49.440 --> 08:55.600
+So what I've done is that I improved async get call trace with the help of my colleagues
+
+08:55.600 --> 09:07.200
+to be much safer, so I wrote testing code that used safe set so that it kind of checks
+
+09:07.200 --> 09:09.200
+the pointer before it exists.
+
+09:09.200 --> 09:14.000
+So it's far safer than I did here for async get stack trace.
+
+09:14.000 --> 09:16.320
+Lots of testing, for example, I did some fuzzing.
+
+09:16.320 --> 09:23.160
+So I called async get stack trace with random u-context, so with randomized frame pointers
+
+09:23.160 --> 09:29.160
+and stack pointers, and it doesn't crash like for hours on a large machine, which is quite
+
+09:29.160 --> 09:30.160
+cool.
+
+09:30.160 --> 09:37.760
+And so this covers async get async profile when it modifies the frame and stack pointer
+
+09:37.760 --> 09:46.120
+to alleviate some concerns when the VM is in undefined state.
+
+09:46.120 --> 09:51.760
+It needs a lot of convincing, so I'm still in the process where I have to talk with all
+
+09:51.760 --> 09:54.640
+the people from Oracle, all the JFR people.
+
+09:54.640 --> 10:01.840
+It's a long, drawn-out process, but I hope I can convince them, because clearly the people
+
+10:01.840 --> 10:09.880
+on the profiler side are really happy to have this because it has many advantages for them.
+
+10:09.880 --> 10:15.280
+And of course, again, testing, because the whole point of this API is that you get more
+
+10:15.280 --> 10:18.480
+information but also that it's a better tested API.
+
+10:18.480 --> 10:23.680
+Currently, I have six tests, and I'm working on more.
+
+10:23.680 --> 10:28.080
+So I hope that it gets in.
+
+10:28.080 --> 10:37.760
+Till then, you can see on GitHub there's a draft PR on the strap.
+
+10:37.760 --> 10:44.080
+Just search in the PRs for draft PR with R-SkiST in the name.
+
+10:44.080 --> 10:50.520
+And then you can follow me on Twitter and our team at SpeedSubmachine, and that's all.
+
+10:50.520 --> 10:52.840
+Oh, yes, yes, yes.
+
+10:52.840 --> 11:00.720
+And I'm also blogging mostly in others, and all the blog posts are also put on FUJ.
+
+11:00.720 --> 11:04.960
+But you can follow me there and read on all the topics that they talked today.
+
+11:04.960 --> 11:05.960
+So thanks.
+
+11:05.960 --> 11:14.840
+Question, yes.
+
+11:14.840 --> 11:22.520
+So SafeHatch, I think it uses signal handlers, so it cannot be called from a signal handler,
+
+11:22.520 --> 11:24.520
+so what do you do there?
+
+11:24.520 --> 11:25.520
+Wally.
+
+11:25.520 --> 11:26.520
+Oh, yes.
+
+11:26.520 --> 11:31.680
+The question was, can SafeHatch be called from signal handlers because it uses signals?
+
+11:31.680 --> 11:36.400
+I think it uses different signals because I didn't have any problems using it from signal
+
+11:36.400 --> 11:37.400
+handlers.
+
+11:37.400 --> 11:38.840
+So I have tests.
+
+11:38.840 --> 11:44.880
+To use us and get stack-dressed, you have to use signal handlers, so I didn't see any
+
+11:44.880 --> 11:45.880
+problems so far.
+
+11:45.880 --> 11:47.320
+I think that's possible.
+
+11:47.320 --> 11:51.040
+It's even weird because from signal handlers, you cannot do any mallocs, so you have to
+
+11:51.040 --> 11:53.940
+preallocate, but you can call fork.
+
+11:53.940 --> 11:56.320
+So it's quite interesting.
+
+11:56.320 --> 11:57.320
+Any other questions?
+
+11:57.320 --> 12:02.400
+Does it handle invoke dynamics, especially?
+
+12:02.400 --> 12:08.480
+Because within that stack, you'll get the whole stacker deciding how to dispatch the
+
+12:08.480 --> 12:12.040
+call.
+
+12:12.040 --> 12:16.960
+So the question was, does it handle invoke dynamics specifically?
+
+12:16.960 --> 12:23.680
+Now it just uses, it just is based on the frame stack-walking and the internal mechanism
+
+12:23.680 --> 12:24.680
+of stack-walking.
+
+12:24.680 --> 12:29.000
+So it doesn't handle it differently than, for example, I think, get call trace and
+
+12:29.000 --> 12:30.000
+trace R.
+
+12:30.000 --> 12:32.000
+That's all Java frames.
+
+12:32.000 --> 12:35.840
+Yeah, that's all Java frames, so that's probably fine.
+
+12:35.840 --> 12:41.000
+You have to change the negative parts?
+
+12:41.000 --> 12:46.280
+Or does it work on all platforms?
+
+12:46.280 --> 12:49.160
+So the question was, does it work on all platforms?
+
+12:49.160 --> 12:53.720
+It's known that it doesn't really work on Windows just because Windows hasn't really
+
+12:53.720 --> 12:54.920
+a concept of signals.
+
+12:54.920 --> 13:01.000
+If you have any ideas on getting something like this to work on Windows, feel free to
+
+13:01.000 --> 13:02.840
+drop me a message.
+
+13:02.840 --> 13:05.880
+So no, I didn't have to change any native parts.
+
+13:05.880 --> 13:13.000
+I had to create some native parts for testing to modify the U-context, because this is highly
+
+13:13.000 --> 13:16.680
+operating system specific.
+
+13:16.680 --> 13:24.240
+So the changes to the whole OpenJDK are fairly minimal, so they aren't that large besides
+
+13:24.240 --> 13:27.840
+passing through some bullet to configure stuff.
+
+13:27.840 --> 13:34.240
+And the code itself is just a few couple hundred lines, so it's quite simple also to understand,
+
+13:34.240 --> 13:40.640
+and there's a blog post that describes the reasoning behind it.
+
+13:40.640 --> 13:41.640
+Any other questions?
+
+13:41.640 --> 13:42.640
+Yes?
+
+13:42.640 --> 13:46.440
+Is it already a sub-machine?
+
+13:46.440 --> 13:52.680
+No, it's not yet on the sub-machine, because I'm still in the process of testing it.
+
+13:52.680 --> 13:54.720
+So there's, of course, a podcast.
+
+13:54.720 --> 14:00.280
+You can already use the JVM when you compile it yourself.
+
+14:00.280 --> 14:06.640
+I'm in the process to updating my demo repository, which contains a modified sync profile that
+
+14:06.640 --> 14:10.680
+uses it, so you can try it out yourself.
+
+14:10.680 --> 14:19.040
+I'll try it out in the next few weeks, it still has some bugs.
+
+14:19.040 --> 14:20.040
+Anything else?
+
+14:20.040 --> 14:21.040
+Thank you very much.
+
+14:21.040 --> 14:46.640
+Thank you very much.

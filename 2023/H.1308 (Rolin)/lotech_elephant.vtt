@@ -1,0 +1,319 @@
+WEBVTT
+
+00:00.000 --> 00:20.380
+Great. Okay, my name is Noel Grandin. I'm talking about the work that I've been doing
+
+00:20.380 --> 00:25.040
+making Leber Office faster. We all know that Leber Office is a bit of an elephant. It's
+
+00:25.040 --> 00:28.280
+a cute elephant, but it's still a bit of an elephant. We've got 10 million odd lines
+
+00:28.280 --> 00:33.400
+of code, some of which is 20 years old. Practices that were perfectly acceptable 20 years ago
+
+00:33.400 --> 00:39.720
+are a little bit trickier these days. Optimizations that made perfect sense back in the day are
+
+00:39.720 --> 00:45.720
+not great anymore, and things have just changed around. For example, CPU memory bandwidth has
+
+00:45.720 --> 00:51.720
+dramatically changed. When we ran about the error of the 486DX2, we suddenly saw a dramatic
+
+00:51.720 --> 00:57.120
+shift in the speeds of main RAM versus the speeds of your main CPU. Up until that point,
+
+00:57.120 --> 01:02.520
+you were looking at CPUs that could touch location and memory at about the same speed
+
+01:02.520 --> 01:10.200
+as they could touch local cached memory. You wrote your algorithms around those sorts of
+
+01:10.200 --> 01:13.960
+things, the DX2 changed things, and it only got dramatically worse after that. To the
+
+01:13.960 --> 01:19.960
+point now where touching something in an L1 cache versus touching main memory can be anywhere
+
+01:19.960 --> 01:26.320
+up to 50 times slower. Cache-friendly algorithms are now the new game in town. We now have
+
+01:26.320 --> 01:31.240
+multiple cores. Everybody has multiple cores. It used to be that only people with vast sums
+
+01:31.240 --> 01:37.320
+of money had machines with multiple cores or L1 CPU. Now, everybody has one. Locking
+
+01:37.320 --> 01:41.920
+algorithms that made perfect sense because they only got touched by a handful of people
+
+01:41.920 --> 01:48.960
+suddenly get exercised by everybody, and all sorts of interesting flaws come up. An interesting
+
+01:48.960 --> 01:53.160
+note, the locking algorithms that were written back then, nobody actually knew if they were
+
+01:53.160 --> 02:00.160
+truly solid or not because Intel's own engineers refused to commit to a cache-coherency protocol
+
+02:00.160 --> 02:08.140
+until somewhere around the Pentium era. Up until then, they ruthlessly refused to say
+
+02:08.140 --> 02:12.240
+anything about it, and if queried, they would just say that it wasn't something they had
+
+02:12.240 --> 02:19.680
+locked down yet. You were kind of in the dark, so we end up where we end up. The good news,
+
+02:19.680 --> 02:25.240
+I've been at this for a little while, and the worst and ugliest of the stuff is largely
+
+02:25.240 --> 02:29.440
+gone. I mean, there's lots of performance issues left in LibreOffice, but the stuff
+
+02:29.440 --> 02:34.200
+that used to hang LibreOffice up for minutes at a time, I've managed to nail most of that
+
+02:34.200 --> 02:39.440
+down. There's still lots of places where it's slow, but it's not like heinously slow like
+
+02:39.440 --> 02:46.000
+it used to be. The bad news is that the remaining stuff is really, really ugly. It's typically
+
+02:46.000 --> 02:49.640
+the stuff that I just couldn't get my head around the first time, and some of it I've
+
+02:49.640 --> 02:53.560
+looked at again, and I still can't get my head around it. Some of it I've been beating
+
+02:53.560 --> 02:59.840
+on for a while, and I'm not making a lot of progress. But anyhow, the point of this exercise
+
+02:59.840 --> 03:05.200
+is that you keep beating on things, and eventually either you break or it breaks. Hopefully,
+
+03:05.200 --> 03:10.200
+get the right thing. So what worked out nicely? I'm going to talk today about what worked
+
+03:10.200 --> 03:14.680
+out well and what worked out worse, because I think it's important that we share both
+
+03:14.680 --> 03:19.000
+the successes and the failures, because I think you learn equally from both. So what
+
+03:19.000 --> 03:23.760
+worked out nicely is reducing allocations, primarily with things like using standard
+
+03:23.760 --> 03:30.520
+optional. So for example, if we were allocating a temporary data structure inside a subroutine,
+
+03:30.520 --> 03:37.600
+I would switch that to declare that thing using standard optional, which does have the
+
+03:37.600 --> 03:43.120
+downside that it takes up space on the stack even if you're not using it. But on the upside,
+
+03:43.120 --> 03:48.800
+using the stack is about 100 times faster than allocating from main memory. The reasons
+
+03:48.800 --> 03:52.600
+for that are because any time you touch main, any time you have to allocate out of the heap,
+
+03:52.600 --> 03:56.480
+you have to take a lock. That leads to locking contention, et cetera, et cetera. You have
+
+03:56.480 --> 04:00.000
+to talk to main memory because you're doing all sorts of stuff there, whereas the stack
+
+04:00.000 --> 04:05.600
+is pretty much guaranteed to be in L1 cache. And so allocating out of there and deallocating
+
+04:05.600 --> 04:10.000
+out of there is just ridiculously fast. So you can allocate quite large amounts of memory
+
+04:10.000 --> 04:14.200
+before you start falling out of L1 cache from talking up to a couple of kilobytes here.
+
+04:14.200 --> 04:19.040
+So throwing this sort of stuff at it worked well. The other thing I did was I've been
+
+04:19.040 --> 04:24.580
+converting the usages of our internal OSL, colon, colon, mutex class to the standard
+
+04:24.580 --> 04:28.880
+mutex class. Now, despite the naming here, we're talking about two different kinds of
+
+04:28.880 --> 04:36.520
+mutexes. Our internal mutex is what's normally called standard recursive mutex, whereas
+
+04:36.520 --> 04:42.920
+standard mutex is a non-recursive mutex, and it is considerably faster. In the uncontended
+
+04:42.920 --> 04:49.360
+case, standard mutex is about 20 to 50 times faster than standard recursive mutex. In the
+
+04:49.360 --> 04:54.000
+contended case, they tend to fall back to roughly being about the same cost. So given
+
+04:54.000 --> 04:59.920
+that we run most of the time with very, very little concurrency, except for an occasional
+
+04:59.920 --> 05:05.760
+use case here and there, standard mutex is a major win. The downside of standard mutex
+
+05:05.760 --> 05:12.760
+is that if you use it and you try and lock that mutex a second time, you get a dead lock.
+
+05:12.760 --> 05:18.360
+So you have to write your code quite carefully. Most of our usages converted very easily.
+
+05:18.360 --> 05:22.760
+I did make a couple of mistakes, so there were a couple of regressions I had to fix,
+
+05:22.760 --> 05:25.720
+and in a couple of cases, the regressions were simply unfixable, and so we backed it
+
+05:25.720 --> 05:31.520
+back out again. But in general, it's a win. And as a side effect, standard mutex is allocation
+
+05:31.520 --> 05:37.880
+free. It's literally just a single word in memory, and the common unattended case of
+
+05:37.880 --> 05:42.880
+taking a standard mutex is what's called a CAS operation, compare and swap. So it's
+
+05:42.880 --> 05:49.800
+really fast, and it doesn't use even less memory than OSL mutex, so a win all round.
+
+05:49.800 --> 05:55.320
+What didn't work out? So we've got this SVL shared string pool. It's a really nice thing.
+
+05:55.320 --> 06:01.080
+We use it in spreadsheets primarily, because spreadsheets often have many tens of thousands
+
+06:01.080 --> 06:05.800
+of strings which are all identical across all the cells, so we store references to those
+
+06:05.800 --> 06:11.880
+strings in the shared pool. Now, this shared pool gets hit very hard at load time, because
+
+06:11.880 --> 06:18.120
+other people just implemented concurrent loading of spreadsheets. So we have this nice stuff
+
+06:18.120 --> 06:23.320
+where we fire up multiple threads and load a bunch of different chunks of the spreadsheet
+
+06:23.320 --> 06:28.880
+at the same time. This is great, speeds things up. But it was bottlenecking very hard in
+
+06:28.880 --> 06:34.640
+SVL shared string pool. So I thought, oh, it's great. This is a hash map. Best case
+
+06:34.640 --> 06:39.040
+scenario, we can stick a concurrent lock free hash map in there. I found this great
+
+06:39.040 --> 06:43.200
+cuckoo hash map written by some very bright people, much smarter than myself. I stuck
+
+06:43.200 --> 06:48.560
+it in there. Oh, it was great. It worked out brilliantly. It completely destroyed the bottleneck.
+
+06:48.560 --> 06:52.360
+Spreadsheet loading went up by a factor of two or three, and I thought I had a great
+
+06:52.360 --> 06:57.160
+win. And then the first bug came in where there was an edge case where it wasn't quite
+
+06:57.160 --> 07:01.680
+the locking, because we were doing concurrent locking now. It was getting some weird edge
+
+07:01.680 --> 07:07.400
+cases. We had two different maps. They were both talking in the same thing. So I then
+
+07:07.400 --> 07:12.000
+had to fix those edge cases. I reworked it. We fixed those bugs. We reworked it again.
+
+07:12.000 --> 07:19.720
+I fixed the bugs, and eventually got it working. And then another bright guy came in, Lubwash
+
+07:19.720 --> 07:27.800
+came in and said, but wait. String pool is indeed a hotspot, but the hotspot is not actually
+
+07:27.800 --> 07:33.200
+the hash map inside string pool, the hotspot is the upper case conversion. He improved
+
+07:33.200 --> 07:37.320
+the upper case conversion. And by the time he was done improving the upper case conversion,
+
+07:37.320 --> 07:44.480
+my concurrent hash map was making no difference whatsoever. So I had identified a hotspot,
+
+07:44.480 --> 07:50.460
+but I hadn't identified the hotspot. So we backed it out, because there's no point in
+
+07:50.460 --> 07:54.240
+keeping a highly complicated piece of equipment like that around. So I was very sad to see
+
+07:54.240 --> 07:59.840
+it go. But I learned some stuff in the process. So no harm, no foul. And we backed it out
+
+07:59.840 --> 08:05.560
+again, and we were back to being faster than we were before. Red line processing in writer,
+
+08:05.560 --> 08:11.320
+which is our document editor section, is often very, very slow, especially if there's a ton
+
+08:11.320 --> 08:16.920
+of red lines in a big document. And it's slow both loading and slow at runtime, because
+
+08:16.920 --> 08:21.320
+when we're doing red lines, we often are doing massive amounts of adding and deleting to
+
+08:21.320 --> 08:25.960
+data structures as we internally render and stuff. And so I thought I'd try and speed that
+
+08:25.960 --> 08:32.240
+up. However, this is writer. Writer is the most cache-unfriendly program known to mankind.
+
+08:32.240 --> 08:40.160
+It just wants to chase pointers all over RAM. It's data set once you have more than a sort
+
+08:40.160 --> 08:45.120
+of 10-page document. You are completely falling out of L1 cache. So you have no chance of
+
+08:45.120 --> 08:50.280
+getting cached algorithms. The data structures are inherently very, very complicated. Human
+
+08:50.280 --> 08:55.220
+languages and documents just are. Consequences are we do pointer chasing. So we're constantly
+
+08:55.220 --> 08:59.600
+loading a pointer and then following it to some other location in memory, which is guaranteed
+
+08:59.600 --> 09:04.120
+to not to be an L1 cache. And then we're following that again to something else, which is also
+
+09:04.120 --> 09:07.560
+not an L1 cache. And in the process, we've now blown apart our cache. So if we need the
+
+09:07.560 --> 09:12.280
+first pointer again, that's also not an L1 cache. So we just take our tails around, enable
+
+09:12.280 --> 09:17.760
+very slow processing. I did my best to fix this. And that involves trying to speed up
+
+09:17.760 --> 09:25.080
+something called a node index and a content index. And I failed. I am now three levels
+
+09:25.080 --> 09:30.160
+deep, fixing different things related to that. No end in sight. And I'm currently bottlenecked
+
+09:30.160 --> 09:34.960
+on a piece of processing that I just don't understand. So that didn't work out. But in
+
+09:34.960 --> 09:41.960
+the process, I now know a lot more about writer. And so I consider that a word. Thank you.
+
+10:04.960 --> 10:09.960
+Thank you.

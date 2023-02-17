@@ -1,0 +1,1300 @@
+1
+0:00:00.000 --> 0:00:09.440
+All right, our next speaker is Andrew Jeffery from the Earth of Cambridge talking about
+
+2
+0:00:09.440 --> 0:00:10.440
+LSKB.
+
+3
+0:00:10.440 --> 0:00:17.680
+Hello, so yes, I'm Andrew Jeffery from University of Cambridge.
+
+4
+0:00:17.680 --> 0:00:21.840
+Email is there if you want to email me about any questions that I can't answer today.
+
+5
+0:00:21.840 --> 0:00:26.760
+As a brief kind of precursor, I kind of come from the distributed systems world, not necessarily
+
+6
+0:00:26.760 --> 0:00:31.960
+confidential computing world, so this is kind of like a hybrid of both worlds here.
+
+7
+0:00:31.960 --> 0:00:36.920
+So today we're going to talk about LSKB, aiming to democratize confidential computing from
+
+8
+0:00:36.920 --> 0:00:39.000
+the core.
+
+9
+0:00:39.000 --> 0:00:42.000
+So first of all, we've got to work out what this core actually is that we kind of want
+
+10
+0:00:42.000 --> 0:00:43.000
+to start replacing.
+
+11
+0:00:43.000 --> 0:00:48.040
+And so we're going to start working with distributed key value stores.
+
+12
+0:00:48.040 --> 0:00:50.640
+In particular, we're going to look at etcd.
+
+13
+0:00:50.640 --> 0:00:55.660
+And as the etcd website defines itself, it's a distributed, reliable key value store.
+
+14
+0:00:55.660 --> 0:01:00.720
+And importantly, it's for the most critical data of your distributed systems.
+
+15
+0:01:00.720 --> 0:01:03.820
+So etcd runs as a cluster, it's distributed.
+
+16
+0:01:03.820 --> 0:01:07.920
+So you have this one leader node, and you might have some more followers in this setup
+
+17
+0:01:07.920 --> 0:01:08.920
+as well.
+
+18
+0:01:08.920 --> 0:01:13.840
+etcd is also not alone, it's the core, so you have some applications around that.
+
+19
+0:01:13.840 --> 0:01:18.000
+Some of those applications might be some sort of orchestration, so using Kubernetes on top
+
+20
+0:01:18.000 --> 0:01:19.880
+is like one of the main candidates.
+
+21
+0:01:19.880 --> 0:01:25.240
+Otherwise you might use M3 or Rook or Core DNS, and there's other applications that use
+
+22
+0:01:25.240 --> 0:01:27.280
+etcd internally as well.
+
+23
+0:01:27.280 --> 0:01:33.960
+So effectively, it's really widely used, it's quite a critical piece of a lot of infrastructure.
+
+24
+0:01:33.960 --> 0:01:39.000
+And so you have to interact with etcd in some way, even if you're just using one of these
+
+25
+0:01:39.000 --> 0:01:40.000
+services.
+
+26
+0:01:40.000 --> 0:01:46.680
+And so primarily you use some key value operations, like you can put, so you might write foo1
+
+27
+0:01:46.680 --> 0:01:51.920
+equals bar into the data store, and it keeps some history, so you kind of have this revision
+
+28
+0:01:51.920 --> 0:01:52.920
+system.
+
+29
+0:01:52.920 --> 0:01:56.600
+When you do that first write, it'll be stored at, say, revision 5, and you write to be 6,
+
+30
+0:01:56.600 --> 0:01:58.600
+7, 8, going on like that.
+
+31
+0:01:58.600 --> 0:02:03.640
+So after you've written, you can get something back out using the range queries.
+
+32
+0:02:03.640 --> 0:02:09.920
+And with this, you can say, I'd like all keys between foo and foo5 in history, so you'd
+
+33
+0:02:09.920 --> 0:02:11.840
+be able to get multiple keys at once.
+
+34
+0:02:11.840 --> 0:02:15.440
+And you can also specify the revision here if you wanted to go back in time just to see
+
+35
+0:02:15.440 --> 0:02:19.320
+what it was at some previous point.
+
+36
+0:02:19.320 --> 0:02:22.680
+After you've read something, you might no longer need stuff, so you can delete it.
+
+37
+0:02:22.680 --> 0:02:28.320
+So you can also delete with this range as well, so you can delete, say, foo2, foo5.
+
+38
+0:02:28.320 --> 0:02:30.760
+Transactions are a nice ability here, so you can do some kind of conditional logic at the
+
+39
+0:02:30.760 --> 0:02:33.000
+data store side.
+
+40
+0:02:33.000 --> 0:02:38.120
+So you can use put range with leads or more nested transactions internally to do bulk
+
+41
+0:02:38.120 --> 0:02:43.520
+operations here, so you can say, right, foo2 and foo3 in the same revision.
+
+42
+0:02:43.520 --> 0:02:50.120
+Additionally, you can have leases on top of the data store, so these can be used for building
+
+43
+0:02:50.120 --> 0:02:56.720
+high-level primitives and distributed systems, primarily you might want some leadership mechanism.
+
+44
+0:02:56.720 --> 0:03:00.680
+One final thing here is the watch API that etcd provides.
+
+45
+0:03:00.680 --> 0:03:04.920
+Similar to ranges, you can do a range between a start and an end, and you can also do a
+
+46
+0:03:04.920 --> 0:03:07.480
+watch at a certain point in history.
+
+47
+0:03:07.480 --> 0:03:10.900
+So for watches, that history is where you start watching from.
+
+48
+0:03:10.900 --> 0:03:14.280
+So if you start with revision 5, you'll be notified that foo1 equals bar, and then you'll
+
+49
+0:03:14.280 --> 0:03:19.040
+be notified of the things in revision 6, foo2 and foo3, and everything that comes in after
+
+50
+0:03:19.040 --> 0:03:21.760
+that as well while you keep the connection open.
+
+51
+0:03:21.760 --> 0:03:26.240
+This is just like a really cool API that's used by lots of these other systems, so this
+
+52
+0:03:26.240 --> 0:03:31.320
+is kind of something we might want to mimic if we want to replace etcd.
+
+53
+0:03:31.320 --> 0:03:36.360
+So etcd is a big system, we want to run it somewhere, primarily lots of people run it
+
+54
+0:03:36.360 --> 0:03:37.880
+in the cloud.
+
+55
+0:03:37.880 --> 0:03:42.080
+We don't always want to trust this cloud, because it's run by cloud providers, they
+
+56
+0:03:42.080 --> 0:03:45.280
+might themselves be trustworthy, but the things that they're operating might not be, so if
+
+57
+0:03:45.280 --> 0:03:50.200
+a hypervisor gets a weakness, then it might get attackers going through to the lower layers
+
+58
+0:03:50.200 --> 0:03:54.480
+being able to access some of the hardware themselves.
+
+59
+0:03:54.480 --> 0:03:57.600
+Clients that are interacting with your service might be within the cloud themselves, they
+
+60
+0:03:57.600 --> 0:04:00.800
+might have already accepted some of the cloud primitives.
+
+61
+0:04:00.800 --> 0:04:03.600
+They might also just be outside of the cloud and just having to use your service for some
+
+62
+0:04:03.600 --> 0:04:07.200
+reason, so they might not be able to use the cloud directly themselves.
+
+63
+0:04:07.200 --> 0:04:12.120
+Additionally, they might not necessarily speak directly to your datastore.
+
+64
+0:04:12.120 --> 0:04:14.280
+Lots of things they talk through a proxy.
+
+65
+0:04:14.280 --> 0:04:18.240
+So if you're in Kubernetes world, you might have kubelets and kubectl.
+
+66
+0:04:18.240 --> 0:04:23.000
+They speak through the API server, which basically terminates TLS connections before passing and
+
+67
+0:04:23.000 --> 0:04:26.920
+doing some logic back on the datastore itself.
+
+68
+0:04:26.920 --> 0:04:29.480
+And so today we're going to speak about two problems.
+
+69
+0:04:29.480 --> 0:04:32.800
+Problem one here is this etcd cluster that's running in the cloud.
+
+70
+0:04:32.800 --> 0:04:37.760
+If we're not trusting this cloud, then all of the data in memory is currently unencrypted,
+
+71
+0:04:37.760 --> 0:04:40.400
+and so we want to be able to do something about that.
+
+72
+0:04:40.400 --> 0:04:43.040
+And problem two is this proxy.
+
+73
+0:04:43.040 --> 0:04:47.760
+If this proxy is terminating some TLS connections, we don't really want that to be able to happen.
+
+74
+0:04:47.760 --> 0:04:53.760
+We'll actually see how the proxy can be a bit distrustful with our interactions.
+
+75
+0:04:53.760 --> 0:04:58.120
+We want to be able to show when it's not being very trustworthy.
+
+76
+0:04:58.120 --> 0:05:01.440
+So diving into problem one, so we've got this etcd cluster.
+
+77
+0:05:01.440 --> 0:05:06.920
+etcd, like any storage service, has some storage, it has some memory and some processing application.
+
+78
+0:05:06.920 --> 0:05:10.560
+It's also distributed, so we have some TLS connections between the peers.
+
+79
+0:05:10.560 --> 0:05:15.200
+And effectively, as you can see in yellow here, we have some level of security.
+
+80
+0:05:15.200 --> 0:05:20.080
+So recommended setups have etcd communicating for etcd nodes over TLS.
+
+81
+0:05:20.080 --> 0:05:25.040
+And we also can have this optional sort of file system encryption that gets put down
+
+82
+0:05:25.040 --> 0:05:27.320
+to storage.
+
+83
+0:05:27.320 --> 0:05:30.040
+One main problem with this, all of those keys are in memory.
+
+84
+0:05:30.040 --> 0:05:36.360
+So the TLS key that we were using for TLS is now in memory, so the attacker's got that.
+
+85
+0:05:36.360 --> 0:05:39.160
+And they've also got the private key for any file system encryption.
+
+86
+0:05:39.160 --> 0:05:43.800
+So that basically renders our TLS connections and our storage encryption pretty much worthless
+
+87
+0:05:43.800 --> 0:05:48.160
+if we're not trusting that someone can't access our memory.
+
+88
+0:05:48.160 --> 0:05:54.040
+So if we actually swap out etcd for LSKV, which is our data store, we run LSKV inside
+
+89
+0:05:54.040 --> 0:05:59.000
+of an SGX enclave, which gives us those confidentiality properties that we just mentioned in the previous
+
+90
+0:05:59.000 --> 0:06:00.000
+talk.
+
+91
+0:06:00.000 --> 0:06:04.040
+Then we can build some of these derivatives to be a bit more trustworthy.
+
+92
+0:06:04.040 --> 0:06:08.560
+So now that our memory is encrypted and interpretively protected, we can store our TLS keys and file
+
+93
+0:06:08.560 --> 0:06:12.760
+system keys there and trust that they're not going to be able to be accessed.
+
+94
+0:06:12.760 --> 0:06:16.680
+The actual application itself is running in a secure enclave, so we can show you that
+
+95
+0:06:16.680 --> 0:06:20.320
+it's not going to be able to be modified.
+
+96
+0:06:20.320 --> 0:06:24.200
+Our TLS connections, we can be sure that they're actually secure TLS because our TLS keys are
+
+97
+0:06:24.200 --> 0:06:25.200
+in memory.
+
+98
+0:06:25.200 --> 0:06:29.200
+And we can actually upgrade those to a tested TLS, where rather than just trusting the other
+
+99
+0:06:29.200 --> 0:06:32.680
+application over end, we can make sure the other application is running in a secure enclave
+
+100
+0:06:32.680 --> 0:06:33.680
+as well.
+
+101
+0:06:33.680 --> 0:06:35.960
+So it's in the same environment that we trust.
+
+102
+0:06:35.960 --> 0:06:40.600
+And finally, we've got this file system key in memory, so we can trust that anything we
+
+103
+0:06:40.600 --> 0:06:45.160
+write to disk is actually going to be encrypted properly as well and safe.
+
+104
+0:06:45.160 --> 0:06:48.000
+So this is one nice solution to that problem one.
+
+105
+0:06:48.000 --> 0:06:51.800
+So if we delve into a bit of what LSKV is a bit more, we can see that it builds on something
+
+106
+0:06:51.800 --> 0:06:52.800
+called CCF.
+
+107
+0:06:52.800 --> 0:06:58.200
+It runs in the SGX enclave, and like most services in the cloud, it will run on top
+
+108
+0:06:58.200 --> 0:07:03.360
+of a hypervisor and have some memory and storage and other resources attached as well.
+
+109
+0:07:03.360 --> 0:07:09.720
+So if we quickly jump into CCF, which is the Confidential Consortium Framework, it's a pretty
+
+110
+0:07:09.720 --> 0:07:16.320
+nice project that basically splits up the interactions and the management of it into
+
+111
+0:07:16.320 --> 0:07:18.080
+three distinct roles.
+
+112
+0:07:18.080 --> 0:07:19.920
+So the first role is the operator.
+
+113
+0:07:19.920 --> 0:07:23.480
+So this is the cloud provider, the person who's standing up VMs for you.
+
+114
+0:07:23.480 --> 0:07:29.000
+You might say, I'd like one LSKV node to run with, and then you might later want more to
+
+115
+0:07:29.000 --> 0:07:30.800
+join into the network.
+
+116
+0:07:30.800 --> 0:07:35.240
+And so this operator is untrusted, so all they can do is stand those nodes up.
+
+117
+0:07:35.240 --> 0:07:40.000
+They can't do any sort of giving those nodes access to the data in the cluster.
+
+118
+0:07:40.000 --> 0:07:42.720
+They don't auto-join the cluster.
+
+119
+0:07:42.720 --> 0:07:45.880
+That's the responsibility of the governance, who we partly trust.
+
+120
+0:07:45.880 --> 0:07:49.840
+There's a few of them, and so any interactions they do have to be done in some sort of majority
+
+121
+0:07:49.840 --> 0:07:51.200
+way.
+
+122
+0:07:51.200 --> 0:07:55.920
+And so these people will be responsible for things like once a node has been stood up,
+
+123
+0:07:55.920 --> 0:07:59.360
+except checking the configuration of it and finally accepting it into the network so it
+
+124
+0:07:59.360 --> 0:08:04.240
+can start serving application requests and handle some of the data in the cluster.
+
+125
+0:08:04.240 --> 0:08:08.120
+And finally, we have users that need to actually access the application that we're running.
+
+126
+0:08:08.120 --> 0:08:12.440
+And so these are treated as kind of trusted towards the application, but the application
+
+127
+0:08:12.440 --> 0:08:18.320
+itself can have internal access controls inside.
+
+128
+0:08:18.320 --> 0:08:24.880
+All the data is stored on an encrypted ledger that gets written to the disks.
+
+129
+0:08:24.880 --> 0:08:29.880
+These requests are stored publicly in this ledger, and they're also signed so that everyone
+
+130
+0:08:29.880 --> 0:08:32.600
+can see those and verify those.
+
+131
+0:08:32.600 --> 0:08:37.520
+User interactions that go through the application are normally stored encrypted by default.
+
+132
+0:08:37.520 --> 0:08:42.000
+You can make them public if you have certain use cases for those.
+
+133
+0:08:42.000 --> 0:08:45.440
+So LSKV actually has an ACD compatible API.
+
+134
+0:08:45.440 --> 0:08:47.360
+This slide might look pretty familiar.
+
+135
+0:08:47.360 --> 0:08:51.640
+It's basically the same API at the core.
+
+136
+0:08:51.640 --> 0:08:56.800
+One asterisk is that this watch is at the bottom is currently requiring a patch on CCF
+
+137
+0:08:56.800 --> 0:09:00.480
+because it hasn't got RAM to be merged in yet.
+
+138
+0:09:00.480 --> 0:09:03.960
+But that's something that should be fixed and should be expected to work.
+
+139
+0:09:03.960 --> 0:09:09.600
+So effectively, this basically means that we can switch out etcd for LSKV in most cases,
+
+140
+0:09:09.600 --> 0:09:11.880
+solving problem one.
+
+141
+0:09:11.880 --> 0:09:16.920
+So before we quickly go into problem two, we've just swapped out etcd and LSKV, and
+
+142
+0:09:16.920 --> 0:09:18.980
+it might not always be as simple as this.
+
+143
+0:09:18.980 --> 0:09:22.000
+So some quick trade-offs.
+
+144
+0:09:22.000 --> 0:09:27.520
+LSKV is actually optimistically consistent in the way it replicates data rather than
+
+145
+0:09:27.520 --> 0:09:29.520
+ACD is strongly consistent.
+
+146
+0:09:29.520 --> 0:09:33.680
+Otherwise, we have the normal things we might expect that LSKV actually gives us confidential
+
+147
+0:09:33.680 --> 0:09:38.120
+algae properties of our data, makes more operations transparent.
+
+148
+0:09:38.120 --> 0:09:40.080
+So those governance operations we can see.
+
+149
+0:09:40.080 --> 0:09:42.640
+It also has this ACD API at its core.
+
+150
+0:09:42.640 --> 0:09:46.040
+It also has some extra features that we're not going to cover too much here.
+
+151
+0:09:46.040 --> 0:09:47.620
+There's one later.
+
+152
+0:09:47.620 --> 0:09:54.920
+So quickly on this optimistic sense, rather than replicating data in a synchronous way,
+
+153
+0:09:54.920 --> 0:09:58.400
+when you write to LSKV, it will replicate asynchronously.
+
+154
+0:09:58.400 --> 0:10:00.460
+And in turn, you get an ID back.
+
+155
+0:10:00.460 --> 0:10:05.760
+You can later follow up with this ID to say, was this replicated properly or was it not
+
+156
+0:10:05.760 --> 0:10:06.760
+allowed?
+
+157
+0:10:06.760 --> 0:10:09.860
+This basically puts the decision at the client's side.
+
+158
+0:10:09.860 --> 0:10:13.760
+So they can either be optimistic and say, I'm going to trust that that's fine.
+
+159
+0:10:13.760 --> 0:10:17.580
+Or they can come back later and say, no, I wanted to make sure that was replicated first.
+
+160
+0:10:17.580 --> 0:10:20.280
+So this is just a key difference.
+
+161
+0:10:20.280 --> 0:10:24.080
+If we go quickly onto problem two, we have this proxy that we might want to communicate
+
+162
+0:10:24.080 --> 0:10:27.480
+to the data store too.
+
+163
+0:10:27.480 --> 0:10:31.080
+So in this instance, Alice wants to write 500 pounds into an account.
+
+164
+0:10:31.080 --> 0:10:34.800
+But the proxy is going to intercept that and write that money into Bob's account instead.
+
+165
+0:10:34.800 --> 0:10:36.200
+LSKV is none the wiser here.
+
+166
+0:10:36.200 --> 0:10:37.200
+It's just gotten a request.
+
+167
+0:10:37.200 --> 0:10:40.320
+It's going to post that request and handle the response.
+
+168
+0:10:40.320 --> 0:10:45.720
+The proxy in turn has an opportunity to return to the client and say, OK, Alice, we've written
+
+169
+0:10:45.720 --> 0:10:48.520
+your money into the account.
+
+170
+0:10:48.520 --> 0:10:51.160
+Now hopefully you can see here that Alice is not equal to Bob.
+
+171
+0:10:51.160 --> 0:10:54.080
+And so she hasn't actually got the money.
+
+172
+0:10:54.080 --> 0:10:59.520
+So LSKV gives us this receipt functionality where we can actually expose untrustworthy
+
+173
+0:10:59.520 --> 0:11:00.840
+proxies.
+
+174
+0:11:00.840 --> 0:11:05.120
+So when the client first does the request to write money into Alice's account, they
+
+175
+0:11:05.120 --> 0:11:07.840
+can also ask for a receipt for that operation.
+
+176
+0:11:07.840 --> 0:11:08.840
+This goes through the proxy.
+
+177
+0:11:08.840 --> 0:11:11.680
+The proxy can rewrite the normal write request as normal.
+
+178
+0:11:11.680 --> 0:11:15.040
+So LSKV actually puts the money into Bob's account.
+
+179
+0:11:15.040 --> 0:11:18.080
+But we still want to get that receipt back.
+
+180
+0:11:18.080 --> 0:11:23.960
+So when the receipt actually comes back from LSKV, the client can actually detect that
+
+181
+0:11:23.960 --> 0:11:28.200
+either the proxy's manipulated this receipt in some way so it's no longer valid because
+
+182
+0:11:28.200 --> 0:11:29.800
+it's a signature.
+
+183
+0:11:29.800 --> 0:11:33.000
+Or it is valid, in which case it says that the money went into Bob's account, which is
+
+184
+0:11:33.000 --> 0:11:34.920
+not what they wanted.
+
+185
+0:11:34.920 --> 0:11:38.840
+So you can use this to flag to someone else that this proxy is not trustworthy.
+
+186
+0:11:38.840 --> 0:11:44.760
+And you'd probably stop talking to it.
+
+187
+0:11:44.760 --> 0:11:51.880
+So that's also how we can solve problem two quickly with LSKV.
+
+188
+0:11:51.880 --> 0:11:57.440
+Just a quick summary of things here is now that we don't think current data stores are
+
+189
+0:11:57.440 --> 0:12:02.560
+really suited for confidential operation, primarily looking at CD.
+
+190
+0:12:02.560 --> 0:12:06.880
+We don't think that lifting and shifting them into confidential environments gets you all
+
+191
+0:12:06.880 --> 0:12:09.720
+the properties that you necessarily want.
+
+192
+0:12:09.720 --> 0:12:14.720
+You get some memory encryption and integrity just by running them in enclaves.
+
+193
+0:12:14.720 --> 0:12:18.040
+You don't get some of the other properties that we get from building on the ledger and
+
+194
+0:12:18.040 --> 0:12:23.040
+also having a different trust model compared to what some systems have.
+
+195
+0:12:23.040 --> 0:12:26.320
+We've introduced LSKV, which is a new confidential data store built on CCF.
+
+196
+0:12:26.320 --> 0:12:30.600
+It actually has an HCD compatible API, which basically means that you can swap out HCD
+
+197
+0:12:30.600 --> 0:12:32.600
+for LSKV in most cases.
+
+198
+0:12:32.600 --> 0:12:38.120
+LSKV is also able to highlight these untrustworthy proxies using receipts.
+
+199
+0:12:38.120 --> 0:12:40.000
+And yeah, it's kind of fast.
+
+200
+0:12:40.000 --> 0:12:43.200
+Thanks to that optimism, it basically has a higher throughput and lower latency than
+
+201
+0:12:43.200 --> 0:12:44.200
+HCD.
+
+202
+0:12:44.200 --> 0:12:47.000
+If you do replace HCD with it, hopefully your performance of stuff will start increasing
+
+203
+0:12:47.000 --> 0:12:49.600
+as well.
+
+204
+0:12:49.600 --> 0:12:50.600
+That's pretty much me.
+
+205
+0:12:50.600 --> 0:12:52.440
+So I'm around for a few questions.
+
+206
+0:12:52.440 --> 0:12:54.520
+And please check out the GitHub repo.
+
+207
+0:12:54.520 --> 0:12:57.280
+It's open source and everything.
+
+208
+0:12:57.280 --> 0:13:00.560
+My email is there if you have any questions after the talk.
+
+209
+0:13:00.560 --> 0:13:01.560
+So thank you.
+
+210
+0:13:01.560 --> 0:13:04.560
+We definitely have time, so feel free to go on the daisy.
+
+211
+0:13:04.560 --> 0:13:06.560
+You have a question.
+
+212
+0:13:06.560 --> 0:13:17.600
+On the proxy side, the receipts, is there an API extension or is there an API change?
+
+213
+0:13:17.600 --> 0:13:23.200
+If I'm using the proxy, I switch it to LSKV, do I need to change my application?
+
+214
+0:13:23.200 --> 0:13:24.200
+Yeah.
+
+215
+0:13:24.200 --> 0:13:29.000
+So that's a question about the HCD API.
+
+216
+0:13:29.000 --> 0:13:33.120
+Does that include the write receipts by default?
+
+217
+0:13:33.120 --> 0:13:34.120
+No, it does not.
+
+218
+0:13:34.120 --> 0:13:37.520
+There are a separate GRPC service on top.
+
+219
+0:13:37.520 --> 0:13:40.480
+So your clients would need to be manipulated with that.
+
+220
+0:13:40.480 --> 0:13:43.080
+Either your clients or you'll build that into the proxy.
+
+221
+0:13:43.080 --> 0:13:46.640
+So you could say, because the idea of the proxy is that it's exposing different API
+
+222
+0:13:46.640 --> 0:13:48.000
+to your clients, right?
+
+223
+0:13:48.000 --> 0:13:51.600
+So if you do a write request to your proxy, your proxy could by default ask for a receipt
+
+224
+0:13:51.600 --> 0:13:53.960
+and present that to the user as well.
+
+225
+0:13:53.960 --> 0:13:56.320
+They might need some extra functionality to be able to verify that.
+
+226
+0:13:56.320 --> 0:14:04.920
+I don't know how the receipt works, extending the HCD API to have some sort of non-sore
+
+227
+0:14:04.920 --> 0:14:06.920
+or request for signature.
+
+228
+0:14:06.920 --> 0:14:09.120
+Is that something that you're planning to?
+
+229
+0:14:09.120 --> 0:14:14.960
+Would it make sense to extend the actual HCD API for this?
+
+230
+0:14:14.960 --> 0:14:19.720
+The question is, would it make sense to extend the HCD API for receipts?
+
+231
+0:14:19.720 --> 0:14:20.920
+We don't really think so.
+
+232
+0:14:20.920 --> 0:14:24.920
+We're not really planning on doing changes directly in HCD, just primarily because HCD
+
+233
+0:14:24.920 --> 0:14:26.680
+has a different kind of threat model and trust model.
+
+234
+0:14:26.680 --> 0:14:30.840
+So some of the things that we have, HCD doesn't necessarily support against.
+
+235
+0:14:30.840 --> 0:14:35.320
+So that's one reason we're not going to stop putting some of this back into HCD itself.
+
+236
+0:14:35.320 --> 0:14:37.360
+It's kind of designed to be a separate service.
+
+237
+0:14:37.360 --> 0:14:38.360
+Yeah.
+
+238
+0:14:38.360 --> 0:14:39.360
+Yeah.
+
+239
+0:14:39.360 --> 0:14:44.760
+When we have the use case of using LSKD in a Kubernetes scenario, I'm wondering how the
+
+240
+0:14:44.760 --> 0:14:45.760
+authentication would work.
+
+241
+0:14:45.760 --> 0:14:50.280
+Like if I have confidential services, and only those should be able to access the confidential
+
+242
+0:14:50.280 --> 0:14:54.880
+storage, how would the mutual authentication work?
+
+243
+0:14:54.880 --> 0:15:02.320
+The HCD should just give out secrets to those confidential services, and the confidential
+
+244
+0:15:02.320 --> 0:15:07.960
+service should know that they access the correct HCD storage essentially.
+
+245
+0:15:07.960 --> 0:15:10.400
+By HCD storage, you mean a key?
+
+246
+0:15:10.400 --> 0:15:15.840
+I mean the LSKD as an HCD replacement in a Kubernetes state.
+
+247
+0:15:15.840 --> 0:15:16.840
+Okay.
+
+248
+0:15:16.840 --> 0:15:19.880
+So I think your question is about how do you make sure you access the right HCD cluster
+
+249
+0:15:19.880 --> 0:15:21.280
+from a confidential client?
+
+250
+0:15:21.280 --> 0:15:22.280
+Yes.
+
+251
+0:15:22.280 --> 0:15:26.440
+So you'd be speaking through the API server rate in Kubernetes?
+
+252
+0:15:26.440 --> 0:15:27.440
+Yeah.
+
+253
+0:15:27.440 --> 0:15:30.760
+Or you're saying you want to connect directly?
+
+254
+0:15:30.760 --> 0:15:33.840
+Maybe you have a confidential controller or you connect directly, I guess.
+
+255
+0:15:33.840 --> 0:15:34.840
+Okay.
+
+256
+0:15:34.840 --> 0:15:37.040
+So I'm not sure if we can do that directly in LSKD.
+
+257
+0:15:37.040 --> 0:15:41.520
+It has a cluster ID like a normal HCD cluster, so you can go about trusting that.
+
+258
+0:15:41.520 --> 0:15:45.640
+But I definitely would really work through that use case directly.
+
+259
+0:15:45.640 --> 0:15:48.480
+The main thing is that if you want to write a proxy around it, then you might want that
+
+260
+0:15:48.480 --> 0:15:49.480
+in the proxy.
+
+261
+0:15:49.480 --> 0:15:50.480
+Okay.
+
+262
+0:15:50.480 --> 0:15:51.480
+Okay.
+
+263
+0:15:51.480 --> 0:15:59.280
+One of the things that LSKD, we have to be careful of as compared to like HCD.
+
+264
+0:15:59.280 --> 0:16:00.280
+In what context?
+
+265
+0:16:00.280 --> 0:16:06.280
+Like what are the things that LSKD need to be taken care of that DTC don't take care
+
+266
+0:16:06.280 --> 0:16:07.280
+of?
+
+267
+0:16:07.280 --> 0:16:08.280
+Okay.
+
+268
+0:16:08.280 --> 0:16:10.280
+Why do you need to do that?
+
+269
+0:16:10.280 --> 0:16:11.280
+Yeah.
+
+270
+0:16:11.280 --> 0:16:17.000
+So the question is about what are some things that LSKD kind of supports that HCD doesn't.
+
+271
+0:16:17.000 --> 0:16:19.480
+So one of the main things is storage.
+
+272
+0:16:19.480 --> 0:16:25.080
+In HCD, everything gets written to disk straight away and that's part of the consensus process.
+
+273
+0:16:25.080 --> 0:16:27.440
+You won't get returned until it's written to disk.
+
+274
+0:16:27.440 --> 0:16:29.320
+In LSKD, that's not the case.
+
+275
+0:16:29.320 --> 0:16:34.200
+We don't write to disk asynchronously, which basically means that we're not trusting this
+
+276
+0:16:34.200 --> 0:16:39.000
+host to necessarily persist our data or even give it back to us correctly when we ask for
+
+277
+0:16:39.000 --> 0:16:40.000
+it.
+
+278
+0:16:40.000 --> 0:16:43.880
+It's only used for disaster recovery scenarios.
+
+279
+0:16:43.880 --> 0:16:52.600
+So that's like one primary difference, which basically means that ACD is open to rollback
+
+280
+0:16:52.600 --> 0:16:53.600
+attacks.
+
+281
+0:16:53.600 --> 0:16:57.560
+So if you trust the host to do the data, they can cut them off and when you load back, you've
+
+282
+0:16:57.560 --> 0:17:00.600
+got a subset of what you had before.
+
+283
+0:17:00.600 --> 0:17:01.600
+Okay.
+
+284
+0:17:01.600 --> 0:17:02.600
+Yeah.
+
+285
+0:17:02.600 --> 0:17:15.360
+So I saw in the tradeoffs that LSKD cannot have a strong replication, like HCD.
+
+286
+0:17:15.360 --> 0:17:25.600
+So what was the cause of, why was LSKD to be able to do that tradeoff?
+
+287
+0:17:25.600 --> 0:17:26.600
+Yeah.
+
+288
+0:17:26.600 --> 0:17:32.040
+So the question is about why does LSKD not have strongly consistent replication?
+
+289
+0:17:32.040 --> 0:17:36.160
+Basically, if we're not trusting the host, then A, we don't want to write things to disk,
+
+290
+0:17:36.160 --> 0:17:37.160
+like we just said.
+
+291
+0:17:37.160 --> 0:17:38.480
+So that's one reason for that part.
+
+292
+0:17:38.480 --> 0:17:42.600
+And then on the replication side, we're not trusting the host, so we don't want to block
+
+293
+0:17:42.600 --> 0:17:45.760
+everyone on wanting to replicate everything.
+
+294
+0:17:45.760 --> 0:17:53.360
+So it does do the replication and you can follow up again with that ID from your operation.
+
+295
+0:17:53.360 --> 0:17:56.000
+So if you do care about it being strongly replicated, you can just follow up the ID
+
+296
+0:17:56.000 --> 0:18:00.120
+and wait until it's committed, which is kind of giving the user a bit more flexibility
+
+297
+0:18:00.120 --> 0:18:02.440
+in that operation choice.
+
+298
+0:18:02.440 --> 0:18:03.440
+Okay.
+
+299
+0:18:03.440 --> 0:18:05.440
+So I have one more.
+
+300
+0:18:05.440 --> 0:18:08.080
+So Tom will set up in the last question.
+
+301
+0:18:08.080 --> 0:18:09.080
+Yep.
+
+302
+0:18:09.080 --> 0:18:10.080
+I have one more.
+
+303
+0:18:10.080 --> 0:18:13.080
+So I was actually surprised by your performance numbers because 50% latency loss I expect,
+
+304
+0:18:13.080 --> 0:18:16.240
+but then three and a half times gain in performance is something I didn't expect.
+
+305
+0:18:16.240 --> 0:18:20.640
+Can you say why that is or how well it kept them?
+
+306
+0:18:20.640 --> 0:18:21.640
+It's actually consistent.
+
+307
+0:18:21.640 --> 0:18:22.640
+Maybe I missed that.
+
+308
+0:18:22.640 --> 0:18:25.640
+Yeah, of course you don't see the slide anymore.
+
+309
+0:18:25.640 --> 0:18:27.640
+Oh, that's a good slide.
+
+310
+0:18:27.640 --> 0:18:28.640
+Yes.
+
+311
+0:18:28.640 --> 0:18:29.640
+Yes.
+
+312
+0:18:29.640 --> 0:18:32.160
+So the question is about why it's so fast.
+
+313
+0:18:32.160 --> 0:18:40.480
+Unfortunately, it was a consistency slide, but yeah.
+
+314
+0:18:40.480 --> 0:18:42.680
+Even the slides are confidential now.
+
+315
+0:18:42.680 --> 0:18:44.320
+But yeah, slides are on there for some.
+
+316
+0:18:44.320 --> 0:19:12.840
+Yeah.
+
+317
+0:19:12.840 --> 0:19:16.960
+So primarily you can replace entity with LSKV at the moment.
+
+318
+0:19:16.960 --> 0:19:21.320
+If you took the clusters and swapped them, the entity API is still there.
+
+319
+0:19:21.320 --> 0:19:23.080
+Your things will still work.
+
+320
+0:19:23.080 --> 0:19:26.200
+If you wanted to take advantage of the extra things like the receipts for the proxies and
+
+321
+0:19:26.200 --> 0:19:30.280
+things you would need to add some logic into your proxy or into your clients.
+
+322
+0:19:30.280 --> 0:19:42.560
+There's not currently apps that support those receipts and extra bits at the moment.
+
+323
+0:19:42.560 --> 0:19:43.560
+We haven't got that bit.
+
+324
+0:19:43.560 --> 0:19:45.960
+It's just on the data store focus at the moment.
+
+325
+0:19:45.960 --> 0:20:12.960
+Cool.
+

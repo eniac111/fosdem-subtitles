@@ -1,0 +1,1080 @@
+1
+0:00:00.000 --> 0:00:10.940
+Please welcome Hugo, who is going to do the next talk on code-reloading techniques in
+
+2
+0:00:10.940 --> 0:00:13.940
+Python.
+
+3
+0:00:13.940 --> 0:00:27.820
+Hello, everybody, and I'm glad to speak to you, and I hope I will have a good presentation.
+
+4
+0:00:27.820 --> 0:00:33.560
+You will be happy about replacing Jonathan's talk, who could make it today.
+
+5
+0:00:33.560 --> 0:00:38.280
+So we'll be talking about hot code-reloading in Python and a few different methods to do
+
+6
+0:00:38.280 --> 0:00:39.280
+this.
+
+7
+0:00:39.280 --> 0:00:40.640
+A short introduction.
+
+8
+0:00:40.640 --> 0:00:47.080
+So I discovered Python in Linux in 2003, and I think I've attended almost every Fuzz
+
+9
+0:00:47.080 --> 0:00:53.960
+them since 2004, and I really, I think Fuzz them made me, and I'm really happy to be speaking
+
+10
+0:00:53.960 --> 0:00:58.300
+here to be here with you.
+
+11
+0:00:58.300 --> 0:01:01.760
+In Python, there are a lot of things that we can do, and I'm really amazed by all the
+
+12
+0:01:01.760 --> 0:01:07.080
+flexibility of Python and the access to the internals, and when I started discovering
+
+13
+0:01:07.080 --> 0:01:13.320
+Python, I was 16-year-old, and I discovered you could play with exec and socket and combine
+
+14
+0:01:13.320 --> 0:01:19.780
+them and make Trojan horse, and I found that really cool.
+
+15
+0:01:19.780 --> 0:01:23.680
+Many years later, I discovered people were basically taking the same idea to make something
+
+16
+0:01:23.680 --> 0:01:28.380
+called Jupyter Notebook you may have heard about, something where you receive Python
+
+17
+0:01:28.380 --> 0:01:34.400
+code over the Internet and then you just execute it somewhere.
+
+18
+0:01:34.400 --> 0:01:37.840
+And I really liked tinkering with Python.
+
+19
+0:01:37.840 --> 0:01:46.080
+I also created my own web framework before they were Django and most popular ones that
+
+20
+0:01:46.080 --> 0:01:51.760
+are more mature now, and one thing I discovered is you could use exec file to execute code
+
+21
+0:01:51.760 --> 0:01:55.360
+that's in a Python file in a specific environment.
+
+22
+0:01:55.360 --> 0:01:59.900
+So you have these environment variables in your Python code, and you can override them.
+
+23
+0:01:59.900 --> 0:02:05.960
+So when you execute code from a Python file in a specific environment, you pass the environment
+
+24
+0:02:05.960 --> 0:02:10.600
+in the dictionary above here, it can only access these variables.
+
+25
+0:02:10.600 --> 0:02:16.400
+So you could restrict the access to imports, the access to a lot of things, but Python
+
+26
+0:02:16.400 --> 0:02:21.920
+is Python, and there are always ways to escape this by accessing the properties of objects,
+
+27
+0:02:21.920 --> 0:02:29.920
+so there's no safe way to run Python codes contained, like you could use Lua or something.
+
+28
+0:02:29.920 --> 0:02:36.760
+When you have Python code, it always has access to everything that the CPython interpreter
+
+29
+0:02:36.760 --> 0:02:40.960
+has access to.
+
+30
+0:02:40.960 --> 0:02:46.440
+And so I will be talking about code reloading, which is a process of replacing part of a
+
+31
+0:02:46.440 --> 0:02:48.720
+program with a new version.
+
+32
+0:02:48.720 --> 0:02:54.440
+It focuses on changes in the source code, a term mostly used for interpreted languages,
+
+33
+0:02:54.440 --> 0:02:56.820
+and you have two ways to do code reloading.
+
+34
+0:02:56.820 --> 0:03:01.920
+You have code reloading, which means that you are stopping the process and you're restarting
+
+35
+0:03:01.920 --> 0:03:06.800
+it, and you have hot code reloading where you keep the process running and you just
+
+36
+0:03:06.800 --> 0:03:11.840
+patch it while it's running, keeping the state.
+
+37
+0:03:11.840 --> 0:03:17.720
+As a small analogy, cold code reloading, you can really switch anything you want, but it
+
+38
+0:03:17.720 --> 0:03:18.720
+takes a while.
+
+39
+0:03:18.720 --> 0:03:23.800
+Hot code reloading, you just do it while it's going on.
+
+40
+0:03:23.800 --> 0:03:29.360
+Cold code reloading is the most popular technique for code reloading in Python, so you stop
+
+41
+0:03:29.360 --> 0:03:36.520
+and restart the entire process, and it's easy, reliable, but you lose state.
+
+42
+0:03:36.520 --> 0:03:39.360
+So getting it back might take a while.
+
+43
+0:03:39.360 --> 0:03:47.040
+It's very popular in web frameworks because all of the state is stored in databases.
+
+44
+0:03:47.040 --> 0:03:51.160
+And you also have the easiest way to do code reloading that you all used.
+
+45
+0:03:51.160 --> 0:03:53.680
+Control C, app enter.
+
+46
+0:03:53.680 --> 0:03:59.200
+I still end up using it so often.
+
+47
+0:03:59.200 --> 0:04:00.760
+And there's tooling to do that.
+
+48
+0:04:00.760 --> 0:04:06.520
+If you look at how Django and Flask do it, they have good examples, Django source code
+
+49
+0:04:06.520 --> 0:04:10.640
+especially is very easy to understand, very clear.
+
+50
+0:04:10.640 --> 0:04:14.640
+And the main part of it ends up being this part here.
+
+51
+0:04:14.640 --> 0:04:23.080
+So it has this object called a reloader and will run this function, and it will basically
+
+52
+0:04:23.080 --> 0:04:26.360
+run your main app, your main process in a thread.
+
+53
+0:04:26.360 --> 0:04:31.800
+And when there is something that has changed, it looks at changes in the file system, when
+
+54
+0:04:31.800 --> 0:04:37.600
+it has changed, it will restart your program in that thread.
+
+55
+0:04:37.600 --> 0:04:42.720
+So it's basically running all of Django in a thread, and that allows it to stop it, reimport
+
+56
+0:04:42.720 --> 0:04:45.800
+everything, and then restart that part of the process.
+
+57
+0:04:45.800 --> 0:04:50.560
+So you still have one process running, only one process, but it's running all of your
+
+58
+0:04:50.560 --> 0:04:54.360
+application in a background thread that's managed by this reloader object.
+
+59
+0:04:54.360 --> 0:04:59.640
+That's what happens when you do a Python managed by run server using Django.
+
+60
+0:04:59.640 --> 0:05:02.480
+Flask uses something very similar.
+
+61
+0:05:02.480 --> 0:05:07.080
+The code is a bit easier to read when you look at Django.
+
+62
+0:05:07.080 --> 0:05:09.240
+So really have a look at this auto reload from Django.
+
+63
+0:05:09.240 --> 0:05:13.800
+It's a really good example on how to do things.
+
+64
+0:05:13.800 --> 0:05:18.240
+And under the hood, there are different ways of detecting that a file has changed.
+
+65
+0:05:18.240 --> 0:05:23.000
+Of course, you could just manually every second or every few seconds look if there are changes
+
+66
+0:05:23.000 --> 0:05:25.720
+on the file system from a thread again.
+
+67
+0:05:25.720 --> 0:05:31.400
+But there are ways on different operating systems to have direct notifications, direct
+
+68
+0:05:31.400 --> 0:05:33.960
+signals when something is happening.
+
+69
+0:05:33.960 --> 0:05:39.560
+On Linux, you have the inotify API provided by the kernel that basically gives events
+
+70
+0:05:39.560 --> 0:05:44.040
+so any process can look for changes on files.
+
+71
+0:05:44.040 --> 0:05:49.160
+And the very simple way to use it in a shell is just to use this inotify to wait.
+
+72
+0:05:49.160 --> 0:05:54.280
+So you can just say I'm waiting for anything to happen in this directory and then when
+
+73
+0:05:54.280 --> 0:05:57.040
+something happens, you just do something.
+
+74
+0:05:57.040 --> 0:06:03.120
+In Python, you have the inotify binding to this inotify library and you have watchdog.
+
+75
+0:06:03.120 --> 0:06:08.800
+Watchdog is a multi-platform library in Python to do exactly this.
+
+76
+0:06:08.800 --> 0:06:15.000
+So it works on both Linux, Mac OS, Windows, BSDs.
+
+77
+0:06:15.000 --> 0:06:17.800
+Not micro Python.
+
+78
+0:06:17.800 --> 0:06:20.840
+And the interface is quite simple.
+
+79
+0:06:20.840 --> 0:06:27.760
+A bit of a classy overhead but you can basically schedule an observer and start it and it will
+
+80
+0:06:27.760 --> 0:06:31.600
+use callbacks when something is modified.
+
+81
+0:06:31.600 --> 0:06:36.640
+So you can do whatever you want to do at that moment.
+
+82
+0:06:36.640 --> 0:06:37.640
+Hot code reloading.
+
+83
+0:06:37.640 --> 0:06:43.740
+That's something that's less common, especially in Python, but in general it's less common.
+
+84
+0:06:43.740 --> 0:06:49.060
+It has drawbacks because of the states, it can lead to inconsistent states.
+
+85
+0:06:49.060 --> 0:06:53.600
+But it also has advantages because sometimes it's states that you're interested in, you're
+
+86
+0:06:53.600 --> 0:06:59.240
+making a video game and you have an NPC and you have to test it, you have to go back to
+
+87
+0:06:59.240 --> 0:07:02.600
+that same space, recreate the whole behavior.
+
+88
+0:07:02.600 --> 0:07:06.920
+It's hard to tweak the behavior live when you have sometimes a WebSocket or socket connections
+
+89
+0:07:06.920 --> 0:07:09.440
+that you have to keep open.
+
+90
+0:07:09.440 --> 0:07:15.120
+When starting your program takes a while because you're initializing a bunch of things, then
+
+91
+0:07:15.120 --> 0:07:20.120
+it can be quite useful to do hot code reloading.
+
+92
+0:07:20.120 --> 0:07:23.320
+And there are two challenges if you want to do this.
+
+93
+0:07:23.320 --> 0:07:28.520
+One of the challenges is to find and load the new code and then you need to replace
+
+94
+0:07:28.520 --> 0:07:32.440
+the references where that code is used in the code.
+
+95
+0:07:32.440 --> 0:07:35.040
+In your memory.
+
+96
+0:07:35.040 --> 0:07:36.480
+And it's not a new thing.
+
+97
+0:07:36.480 --> 0:07:38.400
+Other languages do it.
+
+98
+0:07:38.400 --> 0:07:44.560
+Java especially, they have a way to use the debugger and you can replace a version of
+
+99
+0:07:44.560 --> 0:07:51.560
+a class file which is the PYC of Java, the compiled file of Java.
+
+100
+0:07:51.560 --> 0:07:57.400
+You can replace it from your ID directly while it's running using the debugger.
+
+101
+0:07:57.400 --> 0:08:00.920
+The only concern is that the interface of the class, the methods, the properties of
+
+102
+0:08:00.920 --> 0:08:03.640
+that class may not change.
+
+103
+0:08:03.640 --> 0:08:11.280
+In C++ you can do hot code reloading by using DLLs, dynamic link libraries or shared libraries.
+
+104
+0:08:11.280 --> 0:08:14.280
+That allows you to do hot code reloading.
+
+105
+0:08:14.280 --> 0:08:22.160
+So it's possible to replace DLLs and do hot code reloading in C++ as well.
+
+106
+0:08:22.160 --> 0:08:28.440
+If you want to do it in pure Python, there are three main ways to execute code from Python.
+
+107
+0:08:28.440 --> 0:08:29.760
+You have the import module.
+
+108
+0:08:29.760 --> 0:08:34.720
+If you import something, it will execute everything in that file.
+
+109
+0:08:34.720 --> 0:08:40.480
+If you were at the micro Python tool, sometimes you import a blink and it runs it.
+
+110
+0:08:40.480 --> 0:08:46.020
+That's a weird feature of Python, but it basically just executes everything there.
+
+111
+0:08:46.020 --> 0:08:50.400
+You can use exec, this function that takes a string and then it will parse the Python
+
+112
+0:08:50.400 --> 0:08:55.240
+code from that string and execute it.
+
+113
+0:08:55.240 --> 0:09:00.160
+Basically in a specific environment you can add specific variables to the environment
+
+114
+0:09:00.160 --> 0:09:01.160
+of this execution.
+
+115
+0:09:01.160 --> 0:09:07.160
+And you have eval that's basically evaluating a Python expression and getting the result
+
+116
+0:09:07.160 --> 0:09:08.320
+out of it.
+
+117
+0:09:08.320 --> 0:09:13.800
+So if you want to make a small shell or ask for a user input and use eval, the user can
+
+118
+0:09:13.800 --> 0:09:18.920
+type any Python code he wants, which could lead to security issues if that's interested
+
+119
+0:09:18.920 --> 0:09:25.480
+in but it can be quite nice if you want the user to be able to use powers of numbers with
+
+120
+0:09:25.480 --> 0:09:33.280
+two stars and any Python supported expression.
+
+121
+0:09:33.280 --> 0:09:40.440
+So if you want to use the import base, if you use import, something that you can use
+
+122
+0:09:40.440 --> 0:09:45.380
+is this import and you can reload a Python module that you imported.
+
+123
+0:09:45.380 --> 0:09:51.240
+So if you just have some code that's importing a module, you can reload that module.
+
+124
+0:09:51.240 --> 0:09:57.600
+But all the references you have will still be to, if you have a reference or a function
+
+125
+0:09:57.600 --> 0:10:02.320
+inside that module, it will still be a reference to the old function, to the bytecode of the
+
+126
+0:10:02.320 --> 0:10:04.760
+old function, not the updated version.
+
+127
+0:10:04.760 --> 0:10:10.880
+However, if your module is named module and you have module.my function and you always
+
+128
+0:10:10.880 --> 0:10:16.480
+call it module.my function, then when you reload it, if it can access a new reference
+
+129
+0:10:16.480 --> 0:10:19.380
+to the new loaded module, then this will work.
+
+130
+0:10:19.380 --> 0:10:27.400
+So it's quite an easy way to do reloading of code if all your references are not inside
+
+131
+0:10:27.400 --> 0:10:38.800
+the module but reference always through the whole module.my function.
+
+132
+0:10:38.800 --> 0:10:45.040
+One issue you have if you use this import base reloading is sometimes people write code
+
+133
+0:10:45.040 --> 0:10:47.680
+in the middle of the Python file.
+
+134
+0:10:47.680 --> 0:10:53.080
+You just have a small script that's containing a while through or you have a connection to
+
+135
+0:10:53.080 --> 0:10:58.320
+a database that takes ten seconds and that's blocking and every time you're reloading,
+
+136
+0:10:58.320 --> 0:11:05.280
+this will be in your way every time and will slow you down.
+
+137
+0:11:05.280 --> 0:11:12.520
+Another way you can do Python code reloading is to just take control yourself of the execution
+
+138
+0:11:12.520 --> 0:11:13.520
+of the refreshing.
+
+139
+0:11:13.520 --> 0:11:22.080
+So if you have some Python code here, you can execute the code above within the environment
+
+140
+0:11:22.080 --> 0:11:24.920
+of this module, module.py.
+
+141
+0:11:24.920 --> 0:11:32.360
+So if I have a function, my sum in module.py, by running this, I can basically refresh it
+
+142
+0:11:32.360 --> 0:11:43.640
+and say, okay, now I want to replace module.mysum with the new function, the new code here.
+
+143
+0:11:43.640 --> 0:11:48.560
+And so if you want to wrap everything together, what can be quite interesting is to have a
+
+144
+0:11:48.560 --> 0:11:49.560
+proxy.
+
+145
+0:11:49.560 --> 0:11:54.040
+So instead of manipulating directly the function you're interested in, when you want to be
+
+146
+0:11:54.040 --> 0:11:58.240
+able to reload something, you don't pass around a reference to that function but to a proxy
+
+147
+0:11:58.240 --> 0:12:01.120
+that can change its own reference.
+
+148
+0:12:01.120 --> 0:12:06.120
+That way you can reload something and then everything that's using it is not using my
+
+149
+0:12:06.120 --> 0:12:13.840
+function directly, it's using a proxy to my function and you can override the code attributes.
+
+150
+0:12:13.840 --> 0:12:19.840
+So here you have this proxy here and it's a proxy to work in progress.
+
+151
+0:12:19.840 --> 0:12:24.920
+It keeps this reference to the function and then every time you call the proxy, so the
+
+152
+0:12:24.920 --> 0:12:30.680
+instance of this proxy, it will basically just forward every argument to the function
+
+153
+0:12:30.680 --> 0:12:32.400
+and return the result.
+
+154
+0:12:32.400 --> 0:12:38.200
+So you can just proxy a call to a function this way with a mutable reference to the function
+
+155
+0:12:38.200 --> 0:12:39.200
+here.
+
+156
+0:12:39.200 --> 0:12:45.160
+This mutable reference you can change later.
+
+157
+0:12:45.160 --> 0:12:47.200
+You can do something similar with classes.
+
+158
+0:12:47.200 --> 0:12:53.760
+So if you look at a Python class, an instance of a class in Python, it basically has two
+
+159
+0:12:53.760 --> 0:12:57.480
+very important attributes, class and dict.
+
+160
+0:12:57.480 --> 0:13:01.880
+Class is a reference to the class that it inherits from.
+
+161
+0:13:01.880 --> 0:13:08.120
+So if you instantiate a class, every instance has a reference to the class it instantiates
+
+162
+0:13:08.120 --> 0:13:13.320
+and that's reference because it's Python is mutable so you can change the underscore and
+
+163
+0:13:13.320 --> 0:13:17.520
+the first class of your object and forward it to another class and bam, your object is
+
+164
+0:13:17.520 --> 0:13:20.480
+now from another class.
+
+165
+0:13:20.480 --> 0:13:27.640
+I see some people don't like this idea.
+
+166
+0:13:27.640 --> 0:13:30.400
+It's Python with great power, great responsibility.
+
+167
+0:13:30.400 --> 0:13:33.400
+You can do very nasty things in Python.
+
+168
+0:13:33.400 --> 0:13:37.720
+Please do not unless it really makes sense.
+
+169
+0:13:37.720 --> 0:13:42.680
+And you have this underscore, underscore dict object which contains all the properties that
+
+170
+0:13:42.680 --> 0:13:44.720
+are part of your instance.
+
+171
+0:13:44.720 --> 0:13:51.240
+So if you do my instance dot a, it will look, okay, is a defined inside underscore, underscore
+
+172
+0:13:51.240 --> 0:13:52.240
+dict?
+
+173
+0:13:52.240 --> 0:13:53.880
+Yes, it will just return that.
+
+174
+0:13:53.880 --> 0:14:00.240
+No, then it will look in the class and on the parents of that class for this attribute
+
+175
+0:14:00.240 --> 0:14:06.240
+a, attribute or method because all the methods and the attributes are in this underscore,
+
+176
+0:14:06.240 --> 0:14:09.280
+underscore dict part.
+
+177
+0:14:09.280 --> 0:14:15.880
+So in practice if you have this, an object, an instance and you replace the underscore
+
+178
+0:14:15.880 --> 0:14:22.080
+underscore class and you keep the underscore, underscore dict, then you are switching, reloading
+
+179
+0:14:22.080 --> 0:14:28.000
+what class that instance is part of and then if that new version, new class is the new
+
+180
+0:14:28.000 --> 0:14:37.120
+version of your class, you just reloaded live the instance and all the code of your class.
+
+181
+0:14:37.120 --> 0:14:43.520
+So this allows you to basically do hot code reloading of the class of all the instances
+
+182
+0:14:43.520 --> 0:14:46.120
+if you patch this.
+
+183
+0:14:46.120 --> 0:14:50.480
+And then the last thing that's useful in Python is the weak references.
+
+184
+0:14:50.480 --> 0:14:56.240
+So weak references allow you to keep a reference to an object but still allow it to be garbage
+
+185
+0:14:56.240 --> 0:14:57.560
+collected.
+
+186
+0:14:57.560 --> 0:15:04.400
+So when you have a reference, the garbage collector uses a reference counting and also
+
+187
+0:15:04.400 --> 0:15:12.040
+a regular collection for circular import, circular references, but when you keep a weak
+
+188
+0:15:12.040 --> 0:15:18.800
+reference to something, then it will not increase that garbage counting counter, so it will
+
+189
+0:15:18.800 --> 0:15:27.240
+allow the object that's targeted to be garbage collected at some point.
+
+190
+0:15:27.240 --> 0:15:37.920
+And so you have this weak ref library in Python to have a weak reference to something.
+
+191
+0:15:37.920 --> 0:15:42.560
+You can get the source codes of the new source code using the inspect module in Python.
+
+192
+0:15:42.560 --> 0:15:47.080
+You have inspect.get source of my function, it will just return you directly the source
+
+193
+0:15:47.080 --> 0:15:54.160
+code as a string of your function and inspect.get source of a class does exactly the same thing,
+
+194
+0:15:54.160 --> 0:16:02.280
+so it's very easy to get access to the source code of any Python function or class.
+
+195
+0:16:02.280 --> 0:16:08.320
+And if you put it all together, you can say, okay, I have my source code, I just get the
+
+196
+0:16:08.320 --> 0:16:14.920
+new source code of my targets, which uses inspect.get source.
+
+197
+0:16:14.920 --> 0:16:22.480
+Then I have some environment, the environment of the module and some new environment with
+
+198
+0:16:22.480 --> 0:16:28.840
+the variables created by the code, and I just execute the source code within the environment
+
+199
+0:16:28.840 --> 0:16:34.600
+of the module so you can access all the imports and all the variables defined in that module,
+
+200
+0:16:34.600 --> 0:16:40.200
+and I have these locals so that every variable created during this execution is available
+
+201
+0:16:40.200 --> 0:16:41.920
+within this namespace.
+
+202
+0:16:41.920 --> 0:16:52.440
+And I just returned the field from this dictionary here that's named the same as my target.
+
+203
+0:16:52.440 --> 0:16:57.080
+And now I just hot code reloaded it.
+
+204
+0:16:57.080 --> 0:17:02.920
+Putting it together, I made a small module in Python where I added this auto reload feature
+
+205
+0:17:02.920 --> 0:17:10.440
+so you can decorate any function and it will reload it automatically while it's running.
+
+206
+0:17:10.440 --> 0:17:12.240
+We can have a look at a small demo here.
+
+207
+0:17:12.240 --> 0:17:18.640
+So I have some Python code with a global state and two functions that are processing something.
+
+208
+0:17:18.640 --> 0:17:23.120
+And I will just I can just run this.
+
+209
+0:17:23.120 --> 0:17:35.760
+But if I want to be able to live code, I need to I can just put reload.
+
+210
+0:17:35.760 --> 0:17:39.440
+I'll just mark these two methods as auto reload.
+
+211
+0:17:39.440 --> 0:17:40.720
+So there's no magic.
+
+212
+0:17:40.720 --> 0:17:44.680
+You have to mark them as reloadable.
+
+213
+0:17:44.680 --> 0:17:46.080
+Too much magic is bad.
+
+214
+0:17:46.080 --> 0:17:49.680
+There is already enough.
+
+215
+0:17:49.680 --> 0:17:53.280
+And so here on the right side, you see that it's executing this program.
+
+216
+0:17:53.280 --> 0:17:56.320
+But I don't really like the way it's printing the value.
+
+217
+0:17:56.320 --> 0:18:00.880
+So I want something more English, like value is.
+
+218
+0:18:00.880 --> 0:18:06.240
+And this complex processing thing, it's yeah, maybe it was a 20 I wanted.
+
+219
+0:18:06.240 --> 0:18:09.680
+So now I'm multiplying everything by 20.
+
+220
+0:18:09.680 --> 0:18:12.280
+Or it was a negative value.
+
+221
+0:18:12.280 --> 0:18:14.040
+So it's changing sign all the time.
+
+222
+0:18:14.040 --> 0:18:18.000
+And this is just while running, I can just swap it directly.
+
+223
+0:18:18.000 --> 0:18:20.640
+And as you can see, the program is running.
+
+224
+0:18:20.640 --> 0:18:24.000
+It's maintaining a state, but you can still change the code.
+
+225
+0:18:24.000 --> 0:18:29.560
+If you do a typo, then it will just show you that there is an invalid syntax and wait for
+
+226
+0:18:29.560 --> 0:18:42.160
+you to fix it to keep running again.
+
+227
+0:18:42.160 --> 0:18:43.600
+And you can just pip install it.
+
+228
+0:18:43.600 --> 0:18:44.600
+It's on pipe UI.
+
+229
+0:18:44.600 --> 0:18:53.160
+So if you end up in this situation where your state is complex to get in Python and you
+
+230
+0:18:53.160 --> 0:18:58.920
+want to work on something, you are not doing web with all your state in a database, have
+
+231
+0:18:58.920 --> 0:18:59.920
+a look at reloader.
+
+232
+0:18:59.920 --> 0:19:10.320
+It's a simple way to just hot code reload and tweak your code while it's running.
+
+233
+0:19:10.320 --> 0:19:13.920
+You can find the slides on this URL.
+
+234
+0:19:13.920 --> 0:19:23.320
+Thanks for watching.
+
+235
+0:19:23.320 --> 0:19:31.880
+I believe we have five minutes for questions or remarks if you didn't like it.
+
+236
+0:19:31.880 --> 0:19:35.520
+So if you have any questions, don't hesitate.
+
+237
+0:19:35.520 --> 0:19:36.520
+Yes?
+
+238
+0:19:36.520 --> 0:20:00.800
+So you
+
+239
+0:20:00.800 --> 0:20:18.800
+can use
+
+240
+0:20:18.800 --> 0:20:43.040
+of
+
+241
+0:20:43.040 --> 0:20:46.040
+Okay, that's good to look at, thank you.
+
+242
+0:20:46.040 --> 0:20:49.040
+Another thing is that there is a library called opcodes,
+
+243
+0:20:49.040 --> 0:20:52.040
+which has a safe eval function,
+
+244
+0:20:52.040 --> 0:20:56.040
+which allows you to define an allow list of opcodes,
+
+245
+0:20:56.040 --> 0:21:01.040
+like byte for byte for opcodes, which are allowed.
+
+246
+0:21:01.040 --> 0:21:02.040
+So there is a...
+
+247
+0:21:02.040 --> 0:21:05.040
+This is much more tricky, and you shouldn't drop it.
+
+248
+0:21:05.040 --> 0:21:09.040
+Okay, so there is a library that allows you to do safe evaluation
+
+249
+0:21:09.040 --> 0:21:12.040
+by filtering the opcodes that the code is allowed to run.
+
+250
+0:21:12.040 --> 0:21:13.040
+That's what you're saying.
+
+251
+0:21:13.040 --> 0:21:16.040
+Okay, that's quite interesting as well, yeah.
+
+252
+0:21:16.040 --> 0:21:17.040
+Pawn tools.
+
+253
+0:21:17.040 --> 0:21:20.040
+It's not really designed to be used on production.
+
+254
+0:21:20.040 --> 0:21:25.040
+It's like very used for like CTF security challenges.
+
+255
+0:21:25.040 --> 0:21:27.040
+So how do you calculate it?
+
+256
+0:21:27.040 --> 0:21:28.040
+Phone calls?
+
+257
+0:21:28.040 --> 0:21:29.040
+Pawn tools.
+
+258
+0:21:29.040 --> 0:21:30.040
+Pawn tools.
+
+259
+0:21:30.040 --> 0:21:31.040
+Pwn tools.
+
+260
+0:21:31.040 --> 0:21:32.040
+Oh, okay.
+
+261
+0:21:32.040 --> 0:21:34.040
+Pwn tools.
+
+262
+0:21:34.040 --> 0:21:35.040
+Yeah.
+
+263
+0:21:35.040 --> 0:21:36.040
+Okay.
+
+264
+0:21:36.040 --> 0:21:40.040
+I'm not sure I want to pip install something with Pwn inside.
+
+265
+0:21:40.040 --> 0:21:42.040
+Yeah.
+
+266
+0:21:42.040 --> 0:21:44.040
+Yeah.
+
+267
+0:21:44.040 --> 0:21:51.040
+Any other question or remarks?
+
+268
+0:21:51.040 --> 0:21:53.040
+Okay.
+
+269
+0:21:53.040 --> 0:21:54.040
+Thank you.
+
+270
+0:21:54.040 --> 0:22:12.040
+Thank you.
+

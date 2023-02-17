@@ -1,0 +1,223 @@
+WEBVTT
+
+00:00.000 --> 00:10.920
+Okay, I think we can start.
+
+00:10.920 --> 00:16.480
+Hello, my name is Shuman Kwas and I work for Collabora Productivity.
+
+00:16.480 --> 00:22.320
+Today I would like to talk about the LibreOffice kit.
+
+00:22.320 --> 00:30.480
+I named this presentation Bridge between your application and LibreOffice because LibreOffice
+
+00:30.480 --> 00:38.680
+kit is simply an API which provides a possibility to render the preview of the document.
+
+00:38.680 --> 00:47.360
+So if you want to build an app which requires rendering of some documents, you can use that.
+
+00:47.360 --> 00:55.440
+So that's the API which provides not only rendering of the documents but also we can
+
+00:55.440 --> 01:02.040
+manipulate the documents and also it gives us access to the UI components.
+
+01:02.040 --> 01:09.120
+We use LibreOffice kit in Collabora Online but also in the LibreOffice repository there
+
+01:09.120 --> 01:17.520
+is some sample application called gtki-tiled-viewer where we can see it in action.
+
+01:17.520 --> 01:27.400
+It renders the document from tiles and also allows us to do some simple modifications.
+
+01:27.400 --> 01:35.620
+The APIs are in LibreOffice kit directory and most of the crucial implementation is
+
+01:35.620 --> 01:38.380
+in desktop module.
+
+01:38.380 --> 01:50.120
+The most important part is class LibreOffice kit document which we can use to access all
+
+01:50.120 --> 01:53.960
+the functionality.
+
+01:53.960 --> 02:03.120
+Also when we get some notification from the LibreOffice code, some events because for
+
+02:03.120 --> 02:13.240
+example selection has been changed, we got the callbacks listed in LibreOffice kit.
+
+02:13.240 --> 02:28.040
+This should be completely transparent when we talk about rendering because it should
+
+02:28.040 --> 02:33.000
+be completely transparent when we compare to normal desktop application but sometimes
+
+02:33.000 --> 02:34.480
+it's not possible.
+
+02:34.480 --> 02:42.200
+So we use some conditional code for LibreOffice kit behind the Comp Helper LibreOffice kit
+
+02:42.200 --> 02:44.280
+is active flag.
+
+02:44.280 --> 02:50.840
+For example calling this mentioned callbacks is behind this guard.
+
+02:50.840 --> 02:56.440
+In this talk I would like to present some improvements in LibreOffice kit mostly in
+
+02:56.440 --> 02:59.280
+rendering the tiles.
+
+02:59.280 --> 03:07.720
+The biggest thing is the master page mode because there was a problem.
+
+03:07.720 --> 03:14.800
+In Impress we can open slides in edit mode but also we can design slides, how they look
+
+03:14.800 --> 03:19.560
+and this is called master page mode.
+
+03:19.560 --> 03:26.560
+There was a problem when we had multiple users in the same presentation and some of them
+
+03:26.560 --> 03:37.920
+were watching the master page and some of them were just editing the presentation.
+
+03:37.920 --> 03:50.120
+Sometimes we got the mixed tiles because in our API there was no explicit way to say that
+
+03:50.120 --> 03:55.200
+we want to render a tile for master page or for the normal mode.
+
+03:55.200 --> 04:03.280
+So depending on which view we selected for rendering it was completely not deterministic.
+
+04:03.280 --> 04:10.760
+So I introduced that parameter to our API so now we are sure that we will not mix tiles
+
+04:10.760 --> 04:15.920
+between different modes.
+
+04:15.920 --> 04:21.360
+Other problem I noticed was in CALC.
+
+04:21.360 --> 04:29.680
+Again it was not deterministic when we were rendering some piece of the spreadsheet because
+
+04:29.680 --> 04:41.240
+when we had two users editing content in a similar area which was covered by one tile,
+
+04:41.240 --> 04:50.520
+when one of these cells was overflowing because we had too much content to fit into the cell,
+
+04:50.520 --> 04:57.320
+it was rendered only when the view selected for rendering was the actual editor.
+
+04:57.320 --> 05:08.040
+But when other users were typing we sometimes refreshed the given fragment of the spreadsheet
+
+05:08.040 --> 05:09.240
+without that.
+
+05:09.240 --> 05:17.400
+So it was flickering and sometimes we got the right view and sometimes we got view without
+
+05:17.400 --> 05:19.080
+overflowing content.
+
+05:19.080 --> 05:28.600
+So I fixed that and now we are rendering always the same way, the same tile.
+
+05:28.600 --> 05:37.400
+So we got overflowing content in both cases and like we can see here there are two different
+
+05:37.400 --> 05:41.720
+views and both have the same content.
+
+05:41.720 --> 05:53.080
+It's very important because then client application can catch the tiles and they are the same.
+
+05:53.080 --> 06:00.960
+Other thing I improved was rendering the slide previews because in previews we don't want
+
+06:00.960 --> 06:08.480
+to attach any selections or draft changes in text fields.
+
+06:08.480 --> 06:13.360
+We want to just play plain preview of a slide.
+
+06:13.360 --> 06:21.720
+In the old code we always used one view, the first one for rendering this but it was not
+
+06:21.720 --> 06:30.040
+correct because when first user was typing something, for example in the text box, it
+
+06:30.040 --> 06:39.520
+was visible as well in the preview for other users.
+
+06:39.520 --> 06:48.280
+So now I modified the algorithm which selects a view for drawing and we prefer views which
+
+06:48.280 --> 06:54.000
+are not editing currently.
+
+06:54.000 --> 07:01.800
+Other functions which get improvements was render shape selection which is responsible
+
+07:01.800 --> 07:12.200
+for rendering the shape or image of element which is currently selected in the document.
+
+07:12.200 --> 07:26.040
+We used that for example for showing the rotation result in the real time so when user starts
+
+07:26.040 --> 07:33.520
+to drag something or rotate he see the potential results.
+
+07:33.520 --> 07:41.720
+The problem here was that when we selected some image with very very large size it was
+
+07:41.720 --> 07:53.000
+rendering the original image so it was taking sometimes few seconds and was sending megabytes
+
+07:53.000 --> 07:55.960
+just to render a preview.
+
+07:55.960 --> 08:04.200
+I optimized that a bit by setting maximal resolution we used for previews because they
+
+08:04.200 --> 08:11.080
+don't have to be as big as original images.
+
+08:11.080 --> 08:21.200
+And also from other things in the LibreOffice kit I added was exposing the formula bar widget
+
+08:21.200 --> 08:24.120
+which is present in calc.
+
+08:24.120 --> 08:33.880
+Now it sends all the events like selections or cursor movements to the client application
+
+08:33.880 --> 08:38.880
+so it can be handled there correctly because previously in Color
+
+08:38.880 --> 08:48.960
+Brown line we were using the tunneled pixel based formula bar which is not perfect for
+
+08:48.960 --> 08:52.040
+user experience.
+
+08:52.040 --> 08:53.480
+And that's all from me.
+
+08:53.480 --> 08:54.480
+Thank you.
+
+08:54.480 --> 09:04.900
+OW

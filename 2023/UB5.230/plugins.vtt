@@ -1,0 +1,1273 @@
+WEBVTT
+
+00:00.000 --> 00:09.000
+Okay, I guess I can start.
+
+00:09.000 --> 00:10.000
+Yeah.
+
+00:10.000 --> 00:13.160
+Right, so thank you very much for being here.
+
+00:13.160 --> 00:18.180
+Thanks also to the folks organizing the dev room and the event.
+
+00:18.180 --> 00:19.180
+My name is Joakim.
+
+00:19.180 --> 00:24.500
+I work for Microsoft, and I'm here to talk to you about some stuff that we found while
+
+00:24.500 --> 00:29.360
+building a UI project, a JavaScript UI project.
+
+00:29.360 --> 00:33.800
+And maybe, yeah, maybe it's helpful for you too.
+
+00:33.800 --> 00:41.520
+All right, so this is kind of a high level presentation, and I'm not here to tell you
+
+00:41.520 --> 00:42.920
+how to do stuff.
+
+00:42.920 --> 00:47.560
+Certainly certain things will be very basic or so.
+
+00:47.560 --> 00:51.960
+Others you hopefully will also disagree, but the idea is to tell you about the patterns
+
+00:51.960 --> 00:56.400
+that we found, which hopefully if you want to do something like this, you will already
+
+00:56.400 --> 01:02.160
+be aware of these things.
+
+01:02.160 --> 01:07.560
+So just to set up the context of what I'm talking about, and I should have started the
+
+01:07.560 --> 01:08.560
+timer.
+
+01:08.560 --> 01:14.720
+Yeah, you know, when we say, like, plug-in system, we're talking about applications like,
+
+01:14.720 --> 01:18.220
+for example, ones you know probably metamos or VS code.
+
+01:18.220 --> 01:21.640
+They have extensions or plug-ins, if you will.
+
+01:21.640 --> 01:26.080
+I usually just say plug-ins, but it's essentially the same thing.
+
+01:26.080 --> 01:31.960
+And the talk is not about the product that we do, but just to give you an idea of the
+
+01:31.960 --> 01:35.080
+context, this is Kubernetes UI.
+
+01:35.080 --> 01:40.200
+It's built with React, and there's a server and a back-end and a front-end, so it's very
+
+01:40.200 --> 01:41.400
+traditional in that sense.
+
+01:41.400 --> 01:46.320
+And you can run it as a web app or as a desktop app.
+
+01:46.320 --> 01:53.920
+So yeah, and when I talk about plug-ins, still in the context thing, what this means is that,
+
+01:53.920 --> 01:57.880
+of course, it's code that should be loaded dynamically.
+
+01:57.880 --> 02:03.200
+It has an API from a library, of course, for you to change stuff.
+
+02:03.200 --> 02:11.280
+And in our case, this is used basically for changing, you know, the UI, most of it.
+
+02:11.280 --> 02:16.480
+But you can also change certain core things like adding routes, deleting routes, I don't
+
+02:16.480 --> 02:20.720
+know, changing the token when you need to get a token, stuff like that, right?
+
+02:20.720 --> 02:24.240
+But this is essentially the context of what I'm talking about when I say plug-ins and
+
+02:24.240 --> 02:25.240
+functionality.
+
+02:25.240 --> 02:32.200
+Okay, so let's start by looking at what the plug-in should look like.
+
+02:32.200 --> 02:36.400
+This is usually we're talking about a bundled single JS file, right?
+
+02:36.400 --> 02:41.040
+Let's not talk about, like, several JS files, you know, the drill, hopefully.
+
+02:41.040 --> 02:46.160
+But so you have the plug-in code, maybe that's enough for us.
+
+02:46.160 --> 02:48.920
+It's been enough for a while.
+
+02:48.920 --> 02:53.440
+But likely you will need some information together with the code, right?
+
+02:53.440 --> 02:56.520
+That's often called a manifest.
+
+02:56.520 --> 03:01.480
+Certain plug-in system that I worked before, it was kind of programmatic, so the plug-in
+
+03:01.480 --> 03:06.520
+itself declares here's my name, here's my, I don't know, dependencies for other plug-ins
+
+03:06.520 --> 03:09.200
+or whatnot.
+
+03:09.200 --> 03:11.000
+We recommend not doing that.
+
+03:11.000 --> 03:16.080
+We recommend using a text file where you declare, like, a manifest file where you have all that
+
+03:16.080 --> 03:17.720
+information about the plug-in.
+
+03:17.720 --> 03:23.360
+Turns out that, you know, package JSON is pretty good for that already.
+
+03:23.360 --> 03:29.080
+So the advantage of not having this in the file, hopefully they're obvious, but the thing
+
+03:29.080 --> 03:33.680
+is that you don't have to load the code before you know if you should load the code, right?
+
+03:33.680 --> 03:39.040
+So if you have metadata that you need to use to decide whether to use the code, for example,
+
+03:39.040 --> 03:42.840
+you want to tell the user, okay, here's the name of the plug-in, do you want to enable
+
+03:42.840 --> 03:49.080
+this plug-in so it's better that the code is not already running.
+
+03:49.080 --> 03:54.880
+Loading and unloading plug-ins, so, you know, this is coming into what the plug-in should
+
+03:54.880 --> 04:01.040
+be structured like, but of course you have to load the plug-ins dynamically, and usually
+
+04:01.040 --> 04:04.880
+there is this pattern of an activate method.
+
+04:04.880 --> 04:09.520
+This activate, of course, is about telling the plug-in developer more or less when the
+
+04:09.520 --> 04:13.440
+code should be, you know, loaded.
+
+04:13.440 --> 04:17.000
+So that's the sole purpose of this, right?
+
+04:17.000 --> 04:21.240
+This is not so much for anything like, okay, if you don't put code inside the activate,
+
+04:21.240 --> 04:26.200
+that means you're not one, don't trust that, right?
+
+04:26.200 --> 04:31.000
+But it also can be used to tell the system that when you try to activate the plug-in,
+
+04:31.000 --> 04:35.520
+then you can have like a return, for example, from that activate method, and the plug-in
+
+04:35.520 --> 04:37.760
+can tell the system I could not activate, right?
+
+04:37.760 --> 04:41.040
+We'll see a couple of examples.
+
+04:41.040 --> 04:47.880
+Without deactivate, and our plug-ins for a while also didn't have the, like, well, you
+
+04:47.880 --> 04:51.840
+can use them without deactivate, but that's because you should assume that the whole loading
+
+04:51.840 --> 04:53.800
+is deactivate, right?
+
+04:53.800 --> 04:56.240
+So both methods are fine.
+
+04:56.240 --> 05:02.480
+Like I said, this is, in many cases, a matter of taste, but this is like a pattern.
+
+05:02.480 --> 05:06.640
+So if you have an activate, of course, should you have deactivate, this is when you tell
+
+05:06.640 --> 05:08.920
+the plug-in, okay, you're going away.
+
+05:08.920 --> 05:13.360
+Maybe there's certain things that the plug-in needs to do before it goes away, like cleaning
+
+05:13.360 --> 05:14.360
+up.
+
+05:14.360 --> 05:18.400
+This is unlikely to be used by most plug-ins, but the thing is that, like, you shouldn't
+
+05:18.400 --> 05:25.280
+rely on deactivate for just when the, like, you shouldn't trust that the plug-in will
+
+05:25.280 --> 05:29.800
+only run the code inside the activate, you should also not trust the plug-in to deactivate
+
+05:29.800 --> 05:30.840
+itself, right?
+
+05:30.840 --> 05:36.080
+So this is mostly about telling the plug-in developers, here's a way that you know when
+
+05:36.080 --> 05:38.920
+the code is going to be activated and deactivated.
+
+05:38.920 --> 05:45.840
+Yeah, for unloading, of course, you should just reload the system without the plug-in,
+
+05:45.840 --> 05:47.120
+mostly.
+
+05:47.120 --> 05:51.800
+And that's pretty much the conclusion of the section, right?
+
+05:51.800 --> 05:55.040
+Don't trust plug-ins code, I guess.
+
+05:55.040 --> 06:02.400
+Now going into the structure, and hopefully this is a bit more interesting now, yeah,
+
+06:02.400 --> 06:05.880
+so you have to decide how can people write plug-ins, right?
+
+06:05.880 --> 06:12.360
+And since we are extending functionality and, you know, extending something that you already
+
+06:12.360 --> 06:16.880
+know how it will work, maybe a plug-in class sounds good, like an object-oriented where
+
+06:16.880 --> 06:18.960
+you extend stuff, sounds good.
+
+06:18.960 --> 06:25.080
+But of course, right now we have a lot of functional code going on, so ultimately this
+
+06:25.080 --> 06:26.880
+is a matter of taste, right?
+
+06:26.880 --> 06:33.000
+We can argue, like, what's fastest, what's quicker to do, but in such applications it's
+
+06:33.000 --> 06:37.600
+fine if you're not squeezing that extra 200 mil.
+
+06:37.600 --> 06:40.840
+So yeah, so these plug-ins do exactly the same.
+
+06:40.840 --> 06:47.880
+For example, in this case, the plug-ins would say, okay, we only work on Mondays, so if
+
+06:47.880 --> 06:53.640
+the day is not a Monday, then you just tell the system I'm not activating, but these are
+
+06:53.640 --> 06:54.640
+different flavors.
+
+06:54.640 --> 07:01.640
+However, maybe an interesting plot twist would be that, of course, plug-ins have a life cycle,
+
+07:01.640 --> 07:06.720
+right, they activate, they deactivate, so that's what React kind of gives you for a component.
+
+07:06.720 --> 07:11.400
+So why not making a plug-in be a React component?
+
+07:11.400 --> 07:18.240
+Right, you already have, you know, certain life cycle things like the, like, use effect,
+
+07:18.240 --> 07:19.640
+for example.
+
+07:19.640 --> 07:23.480
+Another advantage is that you could also use hooks inside it.
+
+07:23.480 --> 07:29.840
+So we, for example, in our system have some hooks, and if you just use the, this method
+
+07:29.840 --> 07:31.800
+is going to be a bit complicated to do, right?
+
+07:31.800 --> 07:37.160
+But if you use this, then probably it's a good idea.
+
+07:37.160 --> 07:40.200
+And if you, of course, this only works if you have a React-based system.
+
+07:40.200 --> 07:44.440
+Other systems, I don't know, but yeah.
+
+07:44.440 --> 07:51.880
+But then the other thing about the functionality is, okay, how about implementing actual stuff
+
+07:51.880 --> 07:53.680
+to change the system, right?
+
+07:53.680 --> 07:59.280
+And in here, I think there are mainly two options, so you can make it so that it's very
+
+07:59.280 --> 08:01.280
+textual and declarative.
+
+08:01.280 --> 08:05.800
+So let's say that you have a top bar, we do have a top bar, and you want actions.
+
+08:05.800 --> 08:09.760
+Actions would be like a button or a string or something else that you want to put there.
+
+08:09.760 --> 08:15.320
+Right, so if you make it declarative, like the left example there, of course the system
+
+08:15.320 --> 08:21.080
+is responsible for interpreting whatever you put there, so as long as you don't implement
+
+08:21.080 --> 08:25.640
+stuff, you won't give any power to that plug-in implementation.
+
+08:25.640 --> 08:29.920
+On the other hand, this is kind of a bit limiting, right?
+
+08:29.920 --> 08:35.280
+So because you always have to develop more and more functionality to support it.
+
+08:35.280 --> 08:43.880
+If you want to be a bit more flexible, although not as, I guess, friendly to new developers,
+
+08:43.880 --> 08:47.400
+you can just say, okay, just put a component here, and that's it, right?
+
+08:47.400 --> 08:51.040
+And it can be a string or something else.
+
+08:51.040 --> 08:53.440
+So that's the right side.
+
+08:53.440 --> 08:58.280
+And of course, maybe people will do stuff that you're not expecting with that, but also
+
+08:58.280 --> 08:59.940
+you basically support anything.
+
+08:59.940 --> 09:06.240
+So it depends on the level of what you really want to give.
+
+09:06.240 --> 09:12.180
+Now the functionality itself, like I won't bother you with the functionality that we have,
+
+09:12.180 --> 09:17.080
+but of course you will usually say, okay, I want people to add, again, top bar actions
+
+09:17.080 --> 09:22.000
+or I don't know, like a new route and all that, and it will be likely that you also
+
+09:22.000 --> 09:24.760
+have to have a way to remove those, right?
+
+09:24.760 --> 09:26.080
+So you can add an action.
+
+09:26.080 --> 09:30.960
+Somebody will say, okay, now I need to remove it if it's not monitored or something, right?
+
+09:30.960 --> 09:35.520
+So it's some sort of crude or crud or whatever you call it.
+
+09:35.520 --> 09:38.960
+So let's look at what it could look like.
+
+09:38.960 --> 09:42.760
+So in our case, now I talk about header actions and I actually put this screenshot here just
+
+09:42.760 --> 09:45.120
+to illustrate, but this is a header action.
+
+09:45.120 --> 09:47.640
+It's just a header with an action.
+
+09:47.640 --> 09:53.080
+And yeah, so if we want to support something like this, should you have one function for
+
+09:53.080 --> 09:57.420
+operation like register header action like we have here?
+
+09:57.420 --> 10:02.040
+So you declare the button and you do it, or maybe, okay, if you add one button, maybe
+
+10:02.040 --> 10:04.800
+you can add a list of buttons.
+
+10:04.800 --> 10:07.800
+Just keeps getting appended there.
+
+10:07.800 --> 10:09.640
+Sounds great.
+
+10:09.640 --> 10:14.360
+And then you have a counterpart for the operation that's removing header actions.
+
+10:14.360 --> 10:21.040
+And in this case, you can just call it deregister just to be the opposite or remove to be a
+
+10:21.040 --> 10:23.040
+bit more direct.
+
+10:23.040 --> 10:28.760
+However, how can you actually identify what you added there, right?
+
+10:28.760 --> 10:35.460
+So if you declare the component or the function in this case on the left, then you have access
+
+10:35.460 --> 10:36.460
+to it.
+
+10:36.460 --> 10:37.460
+So you just call it again.
+
+10:37.460 --> 10:40.960
+It's hopefully equal to the same thing internally.
+
+10:40.960 --> 10:45.280
+And the system can understand, okay, this is something that we have here, so let me
+
+10:45.280 --> 10:46.280
+remove that.
+
+10:46.280 --> 10:47.280
+Right?
+
+10:47.280 --> 10:53.880
+But let's say that we already have, we already have, we already have like default actions.
+
+10:53.880 --> 10:56.960
+So how can the user refer to the default actions, right?
+
+10:56.960 --> 10:57.960
+Will they import them?
+
+10:57.960 --> 11:02.200
+That sounds like they cannot really refer to the actions by the function name because
+
+11:02.200 --> 11:04.720
+it gets minimized and then things don't work.
+
+11:04.720 --> 11:07.620
+So of course, one solution is to add IDs.
+
+11:07.620 --> 11:12.280
+So it's probably a good idea that whenever you have a function where you're just passing
+
+11:12.280 --> 11:17.180
+like a component or something else, probably you should identify it, right?
+
+11:17.180 --> 11:20.360
+If you want to refer to it later.
+
+11:20.360 --> 11:23.280
+But then you're very happy it works.
+
+11:23.280 --> 11:27.040
+And somebody will go and say, hey, that's cool, but you keep appending the actions.
+
+11:27.040 --> 11:29.040
+I want, sorry.
+
+11:29.040 --> 11:31.880
+I want to actually have my actions prepended.
+
+11:31.880 --> 11:35.280
+And then your world goes upside down, right?
+
+11:35.280 --> 11:41.840
+So either you can add, of course, like, I don't know, like an index to the function
+
+11:41.840 --> 11:42.840
+when you call it.
+
+11:42.840 --> 11:47.180
+So now you have ID, index, and the actual action.
+
+11:47.180 --> 11:50.900
+Or you can scrape all that and, for example, just use a list processor.
+
+11:50.900 --> 11:55.520
+So instead of registering, okay, add function, remove function, and all that, you can say,
+
+11:55.520 --> 11:57.560
+here's my list processor for header actions, right?
+
+11:57.560 --> 12:00.760
+And it's going to be fed whatever is the default actions.
+
+12:00.760 --> 12:04.920
+And you can add them, you can remove them, you can shuffle them, whatever.
+
+12:04.920 --> 12:08.840
+So of course you have to identify them as well.
+
+12:08.840 --> 12:10.440
+So the ID keeps going there.
+
+12:10.440 --> 12:17.800
+But this is, I think, a more flexible way and less work to maintain.
+
+12:17.800 --> 12:20.380
+Now developer experience.
+
+12:20.380 --> 12:27.560
+So it's supposedly important that users can start plugins and develop plugins easily for
+
+12:27.560 --> 12:29.040
+your system.
+
+12:29.040 --> 12:34.120
+So just like other programs that you probably used before, there should be, like, this bootstrap
+
+12:34.120 --> 12:36.840
+way of creating a plugin, right?
+
+12:36.840 --> 12:41.600
+Either that, or of course you have a folder of examples that you say, okay, just use this
+
+12:41.600 --> 12:43.200
+and modify it.
+
+12:43.200 --> 12:49.680
+We do have something like a bootstrap script, like the headline plugin it's called, because
+
+12:49.680 --> 12:51.440
+we're original.
+
+12:51.440 --> 13:01.520
+And yeah, and that's interesting because you can just generate the base plugin, but also
+
+13:01.520 --> 13:06.040
+you should take into account that you should require the developers to configure as less
+
+13:06.040 --> 13:07.720
+stuff as possible, right?
+
+13:07.720 --> 13:13.440
+So one way would be to say, okay, here's the package JSON that we generated, of course.
+
+13:13.440 --> 13:15.360
+Here's the TS config that we generated.
+
+13:15.360 --> 13:19.240
+Here's the webpack configuration that we have and all that.
+
+13:19.240 --> 13:23.560
+However, of course, the next time that you need to upgrade the plugins, then you have
+
+13:23.560 --> 13:25.560
+to upgrade all that stuff.
+
+13:25.560 --> 13:33.120
+So probably a better idea is to try to add as least stuff as possible, right?
+
+13:33.120 --> 13:38.600
+So if, for example, in the case of TS config, instead of just shipping the whole TS config
+
+13:38.600 --> 13:44.240
+and then you have to figure out how to upgrade that if you need, we are already, as a module,
+
+13:44.240 --> 13:48.400
+we are already inside the application at the development stage.
+
+13:48.400 --> 13:49.840
+So we just point to it, right?
+
+13:49.840 --> 13:53.440
+We ship the TS config that we want and we point to it.
+
+13:53.440 --> 13:56.800
+So if the developer touches it, then it's fine.
+
+13:56.800 --> 13:58.280
+We're never touching that again.
+
+13:58.280 --> 14:00.680
+We're just touching the file that we ship, right?
+
+14:00.680 --> 14:07.000
+So it's going to be updated automatically as long as you update the module.
+
+14:07.000 --> 14:12.120
+So actually, we try to keep the dependencies as simple as possible in this case would be
+
+14:12.120 --> 14:14.840
+just to have one, right?
+
+14:14.840 --> 14:18.320
+Our headline plugin package in this case.
+
+14:18.320 --> 14:22.280
+All right.
+
+14:22.280 --> 14:26.360
+Next is about bundling.
+
+14:26.360 --> 14:30.240
+So now you have your API with the processing, this processing and stuff.
+
+14:30.240 --> 14:31.480
+Yeah.
+
+14:31.480 --> 14:34.840
+And Webpack is very easy to use.
+
+14:34.840 --> 14:35.840
+Yeah.
+
+14:35.840 --> 14:40.200
+So you got your bundle, right?
+
+14:40.200 --> 14:47.360
+And you got your bundle to be, you know, you got your single JavaScript file to be run,
+
+14:47.360 --> 14:48.360
+ready to be run.
+
+14:48.360 --> 14:52.360
+Because that's going to, if you just have like React, for example, that this plugin
+
+14:52.360 --> 14:55.240
+will import, then you get React bundled there.
+
+14:55.240 --> 15:01.880
+If you have your, in our case, headline plugin, then you're going to have that library, you
+
+15:01.880 --> 15:02.880
+know, just bundled in.
+
+15:02.880 --> 15:05.000
+And you should try to avoid that, right?
+
+15:05.000 --> 15:08.160
+Because it's going to be running inside a system that already has this.
+
+15:08.160 --> 15:13.040
+It should run with the same versions and it should not, you know, just even if it's for
+
+15:13.040 --> 15:16.840
+size matters, not pack the same thing.
+
+15:16.840 --> 15:19.800
+So Webpack has this thing called external modules.
+
+15:19.800 --> 15:24.520
+And you can just say, okay, whenever you find this import, actually we mean this variable.
+
+15:24.520 --> 15:30.640
+So when it finds the React router, it says don't care about the React router, just use
+
+15:30.640 --> 15:31.640
+whatever you put there.
+
+15:31.640 --> 15:37.320
+In our case, it's like plugin lib, React router, and it's going to use the same code.
+
+15:37.320 --> 15:39.680
+So we were like, okay, this is great.
+
+15:39.680 --> 15:41.080
+We can avoid shipping all the stuff.
+
+15:41.080 --> 15:44.080
+We were going to keep our headline plugin package really lean.
+
+15:44.080 --> 15:45.840
+It's going to be great.
+
+15:45.840 --> 15:50.320
+So we even thought, okay, we're not even shipping our own library.
+
+15:50.320 --> 15:52.320
+We're just shipping the typed declarations.
+
+15:52.320 --> 15:53.760
+That's going to be fine.
+
+15:53.760 --> 15:59.600
+So we spent many hours wiring, you know, TS config and Webpack and whatnot to make sure
+
+15:59.600 --> 16:01.400
+that it was happy.
+
+16:01.400 --> 16:06.400
+When users are developing, they can see that imports seem to work, even though they don't
+
+16:06.400 --> 16:11.000
+exist inside the library.
+
+16:11.000 --> 16:13.280
+And then somebody wanted to test the plugin.
+
+16:13.280 --> 16:16.640
+And it's like, oh, okay, so now you cannot test the plugin because you don't have the
+
+16:16.640 --> 16:18.320
+libraries around.
+
+16:18.320 --> 16:23.400
+So maybe you have to use the program itself to test the plugin, but that's probably not
+
+16:23.400 --> 16:24.800
+a great idea.
+
+16:24.800 --> 16:28.400
+So we were like, okay, we have to ship the actual library.
+
+16:28.400 --> 16:29.400
+Yeah.
+
+16:29.400 --> 16:33.800
+And so, yeah, so it still works as an external module.
+
+16:33.800 --> 16:36.200
+So we're not bundling it, but we're shipping it.
+
+16:36.200 --> 16:42.840
+And it's fine because, I mean, yes, the headline plugin package is slightly larger, but that's
+
+16:42.840 --> 16:45.640
+okay because it's just one time.
+
+16:45.640 --> 16:47.400
+So take that into account.
+
+16:47.400 --> 16:50.000
+Don't get too extreme with not shipping stuff.
+
+16:50.000 --> 16:51.000
+Yeah.
+
+16:51.000 --> 16:54.400
+And we're getting to the end.
+
+16:54.400 --> 16:56.000
+So running the plugins, right?
+
+16:56.000 --> 16:58.240
+So now you got your bundle.
+
+16:58.240 --> 17:00.600
+It's not bundling React because we got it.
+
+17:00.600 --> 17:04.680
+It's not bundling your library because you got it.
+
+17:04.680 --> 17:07.320
+And you're going to run it.
+
+17:07.320 --> 17:11.640
+However, you know, of course, at some point you will break API.
+
+17:11.640 --> 17:16.040
+And if you do break API, it would be nice that you download a plugin that will be broken
+
+17:16.040 --> 17:20.400
+because it's, you know, you'll break the system for your users.
+
+17:20.400 --> 17:24.040
+So package.json has this already.
+
+17:24.040 --> 17:28.860
+It's part of its known keywords, I guess, called engines.
+
+17:28.860 --> 17:31.520
+So you can just put something there for your system.
+
+17:31.520 --> 17:35.920
+And then, of course, when you run it, you should just check for that before running
+
+17:35.920 --> 17:39.080
+it.
+
+17:39.080 --> 17:42.400
+Now how to run the actual system.
+
+17:42.400 --> 17:44.640
+So now you have everything in place.
+
+17:44.640 --> 17:47.600
+And you can check for it before you load it.
+
+17:47.600 --> 17:48.960
+But how do you actually load it?
+
+17:48.960 --> 17:49.960
+Do you load it?
+
+17:49.960 --> 17:51.760
+Of course, it's going to be loaded in the front.
+
+17:51.760 --> 17:54.400
+And that's what we're talking about with JavaScript.
+
+17:54.400 --> 17:56.400
+And this is highly special to each project, right?
+
+17:56.400 --> 18:01.120
+So maybe you have something there where the users can just load the files directly.
+
+18:01.120 --> 18:04.800
+And it just, you know, it just refreshes and loads.
+
+18:04.800 --> 18:07.320
+In our case, we didn't want to do that.
+
+18:07.320 --> 18:11.140
+We wanted it to be very transparent to the user.
+
+18:11.140 --> 18:16.240
+So if the user, of course, downloads a plugin, next time they start the application, they
+
+18:16.240 --> 18:19.640
+should see that things changed.
+
+18:19.640 --> 18:26.040
+But also, in the case of our application, it works also if you deploy it as a web service
+
+18:26.040 --> 18:27.040
+like that.
+
+18:27.040 --> 18:31.640
+So in that case, we don't want really the users to keep using different plugins.
+
+18:31.640 --> 18:37.200
+In this case, it's more like, okay, whoever deployed it is giving you, like, an experience,
+
+18:37.200 --> 18:42.480
+user experience with the base code plus a bunch of plugins that the users shouldn't
+
+18:42.480 --> 18:43.480
+really know about.
+
+18:43.480 --> 18:47.680
+And for security reasons, of course, we don't want the users to keep loading plugins on
+
+18:47.680 --> 18:54.600
+something that is now, you know, even though it runs locally, it's going to, you have it,
+
+18:54.600 --> 18:58.380
+you know, just deployed for this user and other users.
+
+18:58.380 --> 19:03.880
+So they would have different user experiences if they keep adding their own plugins.
+
+19:03.880 --> 19:04.880
+Right?
+
+19:04.880 --> 19:10.320
+So what we do in our case is that we have the backend or the server.
+
+19:10.320 --> 19:14.320
+It's a server, but, you know, depending on if it's running locally or actually in the
+
+19:14.320 --> 19:15.360
+server.
+
+19:15.360 --> 19:20.480
+And then that's the thing that has to have access to the plugins themselves.
+
+19:20.480 --> 19:21.480
+Right?
+
+19:21.480 --> 19:28.360
+So it reads the plugins, and then it has an endpoint, and the frontend, when it loads,
+
+19:28.360 --> 19:31.960
+before it loads everything, it says, okay, what are the plugins that you have?
+
+19:31.960 --> 19:33.360
+It says, I got this 10 plugins.
+
+19:33.360 --> 19:38.400
+It says, okay, give me the plugins now or give me this one plugin now, for example.
+
+19:38.400 --> 19:43.960
+Then you get the actual bundle JS code from the backend, and then it loads it dynamically,
+
+19:43.960 --> 19:47.240
+and then you get the shiny thing.
+
+19:47.240 --> 19:52.080
+So this way, of course, if you're running it locally and you have the plugins in the
+
+19:52.080 --> 19:58.240
+plugin folder that it expects, the backend has access, it actually keeps watching the
+
+19:58.240 --> 19:59.440
+folder in our case.
+
+19:59.440 --> 20:02.600
+It gets refreshed whenever you change stuff there.
+
+20:02.600 --> 20:07.320
+And that's how we do it locally.
+
+20:07.320 --> 20:11.720
+If you're running on the server, then, of course, we don't check if the plugins change
+
+20:11.720 --> 20:12.720
+or not.
+
+20:12.720 --> 20:15.960
+That's not supposed to happen, but you still get essentially the same experience.
+
+20:15.960 --> 20:23.040
+But like I said, this is mostly, this is very tight-witched project.
+
+20:23.040 --> 20:24.520
+And that's all I got.
+
+20:24.520 --> 20:29.520
+So thank you.
+
+20:29.520 --> 20:34.760
+Thank you very much.
+
+20:34.760 --> 20:36.800
+We do have time for questions.
+
+20:36.800 --> 20:44.480
+So raise your hand high, and we'll start with the first question.
+
+20:44.480 --> 20:46.480
+Yeah.
+
+20:46.480 --> 20:49.680
+Hey.
+
+20:49.680 --> 20:53.320
+You said putting some dependencies in the plugin.
+
+20:53.320 --> 21:00.680
+So having a module they import so they can use some things like hooks, do you have to
+
+21:00.680 --> 21:09.000
+or do you do anything against a plugin modifying those things that would then mess with other
+
+21:09.000 --> 21:11.400
+plugins, like changing the objects you passed in?
+
+21:11.400 --> 21:12.880
+I can order them with so much.
+
+21:12.880 --> 21:13.880
+Sorry.
+
+21:13.880 --> 21:21.400
+If the plugins are depending on a module that you made, and the same ones being passed into
+
+21:21.400 --> 21:28.560
+the different plugins, could they modify the things you're passing in to then mess with
+
+21:28.560 --> 21:31.480
+the other plugins?
+
+21:31.480 --> 21:33.920
+Yes.
+
+21:33.920 --> 21:36.120
+But what was the actual question?
+
+21:36.120 --> 21:37.120
+Sorry.
+
+21:37.120 --> 21:39.120
+Go ahead.
+
+21:39.120 --> 21:40.120
+Sorry.
+
+21:40.120 --> 21:46.680
+Is there a way to mitigate against them kind of changing how the plugin system behaves
+
+21:46.680 --> 21:49.040
+for the other plugins?
+
+21:49.040 --> 21:56.160
+But you mean, for example, in the example of the actions, whatever goes there?
+
+21:56.160 --> 22:01.440
+So you had a button.
+
+22:01.440 --> 22:04.840
+Say you have a button class you're passing in, they can extend.
+
+22:04.840 --> 22:11.120
+What if they changed the behavior of that button class to then other plugins have a
+
+22:11.120 --> 22:13.200
+modified version when running?
+
+22:13.200 --> 22:18.120
+Yeah, but that's actually something by design, right?
+
+22:18.120 --> 22:22.800
+So you're supposed to, let's say that you changed the delete button, and now you still
+
+22:22.800 --> 22:26.400
+have the delete button, but the delete button will no longer delete.
+
+22:26.400 --> 22:32.480
+It will just say, actually it was on the example, but it will just say, not today, right?
+
+22:32.480 --> 22:33.480
+Yeah.
+
+22:33.480 --> 22:36.840
+So the delete button on the left just says, not today, right?
+
+22:36.840 --> 22:44.960
+It actually replaces the delete button in this case, but that's fine, right?
+
+22:44.960 --> 22:48.880
+That's fine because that's what the plugins are supposed to do, right?
+
+22:48.880 --> 22:53.560
+So the plugins are supposed to do, and maybe you have even plugins that, okay, they expect
+
+22:53.560 --> 22:56.320
+you already to have other things in there.
+
+22:56.320 --> 23:01.320
+So if you have a combination of both plugins, they can see that you added stuff.
+
+23:01.320 --> 23:02.960
+And yeah, so that's by design.
+
+23:02.960 --> 23:08.880
+Of course, if you install plugins that will make your system not do anything, well, that's
+
+23:08.880 --> 23:13.120
+also, you should be careful about what you install.
+
+23:13.120 --> 23:16.960
+You talk about security in the front end, but isn't that something that Back Engine
+
+23:16.960 --> 23:24.320
+handle more and just keep the JavaScript as light as possible instead?
+
+23:24.320 --> 23:25.640
+About the security, what?
+
+23:25.640 --> 23:27.840
+You talk about security in the front end.
+
+23:27.840 --> 23:28.840
+Yeah.
+
+23:28.840 --> 23:32.800
+So that users can't add their own plugins.
+
+23:32.800 --> 23:39.120
+But isn't that something that the user would be responsible for anyway?
+
+23:39.120 --> 23:40.120
+No, no.
+
+23:40.120 --> 23:41.120
+Yeah.
+
+23:41.120 --> 23:43.320
+I mean, I was rushing maybe I didn't explain that correctly.
+
+23:43.320 --> 23:48.160
+No, the thing about the security is not so much about the security, it's about the user
+
+23:48.160 --> 23:49.160
+experience.
+
+23:49.160 --> 23:52.840
+So you suppose as a user to add your own plugins, of course.
+
+23:52.840 --> 23:59.520
+But that's if you use, in our case, our application as a desktop application because then it's
+
+23:59.520 --> 24:01.680
+you who's responsible for that application.
+
+24:01.680 --> 24:06.480
+When you go and you use it because you access some service that gives you in the browser,
+
+24:06.480 --> 24:07.480
+right?
+
+24:07.480 --> 24:11.800
+It's the person that deployed that or the company or whatever that is supposed to give
+
+24:11.800 --> 24:14.040
+you the plugins that you are supposed to see, right?
+
+24:14.040 --> 24:17.520
+So you shouldn't change the way that the application works.
+
+24:17.520 --> 24:19.520
+But that's, of course, our decision, right?
+
+24:19.520 --> 24:23.320
+In other cases, like I guess Slack or something like that, you can add actually different
+
+24:23.320 --> 24:24.920
+plugins for yourself.
+
+24:24.920 --> 24:26.160
+And that's cool too.
+
+24:26.160 --> 24:35.560
+But this is, like I said, this was a highly intimate decision for our own project.
+
+24:35.560 --> 24:42.720
+So a couple of months back when we are checking for the plugins, so usually a few applications
+
+24:42.720 --> 24:47.760
+run the plugins in an isolated environment, like they ship their micro run times and run
+
+24:47.760 --> 24:50.320
+in them and then try to communicate.
+
+24:50.320 --> 24:55.640
+So in your use case, are you running them in the parent application context?
+
+24:55.640 --> 25:00.120
+Because in that case, we can't always trust what users are writing in their plugins, right?
+
+25:00.120 --> 25:03.840
+So they can steal stuff from Windows, things like that.
+
+25:03.840 --> 25:10.640
+Do you have any check to see all the plugins and do the legends before I load them to the
+
+25:10.640 --> 25:12.920
+store or something like that?
+
+25:12.920 --> 25:14.280
+Yeah.
+
+25:14.280 --> 25:17.080
+Security would be a whole talk about it.
+
+25:17.080 --> 25:20.320
+Which we don't have time for.
+
+25:20.320 --> 25:27.680
+We're just running the plugins as is because as of now, you know, we don't have, for example,
+
+25:27.680 --> 25:31.400
+you cannot just download plugins from NPM right now, right?
+
+25:31.400 --> 25:32.680
+We're going to have that.
+
+25:32.680 --> 25:36.000
+When we have that, we're going to have a different way to run them, hopefully.
+
+25:36.000 --> 25:41.880
+I know that depending on the system, you're going to find that some do have a way to isolate
+
+25:41.880 --> 25:42.880
+them.
+
+25:42.880 --> 25:45.960
+There's a good blog article by Figma doing that.
+
+25:45.960 --> 25:46.960
+And that's kind of cool.
+
+25:46.960 --> 25:52.200
+They say what approaches they took and what conclusion they got to.
+
+25:52.200 --> 25:58.560
+Other programs, they just say, okay, you're supposed to install stuff that you trust.
+
+25:58.560 --> 26:03.080
+And they go through some, you know, just like when you install an NPM package, it can be
+
+26:03.080 --> 26:04.080
+harmful, right?
+
+26:04.080 --> 26:07.440
+But there are mechanisms to kind of mitigate that.
+
+26:07.440 --> 26:14.160
+So I want to make it as secure as possible, but that's not, you know, it was not security
+
+26:14.160 --> 26:18.240
+from the start before we actually have the system.
+
+26:18.240 --> 26:21.840
+It's okay.
+
+26:21.840 --> 26:31.880
+So do you have like any ways of handling code splitting and other stuff like that?
+
+26:31.880 --> 26:39.240
+Like maybe a plugin wants to load some components later on?
+
+26:39.240 --> 26:43.960
+Is there a way you can handle it using your method of doing that?
+
+26:43.960 --> 26:46.000
+If the plugin wants to add components later?
+
+26:46.000 --> 26:56.240
+If a plugin developer wants to use code splitting and loading stuff later on?
+
+26:56.240 --> 26:57.240
+Is it fine?
+
+26:57.240 --> 27:03.040
+I mean, if you have an activate method, I mean, if I understand your question, you have
+
+27:03.040 --> 27:05.400
+the moment where the plugins are loaded, right?
+
+27:05.400 --> 27:10.600
+So you can just say, okay, I'm not supposed to be running the buttons now.
+
+27:10.600 --> 27:12.480
+So we're changing this functionality now.
+
+27:12.480 --> 27:15.360
+I'm supposed to be changing the functionality whenever.
+
+27:15.360 --> 27:18.280
+Of course, that's a responsibility for the plugins, right?
+
+27:18.280 --> 27:20.440
+We just say, okay, we're loading you.
+
+27:20.440 --> 27:24.560
+Now you should make sure that you do whatever you want, but it should be like, you can,
+
+27:24.560 --> 27:30.280
+of course, this is just code you can change when it wants.
+
+27:30.280 --> 27:46.160
+Thank you again.

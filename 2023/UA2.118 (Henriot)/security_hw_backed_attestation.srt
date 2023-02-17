@@ -1,0 +1,1272 @@
+1
+0:00:00.000 --> 0:00:26.180
+So, with that in mind, I want to talk to you about our work to integrate remote attestation
+
+2
+0:00:26.180 --> 0:00:30.360
+as an authentication mechanism in TLS.
+
+3
+0:00:30.360 --> 0:00:32.120
+First off, how am I?
+
+4
+0:00:32.120 --> 0:00:33.680
+I'm Yannas Mihalcha.
+
+5
+0:00:33.680 --> 0:00:36.120
+I'm a senior software engineer in ARM.
+
+6
+0:00:36.120 --> 0:00:42.000
+I do mostly software prototyping, so doing proof of concepts for various software stacks
+
+7
+0:00:42.000 --> 0:00:47.160
+that we think might be useful for our software ecosystems.
+
+8
+0:00:47.160 --> 0:00:52.120
+Looking at an overview of the presentation, we're going to start with some theory, looking
+
+9
+0:00:52.120 --> 0:00:57.160
+at remote attestation at TLS and how we plan to integrate the two.
+
+10
+0:00:57.160 --> 0:01:01.360
+And then we're going to continue looking at the practice at the prototype that we're building
+
+11
+0:01:01.360 --> 0:01:06.840
+to instantiate the theory and the draft that we're working on.
+
+12
+0:01:06.840 --> 0:01:10.520
+So let's kick off with the theory.
+
+13
+0:01:10.520 --> 0:01:13.160
+What exactly are we trying to improve here?
+
+14
+0:01:13.160 --> 0:01:19.640
+The current Internet security model is mostly based around an assumption that the attacker
+
+15
+0:01:19.640 --> 0:01:23.080
+is somewhere on the communication path between the peers.
+
+16
+0:01:23.080 --> 0:01:28.560
+So what you usually do is you have some sort of certificate that you issue to the workload
+
+17
+0:01:28.560 --> 0:01:32.960
+and you have the private key associated with that certificate.
+
+18
+0:01:32.960 --> 0:01:38.640
+And the workload can then essentially authenticate itself to its peers.
+
+19
+0:01:38.640 --> 0:01:44.200
+But the problem is that in this trust model, you have to trust that workload is indeed
+
+20
+0:01:44.200 --> 0:01:47.200
+running the software that you're assuming it's running.
+
+21
+0:01:47.200 --> 0:01:56.160
+So even if, for example, your peer presumably uses some open source software, you still
+
+22
+0:01:56.160 --> 0:01:58.000
+have to trust them that they've deployed that.
+
+23
+0:01:58.000 --> 0:02:00.160
+And that's where they're running.
+
+24
+0:02:00.160 --> 0:02:05.080
+And also that they're keeping their key secure because if the software is changed or if the
+
+25
+0:02:05.080 --> 0:02:09.600
+key is exfiltrated, then you're kind of hosed.
+
+26
+0:02:09.600 --> 0:02:15.020
+So if you want to have more guarantees, can we actually use more emotive, verifiable information
+
+27
+0:02:15.020 --> 0:02:19.400
+within our authentication methods so that we have more information about the security
+
+28
+0:02:19.400 --> 0:02:27.040
+state of that workload and its key?
+
+29
+0:02:27.040 --> 0:02:32.520
+And we actually were prompted to look at this from two use cases in particular.
+
+30
+0:02:32.520 --> 0:02:37.880
+So the first one involves IoT or Edge deployment.
+
+31
+0:02:37.880 --> 0:02:43.360
+So for example, you have in this diagram, you have an Edge device that has a private
+
+32
+0:02:43.360 --> 0:02:51.240
+identity key that was provisioned at a manufacturing time.
+
+33
+0:02:51.240 --> 0:02:56.360
+And with this identity key, you want to create some attestation credential that you can present
+
+34
+0:02:56.360 --> 0:02:57.360
+to a service.
+
+35
+0:02:57.360 --> 0:03:00.240
+So presumably, you own both the device and the service.
+
+36
+0:03:00.240 --> 0:03:06.040
+And you want to make sure that only your devices connect and can access whatever service, whatever
+
+37
+0:03:06.040 --> 0:03:07.680
+the service is doing.
+
+38
+0:03:07.680 --> 0:03:14.000
+And sort of a rare use case is one that involves workloads running in the cloud.
+
+39
+0:03:14.000 --> 0:03:20.920
+So you have, again, a workload that has a private identity key provisioned, for example,
+
+40
+0:03:20.920 --> 0:03:22.840
+in the server chip.
+
+41
+0:03:22.840 --> 0:03:26.480
+And you want your local device to connect to the workload.
+
+42
+0:03:26.480 --> 0:03:30.720
+And you want to get more information about software, for example, the software that booted
+
+43
+0:03:30.720 --> 0:03:36.240
+on the server, and how the key is managed.
+
+44
+0:03:36.240 --> 0:03:37.920
+And this is where remote attestation comes in.
+
+45
+0:03:37.920 --> 0:03:43.320
+So remote attestation is essentially a class of hardware-backed mechanisms that allows
+
+46
+0:03:43.320 --> 0:03:50.720
+you to provide cryptographically verifiable metadata about the state of your device.
+
+47
+0:03:50.720 --> 0:03:55.960
+So you can have more trust about, for example, what kind of firmware was running at boot
+
+48
+0:03:55.960 --> 0:04:03.160
+time, what OS kernel you're running, and maybe even what the software in the workload is.
+
+49
+0:04:03.160 --> 0:04:10.320
+So you do this by using that private identity key that was provisioned within the device.
+
+50
+0:04:10.320 --> 0:04:14.000
+And the device essentially becomes a certificate authority for itself.
+
+51
+0:04:14.000 --> 0:04:19.640
+And it can issue credentials for all the workloads running on top of it.
+
+52
+0:04:19.640 --> 0:04:25.720
+If we look at the data flow for remote attestation, this is a bit complicated.
+
+53
+0:04:25.720 --> 0:04:32.480
+And it's useful to think of the arrows not as physical communication paths, but as logical
+
+54
+0:04:32.480 --> 0:04:34.640
+data flows, essentially.
+
+55
+0:04:34.640 --> 0:04:40.240
+And the components that we care mostly about here are the attester and the relying party.
+
+56
+0:04:40.240 --> 0:04:42.880
+So authentication happens between these two.
+
+57
+0:04:42.880 --> 0:04:48.880
+And it's the attester that wants to authenticate themselves using some sort of remote attestation.
+
+58
+0:04:48.880 --> 0:04:54.240
+And as you can see from the diagram, they're not actually connected in the data flow.
+
+59
+0:04:54.240 --> 0:04:59.280
+There's another component there called a verifier, which takes the attestation evidence, produces
+
+60
+0:04:59.280 --> 0:05:05.760
+attestation results that the relying party can then understand and trust.
+
+61
+0:05:05.760 --> 0:05:10.880
+And the verifier also has above in the diagram a sort of supply chain.
+
+62
+0:05:10.880 --> 0:05:18.280
+And in particular, the endorser and the reference value providers, they issue essentially, they
+
+63
+0:05:18.280 --> 0:05:24.120
+provision the attester with its software, the boot time software, for example, and its
+
+64
+0:05:24.120 --> 0:05:25.360
+identity key.
+
+65
+0:05:25.360 --> 0:05:32.320
+And then with this information about the attester, they can go ahead and talk to the verifier
+
+66
+0:05:32.320 --> 0:05:35.040
+and make sure that the verifier trusts the device.
+
+67
+0:05:35.040 --> 0:05:40.320
+So when the verifier tries to appraise the evidence, it understands it and trusts it
+
+68
+0:05:40.320 --> 0:05:45.760
+and then can produce valid attestation results.
+
+69
+0:05:45.760 --> 0:05:51.720
+Switching on to TLS, so the transport layer security, a pretty ubiquitous security protocol.
+
+70
+0:05:51.720 --> 0:05:59.600
+It's used everywhere from like HTTPS to lightweight M2M to secure, to provide secure channels
+
+71
+0:05:59.600 --> 0:06:00.600
+for communication.
+
+72
+0:06:00.600 --> 0:06:05.560
+And these secure channels essentially follow a handshake protocol where the peers authenticate
+
+73
+0:06:05.560 --> 0:06:07.520
+each other.
+
+74
+0:06:07.520 --> 0:06:12.080
+And what usually happens with remote attestation is that you establish a security channel,
+
+75
+0:06:12.080 --> 0:06:16.520
+the secure channel, and you do remote attestation on top of that.
+
+76
+0:06:16.520 --> 0:06:21.120
+Whereas we're trying to integrate remote attestation directly into TLS to make it more
+
+77
+0:06:21.120 --> 0:06:29.200
+efficient and also to limit the attack surface that an attacker might see.
+
+78
+0:06:29.200 --> 0:06:35.000
+If we look at TLS 1.3, the handshake in particular, and how we want to integrate with it.
+
+79
+0:06:35.000 --> 0:06:40.280
+So the handshake starts with the client sending over a client hello, a key share, and in that
+
+80
+0:06:40.280 --> 0:06:47.800
+client hello a bunch of extensions and other things for the server to act upon.
+
+81
+0:06:47.800 --> 0:06:54.960
+And the server sends, for example, any chosen cipher suit or any other responses to the
+
+82
+0:06:54.960 --> 0:07:00.040
+extensions that the client sends, has its own key share, and then it authenticates
+
+83
+0:07:00.040 --> 0:07:07.640
+itself using a certificate message and a certificate verify, and ends with the finished.
+
+84
+0:07:07.640 --> 0:07:12.680
+And then the client can go ahead and authenticate itself using a certificate message and a certificate
+
+85
+0:07:12.680 --> 0:07:17.680
+verify, and it finishes the handshake with the finished message.
+
+86
+0:07:17.680 --> 0:07:22.120
+After that, you have a secure data channel between the two peers.
+
+87
+0:07:22.120 --> 0:07:28.120
+It's important to note for privacy reasons mostly that from the second flight onwards,
+
+88
+0:07:28.120 --> 0:07:29.800
+most of those messages are actually encrypted.
+
+89
+0:07:29.800 --> 0:07:36.000
+For example, the certificate, the certificate verify are encrypted using session keys.
+
+90
+0:07:36.000 --> 0:07:41.800
+And in terms of what we care about, it's the extensions mostly because those are used to
+
+91
+0:07:41.800 --> 0:07:47.400
+negotiate, negotiate the type of credentials that, for example, the relying party might
+
+92
+0:07:47.400 --> 0:07:56.400
+care about, and also to send across any freshness that is required to issue attestation evidence.
+
+93
+0:07:56.400 --> 0:07:59.760
+And also we care about the certificate message because that's obviously where we're going
+
+94
+0:07:59.760 --> 0:08:02.240
+to carry the attestation credentials.
+
+95
+0:08:02.240 --> 0:08:08.440
+Just to state our goals, our high-level goals, obviously we want to enhance authentication
+
+96
+0:08:08.440 --> 0:08:11.960
+in TLS to support your model attestation.
+
+97
+0:08:11.960 --> 0:08:21.040
+We want to support as many platforms as possible from very beefy cloud servers to small IoT
+
+98
+0:08:21.040 --> 0:08:22.040
+devices.
+
+99
+0:08:22.040 --> 0:08:24.720
+And we want to support the most common deployment patterns.
+
+100
+0:08:24.720 --> 0:08:30.040
+So for example, we want to allow both client and server to authenticate or potentially
+
+101
+0:08:30.040 --> 0:08:31.240
+both.
+
+102
+0:08:31.240 --> 0:08:37.040
+We want to allow existing deployments that use PKI to also use remote attestation within
+
+103
+0:08:37.040 --> 0:08:39.840
+the same handshake just to enhance the security.
+
+104
+0:08:39.840 --> 0:08:44.320
+So there's a whole lot of variance there.
+
+105
+0:08:44.320 --> 0:08:48.680
+In terms of security and privacy, we're planning to formally verify the extensions that we're
+
+106
+0:08:48.680 --> 0:08:50.280
+creating.
+
+107
+0:08:50.280 --> 0:08:55.560
+And we're working quite meticulously to prevent any potential attacks.
+
+108
+0:08:55.560 --> 0:09:01.280
+For example, relay attacks, we're taking a credential from some victim platform and you're
+
+109
+0:09:01.280 --> 0:09:05.480
+trying to pawn that off as your own.
+
+110
+0:09:05.480 --> 0:09:13.120
+And in terms of privacy, fortunately, attestation does reveal quite a lot of metadata.
+
+111
+0:09:13.120 --> 0:09:18.120
+And this can be both privacy and security relevant.
+
+112
+0:09:18.120 --> 0:09:24.720
+And the best we can do is to mitigate some of these by allowing the relying party to
+
+113
+0:09:24.720 --> 0:09:29.080
+choose what kind of attestation scheme or attestation results it gets.
+
+114
+0:09:29.080 --> 0:09:34.280
+So you can get, for example, specially crafted attestation results that have blinded or redacted
+
+115
+0:09:34.280 --> 0:09:40.720
+some of the metadata or schemes like direct anonymous attestation that provides some sort
+
+116
+0:09:40.720 --> 0:09:43.720
+of privacy.
+
+117
+0:09:43.720 --> 0:09:45.480
+Moving on to the practice.
+
+118
+0:09:45.480 --> 0:09:48.200
+So looking at our prototype.
+
+119
+0:09:48.200 --> 0:09:52.840
+The big picture here is that we are trying to produce an end-to-end prototype of the
+
+120
+0:09:52.840 --> 0:09:53.840
+system.
+
+121
+0:09:53.840 --> 0:09:59.840
+So we're trying to implement everything from the root of trust all the way to the verifier.
+
+122
+0:09:59.840 --> 0:10:05.680
+And we're sort of limiting this because our drafts and our theoretical work is quite broad
+
+123
+0:10:05.680 --> 0:10:07.680
+and allows a lot of deployment patterns.
+
+124
+0:10:07.680 --> 0:10:14.040
+We're limiting this to, for example, a background check model that I'll talk about in a bit.
+
+125
+0:10:14.040 --> 0:10:17.320
+And the TPM 2.0 as a root of trust.
+
+126
+0:10:17.320 --> 0:10:21.040
+And obviously we're open sourcing the entire stack.
+
+127
+0:10:21.040 --> 0:10:26.760
+Also because these components that we're using are already open source software.
+
+128
+0:10:26.760 --> 0:10:32.280
+For example, cloud native computing foundation or confidential computing consortium.
+
+129
+0:10:32.280 --> 0:10:36.560
+It's actually under the confidential computing consortium attestation special interest group
+
+130
+0:10:36.560 --> 0:10:41.120
+that our work is harbored.
+
+131
+0:10:41.120 --> 0:10:47.960
+Going back actually to the remote attestation diagram, architecture diagram, you can see
+
+132
+0:10:47.960 --> 0:10:50.320
+here a simplified version of that.
+
+133
+0:10:50.320 --> 0:10:55.760
+So on the bottom you can see an attester with an existing root of trust.
+
+134
+0:10:55.760 --> 0:11:00.320
+And the attester wants to communicate with the relying party to authenticate with it.
+
+135
+0:11:00.320 --> 0:11:07.000
+And the relying party will then send the attestation evidence over to the verifier for verification.
+
+136
+0:11:07.000 --> 0:11:11.600
+So this is what we call a background check model because the relying party is doing background
+
+137
+0:11:11.600 --> 0:11:17.680
+check on the evidence provided by the attester.
+
+138
+0:11:17.680 --> 0:11:23.360
+And in our case, if we put a bit more flesh onto this diagram, you can see that in our
+
+139
+0:11:23.360 --> 0:11:28.200
+case the attester will be a client in a TLS handshake and the relying party will be the
+
+140
+0:11:28.200 --> 0:11:30.080
+server.
+
+141
+0:11:30.080 --> 0:11:35.560
+And the TLS stack that we're using is embed TLS.
+
+142
+0:11:35.560 --> 0:11:41.840
+And the client will essentially send attestation evidence produced by the client with the trust.
+
+143
+0:11:41.840 --> 0:11:47.000
+And the embed TLS on the client side will communicate with the root of trust not directly
+
+144
+0:11:47.000 --> 0:11:51.480
+but through parsec, which is one of the projects that we've been developing.
+
+145
+0:11:51.480 --> 0:11:55.880
+And on the server side you have embed TLS again communicating with the verifier, which
+
+146
+0:11:55.880 --> 0:11:59.960
+is in our case composed using a new verizon.
+
+147
+0:11:59.960 --> 0:12:04.440
+So now let's have a look at all of these components independently.
+
+148
+0:12:04.440 --> 0:12:06.560
+So parsec, what is parsec?
+
+149
+0:12:06.560 --> 0:12:09.200
+Parsec is a platform abstraction for security.
+
+150
+0:12:09.200 --> 0:12:15.720
+So if you try to write an application in Java or Python or Go, you might want to use some
+
+151
+0:12:15.720 --> 0:12:18.080
+sort of cryptographic hardware backing.
+
+152
+0:12:18.080 --> 0:12:22.800
+So for example, a discrete EPM or some trusted services running in trust zone.
+
+153
+0:12:22.800 --> 0:12:26.360
+And you want to use these in a more generic way.
+
+154
+0:12:26.360 --> 0:12:28.080
+And this is what parsec is doing.
+
+155
+0:12:28.080 --> 0:12:33.240
+It's presenting a high level interface that you can use to provision.
+
+156
+0:12:33.240 --> 0:12:42.160
+And parsec in particular has this sort of identity key as a core use case that it works
+
+157
+0:12:42.160 --> 0:12:43.160
+with.
+
+158
+0:12:43.160 --> 0:12:48.040
+So it tries to allow you to create an identity for your workload and to use it, for example,
+
+159
+0:12:48.040 --> 0:12:51.240
+to sign TLS handshakes.
+
+160
+0:12:51.240 --> 0:12:53.080
+And parsec is also quite modular.
+
+161
+0:12:53.080 --> 0:12:59.680
+So it's really easy to implement back ends for other types of hardware back ends that
+
+162
+0:12:59.680 --> 0:13:03.080
+you might want to support.
+
+163
+0:13:03.080 --> 0:13:04.080
+Moving on to the other end.
+
+164
+0:13:04.080 --> 0:13:10.160
+So we have a set of components that can be used to build an attestation verification
+
+165
+0:13:10.160 --> 0:13:11.660
+service.
+
+166
+0:13:11.660 --> 0:13:14.280
+So again, verizon is pretty abstract.
+
+167
+0:13:14.280 --> 0:13:18.600
+It has a bunch of components, for example, for appraising different types of attestation
+
+168
+0:13:18.600 --> 0:13:26.160
+schemes, has components for building, for example, APIs for evidence provisioning or
+
+169
+0:13:26.160 --> 0:13:29.880
+for endorsement provisioning for verification APIs.
+
+170
+0:13:29.880 --> 0:13:37.840
+So in this diagram here, some factories is creating a device and then producing the endorsement
+
+171
+0:13:37.840 --> 0:13:40.280
+data that it then feeds to verizon.
+
+172
+0:13:40.280 --> 0:13:45.760
+And when the device tries to connect to an application service, that application service
+
+173
+0:13:45.760 --> 0:13:52.280
+can again go to verizon to verify those credentials.
+
+174
+0:13:52.280 --> 0:13:57.880
+In terms of what the work that we had to do to make this process work across the stack,
+
+175
+0:13:57.880 --> 0:14:03.760
+so parsec, as I've said, works mostly with cryptographic keys.
+
+176
+0:14:03.760 --> 0:14:10.800
+However, at the moment, we didn't have a very generic key attestation API.
+
+177
+0:14:10.800 --> 0:14:15.280
+And this is something that we had to build to produce those attestation tokens or attestation
+
+178
+0:14:15.280 --> 0:14:18.040
+evidence.
+
+179
+0:14:18.040 --> 0:14:23.920
+Parsec also needs to have configuration to allow it to essentially provision its own
+
+180
+0:14:23.920 --> 0:14:24.920
+identity.
+
+181
+0:14:24.920 --> 0:14:29.360
+So on that testing key, it can use the sign attestation credentials.
+
+182
+0:14:29.360 --> 0:14:34.640
+And also ways to, for example, select the TPM PCRs that you want to include in the attestation
+
+183
+0:14:34.640 --> 0:14:40.320
+tokens, for example, to select whether you want to send information about your firmware
+
+184
+0:14:40.320 --> 0:14:44.200
+or about your bootloader or about your operating system kernel.
+
+185
+0:14:44.200 --> 0:14:55.520
+And we also have a new API to produce endorsements that are then fed to verizon for endorsements.
+
+186
+0:14:55.520 --> 0:15:01.240
+So verizon can then trust the key attestation tokens.
+
+187
+0:15:01.240 --> 0:15:08.040
+On the verizon side, again, we have to add support for the precise attestation scheme
+
+188
+0:15:08.040 --> 0:15:09.040
+that we're using.
+
+189
+0:15:09.040 --> 0:15:12.640
+And essentially, we have to build two new plugins.
+
+190
+0:15:12.640 --> 0:15:19.920
+So one to understand the evidence that we're producing through parsec, and one to understand
+
+191
+0:15:19.920 --> 0:15:21.140
+the endorsements.
+
+192
+0:15:21.140 --> 0:15:24.960
+So what essentially we're doing here is we have two components, and we're trying to make
+
+193
+0:15:24.960 --> 0:15:33.320
+them agnostic of whatever is transporting evidence and endorsements between them, which
+
+194
+0:15:33.320 --> 0:15:35.740
+in our case is actually a bad TLS.
+
+195
+0:15:35.740 --> 0:15:40.880
+So the TLS implementation that we're using, the TLS, is implementation of TLS and the
+
+196
+0:15:40.880 --> 0:15:41.880
+TLS.
+
+197
+0:15:41.880 --> 0:15:45.100
+And the reason why, it's actually multiple reasons why we're using it.
+
+198
+0:15:45.100 --> 0:15:52.940
+So one of them is because it offers this PSA crypto API, which parsec hooks into as per
+
+199
+0:15:52.940 --> 0:15:59.560
+our design since we created it in sync with the PSA crypto API.
+
+200
+0:15:59.560 --> 0:16:01.840
+It also has a small code footprint.
+
+201
+0:16:01.840 --> 0:16:07.000
+So it's more suitable for IoT and edge use cases, like the one that I described earlier.
+
+202
+0:16:07.000 --> 0:16:11.000
+And also, we had already expertise working with embed TLS, so it was easier for us to
+
+203
+0:16:11.000 --> 0:16:14.120
+work with it.
+
+204
+0:16:14.120 --> 0:16:18.920
+So the open source ecosystem around our projects, and this is something that has been quite
+
+205
+0:16:18.920 --> 0:16:25.400
+important for me in the past year as well, I've been working on parsec, realizing that
+
+206
+0:16:25.400 --> 0:16:29.320
+open source is more than just some check blocks that we want to take.
+
+207
+0:16:29.320 --> 0:16:30.320
+And that's it.
+
+208
+0:16:30.320 --> 0:16:36.920
+It's more about the continuous involvement in the community and trying to pull the expertise
+
+209
+0:16:36.920 --> 0:16:46.400
+and the work required to create some components that we can reuse across all of our stacks.
+
+210
+0:16:46.400 --> 0:16:53.000
+And yeah, this is the reason why we've been seeding projects into CNCF and CCCA because
+
+211
+0:16:53.000 --> 0:17:00.360
+we're trying to create these communities around our projects and create the ecosystems around
+
+212
+0:17:00.360 --> 0:17:02.920
+our use cases.
+
+213
+0:17:02.920 --> 0:17:08.280
+So if we look at the Rust ecosystem in particular, for example, because the parsec service is
+
+214
+0:17:08.280 --> 0:17:13.920
+written in Rust, we've released a number of crates relevant to handling the roots of
+
+215
+0:17:13.920 --> 0:17:14.920
+trust.
+
+216
+0:17:14.920 --> 0:17:23.520
+So we've released the TSA API crates that helps with interacting natively with TPMs.
+
+217
+0:17:23.520 --> 0:17:28.840
+We've released the CryptoKey Crate, which is essentially a successor to the PCS11 crate
+
+218
+0:17:28.840 --> 0:17:31.640
+that was abandoned some time ago.
+
+219
+0:17:31.640 --> 0:17:36.440
+And we have the PSA Crypto Crate that allows native interaction with PSA cryptography
+
+220
+0:17:36.440 --> 0:17:37.440
+API.
+
+221
+0:17:37.440 --> 0:17:44.560
+And it's actually been quite a nice experience to see communities around these projects grow
+
+222
+0:17:44.560 --> 0:17:51.880
+and have more developers from various projects, some of which have actually presented today
+
+223
+0:17:51.880 --> 0:17:55.280
+getting involved and helping us build this ecosystem.
+
+224
+0:17:55.280 --> 0:18:02.040
+Yeah, the more important goal for us at least is not just to make these particular backends
+
+225
+0:18:02.040 --> 0:18:07.640
+easy to use in Rust, but perhaps even to make them easy to use in an abstract way.
+
+226
+0:18:07.640 --> 0:18:14.320
+So instead of having to integrate with TPMs or PCS11 individually, what if we could integrate
+
+227
+0:18:14.320 --> 0:18:20.040
+with all of them via parsec directly?
+
+228
+0:18:20.040 --> 0:18:25.800
+On the Go ecosystem side, we also have a bunch of packages that we've released.
+
+229
+0:18:25.800 --> 0:18:31.480
+A notable one is Go Cozy, which I believe was initially developed by Mozilla and in
+
+230
+0:18:31.480 --> 0:18:32.880
+abandoned.
+
+231
+0:18:32.880 --> 0:18:14.340
+But then our B
+
+232
+0:18:33.860 --> 0:18:39.960
+raison team took it over, gave it the dusting and then released it.
+
+233
+0:18:39.960 --> 0:18:45.240
+And now it's I think it's used quite widely, for example, by No3 and Sixstar.
+
+234
+0:18:45.240 --> 0:18:49.040
+And we also have a bunch of other packages relevant to remote at the station verification
+
+235
+0:18:49.040 --> 0:18:54.040
+like Sweet or Corim.
+
+236
+0:18:54.040 --> 0:19:00.080
+And yeah, this brings me to my main selling point here is that we're trying to essentially
+
+237
+0:19:00.080 --> 0:19:04.560
+build an ecosystem where at the station can just be used as a plugin for authentication.
+
+238
+0:19:04.560 --> 0:19:12.320
+So whether you integrate it within the authentication step of a TLS stack, or perhaps you want to
+
+239
+0:19:12.320 --> 0:19:17.720
+switch that to some sort of quick stack, or maybe you want to even have some sort of bespoke
+
+240
+0:19:17.720 --> 0:19:21.760
+authentication server and workload trying to authenticate to it.
+
+241
+0:19:21.760 --> 0:19:27.960
+We're trying to make it easy to use remote at the station by making parsec and raison
+
+242
+0:19:27.960 --> 0:19:29.680
+interact so easily.
+
+243
+0:19:29.680 --> 0:19:37.360
+So you can just plug those components in and hopefully get at the station right as it walks.
+
+244
+0:19:37.360 --> 0:19:43.920
+So just to wrap up here, we think that remote at the station is indeed a viable authentication
+
+245
+0:19:43.920 --> 0:19:49.280
+mechanism in TLS and perhaps in other protocols as well in the future.
+
+246
+0:19:49.280 --> 0:19:54.080
+Our design both in terms of theoretical design, so the drafts, the TLS extensions try to be
+
+247
+0:19:54.080 --> 0:19:56.560
+as flexible as possible.
+
+248
+0:19:56.560 --> 0:20:00.120
+But also the prototype that we're building, we're trying to make it quite flexible as
+
+249
+0:20:00.120 --> 0:20:01.120
+well.
+
+250
+0:20:01.120 --> 0:20:06.560
+And we want to reify all of our drafts and all of the things that we're trying to define
+
+251
+0:20:06.560 --> 0:20:13.000
+with other people across the industry, trying to create an end-to-end prototype that represents
+
+252
+0:20:13.000 --> 0:20:14.840
+all of this theoretical work.
+
+253
+0:20:14.840 --> 0:20:20.080
+And yeah, we're hoping that the prototype will serve as a model for integrating remote
+
+254
+0:20:20.080 --> 0:20:26.080
+at the station, not just into specific protocols, but more widely.
+
+255
+0:20:26.080 --> 0:20:36.040
+So yeah, questions?
+
+256
+0:20:36.040 --> 0:20:39.520
+So any questions from Ruhm?
+
+257
+0:20:39.520 --> 0:20:46.320
+I see a hand.
+
+258
+0:20:46.320 --> 0:20:47.320
+Thank you.
+
+259
+0:20:47.320 --> 0:20:50.880
+You mentioned you're working under CNCF and CCCF.
+
+260
+0:20:50.880 --> 0:20:54.680
+You also considered the Open Source for More Foundation?
+
+261
+0:20:54.680 --> 0:20:56.280
+Open Source?
+
+262
+0:20:56.280 --> 0:20:58.280
+Open Source Firmware Foundation?
+
+263
+0:20:58.280 --> 0:20:59.280
+No, not really.
+
+264
+0:20:59.280 --> 0:21:05.440
+All, I mean, neither of these, neither of Parsic or Verizona are really firmware level
+
+265
+0:21:05.440 --> 0:21:06.440
+components.
+
+266
+0:21:06.440 --> 0:21:07.440
+Right.
+
+267
+0:21:07.440 --> 0:21:12.880
+So yeah, we're essentially doing very similar stuff, but doing the full flow, like starting
+
+268
+0:21:12.880 --> 0:21:17.800
+from the very first code running on your platform back in the firmware, we should get in touch.
+
+269
+0:21:17.800 --> 0:21:18.800
+Thank you.
+
+270
+0:21:18.800 --> 0:21:19.800
+Perfect.
+
+271
+0:21:19.800 --> 0:21:23.440
+Hey, thanks for the talk.
+
+272
+0:21:23.440 --> 0:21:30.600
+I was kind of curious how big the impact is on round trip times in TLS, if you have secure
+
+273
+0:21:30.600 --> 0:21:34.160
+enclave or TPM involved in the initial handshake.
+
+274
+0:21:34.160 --> 0:21:35.160
+How does that...
+
+275
+0:21:35.160 --> 0:21:40.720
+Do you see any problems in practice in scale at scale?
+
+276
+0:21:40.720 --> 0:21:45.720
+We've not really gotten to the point where we can properly test end-to-end in terms of
+
+277
+0:21:45.720 --> 0:21:47.760
+actually going to hardware and talking to hardware.
+
+278
+0:21:47.760 --> 0:21:50.400
+So we're mostly doing with software TPMs and stuff like that.
+
+279
+0:21:50.400 --> 0:21:51.400
+So just to integrate.
+
+280
+0:21:51.400 --> 0:21:53.760
+We still have some integration work to do there.
+
+281
+0:21:53.760 --> 0:21:58.320
+But yeah, we're definitely going to benchmark that and see how it impacts.
+
+282
+0:21:58.320 --> 0:22:03.520
+But it obviously depends on the hardware because if we do that on some server, some cloud
+
+283
+0:22:03.520 --> 0:22:07.800
+server, that's going to be quite different from doing it on an IoT device that has a
+
+284
+0:22:07.800 --> 0:22:10.040
+TPM or something like that.
+
+285
+0:22:10.040 --> 0:22:11.040
+Yeah.
+
+286
+0:22:11.040 --> 0:22:12.040
+Okay.
+
+287
+0:22:12.040 --> 0:22:13.440
+Do we have some other questions?
+
+288
+0:22:13.440 --> 0:22:14.600
+Anyone?
+
+289
+0:22:14.600 --> 0:22:18.840
+If not, thank you for your talk.
+
+290
+0:22:18.840 --> 0:22:19.840
+Thanks.
+
+291
+0:22:19.840 --> 0:22:21.840
+Thank you.
+
+292
+0:22:49.840 --> 0:22:51.840
+Thank you.
+
+293
+0:22:51.840 --> 0:22:53.840
+Thank you, too.
+
+294
+0:22:53.840 --> 0:22:56.840
+Well, that was actually a good question.
+
+295
+0:22:56.840 --> 0:22:58.840
+Sorry.
+
+296
+0:22:58.840 --> 0:23:02.840
+Yeah, it's not a problem.
+
+297
+0:23:02.840 --> 0:23:04.840
+No.
+
+298
+0:23:04.840 --> 0:23:11.840
+And you've got the TMI, so we'll get some work to do.
+
+299
+0:23:11.840 --> 0:23:13.840
+All right.
+
+300
+0:23:13.840 --> 0:23:16.840
+Let's talk about laptops.
+
+301
+0:23:16.840 --> 0:23:19.840
+Okay.
+
+302
+0:23:19.840 --> 0:23:22.840
+All right.
+
+303
+0:23:22.840 --> 0:23:25.840
+Okay.
+
+304
+0:23:25.840 --> 0:23:28.840
+Okay.
+
+305
+0:23:28.840 --> 0:23:31.840
+Okay.
+
+306
+0:23:31.840 --> 0:23:34.840
+Okay.
+
+307
+0:23:34.840 --> 0:23:38.840
+Okay.
+
+308
+0:24:38.840 --> 0:24:44.560
+In which case, the governor
+
+309
+0:24:44.620 --> 0:24:49.420
+would supervise her
+
+310
+0:24:49.480 --> 0:24:52.500
+drove, tape pushing
+
+311
+0:24:52.560 --> 0:24:57.740
+on E Sp dinosaur
+
+312
+0:24:57.800 --> 0:25:01.540
+no.
+
+313
+0:25:01.600 --> 0:25:03.540
+The curve unfortunately
+
+314
+0:25:03.600 --> 0:25:05.000
+can't be achieved at
+
+315
+0:25:05.080 --> 0:25:06.020
+the time.
+
+316
+0:25:06.080 --> 0:25:07.100
+It's not seen at the end
+
+317
+0:25:07.180 --> 0:25:08.080
+at all.
+
+318
+0:25:08.080 --> 0:25:10.080
+You
+

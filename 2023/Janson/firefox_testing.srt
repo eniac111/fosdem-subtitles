@@ -1,0 +1,1244 @@
+1
+0:00:00.000 --> 0:00:12.040
+Hello, everyone. I'm Marco Castelluccio. Thank you for being here to listen to my talk.
+
+2
+0:00:12.040 --> 0:00:20.160
+I'm an engineer manager at Mozilla. I've been at Mozilla for almost 10 years now. I've been
+
+3
+0:00:20.160 --> 0:00:26.320
+I started as a contributor, then an intern, then I was hired, and I've been here for almost
+
+4
+0:00:26.320 --> 0:00:33.520
+10 years. I started working on some funny projects like writing a Java VM in JavaScript,
+
+5
+0:00:33.520 --> 0:00:39.240
+and then more recently I started focusing on using machine learning and data mining
+
+6
+0:00:39.240 --> 0:00:51.400
+techniques to improve developer efficiency, which has also been the subject of my PhD.
+
+7
+0:00:51.400 --> 0:00:58.600
+During this talk, I will show you how we will all be out of our job in a few years. Joking.
+
+8
+0:00:58.600 --> 0:01:06.640
+I will just take you through our journey of how we incrementally built features based
+
+9
+0:01:06.640 --> 0:01:16.080
+on machine learning for improving software engineering, one on top of each other.
+
+10
+0:01:16.080 --> 0:01:26.600
+I'm the father of two, Luna and Nika. And before we start with the presentation, I wanted
+
+11
+0:01:26.600 --> 0:01:34.320
+to explain a little why we need to do all these complex machine learning things on top
+
+12
+0:01:34.320 --> 0:01:42.920
+of bugs, CI, patches, et cetera, et cetera. Firefox is a very complex software. It's a
+
+13
+0:01:42.920 --> 0:01:52.240
+browser. We have hundreds of bug reports and feature requests open per day. We have 108
+
+14
+0:01:52.240 --> 0:01:57.560
+million bug reports at this time, which is almost the price of a one bedroom apartment
+
+15
+0:01:57.560 --> 0:02:06.520
+in London. We release every four weeks with thousands of changes. And during 2022, we
+
+16
+0:02:06.520 --> 0:02:13.520
+had 13 major releases and 45 million minor releases. As you can see, we even sometimes
+
+17
+0:02:13.520 --> 0:02:26.720
+party when we reach a certain number of bugs. As I said, Firefox is one of the biggest software
+
+18
+0:02:26.720 --> 0:02:34.000
+in the world. We have a lot of legacy. Netscape was open sourced 25 years ago. A few days
+
+19
+0:02:34.000 --> 0:02:43.520
+ago we celebrated the 25th birthday. Over time we had 800,000 commits made by 9,000 unique
+
+20
+0:02:43.520 --> 0:02:51.320
+contributors representing 25 million lines of code. We had 37,000 commits only last year
+
+21
+0:02:51.320 --> 0:03:00.600
+by 1,000 unique contributors. Not all of them are paid. Many of them are volunteers.
+
+22
+0:03:00.600 --> 0:03:05.440
+And this is a list of the languages that we use. As you can see, we use many of them.
+
+23
+0:03:05.440 --> 0:03:11.200
+We have C, C++, and Rust for low level things. Rust is gaining ground and is probably going
+
+24
+0:03:11.200 --> 0:03:19.720
+to overcome C soon. We use JavaScript for front end and for tests. And we use Python
+
+25
+0:03:19.720 --> 0:03:28.000
+for CI and build system. But we have many more. So if anybody is interested in contributing,
+
+26
+0:03:28.000 --> 0:03:39.000
+you have many options to choose from. But let's see. So as I said, the complexity is
+
+27
+0:03:39.000 --> 0:03:47.120
+really large. We have thousands and thousands of bugs. And we need some way to control the
+
+28
+0:03:47.120 --> 0:03:53.760
+quality, to increase the visibility into the quality of the software. And we cannot do
+
+29
+0:03:53.760 --> 0:04:00.400
+that if the bugs are left uncontrolled. One of the first problems that we had was that
+
+30
+0:04:00.400 --> 0:04:06.600
+there is no way to differentiate between defects and feature requests. We call them bugs on
+
+31
+0:04:06.600 --> 0:04:12.480
+Bugzilla. But they are actually just reports. Many of them are defects. Many of them are
+
+32
+0:04:12.480 --> 0:04:19.880
+actually just feature requests. And so at the time we had no way to measure quality.
+
+33
+0:04:19.880 --> 0:04:26.360
+We had no way to tell in this release we have 100 bugs. In this other release we had 50.
+
+34
+0:04:26.360 --> 0:04:32.660
+So this release is better than the previous. And so we need a way to make this differentiation
+
+35
+0:04:32.660 --> 0:04:37.000
+in order to measure the quality. And it was also hard to improve workflows if we had no
+
+36
+0:04:37.000 --> 0:04:42.960
+way to differentiate between them. So we thought of introducing a new type field. This might
+
+37
+0:04:42.960 --> 0:04:50.160
+seem simple. It's just choice between defect, enhancement, and task. But in practice when
+
+38
+0:04:50.160 --> 0:04:57.640
+you have 9,000 unique contributors, some of them not paid, it's not easy to enforce a
+
+39
+0:04:57.640 --> 0:05:05.160
+change like this. And we also had another problem. We have 100 million bugs. How if
+
+40
+0:05:05.160 --> 0:05:12.040
+we just introduced this type, it's not going to help us at all until we reach a mass of
+
+41
+0:05:12.040 --> 0:05:19.520
+bugs that we change. So if we just introduced it at this time, it will only start to be
+
+42
+0:05:19.520 --> 0:05:25.520
+useful six months from now. So we thought how do we set the field for existing bugs
+
+43
+0:05:25.520 --> 0:05:32.680
+so that this actually becomes useful from day one. And we thought of using machine learning.
+
+44
+0:05:32.680 --> 0:05:40.760
+So we collected a large data set. I'm not sure it can be considered large nowadays.
+
+45
+0:05:40.760 --> 0:05:51.600
+With 2,000 manually labeled bugs, a few of us labeled independently. And then we shared
+
+46
+0:05:51.600 --> 0:05:57.400
+the labeling so that we were consistent. And we had 9,000 labeled with some heuristics
+
+47
+0:05:57.400 --> 0:06:03.240
+based on fields that were already present in Baxilla. Then we, using the fields from
+
+48
+0:06:03.240 --> 0:06:12.080
+Baxilla and the title and comment through an NLP pipeline, we trained an XGB boost model.
+
+49
+0:06:12.080 --> 0:06:21.960
+And we achieved accuracy that we deemed good enough to be used on production. And this
+
+50
+0:06:21.960 --> 0:06:28.820
+is how the bug bug project started. It was just a way to differentiate between defects
+
+51
+0:06:28.820 --> 0:06:36.160
+and non-defects on Baxilla. We saw it worked. And then we decided, we thought, what if we
+
+52
+0:06:36.160 --> 0:06:43.720
+extend this to something else? What is the next big problem that we have on Baxilla?
+
+53
+0:06:43.720 --> 0:06:53.360
+And it was assigning components. Again, we have lots of bugs, millions of, 100,000s of
+
+54
+0:06:53.360 --> 0:06:59.200
+bugs. We need a way to split them in groups so that the right team sees them, so that
+
+55
+0:06:59.200 --> 0:07:04.600
+the right people see them. And the faster we do it, the faster we can fix them. At the
+
+56
+0:07:04.600 --> 0:07:09.560
+time it was manually done by volunteers and developers. So you can see a screenshot here,
+
+57
+0:07:09.560 --> 0:07:21.080
+a product and component, PDF viewer. In this case, we didn't need to manually create a
+
+58
+0:07:21.080 --> 0:07:29.640
+dataset because all of the 1 million bugs were already manually split into groups by
+
+59
+0:07:29.640 --> 0:07:37.480
+volunteers and developers in the past. So we had, in this case, a very large dataset,
+
+60
+0:07:37.480 --> 0:07:44.800
+two decades worth of bugs. The problem here was that we had to roll back the bug to the
+
+61
+0:07:44.800 --> 0:07:51.840
+initial state because otherwise, by training the model on the final state of the bug, we
+
+62
+0:07:51.840 --> 0:07:57.480
+would have used future data to predict the past. And it was not possible, of course.
+
+63
+0:07:57.480 --> 0:08:02.520
+So we rolled back the history of the bug to the beginning. We also reduced the number
+
+64
+0:08:02.520 --> 0:08:07.840
+of components because, again, with the Firefox scale, we have 100,000s of components. Many
+
+65
+0:08:07.840 --> 0:08:13.240
+of them are no longer actually maintained and no longer relevant. So we reduced them
+
+66
+0:08:13.240 --> 0:08:21.040
+to a smaller subset. And, again, we had the same kind of architecture to train the model.
+
+67
+0:08:21.040 --> 0:08:30.840
+With a small tweak, we didn't have perfect accuracy, and so we needed a way to choose
+
+68
+0:08:30.840 --> 0:08:39.720
+confidence and recall. So pay the price of lower quality but catching more bugs or catching
+
+69
+0:08:39.720 --> 0:08:44.480
+fewer bugs but be precise more time. So we can control this easily with a confidence
+
+70
+0:08:44.480 --> 0:08:50.920
+level that is output by the model, which allows us to sometime be more aggressive, sometime
+
+71
+0:08:50.920 --> 0:08:58.120
+be less aggressive. But at least we can have a minimum level of quality that we enforce.
+
+72
+0:08:58.120 --> 0:09:04.040
+The average time to assign a bug then went from one week to a few seconds. Over time,
+
+73
+0:09:04.040 --> 0:09:12.240
+we auto classified 20,000 bugs. And since it worked, we also extended it to webcompat.com,
+
+74
+0:09:12.240 --> 0:09:19.080
+which is another yet another bug reporting system that we have at Mozilla, which if you
+
+75
+0:09:19.080 --> 0:09:23.980
+find the web compatibility bugs, please go there and file them because it's pretty important.
+
+76
+0:09:23.980 --> 0:09:29.760
+And you can see here an action of the bot moving the bug to, again, the Firefox PDF
+
+77
+0:09:29.760 --> 0:09:35.720
+viewer component. Maybe I should have used another example just for fun.
+
+78
+0:09:35.720 --> 0:09:43.360
+Now we had something working, and it was starting to become promising. But we needed to make
+
+79
+0:09:43.360 --> 0:09:48.080
+it better. We needed to have a better architecture for the machine learning side of things. We
+
+80
+0:09:48.080 --> 0:09:53.000
+needed to retrain the models. We needed to collect new data. We needed to make sure that
+
+81
+0:09:53.000 --> 0:10:00.480
+whenever a new component comes in, we retrain the model with the new components. If a component
+
+82
+0:10:00.480 --> 0:10:05.760
+stops being used, we need to remove it from the data set and things like that.
+
+83
+0:10:05.760 --> 0:10:12.240
+So we built over time a very complex architecture. I won't go into too many details because it
+
+84
+0:10:12.240 --> 0:10:23.240
+will take too long. But maybe if somebody has questions later, we can go into that.
+
+85
+0:10:23.240 --> 0:10:31.360
+And then with the architecture now, it was easier to build new models. So we even had
+
+86
+0:10:31.360 --> 0:10:43.480
+contributors building models just all by themselves. In particular, there was a contributor, Aayush,
+
+87
+0:10:43.480 --> 0:10:48.880
+which helped us build a model to root out spam from Bugzilla.
+
+88
+0:10:48.880 --> 0:10:54.960
+So it seems weird, but yes, we do have spam on Bugzilla as well. People are trying to
+
+89
+0:10:54.960 --> 0:11:01.120
+get links to their websites into Bugzilla because they think the search engine will
+
+90
+0:11:01.120 --> 0:11:06.360
+index them. It's not actually the case. We tell them all the time, but they keep doing
+
+91
+0:11:06.360 --> 0:11:15.560
+it anyway. We have university students. Bugzilla is probably the most studied bug tracking
+
+92
+0:11:15.560 --> 0:11:24.400
+system in research. And we have many university students from many countries that use Bugzilla
+
+93
+0:11:24.400 --> 0:11:35.160
+as a playing field. Many times we even contact the universities and professors asking them
+
+94
+0:11:35.160 --> 0:11:44.600
+if we can help them give more relevant topics to students, et cetera. But they keep filing
+
+95
+0:11:44.600 --> 0:11:49.440
+bugs. And this contributor maybe was from one of these schools, was tired of it and
+
+96
+0:11:49.440 --> 0:11:55.960
+helped us build a model. And the results were pretty good. I'll show you a few examples
+
+97
+0:11:55.960 --> 0:12:05.720
+of bugs that were caught by the model. So this one was, if you look just at the first
+
+98
+0:12:05.720 --> 0:12:11.680
+comment of the bug, it looks like a legit bug. But then the person created a second
+
+99
+0:12:11.680 --> 0:12:21.760
+comment with a link to their website. And it was pretty clear that it was spam. This
+
+100
+0:12:21.760 --> 0:12:29.520
+one is another example. This is actually a legit bug. It's not spam. Maybe it's not so
+
+101
+0:12:29.520 --> 0:12:37.440
+usable as a bug report, but it was not spam. And then somebody else, a spammer, took exactly
+
+102
+0:12:37.440 --> 0:12:45.560
+the same contents, created a new bug, injecting the link to their website in the bug report.
+
+103
+0:12:45.560 --> 0:12:50.560
+And somehow, I don't know how the model was able to detect that it was spam. It's funny
+
+104
+0:12:50.560 --> 0:12:57.240
+because you can see that when you file a bug on Bugzilla, Bugzilla will automatically insert
+
+105
+0:12:57.240 --> 0:13:05.280
+the user agent so that we have more information as possible to fix bug. But in this case,
+
+106
+0:13:05.280 --> 0:13:11.920
+he was copying the contents of the other bug. So we have two user agents. And they're even
+
+107
+0:13:11.920 --> 0:13:22.080
+on different platforms, one on Mac and one on... Ah, he was using Chrome, actually.
+
+108
+0:13:22.080 --> 0:13:29.520
+Okay. So we were done with bugs. Well, we are not done with the bugs. We will have plenty
+
+109
+0:13:29.520 --> 0:13:37.560
+of things to do in the future forever. But we were happy enough with bugs. And we thought,
+
+110
+0:13:37.560 --> 0:13:47.080
+what can we improve next? One of the topics that we were focusing on at the time was testing
+
+111
+0:13:47.080 --> 0:13:52.640
+and the cost associated to testing. We were experimenting with code coverage, trying to
+
+112
+0:13:52.640 --> 0:14:02.880
+collect code coverage to select relevant tests to run on a given patch. But it was pretty
+
+113
+0:14:02.880 --> 0:14:10.600
+complex for various reasons. So we thought maybe we can apply machine learning here as
+
+114
+0:14:10.600 --> 0:14:17.600
+well. But before we go into that, let me explain a bit about RCI because it's a little complex.
+
+115
+0:14:17.600 --> 0:14:25.000
+So we have three branches, three repositories, which all kind of share the same code, Firefox.
+
+116
+0:14:25.000 --> 0:14:34.480
+We have Tri, which is on-demand CI. We have Autoland, which is the repository where patches
+
+117
+0:14:34.480 --> 0:14:40.400
+land after they've been reviewed and approved. And we have Mozilla Central, which is the
+
+118
+0:14:40.400 --> 0:14:50.040
+actual repository where Firefox source code lives and from which we build Firefox nightly.
+
+119
+0:14:50.040 --> 0:14:56.680
+On Tri, we run whatever the user wants. On Autoland, we run a subset of tests. At the
+
+120
+0:14:56.680 --> 0:15:04.100
+time, it was kind of random, what we decided to run. And on Mozilla Central, we run everything.
+
+121
+0:15:04.100 --> 0:15:08.760
+To give you an idea, on Tri, we will have hundreds of pushes per day. On Autoland, the
+
+122
+0:15:08.760 --> 0:15:16.200
+same. And on Mozilla Central, we have only three or four. And it's restricted only to
+
+123
+0:15:16.200 --> 0:15:24.960
+certain people that have the necessary permissions since you can build Firefox nightly from there.
+
+124
+0:15:24.960 --> 0:15:34.720
+And it's going to be shipped to everyone. The scale here is similar to the bug case.
+
+125
+0:15:34.720 --> 0:15:43.280
+We have 100,000 unique test files. We have around 150 unique test configurations. So
+
+126
+0:15:43.280 --> 0:15:51.160
+combinations of operating systems, high-level Firefox configurations. So old style engine
+
+127
+0:15:51.160 --> 0:15:57.160
+versus new style engine, certain graphics engine versus another graphics engine, et
+
+128
+0:15:57.160 --> 0:16:05.120
+cetera, et cetera. We have debug builds versus optimized builds. We have ASAN, T-SAN, code
+
+129
+0:16:05.120 --> 0:16:11.600
+coverage, et cetera, et cetera. Of course, the matrix is huge. And you get to 150 configurations.
+
+130
+0:16:11.600 --> 0:16:18.760
+We have more than 300 pushes per day by developers. And the average push takes 1,500 hours if
+
+131
+0:16:18.760 --> 0:16:24.880
+you were to run it all at the same, all one after the other. It takes 300 machine years
+
+132
+0:16:24.880 --> 0:16:32.880
+per month. And we run around 1 million machines per, we use 100 million machines per month
+
+133
+0:16:32.880 --> 0:16:39.920
+to run these tests. If you were to run all of the tests, you would need to run 2.0, all
+
+134
+0:16:39.920 --> 0:16:44.920
+of the tests in all of the configurations, you would need to run around 2.3 billion test
+
+135
+0:16:44.920 --> 0:16:55.440
+files per day, which is, of course, unfeasible. And this is a view of our tree herder, which
+
+136
+0:16:55.440 --> 0:17:03.680
+is the user interface for Mozilla test results. You can see that it is almost unreadable.
+
+137
+0:17:03.680 --> 0:17:11.560
+Likely the green stuff is good. The orange stuff is probably not good. You can see that
+
+138
+0:17:11.560 --> 0:17:19.240
+we have lots of tests. And we spend a lot of money to run these tests. So what we wanted
+
+139
+0:17:19.240 --> 0:17:24.760
+to do, we wanted to reduce the machine time spent to run the tests. We wanted to reduce
+
+140
+0:17:24.760 --> 0:17:31.160
+the end-to-end time so that developers, when they push, they get a result, yes or no, your
+
+141
+0:17:31.160 --> 0:17:36.880
+patch is good or not, quickly. And we also wanted to reduce the cognitive overload for
+
+142
+0:17:36.880 --> 0:17:47.160
+developers. Looking at a page like this, what is it? It's impossible to understand. Also,
+
+143
+0:17:47.160 --> 0:17:56.720
+to give you an obvious example, if you have, if you're changing the Linux version of Firefox,
+
+144
+0:17:56.720 --> 0:18:03.560
+I don't know, you're touching GTK, you don't need to run Windows tests. At the time, we
+
+145
+0:18:03.560 --> 0:18:09.560
+were doing that. At the time, if you touched GTK code, we were running Android, Windows,
+
+146
+0:18:09.560 --> 0:18:18.680
+Mac. That was totally useless. And the traditional way of running tests on browsers doesn't really
+
+147
+0:18:18.680 --> 0:18:24.720
+work. You cannot run everything on all of the pushes. Otherwise, you will have a huge
+
+148
+0:18:24.720 --> 0:18:31.440
+bill from the cloud provider. So we couldn't use coverage because of some technical reasons.
+
+149
+0:18:31.440 --> 0:18:41.320
+We thought, what if we use machine learning? What if we extend bug bug to also learn patches
+
+150
+0:18:41.320 --> 0:18:53.760
+and tests? So the first part was to use machines to try to parse this information and try to
+
+151
+0:18:53.760 --> 0:18:59.480
+understand what exactly failed. It might seem like an easy task if you have one under tests
+
+152
+0:18:59.480 --> 0:19:07.000
+or ten tests, but when you have two billion tests, you have lots of intermittent filling
+
+153
+0:19:07.000 --> 0:19:14.680
+tests. These tests fail randomly. They are not always the same. Every week, we see 150
+
+154
+0:19:14.680 --> 0:19:22.120
+new intermittent tests coming in. It's impossible to, it's not easy to automatically say if
+
+155
+0:19:22.120 --> 0:19:28.600
+a failure is actually a failure or if it is an intermittent. Not even developers are able
+
+156
+0:19:28.600 --> 0:19:34.680
+to do that sometimes. Also, not all of the tests are run on all of the pushes. So if
+
+157
+0:19:34.680 --> 0:19:44.400
+I push my patch and a test doesn't run, but runs later on another patch, and it fails,
+
+158
+0:19:44.400 --> 0:19:52.880
+I don't know if it was my fault or somebody else's fault. And so we have sheriffs, people
+
+159
+0:19:52.880 --> 0:20:01.480
+that are only focused, whose main focus is watching the CI, and they are pretty experienced
+
+160
+0:20:01.480 --> 0:20:09.560
+at doing that. Probably better than most developers. But human errors still exist. Even if we have
+
+161
+0:20:09.560 --> 0:20:15.960
+their annotations, it's pretty hard to be sure about the results. You can see a meme
+
+162
+0:20:15.960 --> 0:20:27.760
+that some sheriffs created. Flaky tests are the infamous intermittent filling tests.
+
+163
+0:20:27.760 --> 0:20:35.400
+So the first step, the second step, after we implemented some heuristics to try to understand
+
+164
+0:20:35.400 --> 0:20:44.040
+the failures due to a given patch, was to analyze patches. We didn't have readily available
+
+165
+0:20:44.040 --> 0:20:52.520
+tools, at least not fast enough for the amount of data that we are talking about. We just
+
+166
+0:20:52.520 --> 0:21:01.440
+used Mercurial for authorship info. Who is the author of the push? Who is the reviewer?
+
+167
+0:21:01.440 --> 0:21:07.040
+When was it pushed? Et cetera, et cetera. And we created a couple of projects written
+
+168
+0:21:07.040 --> 0:21:13.040
+in Rust to parse patches efficiently and to analyze source code. The second one was actually
+
+169
+0:21:13.040 --> 0:21:26.560
+a research partnership with the Polytech clinical ditoreno. And the machine learning model itself,
+
+170
+0:21:26.560 --> 0:21:33.320
+it's not a multilabel model, as one might think, where each test is a label. It would
+
+171
+0:21:33.320 --> 0:21:41.480
+be too large with the number of tests that we have. The model is simplified. The input
+
+172
+0:21:41.480 --> 0:21:50.160
+is the tappel test and patch. And the label is just fail, not fail. So the features actually
+
+173
+0:21:50.160 --> 0:21:57.080
+come from both the test, the patch, and the link between the test and the patch. So,
+
+174
+0:21:57.080 --> 0:22:02.520
+for example, the pass failures, when the same files were touched, the distance from the
+
+175
+0:22:02.520 --> 0:22:10.180
+source files to the test files in the tree, how often source files were modified together
+
+176
+0:22:10.180 --> 0:22:15.760
+with test files. Of course, if they're modified together, probably they are somehow linked.
+
+177
+0:22:15.760 --> 0:22:21.000
+Maybe you need to fix the test. And so when you push your patch, you also fix the test.
+
+178
+0:22:21.000 --> 0:22:29.800
+This is a clear link. But even then, we have lots of test redundancies. So we use the frequent
+
+179
+0:22:29.800 --> 0:22:38.680
+item set mining to try to understand which tests are redundant and remove them from the
+
+180
+0:22:38.680 --> 0:22:49.600
+set of tests that are selected to run. And this was pretty successful as well. So now
+
+181
+0:22:49.600 --> 0:22:58.440
+we had architecture to train models on bugs, to train models on patches and tests. The
+
+182
+0:22:58.440 --> 0:23:09.120
+next step was to reuse what we built for patches to also try to predict defects. This is actually
+
+183
+0:23:09.120 --> 0:23:15.520
+still in experimental phase. It's kind of a research project. So if anybody is interested
+
+184
+0:23:15.520 --> 0:23:22.960
+in collaborating with us on this topic, we would be happy to do so. I will just show
+
+185
+0:23:22.960 --> 0:23:30.760
+you a few things that we have done in the space for now. So the goals are to reduce
+
+186
+0:23:30.760 --> 0:23:37.800
+the regressions by detecting the patches that reviewers should focus on more than others,
+
+187
+0:23:37.800 --> 0:23:44.920
+to reduce the time spent by reviewers on less risky patches, and to when we detect that
+
+188
+0:23:44.920 --> 0:23:51.800
+the patch is risky, trigger some risk control operations. For example, I don't know, running
+
+189
+0:23:51.800 --> 0:23:57.800
+tests more comprehensively in dispatches and things like this. Of course, the model is
+
+190
+0:23:57.800 --> 0:24:04.920
+just an evaluation of the risk. It's not actually going to tell us if there is a bug or not.
+
+191
+0:24:04.920 --> 0:24:17.080
+And it will never replace a real reviewer who can actually review the patch more precisely.
+
+192
+0:24:17.080 --> 0:24:23.960
+The first step was again build the dataset. It is not easy to know which patches cause
+
+193
+0:24:23.960 --> 0:24:29.920
+regressions. It's actually impossible at this time. There are some algorithms that are used
+
+194
+0:24:29.920 --> 0:24:38.320
+in research. The most famous one is SZZ. But we had some answers that it was not so good.
+
+195
+0:24:38.320 --> 0:24:44.640
+So we started here again introducing a change in the process that we have. We introduced
+
+196
+0:24:44.640 --> 0:24:54.520
+a new field, which is called Regressed By, so that developers, QA users, can specify
+
+197
+0:24:54.520 --> 0:25:00.760
+what caused a given regression. So when they file a bug, if they know what caused it, they
+
+198
+0:25:00.760 --> 0:25:06.840
+can specify it here. If they don't know what caused it, we have a few tools that we built
+
+199
+0:25:06.840 --> 0:25:16.400
+over time to automatically download the builds from RCI that we showed earlier. Automatically
+
+200
+0:25:16.400 --> 0:25:22.400
+download the builds from the past and run a bisection to try to find what the cause
+
+201
+0:25:22.400 --> 0:25:30.040
+is for the given bug. With this, we managed to build a pretty large dataset, 5,000 links
+
+202
+0:25:30.040 --> 0:25:39.520
+between bug introducing and bug fixing commits. Actually, commit sets. And then these amounts
+
+203
+0:25:39.520 --> 0:25:46.760
+to 24,000 commits. And then we were able, with this dataset, to evaluate the current
+
+204
+0:25:46.760 --> 0:25:52.720
+algorithms that are presented in the literature. And as we thought, they're not working well
+
+205
+0:25:52.720 --> 0:26:03.840
+at all. So this is one of the areas of improvement for research.
+
+206
+0:26:03.840 --> 0:26:13.640
+One of the improvements that we tried to apply to SZZ was to improve the blame algorithm.
+
+207
+0:26:13.640 --> 0:26:19.640
+If you're more familiar with Mercurial annotate algorithm, to try to, instead of looking at
+
+208
+0:26:19.640 --> 0:26:30.600
+lines splitting changes by words and tokens, so you can see past changes by token instead
+
+209
+0:26:30.600 --> 0:26:37.680
+of by line. This is a visualization from the Linux kernel. This is going to give you a
+
+210
+0:26:37.680 --> 0:26:44.560
+much more precise view of what changed in the past. For example, it will skip over tab
+
+211
+0:26:44.560 --> 0:26:52.680
+only changes, white space only changes, and things like that. If you add an if, your code
+
+212
+0:26:52.680 --> 0:26:57.640
+will be in tandem more. But you're not actually changing everything inside. You're changing
+
+213
+0:26:57.640 --> 0:27:06.160
+only the if. This actually improved the results, but it was not enough to get to an acceptable
+
+214
+0:27:06.160 --> 0:27:11.800
+level of accuracy. But it's nice, and we can actually use it in the IDE. We're not doing
+
+215
+0:27:11.800 --> 0:27:19.160
+it yet, but we will, to give more information to users, because developers use annotate
+
+216
+0:27:19.160 --> 0:27:27.200
+and git blame a lot. And this is a UI that is a work in progress
+
+217
+0:27:27.200 --> 0:27:34.420
+for analyzing the risk of a patch. This is a screenshot from our code review tool. So
+
+218
+0:27:34.420 --> 0:27:39.080
+we are showing the result of the algorithm with the confidence. So in this case, it was
+
+219
+0:27:39.080 --> 0:27:45.760
+a risky patch with 79% confidence. And we give a few explanations to the developers.
+
+220
+0:27:45.760 --> 0:27:51.720
+This is one of the most important things. Developers do not always trust developers
+
+221
+0:27:51.720 --> 0:27:58.040
+like any other user, do not always trust results from machine learning. And so you need to
+
+222
+0:27:58.040 --> 0:28:09.360
+give them an explanation. And this is another part of the output of our tool. This is again
+
+223
+0:28:09.360 --> 0:28:16.160
+on our code review tool. We are showing on the functions that are being changed by the
+
+224
+0:28:16.160 --> 0:28:25.480
+patch if the function is risky or not, and which bugs in the past were involved in this
+
+225
+0:28:25.480 --> 0:28:32.360
+problem. So developers can try to see if the patch is reintroducing a previously fixed
+
+226
+0:28:32.360 --> 0:28:39.880
+bug. And they can also know what kind of side effects there are when you make changes to
+
+227
+0:28:39.880 --> 0:28:53.760
+a given area of the code. Now, we did a lot of stuff for developers.
+
+228
+0:28:53.760 --> 0:28:59.080
+We trained models for bugs. We trained models for patches. We trained models for tests.
+
+229
+0:28:59.080 --> 0:29:06.640
+We trained models to predict the facts. Now I'm going to go to a slightly different topic,
+
+230
+0:29:06.640 --> 0:29:15.240
+even though it's connected. Privacy friendly translations. So we're working on introducing
+
+231
+0:29:15.240 --> 0:29:23.240
+translations in Firefox. The subtitle was actually translated automatically using Firefox
+
+232
+0:29:23.240 --> 0:29:32.320
+Translate, which you can use nowadays. The idea is that translation models improved a
+
+233
+0:29:32.320 --> 0:29:39.680
+lot in recent times. Current cloud-based services do not offer the privacy guarantees that we
+
+234
+0:29:39.680 --> 0:29:47.480
+like to offer in Firefox. They are closed source. They are not privacy preserving. So
+
+235
+0:29:47.480 --> 0:29:53.280
+we started a project. It was funded by the European Union to investigate client-side
+
+236
+0:29:53.280 --> 0:30:01.760
+private translation capabilities in Firefox itself. It is currently available as an add-on
+
+237
+0:30:01.760 --> 0:30:06.360
+that you can install in Firefox. We support many European languages, and we are working
+
+238
+0:30:06.360 --> 0:30:13.120
+on supporting even more. We are going to also work on supporting non-European languages
+
+239
+0:30:13.120 --> 0:30:23.880
+like Chinese, Korean, Japanese, et cetera. And in this case, we use machine learning
+
+240
+0:30:23.880 --> 0:30:30.320
+on the client side to perform the translation. So your data never leaves your Firefox. The
+
+241
+0:30:30.320 --> 0:30:38.640
+models are downloaded from our servers, but they run locally on your machine. So the contents
+
+242
+0:30:38.640 --> 0:30:44.080
+of the web page that you're looking at will never go to Google being or whatever. They
+
+243
+0:30:44.080 --> 0:30:51.520
+will be translated locally on your machine. We use a few open data sets. Luckily, we have
+
+244
+0:30:51.520 --> 0:30:58.280
+lots of them from past research. Not all of them have good quality, but many of them have.
+
+245
+0:30:58.280 --> 0:31:03.680
+But we are looking for more. So if you have suggestions for data sets that we can use,
+
+246
+0:31:03.680 --> 0:31:13.520
+please let us know. On the data sets, we perform some basic data cleaning, and we use machine
+
+247
+0:31:13.520 --> 0:31:21.600
+learning-based techniques to clean the data, to remove bad sentence pairs that we believe
+
+248
+0:31:21.600 --> 0:31:27.600
+are bad. Of course, the data sets that I showed before are open, but sometimes they are just
+
+249
+0:31:27.600 --> 0:31:38.480
+crawled from the web, so they contain all sorts of bad sentences. Also, HTML tags and
+
+250
+0:31:38.480 --> 0:31:42.640
+stuff like that, we need to clean them up. Otherwise, the translations will learn to
+
+251
+0:31:42.640 --> 0:31:49.960
+translate HTML tags. And we use some techniques to increase the size of the data set automatically,
+
+252
+0:31:49.960 --> 0:31:56.080
+like back translations, translating sentences from one language to the other, and back translating
+
+253
+0:31:56.080 --> 0:32:04.240
+it in order to increase the size of the data sets.
+
+254
+0:32:04.240 --> 0:32:16.400
+So we trained a large model on cloud machines, which is pretty large. You can see it's around
+
+255
+0:32:16.400 --> 0:32:22.440
+800 megabytes. So every language pair, you would need to download 800 megabytes, and
+
+256
+0:32:22.440 --> 0:32:33.200
+it is super slow. So we can only use that on cloud. So we use some techniques in order
+
+257
+0:32:33.200 --> 0:32:40.040
+to reduce the size of these models and to make them faster. We use knowledge distillation,
+
+258
+0:32:40.040 --> 0:32:47.800
+basically using the model, the large model that we trained as a trainer for a student
+
+259
+0:32:47.800 --> 0:32:53.640
+model, which is much smaller. So you can see that from 800 megabytes, we got 216. I think
+
+260
+0:32:53.640 --> 0:32:58.120
+now we're around 5, 6, something like that. So it's much smaller, and you can actually
+
+261
+0:32:58.120 --> 0:33:04.320
+download it on demand from our servers. And we use quantization for further compression
+
+262
+0:33:04.320 --> 0:33:14.080
+and perf improvements, so moving the data from the model from float 32 to int 8.
+
+263
+0:33:14.080 --> 0:33:21.400
+Then we compiled the machine translation engine to WebAssembly in order to be able to use
+
+264
+0:33:21.400 --> 0:33:29.040
+it inside Firefox. We introduced some SIMD extensions into WebAssembly and into Firefox
+
+265
+0:33:29.040 --> 0:33:36.200
+in order to be able to be even faster when translating, even though we translate a bit
+
+266
+0:33:36.200 --> 0:33:47.560
+at a time. So it's pretty fast. And the engines are downloaded and updated on demand.
+
+267
+0:33:47.560 --> 0:34:08.720
+Let me show you a demo.
+
+268
+0:34:08.720 --> 0:34:25.920
+So you can see the, my Firefox is in Italian, but you can see that it automatically detected
+
+269
+0:34:25.920 --> 0:34:33.560
+that the page is in French, and it is suggesting me to translate it to Italian. I will change
+
+270
+0:34:33.560 --> 0:35:00.920
+it to English. Oh, fuck.
+
+271
+0:35:00.920 --> 0:35:09.400
+So it is downloading the model. Now it's translating. So while it was translating, you already saw
+
+272
+0:35:09.400 --> 0:35:13.920
+the contents of the first part of the page was already translated, so it's super quick
+
+273
+0:35:13.920 --> 0:35:21.040
+in the end. And the translation seems to be pretty good. I don't speak French, but I think
+
+274
+0:35:21.040 --> 0:35:34.920
+it makes sense. You can also use it from the toolbar. So you can choose a language and
+
+275
+0:35:34.920 --> 0:35:58.040
+translate it to another. Let's do Italian to French. It works.
+
+276
+0:35:58.040 --> 0:36:21.800
+All right. So if you know any dataset that we can use,
+
+277
+0:36:21.800 --> 0:36:26.520
+in addition to the ones that we already use, or if you're interested in building a new
+
+278
+0:36:26.520 --> 0:36:30.800
+great feature in Firefox, or if you want to add support for your language or improving
+
+279
+0:36:30.800 --> 0:36:36.120
+support for your language, come and talk to us at our booth. We would be really happy
+
+280
+0:36:36.120 --> 0:36:43.120
+if you could help us. And before we come to an end, let me show you how far we've come.
+
+281
+0:36:43.120 --> 0:36:50.200
+The dogs have grown, and we have learned that it is possible to tame the complexity of a
+
+282
+0:36:50.200 --> 0:36:57.560
+large scale software. It is possible to use the past history of development to support
+
+283
+0:36:57.560 --> 0:37:04.440
+the future of development. And it is possible to use machine learning in a privacy friendly
+
+284
+0:37:04.440 --> 0:37:09.760
+way and in the open. What else could we do with the data and the
+
+285
+0:37:09.760 --> 0:37:15.440
+tools that we have at our disposal? I don't know. I'm looking forward to know. I'm looking
+
+286
+0:37:15.440 --> 0:37:31.440
+forward to see what other wild ideas you and us at Mozilla can come up with. Thank you.
+
+287
+0:37:31.440 --> 0:37:36.640
+Thank you very much, Madhka, for the amazing talk. Now we're open for questions. If anyone
+
+288
+0:37:36.640 --> 0:37:41.560
+would like to make a question, please raise your hand so you can take the microphone.
+
+289
+0:37:41.560 --> 0:37:53.760
+Questions, questions, questions? Hands up. There. Okay, okay. I'm sorry. I'm learning.
+
+290
+0:37:53.760 --> 0:38:20.480
+I'm new to this. I'm coming up. Hello. I have actually two questions. First question is
+
+291
+0:38:20.480 --> 0:38:24.880
+have you actually think about the idea to use this mechanism to automatically translate
+
+292
+0:38:24.880 --> 0:38:36.880
+interface of Mozilla products? Sorry? Testing? Yes. Yeah. So the question is have you think
+
+293
+0:38:36.880 --> 0:38:43.440
+about mechanism of automatically translating the interface of Mozilla Firefox products
+
+294
+0:38:43.440 --> 0:38:48.400
+or maybe documentation you already have, like MDN, because it's still a demand to translate
+
+295
+0:38:48.400 --> 0:39:13.000
+this stuff? I'm sorry. I'm not hearing well. Can you maybe come closer? From here? Okay.
+
+296
+0:39:13.000 --> 0:39:19.520
+Now it's better? Yes. Okay. So my question is have you tried to use this mechanism of
+
+297
+0:39:19.520 --> 0:39:24.960
+automatic translation to use this translation for existing interface you have in the products
+
+298
+0:39:24.960 --> 0:39:30.760
+and especially also documentation part? Because it's kind of vital part when you need to translate
+
+299
+0:39:30.760 --> 0:39:34.440
+new functionality or you have to translate something new in interface, you need the help
+
+300
+0:39:34.440 --> 0:39:39.440
+of translator. But if you already know how to translate new stuff, so that means you
+
+301
+0:39:39.440 --> 0:39:45.240
+already have a dataset, you can actually automatically translate new parts of interface without translator.
+
+302
+0:39:45.240 --> 0:39:52.000
+Yes. So it is definitely something that could be used to help translators do their job.
+
+303
+0:39:52.000 --> 0:39:57.400
+We could translate parts of the interface automatically and of course there will always
+
+304
+0:39:57.400 --> 0:40:01.920
+be some review from actual translator to make sure that the translation makes sense in the
+
+305
+0:40:01.920 --> 0:40:08.440
+context, especially because Firefox UI sometimes you have very short text and it needs to make
+
+306
+0:40:08.440 --> 0:40:12.560
+sense. But yes, it's definitely something that we have considered. And actually one
+
+307
+0:40:12.560 --> 0:40:18.560
+of the datasets that we use from the list, it's not possible to see from the slide, but
+
+308
+0:40:18.560 --> 0:40:28.000
+it's called Mozilla L10N and they are sentence pairs from our browser UI. People are actually
+
+309
+0:40:28.000 --> 0:40:37.240
+using it in research for automating translations. Does anyone have any other question? Please
+
+310
+0:40:37.240 --> 0:40:48.760
+raise your hands if you have any other questions to Marcum. Okay. If not, thank you very much
+
+311
+0:40:48.760 --> 0:41:09.400
+again, Marcum. Thank you.
+
