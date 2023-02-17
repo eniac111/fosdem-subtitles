@@ -1,0 +1,835 @@
+WEBVTT
+
+00:00.000 --> 00:10.680
+Thanks for introducing me.
+
+00:10.680 --> 00:16.400
+Hello and welcome also from my side to the embedded dev room.
+
+00:16.400 --> 00:21.180
+We're going to hear something today about Delta-like streaming of encrypted over-the-air
+
+00:21.180 --> 00:23.080
+updates for ROG.
+
+00:23.080 --> 00:29.160
+So luckily I managed to put the entire abstract of the presentation already in the title.
+
+00:29.160 --> 00:36.600
+So what we hear about is the changes and developments during the roughly two or three years that
+
+00:36.600 --> 00:41.040
+happened in ROG, the ROG updating framework.
+
+00:41.040 --> 00:46.720
+And so it's basically the development that happened since we've last met here, I guess.
+
+00:46.720 --> 00:48.200
+So short notes about me.
+
+00:48.200 --> 00:49.200
+My name is Sandrik G
+
+00:49.200 --> 00:50.920
+I'm an embedded software developer.
+
+00:50.920 --> 00:52.920
+I work at Pangotronics.
+
+00:52.920 --> 00:58.120
+I'm the team lead of the integration team at Pangotronics and I'm the co-maintainer
+
+00:58.120 --> 01:04.120
+of the update framework ROG that we will hear more about soon.
+
+01:04.120 --> 01:10.080
+Pangotronics for those who don't know, it is a company based in Germany and we provide
+
+01:10.080 --> 01:15.000
+professional embedded Linux consulting and support and work closely together with the
+
+01:15.000 --> 01:24.120
+community and with since the beginning I think more than 7,000 patches in the Linux kernel.
+
+01:24.120 --> 01:26.860
+So a short overview of what we hear today.
+
+01:26.860 --> 01:31.640
+So the first thing is a short introduction into what ROG is for those who are not that
+
+01:31.640 --> 01:34.200
+familiar with but very, very short.
+
+01:34.200 --> 01:39.920
+Then we talk about the bundle format because this is crucial development for or the base
+
+01:39.920 --> 01:43.600
+for all the further features that are listed here.
+
+01:43.600 --> 01:47.560
+So the first thing I will talk about then is bundle streaming.
+
+01:47.560 --> 01:55.600
+Then we will hear about adaptive or Delta like updates, how to encrypt our bundle, give
+
+01:55.600 --> 02:02.000
+a short outlook on recent development about app updates and at the end we have a short
+
+02:02.000 --> 02:08.720
+look into what is coming next on features and what is in the ecosystem.
+
+02:08.720 --> 02:14.120
+So yeah, a typical over the air field update scenario could look like this.
+
+02:14.120 --> 02:20.440
+We have here our server, the server, the image that we want to deploy to the target.
+
+02:20.440 --> 02:26.240
+We create an update artifact from it, sign it, upload it to our deployment infrastructure
+
+02:26.240 --> 02:33.200
+and then we have the individual targets, update targets here that download the update and
+
+02:33.200 --> 02:34.640
+install it.
+
+02:34.640 --> 02:40.680
+And there's also still this conventional not so over the air use case for example using
+
+02:40.680 --> 02:42.320
+the USB stick.
+
+02:42.320 --> 02:46.840
+So what ROG handles is basically two parts.
+
+02:46.840 --> 02:53.080
+The first one is the creation of the update artifacts, the signing, verification and so
+
+02:53.080 --> 03:01.220
+on and the actual installation, the phase safe installation of the updates on the target.
+
+03:01.220 --> 03:07.680
+So yeah, basically ROG is an embedded Linux update framework so it handles the phase safe
+
+03:07.680 --> 03:15.040
+and atomic update of AB systems, so redundant system where you have one partition where
+
+03:15.040 --> 03:19.560
+you're running from an inactive partition and when you update you write your update
+
+03:19.560 --> 03:21.840
+into the inactive partition.
+
+03:21.840 --> 03:26.800
+Once you're done you switch in the boot loader to the inactive partition reboot and everything
+
+03:26.800 --> 03:28.320
+is fine.
+
+03:28.320 --> 03:32.480
+ROG is basically two parts on the target.
+
+03:32.480 --> 03:39.960
+It's the service that handles the update that runs and installs here and it gets its view
+
+03:39.960 --> 03:44.960
+on the system from the system configuration file.
+
+03:44.960 --> 03:49.880
+And yeah, the artifact for updating we call in ROG a bundle.
+
+03:49.880 --> 03:53.440
+A bundle consists of the images that should be installed.
+
+03:53.440 --> 04:01.840
+It consists of additional hooks or something like this and a manifest that holds the description
+
+04:01.840 --> 04:04.440
+what these images are for basically.
+
+04:04.440 --> 04:11.040
+So it's written in C with some utility libraries to not reinvent the wheel for everything.
+
+04:11.040 --> 04:14.320
+It's licensed on the LGPL and hosted on GitHub.
+
+04:14.320 --> 04:21.800
+And it was started in 2015 and I think the first release was in 2017.
+
+04:21.800 --> 04:28.920
+So yeah, as I already mentioned, the bundle format is quite essential for the next things
+
+04:28.920 --> 04:30.400
+that we talk about here.
+
+04:30.400 --> 04:37.160
+So let's first of all have a short look at the initial bundle formats because this was
+
+04:37.160 --> 04:39.560
+a motivation for changing the bundle format then.
+
+04:39.560 --> 04:43.640
+The initial bundle format was quite straightforward.
+
+04:43.640 --> 04:48.880
+It was just all the artifacts and the manifest packed together in a squash file system.
+
+04:48.880 --> 04:55.040
+We signed this squash file system and append the signature to the end of the bundle.
+
+04:55.040 --> 04:58.280
+So the verification is also quite easy.
+
+04:58.280 --> 05:04.120
+You just have to read the entire bundle and have to read the signature to be able to verify
+
+05:04.120 --> 05:05.360
+the bundle.
+
+05:05.360 --> 05:09.560
+So yeah, this is also the downside.
+
+05:09.560 --> 05:17.880
+Even if we don't also just want to access the manifest, we have to always authenticate
+
+05:17.880 --> 05:19.720
+or read the entire bundle.
+
+05:19.720 --> 05:26.200
+So this is quite slow and if it comes to over the air updating, it requires us to always
+
+05:26.200 --> 05:30.840
+download the full bundle before we can access any data in this.
+
+05:30.840 --> 05:34.940
+So yeah, this is bad if we want to use it for streaming.
+
+05:34.940 --> 05:41.000
+So this is why we have introduced in 2020 a new bundle format.
+
+05:41.000 --> 05:47.680
+And this bundle format is basically called the Verity format and it uses the DM Verity.
+
+05:47.680 --> 05:57.080
+So short intro, a device mapper system in Linux is a generic abstraction of manipulating
+
+05:57.080 --> 05:58.080
+block devices.
+
+05:58.080 --> 06:03.140
+So a device mapper has the same API as a block device has.
+
+06:03.140 --> 06:06.880
+So for the upper layer, it looks like it's just talking to a block device.
+
+06:06.880 --> 06:12.860
+But below it can manipulate the block device, authenticate data.
+
+06:12.860 --> 06:21.200
+It can merge data together like we know from DM Lendier and there are several device mappers
+
+06:21.200 --> 06:22.260
+in the kernel.
+
+06:22.260 --> 06:26.680
+So the one that we talk about here is DM Verity.
+
+06:26.680 --> 06:33.260
+It is basically an integrity protection method for read-only block devices.
+
+06:33.260 --> 06:41.320
+So the rough concept is that you split the block image into several chunks and generate
+
+06:41.320 --> 06:47.420
+a hash for each and of these you recursively do this again and again until you have a single
+
+06:47.420 --> 06:58.280
+root hash and then you can verify each single block until the root hash recursively.
+
+06:58.280 --> 07:05.360
+So yeah, you have a data protection or integrity protection for read-only files.
+
+07:05.360 --> 07:08.800
+The Verity table is just appended to the image.
+
+07:08.800 --> 07:13.560
+So let's see how we use this in the Rauch bundle.
+
+07:13.560 --> 07:20.760
+So we take our images here and first create the Verity hash and the root hash.
+
+07:20.760 --> 07:25.880
+The Verity hash is simply appended to the bundle and the root hash is now placed in
+
+07:25.880 --> 07:28.160
+the manifest.
+
+07:28.160 --> 07:34.880
+And then we just sign the manifest with an enveloping signature which means that the
+
+07:34.880 --> 07:38.680
+manifest is the payload of the signature.
+
+07:38.680 --> 07:45.780
+And what this gives us is now the verification of the manifest is quite easy.
+
+07:45.780 --> 07:51.840
+We just have to verify the manifest or the signature and get the manifest content.
+
+07:51.840 --> 07:56.220
+And inside the manifest there's also the root hash.
+
+07:56.220 --> 08:05.680
+This is then automatically trusted if we have verified the authentication of the manifest.
+
+08:05.680 --> 08:14.480
+And then we can set up the in Verity and use the hash tree appended to the manifest and
+
+08:14.480 --> 08:22.360
+the authenticated root hash and then for each access to each chunk or block on the block
+
+08:22.360 --> 08:29.520
+device this is authenticated to the Verity in the kernel and this allows you to have
+
+08:29.520 --> 08:32.840
+fully authenticated random access to your bundle.
+
+08:32.840 --> 08:40.800
+And you also you only need to verify by the time of using the data.
+
+08:40.800 --> 08:47.720
+So the next logical consequence is to implement streaming.
+
+08:47.720 --> 08:51.600
+So up to now Rauch was not so over the air.
+
+08:51.600 --> 08:58.040
+So downloading means that we assume there is an external service like Hawgbit or an
+
+08:58.040 --> 09:05.680
+application or an SCP that downloads the Rauch bundle to the target device and then with
+
+09:05.680 --> 09:09.560
+Rauch we start installing it from the local storage.
+
+09:09.560 --> 09:12.400
+Well the disadvantage of this is obvious.
+
+09:12.400 --> 09:19.320
+We have to have some extra space on the target where we can store the bundle and the artifacts
+
+09:19.320 --> 09:24.480
+can in a modern system become quite huge.
+
+09:24.480 --> 09:34.800
+And so the approach is that we implement streaming or downloading in Rauch itself.
+
+09:34.800 --> 09:42.820
+And if Rauch is able to do this and directly download it to the target device that we update
+
+09:42.820 --> 09:46.280
+then no intermediate storage would be required.
+
+09:46.280 --> 09:51.320
+So let's have a look how this is realized in Rauch.
+
+09:51.320 --> 09:56.800
+So first of all what we do in Rauch is that we spawn or fork an unprivileged helper process
+
+09:56.800 --> 10:02.880
+because Rauch runs as root as it has to update the system and you really don't want to use
+
+10:02.880 --> 10:07.440
+a root service to download data from the Internet.
+
+10:07.440 --> 10:13.240
+So it spawns an unprivileged helper and this helper acts as a translation.
+
+10:13.240 --> 10:21.200
+It plays a block device on one side and talks to the update server via HTTPS range request
+
+10:21.200 --> 10:23.480
+on the other side.
+
+10:23.480 --> 10:32.440
+And HTTP range request should be supported by all common web service also like TTP support
+
+10:32.440 --> 10:37.960
+this and it's also supported by many container delivery networks.
+
+10:37.960 --> 10:44.200
+And if we combine this now with what we've seen with the access to a variety bundle then
+
+10:44.200 --> 10:50.920
+we have fully authenticated random access to the remote bundle.
+
+10:50.920 --> 10:57.100
+And yeah we can randomly access so no intermediate storage is required.
+
+10:57.100 --> 11:02.800
+So the next need when we are able to download things is normally that we want to save download
+
+11:02.800 --> 11:09.720
+bandwidth because bandwidth is limited, expansive or something and the normal approach for this
+
+11:09.720 --> 11:12.720
+is to do conventional data updates.
+
+11:12.720 --> 11:19.240
+It means you have two versions of your image on your host system, calculate a delta and
+
+11:19.240 --> 11:23.640
+then you perform the update with this delta image on the target.
+
+11:23.640 --> 11:28.760
+So if you have the exact version that you have to calculate the delta for on your target
+
+11:28.760 --> 11:37.320
+this works very well, you can go here from version two to the target to version three.
+
+11:37.320 --> 11:41.760
+But if you now have a system that is on a different version, yeah this fails because
+
+11:41.760 --> 11:43.900
+it simply doesn't apply.
+
+11:43.900 --> 11:52.560
+So it's an optimal diff, it allows very small updates but yeah you're required to have access
+
+11:52.560 --> 12:00.840
+to the different image versions on the host and you only can update step by step.
+
+12:00.840 --> 12:04.560
+So from version one to version two to version three.
+
+12:04.560 --> 12:12.320
+So in Ralc we've chosen a different approach, a more generic approach for optimizing download,
+
+12:12.320 --> 12:13.800
+this is called adaptive updates.
+
+12:13.800 --> 12:24.360
+The concept behind this is that the bundle or the manifest itself provides a number of
+
+12:24.360 --> 12:26.760
+optimization options.
+
+12:26.760 --> 12:32.960
+So with each option there's normally an additional data connected that is stored in the device
+
+12:32.960 --> 12:40.800
+for optimizing the download but since we are able to stream the bundle we don't have to
+
+12:40.800 --> 12:44.880
+download these additional data that is stored in the manifest.
+
+12:44.880 --> 12:50.600
+And then it's a responsibility of the Ralc service on the target to see okay which of
+
+12:50.600 --> 12:55.640
+these capabilities do I support and which can I use and which is the best one.
+
+12:55.640 --> 13:02.640
+And there's always the fallback to use a full bundle download so you're always able to download
+
+13:02.640 --> 13:06.560
+the image you want to install.
+
+13:06.560 --> 13:11.640
+One method, adaptive method, generic one is the hash index.
+
+13:11.640 --> 13:18.600
+The idea behind this is that you split your image into several chunks and hash each chunk
+
+13:18.600 --> 13:21.360
+and generate a hash list from this.
+
+13:21.360 --> 13:25.040
+And for installation you just basically do the same on the target.
+
+13:25.040 --> 13:31.080
+You take your target device, block device for example, you hash it with the same algorithm
+
+13:31.080 --> 13:32.560
+and create the same hash index.
+
+13:32.560 --> 13:39.400
+And then for the optimization you just download first of all the hash index that is stored
+
+13:39.400 --> 13:44.760
+in the bundle and then you compare it line by line with the hashes that you've calculated
+
+13:44.760 --> 13:46.080
+on the target.
+
+13:46.080 --> 13:51.480
+And then you can download or just need to download the hashes that differ between what's
+
+13:51.480 --> 13:53.520
+on your target and what's in the bundle.
+
+13:53.520 --> 14:00.280
+And this works both for the intended target version but also if you come from a fully
+
+14:00.280 --> 14:05.920
+different image then you just have to download a bit more because the diff or the hashes
+
+14:05.920 --> 14:08.880
+that differ are a bit more.
+
+14:08.880 --> 14:13.800
+For both devices this is already implemented in the current drought version and there are
+
+14:13.800 --> 14:21.120
+also plans to support this for file based updates using Rsync and offline generated
+
+14:21.120 --> 14:24.080
+Jackson files.
+
+14:24.080 --> 14:27.520
+The next topic is bundle encryption.
+
+14:27.520 --> 14:31.760
+So the motivation is I think quite clear, you will have some sensitive data in your
+
+14:31.760 --> 14:37.000
+bundle and you want to protect it because you have it on an unsafe cloud storage or
+
+14:37.000 --> 14:39.640
+an unsafe communication channel.
+
+14:39.640 --> 14:43.220
+So in Rsync we have implemented this in two stage approach.
+
+14:43.220 --> 14:47.280
+So the first one is a symmetric encryption of only the payload.
+
+14:47.280 --> 14:52.720
+This is what normally already the build server does.
+
+14:52.720 --> 14:56.400
+And this does not yet require access to the key material.
+
+14:56.400 --> 15:00.160
+And the second part is the individual encryption.
+
+15:00.160 --> 15:06.280
+Then you can take the symmetrically encrypted image and encrypted per recipient.
+
+15:06.280 --> 15:12.680
+You can just take one key and encrypt it for all your devices by using a shared key or
+
+15:12.680 --> 15:19.560
+if you really want to do security then you can also use per device or per recipient keys
+
+15:19.560 --> 15:27.720
+and encrypt the bundle for many individual recipients, many thousands.
+
+15:27.720 --> 15:33.520
+So this again uses a device mapper, a different device mapper.
+
+15:33.520 --> 15:35.600
+Now we use DMCrypt.
+
+15:35.600 --> 15:37.240
+It's also quite simple.
+
+15:37.240 --> 15:43.440
+For the generation of the DMCrypt image or the image we use for DMCrypt we just split
+
+15:43.440 --> 15:50.880
+up the original image into equal sized chunks, generate random symmetric key and encrypt
+
+15:50.880 --> 15:54.000
+each block individual.
+
+15:54.000 --> 16:03.760
+And the DMCrypt device mapper then just provides a transparent description of the images.
+
+16:03.760 --> 16:12.460
+So if we access a chunk there then yeah, DMCrypt just decrypts this chunk we just selected
+
+16:12.460 --> 16:18.720
+with the key, with the symmetric key which is the same used for encrypting.
+
+16:18.720 --> 16:24.040
+And if we combine this now in the bundle, so we have here the image, encrypt it and
+
+16:24.040 --> 16:31.720
+combine it with DMVarity then we have a blockwise authenticated decryption.
+
+16:31.720 --> 16:38.000
+And since we have random access through the device mapper and the DMVarity format we also
+
+16:38.000 --> 16:43.960
+have the possibility to stream an encrypted update.
+
+16:43.960 --> 16:48.800
+So I'm short on time, a few notes about app updates.
+
+16:48.800 --> 16:55.280
+So far in Ralq we assumed the application is normally the application.
+
+16:55.280 --> 17:03.080
+We assumed a monotonic system where the application is the one thing that the device should do.
+
+17:03.080 --> 17:08.360
+And so we said okay, the application is normally either part of the root file system or you
+
+17:08.360 --> 17:10.720
+can have it in a separate slot.
+
+17:10.720 --> 17:15.240
+But it actually anyway linked against the libraries that are contained in the root file
+
+17:15.240 --> 17:16.620
+system.
+
+17:16.620 --> 17:22.120
+So it's fine to install, it's always together with the updated root file system.
+
+17:22.120 --> 17:28.440
+The reality is showed it's a bit different and there are more and more demands of having
+
+17:28.440 --> 17:35.200
+the capability of doing container updates, doing app store like updates and with you
+
+17:35.200 --> 17:43.320
+also have one vendor which provides a base system which is rarely updated and other vendors
+
+17:43.320 --> 17:47.880
+provide the applications which are much more frequently updated and additional data should
+
+17:47.880 --> 17:49.280
+be added there.
+
+17:49.280 --> 17:54.400
+And up to now we had no solution for this in Ralq and said okay, then use Ralq for the
+
+17:54.400 --> 18:03.000
+base system and use another update or update approach for this application or file updates.
+
+18:03.000 --> 18:09.640
+What we are working on and this is in a quite premature state actually is Ralq artifact
+
+18:09.640 --> 18:10.640
+update.
+
+18:10.640 --> 18:17.520
+The basic concept behind this is that you have a slot for artifacts and inside the slot
+
+18:17.520 --> 18:22.380
+we don't do image based updates but we do directory or file based updates.
+
+18:22.380 --> 18:28.160
+And then we provide the same as we do for image based updates.
+
+18:28.160 --> 18:35.320
+We ensure that the update is atomically and we also support both the case where we don't
+
+18:35.320 --> 18:42.160
+have any dependency of the app of the container to the base system, this is what you see here,
+
+18:42.160 --> 18:49.160
+but we also support the use case of having a dependency on the root file system but the
+
+18:49.160 --> 18:55.160
+need to more frequently and independently from the root file system update your application.
+
+18:55.160 --> 19:02.920
+So yeah, and together with our checks and files, the idea is that this again also supports
+
+19:02.920 --> 19:07.800
+streaming and Delta like updates.
+
+19:07.800 --> 19:13.960
+So just a very quick, I'll just show the other features and community things.
+
+19:13.960 --> 19:18.720
+We've switched to mason build system recently, this is already merged.
+
+19:18.720 --> 19:20.640
+It wasn't when I started the slides.
+
+19:20.640 --> 19:27.520
+So a new feature we also have is adding custom metadata in the manifest that you can then
+
+19:27.520 --> 19:32.480
+access via Ralq info or the deepest API for custom application.
+
+19:32.480 --> 19:38.320
+And an ongoing development is also about providing more fine grained process because currently
+
+19:38.320 --> 19:43.480
+we just have a slot, a pair slot progress and if you have a large tower then you wait
+
+19:43.480 --> 19:48.920
+very long until the progress gets to the next step.
+
+19:48.920 --> 19:56.240
+And a contribution that came or was started by the community as a real cockpit updater.
+
+19:56.240 --> 20:01.880
+This is basically an interface between the hotbit deployment server and Ralq on the other
+
+20:01.880 --> 20:02.880
+side.
+
+20:02.880 --> 20:06.320
+It talks via deepest API with Ralq.
+
+20:06.320 --> 20:11.760
+And this is a good example where the community started things and they moved them to the
+
+20:11.760 --> 20:16.400
+Ralq organization and are now maintained by the Ralq community.
+
+20:16.400 --> 20:23.080
+And with the latest version of the hotbit updater we are also compatible with using
+
+20:23.080 --> 20:26.720
+streaming updates for hotbit.
+
+20:26.720 --> 20:32.680
+And shout out to Leon who is sitting somewhere here in the room.
+
+20:32.680 --> 20:40.320
+The middle Ralq community is a layer or layer collection started by Leon which provides
+
+20:40.320 --> 20:45.760
+some example integration of Ralq into for example QEMO or Raspberry Pi.
+
+20:45.760 --> 20:51.920
+And it's a very good starting point if you want to check out how to use Ralq, how to
+
+20:51.920 --> 20:54.480
+use all the features in Ralq.
+
+20:54.480 --> 21:00.360
+And I really recommend you to use this as a starting point.
+
+21:00.360 --> 21:04.840
+And yeah.
+
+21:04.840 --> 21:10.920
+A final slide for an open source project it's always hard to know which are the uses of
+
+21:10.920 --> 21:12.800
+your project and where it's actually used.
+
+21:12.800 --> 21:16.320
+So it's always interesting for us to know this.
+
+21:16.320 --> 21:21.640
+One example where we came aware of that Ralq is used is a very famous one.
+
+21:21.640 --> 21:26.240
+It's a wild steam deck that uses Ralq together with the ASIN.
+
+21:26.240 --> 21:30.080
+Another example is the Home Assistant operating system that uses Ralq for updating the base
+
+21:30.080 --> 21:33.640
+system and the O'Naru Eclipse project.
+
+21:33.640 --> 21:41.520
+And one thing that I also find very interesting is that the information panels on the German
+
+21:41.520 --> 21:48.080
+ICE trains have a custom distribution they call Linux for ICE and they also use Ralq
+
+21:48.080 --> 21:50.840
+for updating their systems.
+
+21:50.840 --> 21:54.320
+So this was very quick.
+
+21:54.320 --> 21:56.440
+Thank you for attending.
+
+21:56.440 --> 21:58.040
+I think we still have two questions.
+
+21:58.040 --> 21:59.040
+Yeah.
+
+21:59.040 --> 22:02.200
+I think we have time for one or two questions.
+
+22:02.200 --> 22:04.840
+Hi there.
+
+22:04.840 --> 22:05.840
+Thank you for that.
+
+22:05.840 --> 22:06.840
+That's absolutely intriguing.
+
+22:06.840 --> 22:08.380
+Really interesting.
+
+22:08.380 --> 22:11.120
+So one of the questions was how do I plug this into BitBake.
+
+22:11.120 --> 22:12.120
+And Yvonne said that.
+
+22:12.120 --> 22:13.120
+That's great.
+
+22:13.120 --> 22:14.120
+I know what to do when I get home.
+
+22:14.120 --> 22:16.760
+In other words, what's the granularity of this?
+
+22:16.760 --> 22:20.640
+I saw a sort of a 4K block size in there somewhere.
+
+22:20.640 --> 22:26.000
+In terms of your hashes and then downloading blocks through the streaming process, is that
+
+22:26.000 --> 22:27.080
+4K increments?
+
+22:27.080 --> 22:28.080
+How does that change?
+
+22:28.080 --> 22:32.360
+And what's the overhead in verifying those hashes as you download?
+
+22:32.360 --> 22:36.840
+What's the impact on performance and have you looked at any figures for that?
+
+22:36.840 --> 22:39.360
+Getting quite low.
+
+22:39.360 --> 22:46.640
+So the question was if the 4K is fine grained enough for normal downloads.
+
+22:46.640 --> 22:52.160
+So it's currently fixed but it could also be changed if that's not sufficient.
+
+22:52.160 --> 22:56.920
+But in the current approach, the 4K is a fixed site there.
+
+22:56.920 --> 22:58.240
+Okay.
+
+22:58.240 --> 22:59.240
+So it's getting late.
+
+22:59.240 --> 23:01.720
+So unfortunately we don't have time for any more questions.
+
+23:01.720 --> 23:06.680
+But don't hesitate to ask them in matrix chat or try to catch our sticker in the corridor.
+
+23:06.680 --> 23:11.000
+You can ask questions and we can discuss.
+
+23:11.000 --> 23:12.000
+Thank you for a great talk.
+
+23:12.000 --> 23:27.880
+Thank you very much.

@@ -1,0 +1,1332 @@
+1
+0:00:00.000 --> 0:00:13.240
+Okay, our next speaker is going to talk about something we all used in Go, which is strings.
+
+2
+0:00:13.240 --> 0:00:16.680
+If you didn't have a user in Go, what are you doing here?
+
+3
+0:00:16.680 --> 0:00:19.640
+So let's give a round of applause for Matej.
+
+4
+0:00:19.640 --> 0:00:22.520
+Thank you, everyone.
+
+5
+0:00:22.520 --> 0:00:23.680
+Thank you.
+
+6
+0:00:23.680 --> 0:00:29.800
+Excited to be here, excited to see so many faces, excited to speak first time at the
+
+7
+0:00:29.800 --> 0:00:35.720
+FOSDEM, also a bit intimidating, but hopefully I can show you a thing or two about string
+
+8
+0:00:35.720 --> 0:00:38.920
+optimization in Go.
+
+9
+0:00:38.920 --> 0:00:41.000
+About me, my name is Matej Gera.
+
+10
+0:00:41.000 --> 0:00:45.000
+I work as a software engineer at a company called Corelogix, where we're building an
+
+11
+0:00:45.000 --> 0:00:46.000
+observability platform.
+
+12
+0:00:46.000 --> 0:00:51.640
+Apart from that, I am active in different open source communities, mostly within the
+
+13
+0:00:51.640 --> 0:00:58.140
+cloud-native computing foundation, specifically in the observability area.
+
+14
+0:00:58.140 --> 0:01:00.280
+I work a lot with metrics.
+
+15
+0:01:00.280 --> 0:01:06.480
+I'm a maintainer of the TANOS project, which I will also talk a bit about during my presentation.
+
+16
+0:01:06.480 --> 0:01:11.980
+And apart from that, I contribute to a couple different projects, most interestingly open
+
+17
+0:01:11.980 --> 0:01:12.980
+telemetry.
+
+18
+0:01:12.980 --> 0:01:15.640
+And, yeah, these are my handles.
+
+19
+0:01:15.640 --> 0:01:18.640
+I'm not that active on social media.
+
+20
+0:01:18.640 --> 0:01:23.080
+Best is to reach me on the GitHub issues directly or PRs.
+
+21
+0:01:23.080 --> 0:01:25.080
+And let's get into it.
+
+22
+0:01:25.080 --> 0:01:32.000
+So if anything else, I'd like you to take at least three things today from this presentation.
+
+23
+0:01:32.000 --> 0:01:37.160
+So first of all, I'd like you to understand how strings work behind the scenes in Go.
+
+24
+0:01:37.160 --> 0:01:42.040
+This might be old news for many people who are more experienced with Go or might be a
+
+25
+0:01:42.040 --> 0:01:48.920
+new knowledge for newbies, but I want to set kind of a common ground from which we then
+
+26
+0:01:48.920 --> 0:01:50.520
+can talk about the optimization.
+
+27
+0:01:50.520 --> 0:01:55.800
+Secondly, I want to tell you about the use cases in context of which I have been thinking
+
+28
+0:01:55.800 --> 0:02:00.080
+about string optimization and where I think the presented strategies can be useful.
+
+29
+0:02:00.080 --> 0:02:05.660
+And lastly, I want to tell you about the actual optimization strategies and show some examples
+
+30
+0:02:05.660 --> 0:02:09.880
+of how they can be applied or where they have been applied.
+
+31
+0:02:09.880 --> 0:02:15.880
+I won't be talking today that much about stack versus heap, although a lot of this has to
+
+32
+0:02:15.880 --> 0:02:18.240
+do with memory.
+
+33
+0:02:18.240 --> 0:02:24.040
+For the presentation, I assume we'll be talking more about the heap and kind of the long-term
+
+34
+0:02:24.040 --> 0:02:27.640
+storage of strings in memory.
+
+35
+0:02:27.640 --> 0:02:32.600
+Also I'll be going into encoding or related types like runes and chars, although it's
+
+36
+0:02:32.600 --> 0:02:38.020
+all kind of related, but it's outside of the scope for today.
+
+37
+0:02:38.020 --> 0:02:41.940
+So let me first tell you what kind of brought me to this topic, what was the inspiration
+
+38
+0:02:41.940 --> 0:02:42.940
+behind this talk.
+
+39
+0:02:42.940 --> 0:02:48.040
+As I already said, I worked primarily in the observability landscape with metrics and over
+
+40
+0:02:48.040 --> 0:02:53.520
+the past almost two years, I was working a lot on the TANOS project, which I mentioned
+
+41
+0:02:53.520 --> 0:02:58.080
+and which you can for simple city here imagine as a distributed database for storing time
+
+42
+0:02:58.080 --> 0:02:59.640
+series.
+
+43
+0:02:59.640 --> 0:03:06.320
+And with this goes, it's intended to store millions of time series, even up to or more
+
+44
+0:03:06.320 --> 0:03:07.320
+than billion series.
+
+45
+0:03:07.320 --> 0:03:11.440
+We have heard also about deployments like that.
+
+46
+0:03:11.440 --> 0:03:16.640
+And as I was working with TANOS and learning about these various aspects and components,
+
+47
+0:03:16.640 --> 0:03:20.480
+one particular issue that has been standing out to me was the amount of memory needed
+
+48
+0:03:20.480 --> 0:03:24.600
+for certain TANOS components to operate.
+
+49
+0:03:24.600 --> 0:03:31.120
+And this is due, this is partly due to the fact that the time series data is stored in
+
+50
+0:03:31.120 --> 0:03:33.920
+memory in a time series database.
+
+51
+0:03:33.920 --> 0:03:38.640
+And this is where I decided to focus my attention, where I started to explore like how we can,
+
+52
+0:03:38.640 --> 0:03:44.280
+what are some possible avenues where we could optimize the performance here.
+
+53
+0:03:44.280 --> 0:03:47.880
+Digital here was played by doing this in a data driven way.
+
+54
+0:03:47.880 --> 0:03:54.920
+So I started looking at different data points from TANOS I got like metrics, profiles, benchmarks,
+
+55
+0:03:54.920 --> 0:03:59.840
+and this is a small side note because I considered data driven performance optimization to be
+
+56
+0:03:59.840 --> 0:04:04.280
+what most importance when you're improving the efficiency of your program.
+
+57
+0:04:04.280 --> 0:04:08.120
+And so I don't want to diverge here, but I highly recommend for you to check out a talk
+
+58
+0:04:08.120 --> 0:04:12.160
+by Bartik Plotka, who's I think is in the room here.
+
+59
+0:04:12.160 --> 0:04:17.600
+So he's talking couple of thoughts after me, who is kind of dedicating a lot of his time
+
+60
+0:04:17.600 --> 0:04:21.720
+into this data driven approach to efficiency in Go ecosystem.
+
+61
+0:04:21.720 --> 0:04:25.960
+I don't have it on the slide, but also the presentation that's after me that has to do
+
+62
+0:04:25.960 --> 0:04:28.680
+with squeezing Go functions, it seemed interesting.
+
+63
+0:04:28.680 --> 0:04:34.560
+So a lot of optimization talks today, which I love to see.
+
+64
+0:04:34.560 --> 0:04:39.560
+And you might also ask why string specifically, what makes them so interesting or so optimization
+
+65
+0:04:39.560 --> 0:04:41.800
+worthy?
+
+66
+0:04:41.800 --> 0:04:48.120
+And although I've been looking at TANOS for some time, something clicked after I've seen
+
+67
+0:04:48.120 --> 0:04:50.520
+this particular image at the different presentations.
+
+68
+0:04:50.520 --> 0:04:56.440
+So this was presentation from Brian Borum, and it should be also somewhere around Fosdem,
+
+69
+0:04:56.440 --> 0:05:02.320
+who is working on a kind of a neighboring project called Prometheus, which is a time
+
+70
+0:05:02.320 --> 0:05:05.200
+series database on which TANOS is built.
+
+71
+0:05:05.200 --> 0:05:11.640
+So if TANOS is kind of a distributed version of the Prometheus, we reuse a lot of the code
+
+72
+0:05:11.640 --> 0:05:16.480
+from Prometheus and also the actual time series database code.
+
+73
+0:05:16.480 --> 0:05:21.200
+So he showed, based on the profile and on the icicle graph that you see here, that the
+
+74
+0:05:21.200 --> 0:05:25.400
+labels take most of the memory in Prometheus, and that was around one third.
+
+75
+0:05:25.400 --> 0:05:30.160
+And when I thought about it, the result was rather surprising to me, because the labels
+
+76
+0:05:30.160 --> 0:05:36.680
+of the time series, we could think of them as some kind of metadata or some kind of contextual
+
+77
+0:05:36.680 --> 0:05:41.180
+data about the actual data points, about the samples, as we call them.
+
+78
+0:05:41.180 --> 0:05:45.480
+And these were taking up more spaces than those actual data points, those actual samples
+
+79
+0:05:45.480 --> 0:05:46.680
+themselves.
+
+80
+0:05:46.680 --> 0:05:51.720
+So there's been a lot of thought and work put into optimization and compression of the
+
+81
+0:05:51.720 --> 0:05:56.400
+samples, of the actual time series data, but Brian's finding indicated that there can be
+
+82
+0:05:56.400 --> 0:05:59.160
+more, can be squeezed out of labels.
+
+83
+0:05:59.160 --> 0:06:01.200
+And what are actually labels?
+
+84
+0:06:01.200 --> 0:06:06.860
+Labels are key value pairs attached to a given time series to kind of characterize it.
+
+85
+0:06:06.860 --> 0:06:10.880
+So in principle, they are nothing more than pairs of strings.
+
+86
+0:06:10.880 --> 0:06:13.960
+So this is what brought me in the end to the strings.
+
+87
+0:06:13.960 --> 0:06:17.720
+And it inspired me to talk about this topic to a larger audience.
+
+88
+0:06:17.720 --> 0:06:23.240
+I thought it might be useful to look at this from kind of a more general perspective, even
+
+89
+0:06:23.240 --> 0:06:28.520
+though we're dealing with this problem in a limited space of observability.
+
+90
+0:06:28.520 --> 0:06:33.840
+I think it can be also, some learnings from this can be gained and used also in different,
+
+91
+0:06:33.840 --> 0:06:37.420
+in other types of programs.
+
+92
+0:06:37.420 --> 0:06:42.000
+So first let's lay foundations to our talk by taking a look at what string actually is
+
+93
+0:06:42.000 --> 0:06:43.000
+in Go.
+
+94
+0:06:43.000 --> 0:06:46.360
+So most of you probably are familiar with different properties of strings.
+
+95
+0:06:46.360 --> 0:06:47.360
+They are immutable.
+
+96
+0:06:47.360 --> 0:06:52.600
+They can be converted easily into slices of bytes, can be concatenated, sliced, et cetera,
+
+97
+0:06:52.600 --> 0:06:53.600
+et cetera.
+
+98
+0:06:53.600 --> 0:06:57.240
+However, talking about the qualities of strings does not answer the question what strings
+
+99
+0:06:57.240 --> 0:06:58.520
+really are.
+
+100
+0:06:58.520 --> 0:07:02.720
+And if you look at the source code of Go, you'll see that the strings are actually represented
+
+101
+0:07:02.720 --> 0:07:05.240
+by the string struct struct.
+
+102
+0:07:05.240 --> 0:07:07.680
+So strings are structs.
+
+103
+0:07:07.680 --> 0:07:08.840
+Shocking, right?
+
+104
+0:07:08.840 --> 0:07:13.120
+You can also get the runtime representation of this from the reflect package, which contains
+
+105
+0:07:13.120 --> 0:07:15.320
+the string header type.
+
+106
+0:07:15.320 --> 0:07:19.920
+So based on these two types, we see that the string consists of a pointer to the actual
+
+107
+0:07:19.920 --> 0:07:24.360
+string data in the memory, an integer which gives the information about the size of the
+
+108
+0:07:24.360 --> 0:07:25.360
+string.
+
+109
+0:07:25.360 --> 0:07:28.600
+When Go creates a string, it allocates storage corresponding to the provided string size
+
+110
+0:07:28.600 --> 0:07:32.800
+and then sets the string content as a slice of byte.
+
+111
+0:07:32.800 --> 0:07:36.200
+As you've seen, the string data is stored as a contained slice of bytes memory.
+
+112
+0:07:36.200 --> 0:07:41.080
+The size of the strings stays the same during its lifetime since, as I mentioned previously,
+
+113
+0:07:41.080 --> 0:07:42.080
+the string is immutable.
+
+114
+0:07:42.080 --> 0:07:45.840
+And this also means that the size and the capacity of the backing slice of bytes stays
+
+115
+0:07:45.840 --> 0:07:47.480
+the same.
+
+116
+0:07:47.480 --> 0:07:51.320
+When you put this all together, the total size of the string will consist of the overhead
+
+117
+0:07:51.320 --> 0:07:56.000
+of the string header, which is equal to 16 bytes, and I show in a bit why, and the byte
+
+118
+0:07:56.000 --> 0:07:57.660
+length of the string.
+
+119
+0:07:57.660 --> 0:08:03.280
+We can break this down on this small example of the string I created with FOSDEM, space,
+
+120
+0:08:03.280 --> 0:08:04.820
+waving hand emoji.
+
+121
+0:08:04.820 --> 0:08:05.960
+So this is just a snippet.
+
+122
+0:08:05.960 --> 0:08:12.860
+I don't think it would compile this code, but for brevity, I decided to show these three
+
+123
+0:08:12.860 --> 0:08:14.720
+small lines.
+
+124
+0:08:14.720 --> 0:08:19.480
+And by calling the size method on the string type from the reflect package, you would see
+
+125
+0:08:19.480 --> 0:08:22.200
+it return number 16.
+
+126
+0:08:22.200 --> 0:08:23.200
+Don't be fooled.
+
+127
+0:08:23.200 --> 0:08:27.560
+The size method returns only the information of the size of the type, not size of the
+
+128
+0:08:27.560 --> 0:08:28.560
+whole string.
+
+129
+0:08:28.560 --> 0:08:33.360
+Therefore, it correctly tells us it's 16 bytes, 18 bytes due to pointer pointing to the string
+
+130
+0:08:33.360 --> 0:08:37.000
+in memory, and 8 bytes for keeping the string length information.
+
+131
+0:08:37.000 --> 0:08:41.920
+To get the size of the actual string data, we have to use the good old len method.
+
+132
+0:08:41.920 --> 0:08:43.760
+This tells us it's 11 bytes.
+
+133
+0:08:43.760 --> 0:08:50.340
+Since the string literal, here is UTF-8 encoded, we count one byte per each letter and space,
+
+134
+0:08:50.340 --> 0:08:54.380
+and we need actually four bytes to encode the waving hand emoji.
+
+135
+0:08:54.380 --> 0:08:58.200
+And this brings our total to 27 bytes.
+
+136
+0:08:58.200 --> 0:09:01.960
+Interestingly for such a short string, the overhead of storing it is bigger than the
+
+137
+0:09:01.960 --> 0:09:05.720
+string data itself.
+
+138
+0:09:05.720 --> 0:09:09.560
+It's also important to realize what happens if we declare a new string variable that is
+
+139
+0:09:09.560 --> 0:09:11.040
+copying an existing string.
+
+140
+0:09:11.040 --> 0:09:16.000
+In this case, co-creates what we can consider a shallow copy, meaning the data the string
+
+141
+0:09:16.000 --> 0:09:18.760
+refers to is shared between the variables.
+
+142
+0:09:18.760 --> 0:09:21.360
+Let's break it down again on the example of our FOSDEM string.
+
+143
+0:09:21.360 --> 0:09:27.520
+So we declare a new string literal FOSDEM waving hand emoji, and then create a new str
+
+144
+0:09:27.520 --> 0:09:32.560
+or new string variable, and set it to value equal to string or str.
+
+145
+0:09:32.560 --> 0:09:34.120
+What happens behind the scenes?
+
+146
+0:09:34.120 --> 0:09:37.800
+If you would look at the values, pointer of each of the strings, you would see different
+
+147
+0:09:37.800 --> 0:09:43.080
+addresses, making it obvious that these are two different strings strictly speaking.
+
+148
+0:09:43.080 --> 0:09:47.720
+By looking at their headers, we would see identical information, same pointer to string
+
+149
+0:09:47.720 --> 0:09:49.600
+data and same length.
+
+150
+0:09:49.600 --> 0:09:55.360
+Excuse me, can we turn the light on the front off?
+
+151
+0:09:55.360 --> 0:09:57.520
+I cannot, sorry.
+
+152
+0:09:57.520 --> 0:10:03.320
+Yeah, it's a bit light, right?
+
+153
+0:10:03.320 --> 0:10:05.120
+Sorry.
+
+154
+0:10:05.120 --> 0:10:10.760
+But anyway, so these are two different strings strictly speaking, and looking at the header
+
+155
+0:10:10.760 --> 0:10:16.760
+information, we would see that they point to same string data and have same length.
+
+156
+0:10:16.760 --> 0:10:20.640
+Because they are two different strings, we need to be mindful of the fact that the new
+
+157
+0:10:20.640 --> 0:10:23.000
+STR comes with a brand new string header.
+
+158
+0:10:23.000 --> 0:10:28.640
+So the bottom line is when we do this copying, there is again, even the data is shared, the
+
+159
+0:10:28.640 --> 0:10:32.600
+overhead of 16 bytes is still there.
+
+160
+0:10:32.600 --> 0:10:36.440
+So I briefly talked about my inspiration for this talk, but I also wanted to expand a bit
+
+161
+0:10:36.440 --> 0:10:42.240
+on the context of the problems where I think the string optimization strategies can be
+
+162
+0:10:42.240 --> 0:10:43.240
+useful.
+
+163
+0:10:43.240 --> 0:10:48.000
+I think in general, many programs with characteristics of in-memory stores may face performance
+
+164
+0:10:48.000 --> 0:10:49.000
+issue.
+
+165
+0:10:49.000 --> 0:10:52.320
+I will talk about in this slide such programs.
+
+166
+0:10:52.320 --> 0:10:57.160
+I already mentioned numerous times the time series database, DNS resolvers, or any other
+
+167
+0:10:57.160 --> 0:11:02.560
+kind of key value store, where we come with an assumption that these are some long-running
+
+168
+0:11:02.560 --> 0:11:09.960
+programs, and over the runtime of the program, we will keep the number of strings we'll keep
+
+169
+0:11:09.960 --> 0:11:12.160
+accumulating.
+
+170
+0:11:12.160 --> 0:11:15.040
+So we can be talking potentially billions of strings.
+
+171
+0:11:15.040 --> 0:11:19.320
+There's also potential for repetitions of strings since many of these stored values
+
+172
+0:11:19.320 --> 0:11:21.160
+may repeat themselves.
+
+173
+0:11:21.160 --> 0:11:26.160
+For example, if we associate each of our entries with a label denoting which cluster they belong
+
+174
+0:11:26.160 --> 0:11:31.440
+to, we are guaranteed to have repeated values since we have a finite and often small amount
+
+175
+0:11:31.440 --> 0:11:32.680
+of clusters.
+
+176
+0:11:32.680 --> 0:11:38.840
+So the string cluster will be stored as many times as many entries there are in our database.
+
+177
+0:11:38.840 --> 0:11:42.720
+There are also certain caveats when it comes to handling of incoming data.
+
+178
+0:11:42.720 --> 0:11:50.480
+Data will often come in the form of requests through HTTP or GRPC or any other protocol.
+
+179
+0:11:50.480 --> 0:11:56.280
+And usually we handle this data in our program by un-marshalling them into a struct, and
+
+180
+0:11:56.280 --> 0:12:03.800
+then we might want to store some information, some string from this struct in the memory
+
+181
+0:12:03.800 --> 0:12:05.120
+for future use.
+
+182
+0:12:05.120 --> 0:12:09.600
+However, the side effect of this is that the whole struct will be prevented from being
+
+183
+0:12:09.600 --> 0:12:14.520
+garbage collected because as long as the string or as a matter of fact any other field from
+
+184
+0:12:14.520 --> 0:12:21.400
+a struct is being referenced by our database in memory, the garbage collection won't kick
+
+185
+0:12:21.400 --> 0:12:25.760
+in and eventually will lead to bloat in the memory consumption.
+
+186
+0:12:25.760 --> 0:12:32.260
+I think the second kind of different type of programs where string optimization can
+
+187
+0:12:32.260 --> 0:12:39.400
+be useful are kind of one-off data processing situations as opposed to the long-running
+
+188
+0:12:39.400 --> 0:12:40.720
+programs.
+
+189
+0:12:40.720 --> 0:12:46.000
+So we can take an example of handling some large JSON file.
+
+190
+0:12:46.000 --> 0:12:50.760
+Perhaps it can be some data set from a study or a health data, which I think were some
+
+191
+0:12:50.760 --> 0:12:53.680
+good examples I've seen out in the wild.
+
+192
+0:12:53.680 --> 0:12:58.280
+And such processing will require a larger amount of memory to decode the data during
+
+193
+0:12:58.280 --> 0:12:59.280
+processing.
+
+194
+0:12:59.280 --> 0:13:03.000
+So in general we might be processing same strings that repeat themselves over and over
+
+195
+0:13:03.000 --> 0:13:05.600
+again such as the keys in the JSON document.
+
+196
+0:13:05.600 --> 0:13:09.280
+We're having to allocate such strings in you each time.
+
+197
+0:13:09.280 --> 0:13:15.920
+So now that we have a better understanding of the problem zones, let's look at the actual
+
+198
+0:13:15.920 --> 0:13:17.880
+optimization strategies.
+
+199
+0:13:17.880 --> 0:13:25.640
+So the first strategy is related to the issue I mentioned a couple of slides before where
+
+200
+0:13:25.640 --> 0:13:32.880
+we are wasting memory by keeping whole structs in memory when we only need part of the struct
+
+201
+0:13:32.880 --> 0:13:35.640
+that is represented by the string.
+
+202
+0:13:35.640 --> 0:13:40.080
+So what we want to do here is to have a mechanism that will allow us to quote unquote detach
+
+203
+0:13:40.080 --> 0:13:45.240
+the string from the struct so that the rest of the struct can be garbage collected.
+
+204
+0:13:45.240 --> 0:13:48.960
+Previously this was also possible to achieve with some unsafe manipulation of strings,
+
+205
+0:13:48.960 --> 0:13:55.080
+but since Go 118 there's a new method called clone in the string standard library that
+
+206
+0:13:55.080 --> 0:13:57.480
+makes it quite straightforward.
+
+207
+0:13:57.480 --> 0:14:00.080
+The clone creates a new fresh copy of the string.
+
+208
+0:14:00.080 --> 0:14:04.280
+This decouples the string from the struct, meaning the struct can be garbage collected
+
+209
+0:14:04.280 --> 0:14:08.620
+in the long term and will retain only the new copy of the string.
+
+210
+0:14:08.620 --> 0:14:13.060
+So remember previously I showed that when we copy strings we create shallow copies.
+
+211
+0:14:13.060 --> 0:14:14.360
+Here we want to achieve the opposite.
+
+212
+0:14:14.360 --> 0:14:19.340
+We want to truly copy the string and create a fresh copy of the underlying string data
+
+213
+0:14:19.340 --> 0:14:24.100
+so the original string can be garbage collected together with the struct it's part of.
+
+214
+0:14:24.100 --> 0:14:28.200
+So this you can refer to as deep copying.
+
+215
+0:14:28.200 --> 0:14:32.600
+The next most interesting and I'd say one of the most widely used strategies in software
+
+216
+0:14:32.600 --> 0:14:35.040
+in general is string interning.
+
+217
+0:14:35.040 --> 0:14:38.800
+String interning is a technique which makes it possible to store only a single copy of
+
+218
+0:14:38.800 --> 0:14:43.400
+each distinct string and subsequently we keep referencing the same underlying string in
+
+219
+0:14:43.400 --> 0:14:44.640
+the memory.
+
+220
+0:14:44.640 --> 0:14:49.440
+This concept is somewhat more common in other languages such as Java or Python but can be
+
+221
+0:14:49.440 --> 0:14:52.160
+implemented effortlessly in Go as well.
+
+222
+0:14:52.160 --> 0:14:56.560
+There are even some ready-made solutions out in the open that you can use.
+
+223
+0:14:56.560 --> 0:15:02.520
+So it's simple as you could achieve this by having a simple map string string and you
+
+224
+0:15:02.520 --> 0:15:08.200
+can keep the references to the string in this map which we can call our interning map or
+
+225
+0:15:08.200 --> 0:15:13.240
+cache or anything like that.
+
+226
+0:15:13.240 --> 0:15:16.480
+First complication comes with the concurrency, right?
+
+227
+0:15:16.480 --> 0:15:21.240
+Because we need a mechanism to prevent concurrent write and read to our interning map so obvious
+
+228
+0:15:21.240 --> 0:15:27.280
+choice would be to use Mutex which have our incurs performance penalty but so be it.
+
+229
+0:15:27.280 --> 0:15:31.800
+Our concurrency save map version from the sync standard library.
+
+230
+0:15:31.800 --> 0:15:36.280
+The second complication or the noteworthy fact is that with each new reference string
+
+231
+0:15:36.280 --> 0:15:41.440
+we are incurring the 16 bytes overhead as I explained a couple of slides back.
+
+232
+0:15:41.440 --> 0:15:47.880
+So even though we're saving on the actual string data it's not we're still incurring
+
+233
+0:15:47.880 --> 0:15:49.120
+the overhead.
+
+234
+0:15:49.120 --> 0:15:55.560
+So with millions of strings 16 bytes for every string it's not a trivial it's a non-trivial
+
+235
+0:15:55.560 --> 0:15:57.600
+amount.
+
+236
+0:15:57.600 --> 0:16:02.200
+Third complication comes from the unknown lifetime of the string in our interning map.
+
+237
+0:16:02.200 --> 0:16:07.000
+At some point in the lifetime of the program there might be no more references to a particular
+
+238
+0:16:07.000 --> 0:16:09.600
+string so it can be safely dropped.
+
+239
+0:16:09.600 --> 0:16:12.800
+But how to know when these conditions are met?
+
+240
+0:16:12.800 --> 0:16:18.120
+Ideally we don't want to be keeping unused strings as in an extreme case this can be
+
+241
+0:16:18.120 --> 0:16:25.520
+a denial of service vector leading to exhaustion of memory if we allow the map to grow unbounded.
+
+242
+0:16:25.520 --> 0:16:29.720
+One option could be to periodically clear the map or give the entry a certain time to
+
+243
+0:16:29.720 --> 0:16:34.840
+live so after a given period the map or the given entries are dropped from the map and
+
+244
+0:16:34.840 --> 0:16:39.600
+if a string reappears after such deletion we simply create the entry in the interning
+
+245
+0:16:39.600 --> 0:16:43.120
+map so kind of like cache.
+
+246
+0:16:43.120 --> 0:16:47.600
+And naturally this can lead to some unnecessary churning and unnecessary allocations because
+
+247
+0:16:47.600 --> 0:16:51.080
+we don't know exactly which strings are no longer needed or referenced but we might be
+
+248
+0:16:51.080 --> 0:16:54.160
+still dropping them.
+
+249
+0:16:54.160 --> 0:16:59.840
+Second and more elaborate way to do this is to keep counting the number of references
+
+250
+0:16:59.840 --> 0:17:05.520
+of the used strings and this naturally requires a more eloquent and complex implementation
+
+251
+0:17:05.520 --> 0:17:10.280
+but you can see here I linked work done in the Prometheus project where I think is a
+
+252
+0:17:10.280 --> 0:17:17.680
+good example of how this can be implemented with counting the references.
+
+253
+0:17:17.680 --> 0:17:20.080
+We can take this even to the next level.
+
+254
+0:17:20.080 --> 0:17:25.160
+As I recently learned there is an implementation of an interning library that is capable of
+
+255
+0:17:25.160 --> 0:17:27.880
+automatically dropping unused references.
+
+256
+0:17:27.880 --> 0:17:33.400
+The goal for.org intern library is capable of doing this thanks to somewhat controversial
+
+257
+0:17:33.400 --> 0:17:37.800
+concept of the finalizers in the Go runtime.
+
+258
+0:17:37.800 --> 0:17:42.360
+The first set very plainly make it possible to attach a function that will be called on
+
+259
+0:17:42.360 --> 0:17:47.440
+a variable that is deemed to be garbage collection ready by the garbage collector.
+
+260
+0:17:47.440 --> 0:17:52.360
+At that point this library checks the sentinel boolean on the reference value and if it finds
+
+261
+0:17:52.360 --> 0:17:57.440
+this is the last reference to that value it drops it from a map.
+
+262
+0:17:57.440 --> 0:18:01.680
+The library also cleverly boxes the string header down to a single pointer which brings
+
+263
+0:18:01.680 --> 0:18:06.020
+the overhead down to eight bytes instead of 16.
+
+264
+0:18:06.020 --> 0:18:10.760
+So as fascinating as this implementation is to me it makes use of some potentially unsafe
+
+265
+0:18:10.760 --> 0:18:15.720
+code behavior hence the dark arts reference in the slide title.
+
+266
+0:18:15.720 --> 0:18:19.500
+However the library is deemed stable and mature enough and has been created by some well known
+
+267
+0:18:19.500 --> 0:18:26.120
+names in the Go community so if you're interested I encourage you to study and look at the code
+
+268
+0:18:26.120 --> 0:18:32.360
+it's just one file but it's quite interesting and you're sure to learn a thing or two about
+
+269
+0:18:32.360 --> 0:18:37.200
+some less known parts of Go.
+
+270
+0:18:37.200 --> 0:18:42.720
+And as an example I've recently tried this library in the last blood point in the Thanos
+
+271
+0:18:42.720 --> 0:18:48.280
+project again I linked you the PR with the usage with the implementation which I think
+
+272
+0:18:48.280 --> 0:18:55.880
+is rather straightforward and we ran some synthetic benchmarks on this version with
+
+273
+0:18:55.880 --> 0:18:59.640
+interning turned on this was the result.
+
+274
+0:18:59.640 --> 0:19:04.720
+On the left side you can see probably not very clearly unfortunately but there is a
+
+275
+0:19:04.720 --> 0:19:12.360
+graph showing metrics for both both reported by the Go runtime how many bytes we have in
+
+276
+0:19:12.360 --> 0:19:21.960
+the heap and metrics reported by the container itself and you can see the differences between
+
+277
+0:19:21.960 --> 0:19:27.960
+the green and yellow line and the blue and red line so it's it came up to roughly two
+
+278
+0:19:27.960 --> 0:19:35.480
+to three gigabytes improvement per instance so this is averaged per I think across six
+
+279
+0:19:35.480 --> 0:19:40.760
+or nine instances so for instance this was around two to three gigabytes so we can count
+
+280
+0:19:40.760 --> 0:19:46.160
+overall improvements around ten to twelve gigabytes but more interestingly on the right
+
+281
+0:19:46.160 --> 0:19:52.280
+side of the slide there is another graph to kind of confirm that the interning is doing
+
+282
+0:19:52.280 --> 0:19:59.080
+something that is working then we can we can see we're following again metric reported
+
+283
+0:19:59.080 --> 0:20:04.080
+by the Go runtime and we're looking at the number of objects held in the memory so we
+
+284
+0:20:04.080 --> 0:20:12.080
+can see that it dropped it dropped almost by by half when we look at the average.
+
+285
+0:20:12.080 --> 0:20:15.600
+Finally there's a string interning with a slightly different flavor I would say which
+
+286
+0:20:15.600 --> 0:20:20.800
+I refer to a string interning with symbol tables and in this alternative instead of
+
+287
+0:20:20.800 --> 0:20:26.240
+keeping a reference string we replace it with another referring symbol such as for example
+
+288
+0:20:26.240 --> 0:20:31.360
+an integer so that integer one will correspond to string apple or integer two will correspond
+
+289
+0:20:31.360 --> 0:20:36.360
+to string banana and so on and this can be beneficial with scenarios with a lot of duplicated
+
+290
+0:20:36.360 --> 0:20:42.280
+strings again this brings me to my home home field and to the time series databases where
+
+291
+0:20:42.280 --> 0:20:49.040
+there is generally a high probability of the labels so also the strings being repeated
+
+292
+0:20:49.040 --> 0:20:53.640
+and especially when such strings are being sent over the wire so instead of sending all
+
+293
+0:20:53.640 --> 0:20:59.280
+the duplicated strings we can send a symbol table in their place and we can replace the
+
+294
+0:20:59.280 --> 0:21:05.600
+strings with the references in this table so where this idea come from or where I got
+
+295
+0:21:05.600 --> 0:21:11.080
+inspired for this was also in tunnels but this was by one of my fellow maintainers so
+
+296
+0:21:11.080 --> 0:21:16.600
+you can you can look at that PR who implemented this for data series being sent over the network
+
+297
+0:21:16.600 --> 0:21:23.520
+between tunnels components so instead of sending all the long and unduplicated label keys and
+
+298
+0:21:23.520 --> 0:21:28.520
+values so instead of sending all of these strings we build a symbol table that we send
+
+299
+0:21:28.520 --> 0:21:35.880
+together with the the duplicated label data that includes that contains only references
+
+300
+0:21:35.880 --> 0:21:40.560
+instead of the strings so that all we have to do on the other side once we receive the
+
+301
+0:21:40.560 --> 0:21:46.120
+data is to replace the references by the actual strings based on the symbol table which saves
+
+302
+0:21:46.120 --> 0:21:51.880
+us on one hand the cost of the network since the requests are smaller and also the allocations
+
+303
+0:21:51.880 --> 0:21:59.280
+once we're dealing with the data on the receiving side. Lastly you could try putting all of
+
+304
+0:21:59.280 --> 0:22:04.680
+the strings into one big structure into one big string and this can be useful to decrease
+
+305
+0:22:04.680 --> 0:22:10.200
+the total overhead of the strings as this eliminates the already mentioned overhead
+
+306
+0:22:10.200 --> 0:22:19.280
+of the string header so yeah since this is always 16 bytes plus the byte length of the
+
+307
+0:22:19.280 --> 0:22:23.160
+string which consists which creates the size of the of the string by putting all the strings
+
+308
+0:22:23.160 --> 0:22:30.400
+into the one we can effectively decrease the overhead of those string headers so of course
+
+309
+0:22:30.400 --> 0:22:35.280
+this is not without added complexity because now we have to deal with how to look up those
+
+310
+0:22:35.280 --> 0:22:41.360
+substrings or those smaller strings within the big within the bigger structure and so
+
+311
+0:22:41.360 --> 0:22:46.240
+you need a mechanism because you cannot simply look them up in a map or symbol table and
+
+312
+0:22:46.240 --> 0:22:51.440
+obviously another already mentioned complications such as concurrent access you also have to
+
+313
+0:22:51.440 --> 0:22:55.880
+also still have to deal with this and I think particularly interesting attempt that this
+
+314
+0:22:55.880 --> 0:23:01.400
+is going on in the Prometheus project which again this is this is done by Brian Boren
+
+315
+0:23:01.400 --> 0:23:06.960
+who I mentioned in the previous slides so if you're interested feel free to feel free
+
+316
+0:23:06.960 --> 0:23:16.400
+to check out this this PR so I will conclude with a few words of caution so I have show
+
+317
+0:23:16.400 --> 0:23:19.960
+you some optimization techniques that I found particularly interesting when I was doing
+
+318
+0:23:19.960 --> 0:23:24.440
+my research but let's not be naive these are not magic ones that will make your program
+
+319
+0:23:24.440 --> 0:23:30.180
+suddenly work faster and with fewer resources this is still a balancing exercise so many
+
+320
+0:23:30.180 --> 0:23:34.120
+of the presented techniques can save memory but will actually increase the time it takes
+
+321
+0:23:34.120 --> 0:23:39.480
+to retrieve a string so when I mean optimization this is mostly in a situation where we want
+
+322
+0:23:39.480 --> 0:23:44.680
+to decrease expensive memory footprint of our application while sacrificing a bit more
+
+323
+0:23:44.680 --> 0:23:51.000
+CPU a trade-off that I believe is reasonable in such setting most of making any concrete
+
+324
+0:23:51.000 --> 0:23:57.360
+claims about performance improvements of various techniques as you have seen and I think this
+
+325
+0:23:57.360 --> 0:24:02.240
+nicely ties into the introduction of my talk where I talked about the need of data data
+
+326
+0:24:02.240 --> 0:24:06.860
+driven optimization so I believe there's still more data points needed to show how well these
+
+327
+0:24:06.860 --> 0:24:12.960
+techniques work in practice how well they can work in your specific use case how they
+
+328
+0:24:12.960 --> 0:24:18.080
+compare with each other when it comes to performance and whether there are some other real world
+
+329
+0:24:18.080 --> 0:24:24.880
+implications or maybe properties of go or compiler or the runtime that might not render
+
+330
+0:24:24.880 --> 0:24:33.920
+them useful in practice or the performance gain might be negligible so just to say that
+
+331
+0:24:33.920 --> 0:24:43.800
+your mileage might vary but I think these ideas are worth exploring and can be interesting
+
+332
+0:24:43.800 --> 0:24:57.160
+and that is all from my side thank you for your attention. Also included a couple more
+
+333
+0:24:57.160 --> 0:25:14.760
+resources for those interested you can find the slides in the in the panta bar.
+

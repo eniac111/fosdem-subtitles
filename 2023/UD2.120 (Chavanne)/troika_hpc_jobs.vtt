@@ -1,0 +1,997 @@
+WEBVTT
+
+00:00.000 --> 00:15.720
+Okay, the next talk is a perfect fit after the previous talk.
+
+00:15.720 --> 00:21.960
+So Olivier and Axel are going to talk about Troika, a system to easily manage, submit
+
+00:21.960 --> 00:24.280
+your jobs to any HPC system.
+
+00:24.280 --> 00:28.520
+Yeah, thanks for inviting me and thanks for letting me talk.
+
+00:28.520 --> 00:36.060
+So yeah, Troika, as Ken has said, is a system so that we can interact with job submission
+
+00:36.060 --> 00:38.640
+systems with one given interface.
+
+00:38.640 --> 00:42.020
+So just before I start, a bit of context where I work.
+
+00:42.020 --> 00:48.840
+So I work for the European Centre for Medium-Range Weather Forecasts, which is a European-based
+
+00:48.840 --> 00:53.960
+international organisation, and we run an operational weather forecasting service four
+
+00:53.960 --> 01:02.000
+times a day that we send out to national meteorological services and private customers.
+
+01:02.000 --> 01:10.940
+So we also operate quite a variety of services, like we have our own in-house research to
+
+01:10.940 --> 01:15.500
+improve the models, to do climate analysis, refocus.
+
+01:15.500 --> 01:21.360
+We operate services linked to climate change, for instance, as part of the EU Copernicus
+
+01:21.360 --> 01:27.080
+service, and we've just started a new project called Destination Earth.
+
+01:27.080 --> 01:32.120
+So I'll talk a bit more about that because it's a nice entry to what I will present.
+
+01:32.120 --> 01:36.000
+So it's a EU programme for weather and climate.
+
+01:36.000 --> 01:41.680
+It's a large collaboration that we drive with ESA, the European Space Agency and the European
+
+01:41.680 --> 01:44.920
+Meteorological Satellite Organisation.
+
+01:44.920 --> 01:48.800
+And the goal is to run simulations of the Earth at one kilometre resolution.
+
+01:48.800 --> 01:56.460
+So for those who are wondering, that's about 256 million points per vertical level.
+
+01:56.460 --> 02:02.920
+So this project is quite big, and it will run on multiple HPC systems across Europe.
+
+02:02.920 --> 02:14.240
+So for instance, I think Barcelona with BSC and Lumine Finland, just to name two.
+
+02:14.240 --> 02:19.520
+And that means we will require some level of flexibility to run our workflows.
+
+02:19.520 --> 02:26.920
+So you noticed I didn't say job because in weather forecasting and also for these projects,
+
+02:26.920 --> 02:31.160
+we have lots of different tasks that we run together.
+
+02:31.160 --> 02:37.040
+So here you can see an overview of what we run operationally.
+
+02:37.040 --> 02:44.000
+But in practice, that's a few thousand tasks that run every time we want to run one of
+
+02:44.000 --> 02:47.120
+these pipelines.
+
+02:47.120 --> 02:50.520
+And we have multiple types of workflows in-house.
+
+02:50.520 --> 02:56.000
+So the main one is the operational one, of course, but then researchers have their own
+
+02:56.000 --> 02:58.200
+workflows.
+
+02:58.200 --> 03:03.920
+We have support workflows like CICD, deploying software, or just fetching data and using
+
+03:03.920 --> 03:06.360
+data and things like that.
+
+03:06.360 --> 03:12.720
+And that amounts to about half a million tasks per day on our HPC cluster.
+
+03:12.720 --> 03:19.120
+And so sometimes we run parallel jobs, but most of those tasks are just small, like one
+
+03:19.120 --> 03:25.040
+CPU or a few CPU tasks just to do some processing.
+
+03:25.040 --> 03:30.040
+So for that, we use a workflow manager that we developed called ETflow, which basically
+
+03:30.040 --> 03:34.240
+manages a task graph as a tree with additional dependencies.
+
+03:34.240 --> 03:39.480
+So you can have dependencies on dates, loops, and things like that.
+
+03:39.480 --> 03:42.500
+And that runs a script for every task.
+
+03:42.500 --> 03:46.160
+So a task being one leaf in the tree I show here.
+
+03:46.160 --> 03:53.240
+It stores variables for preprocessing if needed, keeps track of the task status, fetches log
+
+03:53.240 --> 03:54.740
+files on demand.
+
+03:54.740 --> 04:01.200
+What it doesn't do to keep it simple is connect to remote systems and talk to specific queuing
+
+04:01.200 --> 04:02.200
+systems.
+
+04:02.200 --> 04:10.440
+So ETflow just runs commands on the server host, which is usually VM, and provides three
+
+04:10.440 --> 04:16.680
+entry points, which are submit, monitor, and kill for every task.
+
+04:16.680 --> 04:21.400
+And so if you want to run an actual job on an HPC system, that means you have to have
+
+04:21.400 --> 04:22.600
+some kind of interface.
+
+04:22.600 --> 04:27.880
+So first you can start by just saying, oh, yeah, the command is SSH to my cluster and
+
+04:27.880 --> 04:28.880
+submit a job.
+
+04:28.880 --> 04:31.120
+And that's it, which works.
+
+04:31.120 --> 04:36.600
+But when you change cluster, or even like there is an option to put, you're in trouble
+
+04:36.600 --> 04:42.000
+because you have to change that variable, and it can be a bit painful, especially if
+
+04:42.000 --> 04:47.720
+you have thousands of tasks, or you don't want to regenerate the whole workflow.
+
+04:47.720 --> 04:51.520
+So next possible thing, you write a shell script.
+
+04:51.520 --> 04:54.520
+So you could do multiple actions in your script.
+
+04:54.520 --> 04:55.720
+You have a bit more flexibility.
+
+04:55.720 --> 05:00.120
+But I don't know if you tried handling configuration in your shell script.
+
+05:00.120 --> 05:03.520
+Usually it ends up quite easily into a nightmare.
+
+05:03.520 --> 05:07.000
+It's very hard to maintain.
+
+05:07.000 --> 05:09.960
+If you deal with several people, everyone has their own.
+
+05:09.960 --> 05:13.520
+So we try to have something a bit cleaner.
+
+05:13.520 --> 05:20.480
+And so we want to delegate it to a submitter interface that can be made generic, gives
+
+05:20.480 --> 05:22.040
+you lots of flexibility.
+
+05:22.040 --> 05:26.020
+And you can also maintain it as a proper piece of software.
+
+05:26.020 --> 05:32.120
+That means versioning, testing, and some level, at least, of reproducibility.
+
+05:32.120 --> 05:39.640
+So, we call our software Torica because it runs mainly those three actions, submit, monitor,
+
+05:39.640 --> 05:41.800
+and kill.
+
+05:41.800 --> 05:48.400
+It's able to handle remote connection to a remote system, mostly using SSH.
+
+05:48.400 --> 05:55.320
+It's also able to prepare the JavaScript for submission, interact with the QE system, and
+
+05:55.320 --> 05:59.000
+optionally you can run hooks at diverse points.
+
+05:59.000 --> 06:01.440
+So it's written in Python.
+
+06:01.440 --> 06:08.080
+We put a strong emphasis in making it configurable so everything can be driven by configuration.
+
+06:08.080 --> 06:11.080
+I'll show how this works afterwards.
+
+06:11.080 --> 06:12.540
+And we want it to be extensible.
+
+06:12.540 --> 06:19.520
+So you can add new connection methods if running locally on your server node or running over
+
+06:19.520 --> 06:20.520
+SSH isn't enough.
+
+06:20.520 --> 06:23.080
+You could just add a plug-in.
+
+06:23.080 --> 06:27.320
+If you want to support another QE system, same.
+
+06:27.320 --> 06:32.080
+And if you want to add some hooks, for instance, to create directories before you jump runs
+
+06:32.080 --> 06:39.280
+or copy files over before or after submitting a job, et cetera, you can also do it.
+
+06:39.280 --> 06:42.200
+So as an example, that's how you would run Troika.
+
+06:42.200 --> 06:47.880
+So it has quite a simple command line interface where you can control most of the flags you
+
+06:47.880 --> 06:52.280
+will need in your day-to-day life.
+
+06:52.280 --> 06:56.980
+So you choose the action you want to do, submit, monitor, or kill.
+
+06:56.980 --> 07:03.120
+You give it a machine name which is defined in configuration.
+
+07:03.120 --> 07:08.440
+Some options like the user, you tell it where to write the output file because that will
+
+07:08.440 --> 07:11.200
+stay on the server.
+
+07:11.200 --> 07:17.580
+And it serves as a reference if you want to copy some other files that would be put alongside
+
+07:17.580 --> 07:18.680
+this one.
+
+07:18.680 --> 07:24.400
+And so here you can see the log below that shows the commands that would be actually
+
+07:24.400 --> 07:27.800
+executed when doing that.
+
+07:27.800 --> 07:31.840
+So as I said, everything of that is configurable.
+
+07:31.840 --> 07:38.140
+So each site has a name to identify it on the command line.
+
+07:38.140 --> 07:44.840
+And then you define the connection type, local, SSH, whatever you want to add, a type.
+
+07:44.840 --> 07:49.560
+So for now we support direct execution, SLURM, and PBS.
+
+07:49.560 --> 07:51.480
+And then you can add some hooks, for instance.
+
+07:51.480 --> 07:57.040
+Oh yeah, before I start doing anything, check the connection just to see whether it will
+
+07:57.040 --> 07:58.040
+actually work.
+
+07:58.040 --> 08:04.400
+Or, oh yeah, before submitting the script, just make sure the directory containing the
+
+08:04.400 --> 08:07.160
+output file exists.
+
+08:07.160 --> 08:14.840
+Or once the job is submitted, copy the log file to the server so that we can see everything
+
+08:14.840 --> 08:20.960
+in the same place rather than having files scattered around every system.
+
+08:20.960 --> 08:26.320
+And so that's all good, but just having an alias to sbatch that does it remotely is
+
+08:26.320 --> 08:27.660
+not really helpful.
+
+08:27.660 --> 08:35.160
+So we need also to modify the JavaScript to add some options that are understandable by
+
+08:35.160 --> 08:36.960
+the submission system.
+
+08:36.960 --> 08:47.080
+So for that we decided to have a new language, because obviously the directives are not interoperable
+
+08:47.080 --> 08:50.800
+across submission systems.
+
+08:50.800 --> 08:54.680
+And so we need some kind of translation.
+
+08:54.680 --> 09:02.680
+We input some generic directives, and we can add some in the configuration as well.
+
+09:02.680 --> 09:04.920
+And then we translate them.
+
+09:04.920 --> 09:13.280
+So either for things very simple, like, oh yeah, the output file in PBS is minus O, in
+
+09:13.280 --> 09:18.140
+SLURM is minus minus output.
+
+09:18.140 --> 09:24.480
+So this kind of translation, you could have also plugins that compute resources, like,
+
+09:24.480 --> 09:27.700
+if someone gives you the number of nodes and the number of tasks per node, and you need
+
+09:27.700 --> 09:30.720
+the total number of tasks, things like that.
+
+09:30.720 --> 09:36.680
+So you could add plugins, or if you have some specific resource management in your HPC,
+
+09:36.680 --> 09:39.920
+you can add that as well.
+
+09:39.920 --> 09:44.620
+And then on the output side, we have a generator that's site-specific, again, because we need
+
+09:44.620 --> 09:48.240
+to adapt the directives to the system.
+
+09:48.240 --> 09:52.920
+It can make the last few translations, for instance, the actual syntax of some options
+
+09:52.920 --> 09:54.840
+like mail options.
+
+09:54.840 --> 10:02.240
+Most submission systems allow you to specify an email address to which send an email for
+
+10:02.240 --> 10:04.200
+some of your tasks.
+
+10:04.200 --> 10:09.360
+Only the syntax is slightly different for everyone, so it does that translation.
+
+10:09.360 --> 10:15.080
+And it's able to add code if you need, for instance, to define environment variables
+
+10:15.080 --> 10:18.200
+in your software.
+
+10:18.200 --> 10:25.320
+So the main components that are extensible in Troika are, as I said, the interaction
+
+10:25.320 --> 10:27.140
+with the queuing system.
+
+10:27.140 --> 10:35.440
+So you have a parser that reads the native directives so that you can use them if you
+
+10:35.440 --> 10:38.480
+need them for your processing.
+
+10:38.480 --> 10:41.640
+It generates the JavaScript.
+
+10:41.640 --> 10:50.520
+It runs the appropriate commands, so either using qsub as batch or whatever.
+
+10:50.520 --> 10:55.440
+It could use APIs if you have another system.
+
+10:55.440 --> 11:00.400
+And it can also keep track of the submission, so most of the time just keeping a job ID
+
+11:00.400 --> 11:05.920
+so that if you want to monitor the task, you just say, oh, yeah, the script was this.
+
+11:05.920 --> 11:11.760
+And Troika will know, oh, yeah, I put the job ID in that file next to the script.
+
+11:11.760 --> 11:16.400
+I don't need you to tell me where it is.
+
+11:16.400 --> 11:18.640
+And so you can interact.
+
+11:18.640 --> 11:22.840
+You can choose how you want to interact and define new interfaces if you want.
+
+11:22.840 --> 11:24.200
+Same for the connection.
+
+11:24.200 --> 11:30.440
+So the connection mostly does the running of commands on the remote system.
+
+11:30.440 --> 11:36.440
+It's able to copy files over if needed both ways.
+
+11:36.440 --> 11:39.080
+Then you can have some hooks at various points.
+
+11:39.080 --> 11:45.920
+So at startup, just before submitting, just after killing a job, for instance, if you
+
+11:45.920 --> 11:49.760
+want to tell a workflow manager that, oh, this task doesn't exist anymore, I just killed
+
+11:49.760 --> 11:51.920
+it.
+
+11:51.920 --> 11:56.640
+Or at exit if you want to move your log files around, for instance.
+
+11:56.640 --> 12:00.960
+And that allows you to perform extra actions.
+
+12:00.960 --> 12:04.760
+And then the last thing you can customize is the translation.
+
+12:04.760 --> 12:10.880
+So if you want to generate more directives than the user provided, you can also do it.
+
+12:10.880 --> 12:17.120
+And basically, you just pass a function that takes the input set of directives and updates
+
+12:17.120 --> 12:21.560
+that set to whatever you need.
+
+12:21.560 --> 12:24.260
+So a bit of a success story for us.
+
+12:24.260 --> 12:31.520
+So we've just switched to a new HPC with a new set of ECflow server VMs, new location,
+
+12:31.520 --> 12:33.120
+new everything.
+
+12:33.120 --> 12:38.960
+So it's much simpler to actually be able to just change a config file rather than rewrite
+
+12:38.960 --> 12:43.840
+a whole shell script that does all the submissions for us.
+
+12:43.840 --> 12:48.160
+And also, since we have lots of different users, they have different needs, they have
+
+12:48.160 --> 12:50.100
+different ways of working.
+
+12:50.100 --> 12:56.000
+And what we managed to do with Troika is that we managed to bring them all together to use
+
+12:56.000 --> 13:03.400
+a single tool which runs the operational workflows where they need to have a tight control over
+
+13:03.400 --> 13:07.040
+what they actually submit and all the options.
+
+13:07.040 --> 13:12.920
+Research workflows which need to be very flexible because every researcher might have their
+
+13:12.920 --> 13:17.240
+own specific needs, but in the end they run mostly the same kind of code.
+
+13:17.240 --> 13:22.400
+So we need to have an interface that allows that.
+
+13:22.400 --> 13:25.320
+And then we run also general purpose servers.
+
+13:25.320 --> 13:30.440
+If someone has a data processing pipeline, for instance, they can just spawn a server
+
+13:30.440 --> 13:33.520
+and do their work.
+
+13:33.520 --> 13:38.280
+And that needs to have an easy to use interface because we don't want to teach people, oh,
+
+13:38.280 --> 13:42.060
+yeah, you also need to know that to run your job.
+
+13:42.060 --> 13:47.640
+So now what we do is we provide them with VMs where Troika has pre-installed and many
+
+13:47.640 --> 13:52.120
+of them just don't even notice that it's there.
+
+13:52.120 --> 13:58.520
+And as a summary, so I said at the beginning that we handle about half a million jobs per
+
+13:58.520 --> 14:06.040
+day and most of them now pass through Troika and it hasn't failed yet, so hopefully it
+
+14:06.040 --> 14:08.160
+works well enough.
+
+14:08.160 --> 14:14.000
+What it will help us with also going forward is supporting our software development.
+
+14:14.000 --> 14:18.660
+So it's not necessarily tied to a workflow manager.
+
+14:18.660 --> 14:25.320
+We want to control our CICD pipeline also using that because some of the elements of
+
+14:25.320 --> 14:28.720
+the pipeline have to run on our HPC system.
+
+14:28.720 --> 14:34.160
+So basically what we could do is from a GitHub runner, we could use Troika to connect to
+
+14:34.160 --> 14:41.600
+our HPC run jobs there to do testing, deployment and everything.
+
+14:41.600 --> 14:46.120
+We as I said run our in-house workflows and we will continue to do that for the foreseeable
+
+14:46.120 --> 14:47.160
+future.
+
+14:47.160 --> 14:53.560
+It will help us to adapt to new HPC systems because every time we make a tender, any provider
+
+14:53.560 --> 15:01.200
+could answer and we don't control which submission system we will end up with and even which
+
+15:01.200 --> 15:06.600
+site specific variants there will be in the set of options.
+
+15:06.600 --> 15:12.920
+And then for Destination Earth, as I mentioned before, we want to support multiple HPC with
+
+15:12.920 --> 15:18.120
+minimal changes to the code.
+
+15:18.120 --> 15:25.020
+And so just to tell a bit more where do you want to go from here.
+
+15:25.020 --> 15:34.040
+So we want to support more queueing systems because I mean we support two and one of them
+
+15:34.040 --> 15:38.520
+quite well because we use it, the other one a bit less maybe.
+
+15:38.520 --> 15:43.240
+We want also to add functionality to inquire about the submission system.
+
+15:43.240 --> 15:48.400
+So for instance which are the queues available, the partitions, things like that so that the
+
+15:48.400 --> 15:55.880
+user doesn't need to go to the server, check before running, like you could just run a
+
+15:55.880 --> 16:06.680
+command that fetches all the information in a useful way and gives it to you without abstracting
+
+16:06.680 --> 16:10.240
+basically the specifics.
+
+16:10.240 --> 16:16.120
+We also want to add some generic resource computation routines so we have some in-house
+
+16:16.120 --> 16:22.880
+but they are very tied to the way we function and so there will be some work to make it
+
+16:22.880 --> 16:30.120
+more generic and then integrate it in the main source code rather than in a plugin.
+
+16:30.120 --> 16:35.600
+And for improvements to the code we want to improve script generation, for now it's a
+
+16:35.600 --> 16:38.400
+bit clunky but it works.
+
+16:38.400 --> 16:45.480
+We want to widen desk coverage because you never test enough and provide packages to
+
+16:45.480 --> 16:52.280
+install it on Debian based machines for instance or RPMs for Red Hat systems etc.
+
+16:52.280 --> 16:57.560
+And if you want to contribute feel free to talk to me or go to our GitHub page and I'll
+
+16:57.560 --> 17:00.160
+stop here for now and take questions.
+
+17:00.160 --> 17:18.400
+Hello, thanks for the presentation.
+
+17:18.400 --> 17:24.280
+So basically I've done something quite similar for my employer sadly cannot be open sourced
+
+17:24.280 --> 17:30.280
+but the problem that we have is we have legacy clusters with legacy job submission systems.
+
+17:30.280 --> 17:36.840
+How did you manage to get the traction to migrate to Torica and to convince the user
+
+17:36.840 --> 17:43.000
+to port their job developments to this new system?
+
+17:43.000 --> 17:48.360
+So what we did first is that we made it as seamless as possible so if you want to interact
+
+17:48.360 --> 17:53.160
+with your job submission system without using our directives you can, they will just pass
+
+17:53.160 --> 17:58.760
+through but you lose on the generosity.
+
+17:58.760 --> 18:07.160
+And then what helped us is that we changed our HPC system and that means we did basically
+
+18:07.160 --> 18:13.560
+start afresh and everyone had to make changes so we just pushed that onto them and I must
+
+18:13.560 --> 18:19.440
+say many of them have been happy because that meant we can do that for them rather than
+
+18:19.440 --> 18:25.680
+them having to figure out the details of how do they submit jobs on that new system and
+
+18:25.680 --> 18:31.760
+everything that we can just tell them oh yeah it's reinstalled it works and so yeah that
+
+18:31.760 --> 18:32.760
+has been really helpful.
+
+18:32.760 --> 18:38.160
+I actually have a follow-up question to that so one thing we have been doing we switched
+
+18:38.160 --> 18:44.000
+recently well four or five years ago from Torque to Slurm and we didn't want to let
+
+18:44.000 --> 18:48.360
+all our users retrain themselves and learn the Slurm commands because in our experience
+
+18:48.360 --> 18:53.320
+Slurm is a bit less user-friendly than Torque is so what we did is we rolled a wrapper that
+
+18:53.320 --> 18:57.920
+people can still use Qsub but they're actually submitting to Slurm and it just it auto-translates
+
+18:57.920 --> 18:59.720
+the script in the background.
+
+18:59.720 --> 19:04.440
+Troika doesn't do that now right you have to use the Troika command but it knows about
+
+19:04.440 --> 19:05.440
+the Slurm header.
+
+19:05.440 --> 19:12.440
+Yeah so you could technically do it we didn't want to encourage that but technically you
+
+19:12.440 --> 19:20.000
+could like add I think you could write it in three lines a plugin that just takes the
+
+19:20.000 --> 19:25.080
+directives you would probably need to support all the directives you need but all the options
+
+19:25.080 --> 19:31.360
+like we have a built-in parser that is able to read like Slurm commands for instance and
+
+19:31.360 --> 19:39.240
+so you just need to tell Troika oh yeah use those on top of whatever is specified in configuration.
+
+19:39.240 --> 19:42.280
+Is that something you would take pull requests on?
+
+19:42.280 --> 19:43.280
+Yeah if you want to.
+
+19:43.280 --> 19:46.280
+We have another question.
+
+19:46.280 --> 20:01.880
+Hi thank you for the presentation very interesting so I'm an early programmer myself and so my
+
+20:01.880 --> 20:09.560
+question for you is how does it fail like how you studied or provoked you know intentional
+
+20:09.560 --> 20:17.160
+failures of the system and have you encountered funny behaviors like plenty hilarious faults
+
+20:17.160 --> 20:18.480
+of the system.
+
+20:18.480 --> 20:24.840
+Yeah we had I mean getting a new system has its lot of failures so I don't know if Axel
+
+20:24.840 --> 20:30.760
+you want to take over for that because you probably have handled some of the failures.
+
+20:30.760 --> 20:37.040
+In example of the command line provided you can see that we wrote on redirect the output
+
+20:37.040 --> 20:42.960
+for each submission and this is a chance to analyze the submission and to decide what's
+
+20:42.960 --> 20:48.880
+the best approach to deal with erroneous submission meaning that some of them have to be reflected
+
+20:48.880 --> 20:54.440
+the hard way to make it clearly visible this is a problem and some others can be handled
+
+20:54.440 --> 21:01.080
+in an either way or not so visible way in still deterministic way and so it may be hidden
+
+21:01.080 --> 21:06.240
+and still automatically under the problems when they occur and this is what we expect
+
+21:06.240 --> 21:13.120
+with so many job to submit to focus on the critical essential for the human side and
+
+21:13.120 --> 21:17.760
+to teach the to have a chance to teach the machines who the hook system to manage with
+
+21:17.760 --> 21:22.240
+those specificities we have identified as problematic but we want to keep ignore the
+
+21:22.240 --> 21:28.440
+or manage automatically until a fix is coming from the system for example if it is related
+
+21:28.440 --> 21:37.160
+to the system problem or identified issue that may come with the next release so this
+
+21:37.160 --> 21:44.800
+is the way to deal with the failures that can occur at job submission.
+
+21:44.800 --> 21:46.480
+Thank you.
+
+21:46.480 --> 22:00.560
+Did I understand correctly that when you're monitoring a job the reference is the script?
+
+22:00.560 --> 22:01.560
+Yes.
+
+22:01.560 --> 22:06.600
+So that correct so that means everyone has to make sure their scripts are uniquely named
+
+22:06.600 --> 22:12.040
+each time otherwise or is it the script and where it is in the file system?
+
+22:12.040 --> 22:18.240
+It's where it is in the file system so you are correct if someone deletes or renames their
+
+22:18.240 --> 22:25.680
+script then it can cause a problem or submits with the same script so it's not a problem
+
+22:25.680 --> 22:33.840
+for us because our work for manager basically does some preprocessing meaning that the script
+
+22:33.840 --> 22:40.800
+has some additional things like oh, yes, it's your second try at that submission so I will
+
+22:40.800 --> 22:48.960
+add the job to at the end and so that's how we circumvent this issue but you are definitely
+
+22:48.960 --> 22:54.800
+correct and that's something we will need to improve at some point but we didn't want
+
+22:54.800 --> 23:01.080
+to have to link to a database or something so that we can keep it simple.
+
+23:01.080 --> 23:03.040
+Thanks.
+
+23:03.040 --> 23:05.720
+You could just copy the script on submission.
+
+23:05.720 --> 23:06.720
+We could copy it.
+
+23:06.720 --> 23:12.920
+That's what Slope does, half a million scripts.
+
+23:12.920 --> 23:15.200
+We need to think about clean up.
+
+23:15.200 --> 23:17.880
+Other questions?
+
+23:17.880 --> 23:18.880
+Hello.
+
+23:18.880 --> 23:27.020
+Users like things to be as simple as possible.
+
+23:27.020 --> 23:31.840
+In order to do that, they would probably be nice to have some sort of central location
+
+23:31.840 --> 23:36.840
+where recipes of various clusters would be sort of combined accessible for people to
+
+23:36.840 --> 23:37.840
+be able to get access to.
+
+23:37.840 --> 23:41.200
+Is that in your plan?
+
+23:41.200 --> 23:43.000
+What do you mean on the configuration side?
+
+23:43.000 --> 23:48.280
+So I could imagine a user turning up going I'm going to download Troika and I'm going
+
+23:48.280 --> 23:50.400
+to talk to this cluster that I have access to.
+
+23:50.400 --> 23:52.520
+How do I get the configuration?
+
+23:52.520 --> 23:53.520
+Oh, okay.
+
+23:53.520 --> 23:54.520
+I see.
+
+23:54.520 --> 24:00.320
+So we don't have that but if Troika gets the traction, I think we could come up with
+
+24:00.320 --> 24:06.760
+a website where you can host your configuration files or have some kind of index where you
+
+24:06.760 --> 24:08.280
+can list them.
+
+24:08.280 --> 24:16.480
+I think, I mean, we would have all that's needed to do that pretty easily.
+
+24:16.480 --> 24:23.240
+I think hopefully the configuration is easy enough so that you don't need to do much on
+
+24:23.240 --> 24:25.760
+top of what's actually provided as examples.
+
+24:25.760 --> 24:27.960
+But, yeah, you are correct.
+
+24:27.960 --> 24:35.240
+We could, if it gets popular, just provide configuration files for several systems or,
+
+24:35.240 --> 24:43.880
+I mean, HPC system providers could also just give a configuration file with the system
+
+24:43.880 --> 24:48.040
+so we can have it where Troika is installed and then the user doesn't even need to bother
+
+24:48.040 --> 24:53.480
+about it.
+
+24:53.480 --> 24:54.480
+Very small second one.
+
+24:54.480 --> 25:00.080
+Given you've just done all this stuff, have you heard of a project called DRMAA, the Distributed
+
+25:00.080 --> 25:02.600
+Resource Manager Application API?
+
+25:02.600 --> 25:08.240
+It might make the insights of this slightly nicer for your EC flow stuff.
+
+25:08.240 --> 25:16.960
+Maybe it might take some inspiration for that.
+
+25:16.960 --> 25:19.240
+Thank you.
+
+25:19.240 --> 25:21.200
+A question but also an observation.
+
+25:21.200 --> 25:25.720
+A long time ago there was a standard code DRMAA.
+
+25:25.720 --> 25:26.720
+Just mentioned.
+
+25:26.720 --> 25:28.960
+It seems not to be used.
+
+25:28.960 --> 25:29.960
+Maybe I'm wrong.
+
+25:29.960 --> 25:36.200
+Very quickly, your system, if you had cloud-based resources on AWS, you've got an SSH connector.
+
+25:36.200 --> 25:40.320
+Could you in the future maybe run up some machines on AWS?
+
+25:40.320 --> 25:42.600
+Yeah, that could be an option.
+
+25:42.600 --> 25:50.040
+As long as you can write Python code to spawn up an image, a container somewhere.
+
+25:50.040 --> 25:51.840
+Yeah, sure.
+
+25:51.840 --> 25:53.760
+I think there are APIs for that.
+
+25:53.760 --> 25:58.680
+There just needs to be a plugin that does the connection and that's it.
+
+25:58.680 --> 25:59.680
+Cool.
+
+25:59.680 --> 26:02.320
+We're out of time.
+
+26:02.320 --> 26:03.320
+Just a comment.
+
+26:03.320 --> 26:07.240
+I don't think you have any people using Troika outside of ECMEF.
+
+26:07.240 --> 26:09.880
+No, that's the first time we actually present it outside.
+
+26:09.880 --> 26:10.880
+All right.
+
+26:10.880 --> 26:11.880
+Good.
+
+26:11.880 --> 26:14.440
+So you're trying to get people to start using it?
+
+26:14.440 --> 26:15.440
+Yes.
+
+26:15.440 --> 26:17.440
+You're building a community, you're getting yourself into trouble.
+
+26:17.440 --> 26:21.200
+You're going to get public requests and bug reports.
+
+26:21.200 --> 26:22.200
+Okay.
+
+26:22.200 --> 26:24.000
+Thank you very much.
+
+26:24.000 --> 26:25.000
+Thank you.
+
+26:25.000 --> 26:26.000
+Nice.
+
+26:26.000 --> 26:27.000
+Thank you.
+
+26:27.000 --> 26:52.140
+Please come forward, please

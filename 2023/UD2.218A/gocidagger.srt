@@ -1,0 +1,848 @@
+1
+0:00:00.000 --> 0:00:07.000
+Okay, thank you everyone. Our next speaker has some interesting news in for your CI. There are
+
+2
+0:00:11.840 --> 0:00:16.980
+better solutions than the YAML you used to and he's gonna, so Mark is gonna talk to us about
+
+3
+0:00:16.980 --> 0:00:30.980
+building a CI pipeline with Dagger in Go. Thank you, thank you. Can you hear me? Okay, so very
+
+4
+0:00:30.980 --> 0:00:38.180
+important information before we get started. I have some Dagger stickers here if you want to pick
+
+5
+0:00:38.180 --> 0:00:43.460
+them up. I know maybe I can just leave them after the talk or you can come to me and pick them up.
+
+6
+0:00:43.460 --> 0:00:50.420
+I'll leave the stickers over here and people can grab them. Important thing, stickers are for your
+
+7
+0:00:50.420 --> 0:00:54.740
+laptop not for the room. Every sticker you put inside a room involves them we have to pay for,
+
+8
+0:00:54.740 --> 0:01:02.600
+so keep them for yourself. Yeah, well that's why we are going to conferences for, right? So thank
+
+9
+0:01:02.600 --> 0:01:11.960
+you again for joining me today. My name is Mark and for the better part of the decade I've been
+
+10
+0:01:11.960 --> 0:01:18.620
+focusing on or helping the jury teams focus, build, helping them focus on their business
+
+11
+0:01:18.620 --> 0:01:22.620
+applications, building their best business applications instead of worrying about things
+
+12
+0:01:22.620 --> 0:01:30.140
+like CI and how they are being deployed. And I have this fake title at Cisco called technical
+
+13
+0:01:30.140 --> 0:01:36.620
+lead, but I decided that I would come clean here today. That I'm really nothing more than just the
+
+14
+0:01:36.620 --> 0:01:43.300
+YAML engineer. That feels good. Anyone else want to number themselves? I didn't have their YAML
+
+15
+0:01:43.300 --> 0:01:56.700
+engineers here. All right. So let's talk about CI CD a bit and CI or CI systems improved a lot in
+
+16
+0:01:56.700 --> 0:02:05.980
+the last couple years. We have new and more involved CI solutions today, but we still have
+
+17
+0:02:05.980 --> 0:02:13.980
+some challenges that we face every day, like the one I've been ordering hinting at YAML. Obviously
+
+18
+0:02:13.980 --> 0:02:21.660
+YAML is one of the biggest problems with CI systems today. And admittedly sometimes like using YAML
+
+19
+0:02:21.660 --> 0:02:28.140
+to build the declarative pipeline can be fine, but man, you miss a space. The whole thing just
+
+20
+0:02:28.140 --> 0:02:36.140
+broke. The whole thing just broke. And you might not even know where to start debugging it. So
+
+21
+0:02:36.140 --> 0:02:45.020
+YAML makes it often really hard for people to even just touch CI. And the other thing is CI
+
+22
+0:02:45.020 --> 0:02:51.500
+like tends to break for no obvious reasons. Like the pipeline that worked yesterday may not work
+
+23
+0:02:51.500 --> 0:02:57.420
+today and you don't really know why. And obviously as developers, when something breaks in production,
+
+24
+0:02:57.420 --> 0:03:03.660
+we can just tell the ops people to worry about it. But with CI, that's not really the case. Like
+
+25
+0:03:03.660 --> 0:03:09.260
+we have to interact with CI and if something goes wrong, we might have to be the ones who fix it.
+
+26
+0:03:10.060 --> 0:03:17.420
+And with the currently available CI solutions today, you can't really like everything that's
+
+27
+0:03:17.420 --> 0:03:22.700
+running in the cloud or in the remote system, you can't really have or you don't really have tools
+
+28
+0:03:22.700 --> 0:03:28.700
+that you can use to debug effectively, you have to start guessing and start changing some YAML config
+
+29
+0:03:29.340 --> 0:03:34.540
+and you have to push that to a repository and then wait for the CI to get triggered and you have to
+
+30
+0:03:34.540 --> 0:03:40.780
+go through this whole and long feedback loop to be able to debug what's going wrong and to be able
+
+31
+0:03:40.780 --> 0:03:46.780
+to fix that. And that's a pain. Like it takes a lot of time. It's really a huge waste of time.
+
+32
+0:03:46.780 --> 0:03:56.140
+And it's really painful to do that. Now, sometimes it's not the CI that's wrong. Sometimes it's you,
+
+33
+0:03:56.140 --> 0:04:02.940
+like pushing something that you shouldn't be pushing to the repository like tests are not
+
+34
+0:04:02.940 --> 0:04:09.900
+passing or the linters are not passing or something else goes wrong. And again, you may have the tools
+
+35
+0:04:09.900 --> 0:04:16.540
+locally in your machine, but you may not have the same versions. You may not have the same setup
+
+36
+0:04:16.540 --> 0:04:22.540
+as in the CI and it may just break in the CI even though you ran the test locally and all everything
+
+37
+0:04:22.540 --> 0:04:29.180
+was green. It may still fail in the CI and you still have to go through the same long feedback
+
+38
+0:04:29.180 --> 0:04:35.260
+loop again and again, trying to fix that instead of being able to run the whole thing locally and
+
+39
+0:04:35.260 --> 0:04:41.820
+being confident that it will just work in the CI as well. And probably there are other challenges
+
+40
+0:04:41.820 --> 0:04:47.900
+with CI, but these are the ones that wasted hours from my life in the last couple of years. So,
+
+41
+0:04:48.940 --> 0:04:56.220
+how can Dagger provide an answer to these problems? So, first of all, Dagger is a programmable and
+
+42
+0:04:56.220 --> 0:05:03.100
+deportable CI solution, which means you can run your CI pipelines basically anywhere. We will get
+
+43
+0:05:03.100 --> 0:05:10.620
+to how it does that. But the important thing is that you can run your CI pipelines anywhere using
+
+44
+0:05:10.620 --> 0:05:16.060
+the same environment, which means if it runs on your machine, then you can be confident that it
+
+45
+0:05:16.060 --> 0:05:21.740
+will run the same way in your own CI system. Now, that's a great thing for a number of reasons
+
+46
+0:05:21.740 --> 0:05:28.380
+because when you start building a pipeline, for example, using any of the CI systems today,
+
+47
+0:05:29.420 --> 0:05:34.940
+you still have to go through that feedback loop, like adding some config and then pushing it to
+
+48
+0:05:34.940 --> 0:05:40.700
+the get to the flow and trying to figure out if it works or not and then changing until it works.
+
+49
+0:05:40.700 --> 0:05:47.100
+If you have the ability to run this whole thing locally, it's much shorter feedback loop so you
+
+50
+0:05:47.100 --> 0:05:54.540
+can build your own CI pipelines much more quickly than using some remote system. The other thing is
+
+51
+0:05:54.540 --> 0:05:59.660
+that if something goes wrong, you have the whole thing running locally. So, again, shorter feedback
+
+52
+0:05:59.660 --> 0:06:07.340
+loop, you have more tools to debug, so it's much easier to figure out what goes wrong, even if
+
+53
+0:06:07.340 --> 0:06:14.460
+it's either the CI pipeline or your code. The other thing about Dagger is that you can actually
+
+54
+0:06:14.460 --> 0:06:19.580
+write your pipelines in your own preferred language. Now, not any language, obviously,
+
+55
+0:06:20.140 --> 0:06:25.980
+some of the languages that the Dagger supports, but that's already much better than the YAML.
+
+56
+0:06:25.980 --> 0:06:32.220
+Like, you can write your pipelines in Go or Python or TypeScript, thinkQ, evenQ,
+
+57
+0:06:33.180 --> 0:06:39.740
+but that's already much better than YAML. You can write your own pipelines in code and you don't
+
+58
+0:06:39.740 --> 0:06:45.820
+have to invent or use some weird syntax, for example, to represent dependencies between steps
+
+59
+0:06:45.820 --> 0:06:52.140
+or between different pipelines. You can just do that in plain code. So, that's great. And all those
+
+60
+0:06:52.140 --> 0:06:59.580
+some of the portability in writing pipelines in your own language points to the fact that you can
+
+61
+0:06:59.580 --> 0:07:05.820
+avoid pandor locking entirely. Like, you would still have, like, a CI solution, like,
+
+62
+0:07:06.380 --> 0:07:12.540
+Jenkins or GitHub actions or whatever, and you would still run Dagger on those systems, but you
+
+63
+0:07:12.540 --> 0:07:19.100
+would have to write, like, a very thin integration layer just to run the Dagger pipelines, and you
+
+64
+0:07:19.100 --> 0:07:24.700
+can you would be much more confident that the pipelines would run the same way on the CI system
+
+65
+0:07:25.660 --> 0:07:32.940
+as on your computer, and, yeah, you can avoid vendor locking entirely. Like, you can move to
+
+66
+0:07:32.940 --> 0:07:39.580
+another CI system if you want to, and you may say that doesn't happen often, but when it does, man,
+
+67
+0:07:39.580 --> 0:07:45.100
+it's really painful. Like, converting from one YAML to another or one YAML to, I don't know,
+
+68
+0:07:45.100 --> 0:07:51.420
+Groovy or Jenkins file or something, that's that hurts. And lastly,
+
+69
+0:07:53.260 --> 0:08:00.460
+costly caching. So, every CI system or most CI systems have their own caching solutions where
+
+70
+0:08:00.460 --> 0:08:07.740
+you can, like, cache the dependencies of your language or dependency manager, but that requires,
+
+71
+0:08:07.740 --> 0:08:13.820
+like, configuration. You have to make sure that you configure it right. Otherwise, well, it could
+
+72
+0:08:13.820 --> 0:08:19.740
+either, like, grow the caching less and you will be paying a lot of money for that, or it would just
+
+73
+0:08:19.740 --> 0:08:25.580
+be non-functional at all and it wouldn't cache anything properly. Now, with Dagger, everything
+
+74
+0:08:25.580 --> 0:08:32.300
+is cached by default. Like, every step is cached. You can think about it like a Docker file. Every
+
+75
+0:08:32.300 --> 0:08:37.340
+instruction or the result of it is basically cached in a separate layer in the Docker file,
+
+76
+0:08:37.340 --> 0:08:43.980
+and if nothing changed between the steps, then when you run it again, it will basically run the
+
+77
+0:08:43.980 --> 0:08:50.060
+same way and it will come from the cache. That's really how Dagger works. Obviously,
+
+78
+0:08:50.060 --> 0:08:54.220
+you have some control over what you want to cache and how you want to do it, but by default,
+
+79
+0:08:54.220 --> 0:09:01.740
+Dagger got that covered for you. Now, how does all this work behind the scenes? If I had to describe
+
+80
+0:09:01.740 --> 0:09:08.460
+it in one word, it's obviously containers. Now, we can do it ourselves today, right? Like, we could
+
+81
+0:09:08.460 --> 0:09:14.860
+just run everything in a container and it would be reasonable to say that it will run on the CEI the
+
+82
+0:09:14.860 --> 0:09:23.580
+same way. What Dagger adds to the mix here is that you can actually build pipelines with code,
+
+83
+0:09:23.580 --> 0:09:32.380
+and that would be translated into build pipelines. So, you would use the Dagger SDK, the language
+
+84
+0:09:32.380 --> 0:09:39.260
+SDK that Dagger provides. Again, today, I believe it's for Go, TypeScript, Python, maybe Q as well.
+
+85
+0:09:40.140 --> 0:09:48.540
+But the underlying API is actually the GraphQL. So, if you have a language client for GraphQL,
+
+86
+0:09:48.540 --> 0:09:53.260
+you can actually build your SDK if you want to, or you can just write GraphQL queries and send
+
+87
+0:09:53.260 --> 0:09:59.580
+those directly to the Dagger engine. But basically, you write your own pipelines using this SDK
+
+88
+0:10:01.340 --> 0:10:07.340
+in your own language, and then the SDK will basically send GraphQL queries to the Dagger
+
+89
+0:10:07.340 --> 0:10:12.780
+engine. Now, when you run the whole thing locally first, and the Dagger SDK will actually launch
+
+90
+0:10:12.780 --> 0:10:19.580
+the Dagger engine for you, all it needs is really a Docker compatible container runtime. So, if you
+
+91
+0:10:19.580 --> 0:10:29.100
+have Docker on your computer or in your CEI, then you can run your Dagger pipeline. So,
+
+92
+0:10:29.820 --> 0:10:35.340
+that's once more the portability of this whole thing. If you have Docker on your machine,
+
+93
+0:10:35.340 --> 0:10:40.380
+and Docker basically runs anywhere these days, then you can run Dagger pipeline there.
+
+94
+0:10:41.980 --> 0:10:47.420
+So, locally, when you launch this for the first time, the Dagger SDK will launch the Dagger
+
+95
+0:10:47.420 --> 0:10:52.940
+engine for you, and you send these GraphQL queries, and you'll see a couple examples how that looks
+
+96
+0:10:52.940 --> 0:11:01.980
+like in the SDK. And the Dagger engine basically builds a DAG-directed acyclic graph of all those
+
+97
+0:11:01.980 --> 0:11:09.260
+steps, and then sends it through, well, it says in OCR runtime, I believe currently Docker is the only
+
+98
+0:11:09.260 --> 0:11:15.020
+supported runtime. But sends through an OCR runtime and runs the whole thing in containers for you.
+
+99
+0:11:15.020 --> 0:11:21.180
+And then, obviously, when a pipeline is finished, you get back the results, and you can use the
+
+100
+0:11:21.180 --> 0:11:25.500
+results in another pipeline if you want to. For example, the result of your build pipeline would
+
+101
+0:11:25.500 --> 0:11:30.780
+be used in your deploy pipeline, and you could deploy your project or whatever you have.
+
+102
+0:11:31.820 --> 0:11:38.780
+So, that's how Dagger works under the hood. And let's take a look at an actual example.
+
+103
+0:11:38.780 --> 0:11:49.980
+Let's see. So, the example will be in Go, because this is the Go, the room.
+
+104
+0:11:53.900 --> 0:11:56.860
+Can you see it from the back?
+
+105
+0:11:56.860 --> 0:12:13.020
+Okay, cool. So, the first thing you need to use the Dagger SDK in Go is importing this module
+
+106
+0:12:13.820 --> 0:12:22.140
+from Dagger. It's the Dagger SDK for Go that you can use to interface with the Dagger engine.
+
+107
+0:12:22.140 --> 0:12:31.020
+And once you have that, you can basically start writing your own program. Now, in this case,
+
+108
+0:12:31.020 --> 0:12:36.700
+I'm using Mage. I'm not sure if you're familiar with that, but it's basically like a make file
+
+109
+0:12:36.700 --> 0:12:43.260
+like solution for Go. You can write these functions, and Mage will basically compile a
+
+110
+0:12:43.260 --> 0:12:52.700
+binary from that and execute it like it would work with make. Now, you can absolutely import
+
+111
+0:12:52.700 --> 0:12:56.620
+this Dagger package in your own application if you want to. In case of applications,
+
+112
+0:12:56.620 --> 0:13:02.060
+it's probably not a huge deal if you have an additional dependency in your Go modules. If
+
+113
+0:13:02.060 --> 0:13:08.460
+you're writing to a library, though, you might want to create a separate module, for example,
+
+114
+0:13:08.460 --> 0:13:17.900
+called CI, and import Dagger SDK in that separate module so you don't import Dagger as a development
+
+115
+0:13:17.900 --> 0:13:25.100
+dependency in your library's Go that modify. I know it still won't be built or still won't be in the
+
+116
+0:13:25.100 --> 0:13:31.900
+final binary if you import a library, but some people get to know it if they see dependencies
+
+117
+0:13:31.900 --> 0:13:40.620
+that is actually not necessary for the library. So make the life easier for your peers. And if
+
+118
+0:13:40.620 --> 0:13:46.140
+you develop a library and use Dagger, just create a separate module and put all the Dagger-related
+
+119
+0:13:46.140 --> 0:13:56.540
+code there. The first thing you need to do when you want to write PyPlay with Dagger is call this
+
+120
+0:13:56.540 --> 0:14:04.700
+Dagger connect function, which will basically connect to your Docker runtime and it will launch
+
+121
+0:14:05.260 --> 0:14:12.380
+the Dagger engine for you and start the so-called session. Now, within that session, you can start
+
+122
+0:14:13.500 --> 0:14:20.380
+building your actual pipelines using these containers. Now, it's pretty similar to how a
+
+123
+0:14:20.380 --> 0:14:30.140
+Docker file would look like, for good reason. But what you can do here is basically use some of the
+
+124
+0:14:30.140 --> 0:14:36.300
+same instructions as you would do in a Docker file. You can obviously go from a base image,
+
+125
+0:14:36.300 --> 0:14:42.540
+which will be going in a Go project, for example. You can mount your source code. That's how you
+
+126
+0:14:42.540 --> 0:14:48.060
+would have access to the source code within the container. And then you can run a bunch of commands
+
+127
+0:14:48.060 --> 0:14:59.020
+like test or you can do the same with the linker, for example. And the other two here,
+
+128
+0:14:59.020 --> 0:15:07.340
+these are the mounted caches. You can do that with the buildkit, actually. So that's, I believe,
+
+129
+0:15:07.340 --> 0:15:12.620
+that's a buildkit functionality. So you can mount a cache directory to the container that will not
+
+130
+0:15:12.620 --> 0:15:20.460
+actually be part of the container, but it will be a mounted cache directory from your host.
+
+131
+0:15:22.220 --> 0:15:25.580
+Now, let's see if I can run this.
+
+132
+0:15:31.260 --> 0:15:36.540
+So I'm using the mage minor here. I'm telling it to change to the CI directory because it's
+
+133
+0:15:36.540 --> 0:15:50.460
+a separate module. And then I'm telling it to use the current. Can you hear me? Okay.
+
+134
+0:15:54.060 --> 0:15:57.900
+Don't know what happened there. And then I'm basically just telling it to run the test
+
+135
+0:15:57.900 --> 0:16:06.620
+function here, again, similarly how a make file would look like. Now let's see what happens.
+
+136
+0:16:08.380 --> 0:16:11.660
+Kind of hope that I don't have to download all those content images.
+
+137
+0:16:11.660 --> 0:16:24.220
+Let's see. Let's get some logs here.
+
+138
+0:16:24.220 --> 0:16:28.780
+Okay.
+
+139
+0:16:37.820 --> 0:16:48.780
+I swear this worked like a couple of hours ago.
+
+140
+0:16:48.780 --> 0:16:55.340
+Oh, you know what? I think I don't have Docker running. Yeah. That's a problem.
+
+141
+0:17:09.020 --> 0:17:12.620
+Yeah, maybe, yeah. So I don't have the Dagger engine running. Let's see.
+
+142
+0:17:12.620 --> 0:17:18.220
+This should start a new container. I mean, this should start a new container.
+
+143
+0:17:18.220 --> 0:17:35.820
+What's going on?
+
+144
+0:17:48.300 --> 0:17:52.300
+All right. This is not great.
+
+145
+0:17:52.300 --> 0:18:11.900
+Can we operate to the Democrats, please? Thank you.
+
+146
+0:18:22.300 --> 0:18:29.180
+Okay. You all just have to believe me. This actually works.
+
+147
+0:18:34.780 --> 0:18:39.900
+Okay. So here are the logs from the previous run. So this actually worked before.
+
+148
+0:18:39.900 --> 0:18:50.300
+Okay. Yeah, it says let's see. Okay. Let's
+
+149
+0:18:50.300 --> 0:19:07.100
+try that.
+
+150
+0:19:07.100 --> 0:19:11.900
+Okay.
+
+151
+0:19:17.580 --> 0:19:20.140
+Let's see. Do we have internet connection here?
+
+152
+0:19:22.460 --> 0:19:24.220
+Yeah, we do have internet connection.
+
+153
+0:19:26.700 --> 0:19:29.020
+Okay. Well, we'll have to work with the logs from here.
+
+154
+0:19:29.020 --> 0:19:45.260
+Okay. So, well, basically what happens here is when it works is it just runs the whole
+
+155
+0:19:45.260 --> 0:19:53.100
+thing within this go along image, mounts the source code, and then runs the go that test
+
+156
+0:19:53.100 --> 0:19:58.300
+comment and just gives back the results. Obviously this is the build log. Like this
+
+157
+0:19:58.300 --> 0:20:03.020
+is the debug log, but normally it will just output the output of the go test command
+
+158
+0:20:04.060 --> 0:20:11.500
+or the go XCI command. Let's see. Still not working. Let's try from
+
+159
+0:20:11.500 --> 0:20:28.780
+the hot spot. Maybe that works better.
+
+160
+0:20:28.780 --> 0:20:42.060
+Anyway. Well, if someone wants to get back their money, sorry folks, this is a free conference.
+
+161
+0:20:43.820 --> 0:20:49.260
+Anyway, yeah, you will just have to believe me that this works, but I will try to make
+
+162
+0:20:49.260 --> 0:20:54.860
+this work after the presentation. Now, if you take a look at the code here, this is still not very
+
+163
+0:20:54.860 --> 0:21:03.020
+like user friendly. If you don't know how Dagger works or if you don't know what happens here,
+
+164
+0:21:03.020 --> 0:21:06.940
+then it's not really useful to you. You will have to go to the documentation and understand
+
+165
+0:21:06.940 --> 0:21:14.460
+how this whole thing works, when it works. So, but the good thing is that this is like,
+
+166
+0:21:14.460 --> 0:21:20.540
+this is code. This is not an arbitrary YAML interface you have to use. So, we can actually
+
+167
+0:21:20.540 --> 0:21:28.940
+make this a bit better if you want to. And what I did in the last couple of weeks is that I built
+
+168
+0:21:31.500 --> 0:21:36.940
+higher level library over the Dagger SDK. So, instead of writing all that container
+
+169
+0:21:36.940 --> 0:21:43.580
+mount nonsense stuff, you can just use this go link package. It's actually called
+
+170
+0:21:43.580 --> 0:21:52.060
+VOCI. You can find it here if you want to give it a try. And instead of, you still have to connect
+
+171
+0:21:52.060 --> 0:21:57.260
+to Dagger, obviously, but instead of running that whole or writing that whole container code,
+
+172
+0:21:57.900 --> 0:22:05.660
+you can just use this much more friendly interface to run your tests or run the goal in CI-Link,
+
+173
+0:22:05.660 --> 0:22:10.380
+for example. And it's much easier for developers to interact with this, like, if they want to
+
+174
+0:22:10.380 --> 0:22:16.140
+change the cover mode, for example, it's pretty obvious how you would want to do that. In this
+
+175
+0:22:16.140 --> 0:22:23.340
+case, compared to how you would want to do that, it would be the lower level Dagger SDK stuff.
+
+176
+0:22:24.700 --> 0:22:27.260
+Let's give this another try.
+
+177
+0:22:27.260 --> 0:22:40.220
+Okay. Now from the... Oh, still one. Let's go to the...
+
+178
+0:22:40.220 --> 0:23:02.860
+Well, it doesn't work. Anyway, if you want to give this a try at home, you're absolutely
+
+179
+0:23:02.860 --> 0:23:09.500
+welcome to do that. The documentation is getting better by the day. It has a bunch of different
+
+180
+0:23:09.500 --> 0:23:16.140
+examples. You will find these examples on my GitHub as well. I promise it works.
+
+181
+0:23:17.660 --> 0:23:22.700
+They've actually just released a brand-new Quick Start guide. So, so far, the documentation...
+
+182
+0:23:22.700 --> 0:23:28.620
+They had documentation for the different SDKs in different places. Now they have a Quick Start guide
+
+183
+0:23:29.260 --> 0:23:33.980
+that is basically the same for all of the languages. So, regardless which one you want to choose,
+
+184
+0:23:33.980 --> 0:23:40.300
+or if you want to try all three supported SDKs, you can do that with the Quick Start guide. And
+
+185
+0:23:40.300 --> 0:23:45.740
+you can actually go ahead and run the code from there. And finally, they have a playground
+
+186
+0:23:46.540 --> 0:23:54.780
+that works with their low-level GraphQL API. So, if you want to give that a try,
+
+187
+0:23:54.780 --> 0:23:58.540
+it's fairly similar to the SDK, actually. If you want to give that a try,
+
+188
+0:23:58.540 --> 0:24:05.900
+then you can absolutely do that and see how Dagger works without actually installing it
+
+189
+0:24:05.900 --> 0:24:16.060
+on your computer. So, that's all I have for today. If you have questions, feel free.
+
+190
+0:24:16.060 --> 0:24:28.300
+There is a sticker, and thank you very much for your attention.
+
+191
+0:24:29.500 --> 0:24:33.260
+If there are any questions, raise your hand. I'll try to give you a microphone.
+
+192
+0:24:33.260 --> 0:24:37.260
+I have one over here that's closer. Hi. Can you...
+
+193
+0:24:38.300 --> 0:24:40.620
+Other than Docker? I'm sorry, can you repeat that?
+
+194
+0:24:40.620 --> 0:24:43.580
+Can you use it with something other than Docker underneath, like Nspawn?
+
+195
+0:24:43.580 --> 0:24:49.740
+You can use it with Docker compatible runtime, so I think you can use it with Podman at the moment.
+
+196
+0:24:50.620 --> 0:24:58.620
+I think, technically, you'll see it on runtime. But I don't know if that's currently available
+
+197
+0:24:58.620 --> 0:25:03.100
+as an option. But we have someone from the Dagger team here who can actually answer that question.
+
+198
+0:25:03.100 --> 0:25:14.300
+Hi. So, how does the portability work when parts of your deployment depend on
+
+199
+0:25:15.580 --> 0:25:22.380
+publishing a Docker image to a repo that is external or AWS or Terraform or things that
+
+200
+0:25:22.380 --> 0:25:25.420
+require secrets? How does that fit in running it locally?
+
+201
+0:25:25.420 --> 0:25:33.020
+So, that's a great question, actually. So, the code itself should be completely portable,
+
+202
+0:25:33.740 --> 0:25:40.060
+so the pipeline itself can run anywhere. What you would need to do in that case is you need
+
+203
+0:25:40.060 --> 0:25:46.060
+some sort of either a central secret store that you can connect to from your own computer,
+
+204
+0:25:46.700 --> 0:25:53.740
+or you need to be able to load some sort of secrets or credentials from your environment
+
+205
+0:25:53.740 --> 0:25:58.380
+variables, for example. You can absolutely do that with the Dagger pipeline. So, from that perspective,
+
+206
+0:26:05.900 --> 0:26:16.140
+hello? And from locally, you can push to another registry or push to a development environment,
+
+207
+0:26:16.140 --> 0:26:21.260
+for example. So, you can parameterize pipelines based on where you run them.
+
+208
+0:26:21.260 --> 0:26:25.180
+You would still run the same code, but you could deploy to a different environment
+
+209
+0:26:28.620 --> 0:26:29.180
+from locally.
+
+210
+0:26:35.660 --> 0:26:37.340
+We have one more question there.
+
+211
+0:26:39.100 --> 0:26:39.580
+Oh, okay.
+
+212
+0:26:39.580 --> 0:26:49.820
+Thank you. One last applause, please.
+

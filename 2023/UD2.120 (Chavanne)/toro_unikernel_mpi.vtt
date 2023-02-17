@@ -1,0 +1,658 @@
+WEBVTT
+
+00:00.000 --> 00:08.040
+All right, we'll get started.
+
+00:08.040 --> 00:12.920
+We have another talk on MPI, but I think a very different one, running MPI applications
+
+00:12.920 --> 00:14.640
+on the Toro Uni kernel.
+
+00:14.640 --> 00:16.680
+Exactly, yeah.
+
+00:16.680 --> 00:18.680
+So hello everyone, I'm Matias.
+
+00:18.680 --> 00:22.680
+I'm going to talk about running MPI applications on Toro Uni kernel.
+
+00:22.680 --> 00:28.320
+In this speaking, a Uni kernel is a way to deploy user applications in a way that is
+
+00:28.320 --> 00:34.720
+closer to the hardware by trying to reuse the operating system interferences.
+
+00:34.720 --> 00:38.960
+So in the overall, it should perform better than just deploying a user application by
+
+00:38.960 --> 00:43.200
+using a general proposed operating system.
+
+00:43.200 --> 00:45.520
+First I would like to introduce myself.
+
+00:45.520 --> 00:50.720
+While I am passionate about operating system development and virtualization technologies,
+
+00:50.720 --> 00:54.800
+I had worked at Citrix to take Huawei and I'm currently at Bathes.
+
+00:54.800 --> 01:03.160
+And here I have my email and my GitHub profile if you want to know more about what I'm doing.
+
+01:03.160 --> 01:09.160
+So I'm going to start to present what is exactly a Uni kernel and then I'm going to go to the
+
+01:09.160 --> 01:12.600
+details of what just makes Toro special.
+
+01:12.600 --> 01:19.400
+And then I will show current implementation of the MPI standard on top of Toro and I will
+
+01:19.400 --> 01:25.680
+finish with a benchmark I'm trying to do to see if the current implementation is working
+
+01:25.680 --> 01:32.080
+I expected of things that could be improved.
+
+01:32.080 --> 01:34.640
+So maybe you are already familiar with this picture.
+
+01:34.640 --> 01:39.120
+This is more or less how a user application is deployed either using a virtual machine
+
+01:39.120 --> 01:40.420
+or bare metal.
+
+01:40.420 --> 01:44.560
+So what we have is the operating system, the user application and the two different modes,
+
+01:44.560 --> 01:49.840
+the different modes in the X86 processor.
+
+01:49.840 --> 01:55.920
+So in general what we have is that when a user application requires someone to open
+
+01:55.920 --> 01:59.960
+a file and a packet or whatever it's going to trigger a syscall and then it's going to
+
+01:59.960 --> 02:07.880
+be a switch in which the processor is running from which is user space to kernel space so
+
+02:07.880 --> 02:13.640
+it's going to be processing a kernel space and going back, right?
+
+02:13.640 --> 02:18.400
+And in general when we see what we have inside the kernel is we have different components,
+
+02:18.400 --> 02:19.400
+right?
+
+02:19.400 --> 02:24.760
+For example, the scheduler, the file system, different drivers and so on.
+
+02:24.760 --> 02:29.840
+So in particular, scheduler is going to choose what is the next process that is going to
+
+02:29.840 --> 02:31.180
+be executed.
+
+02:31.180 --> 02:35.760
+One of these processes is going to be your MPI application for example.
+
+02:35.760 --> 02:43.400
+So if you deploy your MPI application by using a general purpose of the system, your application
+
+02:43.400 --> 02:46.760
+is going to compete with other processes in the system for sure.
+
+02:46.760 --> 02:50.720
+And also what you have in the scheduler is some policy which is going to decide which
+
+02:50.720 --> 02:56.440
+is the next process to be deployed.
+
+02:56.440 --> 03:00.840
+Also we have a component like a file system and since we have a general purpose of the
+
+03:00.840 --> 03:06.280
+system we're going to have several drivers for different file systems and different drivers
+
+03:06.280 --> 03:08.000
+and so on.
+
+03:08.000 --> 03:14.560
+So what some people observed was that there was too much generality in using a general
+
+03:14.560 --> 03:21.080
+purpose of the system for a single purpose application like can be MPI.
+
+03:21.080 --> 03:25.480
+So some people come up with a new architecture.
+
+03:25.480 --> 03:28.200
+They propose what they call uni kernel.
+
+03:28.200 --> 03:33.360
+You have some projects there like OSV, MiraShoS, UniCrash or NanoVMs.
+
+03:33.360 --> 03:39.000
+What they do is just take the user application and compile it within the kernel itself.
+
+03:39.000 --> 03:44.640
+So at the end what you have is a single binary that is going to be deployed either by using
+
+03:44.640 --> 03:49.840
+a virtual machine or a bare metal.
+
+03:49.840 --> 03:54.080
+So instead of for example having syscalls that we have in the case that we have a general
+
+03:54.080 --> 03:58.840
+purpose of the system and different modes of execution, in the case of a uni kernel
+
+03:58.840 --> 04:08.520
+we have simply calls which are cheaper than using syscalls for example.
+
+04:08.520 --> 04:13.440
+In general the project that I presented before all come forward to the epoxy standard so
+
+04:13.440 --> 04:20.840
+means that if you have any application writing in C that can forward epoxy you can theoretically
+
+04:20.840 --> 04:25.880
+compile with a uni kernel without any modification of the user application.
+
+04:25.880 --> 04:30.520
+In reality this does not happen and most of the time the epoxy that the uni kernel implement
+
+04:30.520 --> 04:35.520
+is not complete so you have to do something somewhere to just, you cannot just take your
+
+04:35.520 --> 04:37.640
+application and compile it and generate something.
+
+04:37.640 --> 04:43.720
+It doesn't work out of the box in most of the cases.
+
+04:43.720 --> 04:47.000
+So in this context what is total is also a uni kernel.
+
+04:47.000 --> 04:50.000
+It's an application oriented uni kernel.
+
+04:50.000 --> 04:56.600
+The idea of total is to offer an API which is dedicated to efficiently deploy parallel
+
+04:56.600 --> 04:59.040
+application.
+
+04:59.040 --> 05:02.760
+In the case of total it is not a proxy complaint.
+
+05:02.760 --> 05:07.920
+It means that even if the function like this opens and closes and so on it's more or less
+
+05:07.920 --> 05:08.920
+the same name.
+
+05:08.920 --> 05:11.880
+The semantic of this function is slightly different.
+
+05:11.880 --> 05:16.280
+So I will not say that it's a proxy complaint in that sense.
+
+05:16.280 --> 05:19.000
+I will explain that later.
+
+05:19.000 --> 05:25.440
+So let's say that the three building blocks of the total uni kernel are the memory per
+
+05:25.440 --> 05:31.080
+core, cooperatively scheduler and core to core communication based on vue.io.
+
+05:31.080 --> 05:34.440
+Here I'm talking about the architecture of the uni kernel.
+
+05:34.440 --> 05:38.600
+I'm not talking about yet the application of how we're going to build an application
+
+05:38.600 --> 05:39.600
+to conform to total.
+
+05:39.600 --> 05:43.520
+And I'm going to explain three points.
+
+05:43.520 --> 05:48.360
+So first what happened in the total uni kernel is that we have memory dedicated per core.
+
+05:48.360 --> 05:54.600
+So at the beginning what we does is just allocate, I mean, to split the whole memory in rations
+
+05:54.600 --> 05:57.760
+and we assign the expressions per core.
+
+05:57.760 --> 06:03.160
+And for the moment the size of the expressions is just proportional with the number of calls
+
+06:03.160 --> 06:06.480
+that we have.
+
+06:06.480 --> 06:09.960
+That makes that, for example, the memory allocator is quite simple.
+
+06:09.960 --> 06:14.720
+It doesn't require any communication because we have chunks of data.
+
+06:14.720 --> 06:19.840
+I mean, yeah, the allocator is, we have one allocator per core which means that we don't
+
+06:19.840 --> 06:23.480
+require any synchronization in the kernel to allocate for one core.
+
+06:23.480 --> 06:29.200
+It's quite, we call it per CPU data, let's say.
+
+06:29.200 --> 06:33.640
+So for example, if you have a thread in a core one and we want to locate memory, we're
+
+06:33.640 --> 06:37.560
+going always to get it from same ration and that happens also if we run the core two,
+
+06:37.560 --> 06:40.760
+we are going to use from ration two.
+
+06:40.760 --> 06:45.120
+And the idea is that by doing this we can then leverage technologies like Iber Transport
+
+06:45.120 --> 07:08.760
+or Int
+
+07:08.760 --> 07:12.720
+and we have mainly one API to create thread which is called a big int thread and it's
+
+07:12.720 --> 07:21.880
+the parameter have to say in which core each thread is going to run.
+
+07:21.880 --> 07:26.440
+The scheduler scalability which means that it is the thread that's going to call the
+
+07:26.440 --> 07:30.480
+scheduler to then choose another thread.
+
+07:30.480 --> 07:34.160
+And this is by relying on the API called a systrath switch and most of the time this is
+
+07:34.160 --> 07:40.000
+just in bucket because we are going to be idle for a while so we just call the scheduler
+
+07:40.000 --> 07:45.440
+or for example we're going to do some I.O.
+
+07:45.440 --> 07:47.840
+So the scheduler is also very simple.
+
+07:47.840 --> 07:56.240
+We have again per CPU data so we have one queue per core and the scheduler is simple
+
+07:56.240 --> 08:01.160
+going to choose the next thread that is ready and then the scheduler and this means that
+
+08:01.160 --> 08:05.400
+also we don't require any synchronization at the level of the kernel to a scheduler
+
+08:05.400 --> 08:15.280
+thread so it's like each core run independently one from another.
+
+08:15.280 --> 08:20.520
+Finally I am going to talk a bit about how we communicate cores and basically what we
+
+08:20.520 --> 08:27.760
+have is one dedicated reception queue per core for any other core in the system so we
+
+08:27.760 --> 08:32.880
+have one to one communication.
+
+08:32.880 --> 08:37.080
+It's basically relies in two primitives which is send and receive front, send to and receive
+
+08:37.080 --> 08:43.600
+front and it's just by using the destination core and from where we want to get a packet
+
+08:43.600 --> 08:47.120
+for example.
+
+08:47.120 --> 08:54.120
+These two primitives are the ingradias to then build more complicated APIs like MPI
+
+08:54.120 --> 08:57.000
+gatner, MPI because and MPI scatter.
+
+08:57.000 --> 09:02.640
+So these are the building blocks for those API for example.
+
+09:02.640 --> 09:06.800
+To implement this core to core communication I was using butyl so I was just following
+
+09:06.800 --> 09:09.640
+the specification.
+
+09:09.640 --> 09:11.560
+I will talk a little bit about this.
+
+09:11.560 --> 09:17.280
+I don't want to go too much into detail just to understand roughly how communication between
+
+09:17.280 --> 09:18.280
+core is done.
+
+09:18.280 --> 09:25.960
+As I said before we have one reception queue for each core for any other core in the system
+
+09:25.960 --> 09:33.280
+so it means that for example if core one want to get packets from core two we have a reception
+
+09:33.280 --> 09:39.520
+queue and also if core one want to send a packet to core two it's going to have a transition
+
+09:39.520 --> 09:44.200
+queue and the number of queues is going to be for sure different if you have three core
+
+09:44.200 --> 09:50.920
+for example because the build queues are dedicated.
+
+09:50.920 --> 09:56.120
+So basically how a build queue works is made of three rings buffers.
+
+09:56.120 --> 10:03.320
+So the first ring buffer is a buffer which only contains descriptors to chunks of memory.
+
+10:03.320 --> 10:08.320
+The second buffer is the aviable ring and the three ring buffer is the user ring.
+
+10:08.320 --> 10:14.840
+Basically what happens is the aviable ring is the buffers that the core one are exposed
+
+10:14.840 --> 10:16.640
+into core two.
+
+10:16.640 --> 10:22.080
+So the core two, if the core two want to send a packet to core one it's going to get a buffer
+
+10:22.080 --> 10:26.560
+from aviable ring, put the data and then put it again in the user ring.
+
+10:26.560 --> 10:29.280
+This is basically how build.io works.
+
+10:29.280 --> 10:36.480
+Just that if you are familiar with from build.io, in this case for example the consumer of aviable
+
+10:36.480 --> 10:42.200
+ring is the core two but if for example if you are in a hypervisor and you are implementing
+
+10:42.200 --> 10:47.160
+some build.io device the consumer is not going to be the core two but it's going to be the
+
+10:47.160 --> 10:48.960
+device model, key.mu for example.
+
+10:48.960 --> 10:54.920
+I don't know if you are familiar with that but it's the same scheme.
+
+10:54.920 --> 11:01.080
+This allows that for example since we have one producer and one consumer we can access
+
+11:01.080 --> 11:05.000
+to the build queue without any synchronization.
+
+11:05.000 --> 11:08.320
+At least if we have only one consumer.
+
+11:08.320 --> 11:13.920
+So you don't require any luck for example to access to the build queue.
+
+11:13.920 --> 11:15.840
+So yeah I already talked too much.
+
+11:15.840 --> 11:21.080
+I don't know how much time I have left but I wanted to show some examples about the implementation.
+
+11:21.080 --> 11:26.160
+It's more fun than all the slides I should show.
+
+11:26.160 --> 11:29.200
+So what happened?
+
+11:29.200 --> 11:33.000
+How we deploy an application by using toil away.
+
+11:33.000 --> 11:34.760
+We have the MPI application.
+
+11:34.760 --> 11:40.000
+It's a C application for the moment and you compile it with a unit that's going just to
+
+11:40.000 --> 11:47.080
+link the application with some functions that are the implementation of the MPI.
+
+11:47.080 --> 11:55.240
+For example MPI because Gator and so on is implemented in this level in the MPI interface
+
+11:55.240 --> 11:59.720
+and this unit is going to use some MPI from the unique kernel.
+
+11:59.720 --> 12:04.360
+So at the end what you're going to get is an ELF and binary that could be used to deploy
+
+12:04.360 --> 12:09.240
+your application here as a beauty machine or a better model.
+
+12:09.240 --> 12:14.480
+So you don't have any operating system in the middle here.
+
+12:14.480 --> 12:20.920
+You have only your application, the threads and so on but you don't have nothing else.
+
+12:20.920 --> 12:26.360
+So if you want to see how it is deployed, if you get the MPI application that's going
+
+12:26.360 --> 12:32.880
+to happen, we're going to get the main and then instantiate it one for every core in
+
+12:32.880 --> 12:41.640
+the system as a thread.
+
+12:41.640 --> 12:46.640
+So to benchmark the query implementation, I'm not very familiar with the MPI where I
+
+12:46.640 --> 12:51.440
+just come in from another domain so I'm not really familiar how I had to benchmark such
+
+12:51.440 --> 12:56.360
+implementation and so I choose the also microbenchmark.
+
+12:56.360 --> 13:02.080
+Maybe you know them.
+
+13:02.080 --> 13:06.680
+I just pick up one of them, like for example MPI barrier and I try to implement which
+
+13:06.680 --> 13:07.680
+is quite simple.
+
+13:07.680 --> 13:13.480
+The benchmark is quite simple so I decide to re-implement it.
+
+13:13.480 --> 13:16.320
+I could not take the benchmark as it is.
+
+13:16.320 --> 13:23.080
+I have to do some rework to make it work and then my idea was to see how this behaved when
+
+13:23.080 --> 13:29.080
+I was deploying this as a single VM which many cores.
+
+13:29.080 --> 13:32.960
+The hardware that I use is this one.
+
+13:32.960 --> 13:38.120
+Since I'm not familiar with the high performance computing work, I'm not really sure if this
+
+13:38.120 --> 13:41.320
+is hardware that you often use.
+
+13:41.320 --> 13:45.640
+It's quite a new Intel.
+
+13:45.640 --> 13:47.440
+You can get it in Equinix.
+
+13:47.440 --> 13:54.560
+The price is four euros per hour.
+
+13:54.560 --> 13:59.440
+I launched the test and I tried to measure things so I was just measuring the latency
+
+13:59.440 --> 14:11.120
+of this and I was taking into account the max latency through over 48, 16, and 32 cores.
+
+14:11.120 --> 14:19.800
+I'm getting values in the order of the microseconds and then I found this paper which was also
+
+14:19.800 --> 14:26.080
+using this benchmark to measure their platform.
+
+14:26.080 --> 14:36.240
+I was saying in this paper they were reporting around 20 nanoseconds and 30 nanoseconds.
+
+14:36.240 --> 14:40.800
+Sorry, this is nanoseconds.
+
+14:40.800 --> 14:45.120
+Not nanoseconds, sorry.
+
+14:45.120 --> 14:55.880
+In this platform, in any case, I will be very cautious about this graph because I was getting
+
+14:55.880 --> 14:57.800
+a lot of variation in the numbers.
+
+14:57.800 --> 15:05.120
+Most of the time, for example, I was trying a machine with 32 cores and the VM has already
+
+15:05.120 --> 15:11.800
+32 BCPUs so you should not test in that sort of machine because one of the threads is going
+
+15:11.800 --> 15:15.280
+to compete with the others with the main one of the host.
+
+15:15.280 --> 15:21.280
+You should always test with less cores, less CPU cores, physical cores.
+
+15:21.280 --> 15:25.800
+The idea is to continue doing this.
+
+15:25.800 --> 15:30.080
+Improving the way I'm measuring this and also trying different hardware.
+
+15:30.080 --> 15:34.080
+At the same time, I found a lot of bugs in the unique corner by doing this.
+
+15:34.080 --> 15:38.280
+For example, at the beginning, I only support more or less four cores so I went from four
+
+15:38.280 --> 15:44.960
+to 32, well, it was a number in a constant but anyway, I found many bugs when I was doing
+
+15:44.960 --> 15:49.520
+this so it is all, this is just a proof of concept and I worked in progress.
+
+15:49.520 --> 15:52.600
+You don't take it too serious, I'm trying to say.
+
+15:52.600 --> 15:55.960
+I don't want to jump into any conclusion from this.
+
+15:55.960 --> 16:02.320
+It was fun to do anyway.
+
+16:02.320 --> 16:03.320
+That's all.
+
+16:03.320 --> 16:04.320
+I don't know if you have any questions.
+
+16:04.320 --> 16:17.800
+I'm going to turn it over to you.
+
+16:17.800 --> 16:21.200
+You said this runs on bare metal.
+
+16:21.200 --> 16:23.880
+The unicurnal runs on bare metal.
+
+16:23.880 --> 16:25.440
+How do you even install it?
+
+16:25.440 --> 16:28.000
+Operating systems are kind of complicated.
+
+16:28.000 --> 16:33.440
+How do you even install it on bare metal?
+
+16:33.440 --> 16:36.240
+How do you install it on bare metal?
+
+16:36.240 --> 16:39.000
+How you install it?
+
+16:39.000 --> 16:41.480
+If I had this, how would I install it on bare metal?
+
+16:41.480 --> 16:42.480
+Is there an installer?
+
+16:42.480 --> 16:45.480
+Installer, you mean?
+
+16:45.480 --> 16:50.760
+You can just use some device to boot from, for example.
+
+16:50.760 --> 16:51.760
+It's bootable?
+
+16:51.760 --> 16:53.440
+Yeah, that's it.
+
+16:53.440 --> 16:56.440
+Well, yeah.
+
+16:56.440 --> 16:58.120
+You have many ways to do that.
+
+16:58.120 --> 16:59.640
+You don't have to start it, for example.
+
+16:59.640 --> 17:04.520
+You can do it from the device that is removable, for example.
+
+17:04.520 --> 17:09.440
+You don't need to start it, I mean, whatever.
+
+17:09.440 --> 17:10.440
+Any questions?
+
+17:10.440 --> 17:11.440
+No?
+
+17:11.440 --> 17:12.440
+Thank you.
+
+17:12.440 --> 17:13.440
+Thank you.
+
+17:13.440 --> 17:29.880
+Thank you.
